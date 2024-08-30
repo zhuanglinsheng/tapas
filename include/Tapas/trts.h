@@ -93,9 +93,11 @@ inline std::string tostring_pointer(const char * type, const void * p) const
 	char ptr_addr[100];
 
 	if (nullptr == p)
-		sprintf(ptr_addr, "\"%s\"", type);
+		snprintf(ptr_addr, 100, "\"%s\"", type);
+		// sprintf(ptr_addr, "\"%s\"", type);
 	else
-		sprintf(ptr_addr, "\"%s at %p\"", type, p);
+		snprintf(ptr_addr, 100, "\"%s at %p\"", type, p);
+		// sprintf(ptr_addr, "\"%s at %p\"", type, p);
 	re += std::string(ptr_addr);
 	return re;
 }

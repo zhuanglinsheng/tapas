@@ -287,7 +287,7 @@ std::string tostring()
 	case OP_IDXL:
 		is += "OP_IDXL     ";
 		is += std::to_string(get_L()) + "  " + std::to_string(get_b()) + \
-										"  " + std::to_string(get_i());
+						"  " + std::to_string(get_i());
 		break;
 	case OP_PUSHF:
 		is += "OP_PUSHF    ";
@@ -595,8 +595,7 @@ twrapper * make_wrapper(tvmcmd_vect & tcmds, tconsts & consts, tcinfo & info)
 	wrapper->cmdarr = new tbycode[wrapper->ncmds]();
 	tbycode * cmd_i = wrapper->cmdarr;
 
-	for (auto iter = tcmds.cbegin(); iter != tcmds.cend(); iter++)
-	{
+	for (auto iter = tcmds.cbegin(); iter != tcmds.cend(); iter++) {
 		*cmd_i = *iter;
 		cmd_i ++;
 	}
@@ -604,14 +603,11 @@ twrapper * make_wrapper(tvmcmd_vect & tcmds, tconsts & consts, tcinfo & info)
 	wrapper->consts.ncints = consts.__intcsts.size32();
 	wrapper->consts.ncdbls = consts.__dblcsts.size32();
 
-	if (wrapper->consts.ncstrs > 0)
-	{
+	if (wrapper->consts.ncstrs > 0) {
 		wrapper->consts.cstrs = new char*[wrapper->consts.ncstrs];
 		uint_size_cst str_idx = 0;
 
-		for (auto iter = consts.__strcsts.cbegin();
-			iter != consts.__strcsts.cend(); )
-		{
+		for (auto iter = consts.__strcsts.cbegin(); iter != consts.__strcsts.cend(); ) {
 			std::string s = *iter;
 			uint_size len = s.length() + 1;
 			wrapper->consts.cstrs[str_idx] = new char[len];
@@ -620,30 +616,26 @@ twrapper * make_wrapper(tvmcmd_vect & tcmds, tconsts & consts, tcinfo & info)
 			str_idx ++;
 		}
 	}
-	else wrapper->consts.cstrs = nullptr;
+	else
+		wrapper->consts.cstrs = nullptr;
 
-	if (wrapper->consts.ncints > 0)
-	{
+	if (wrapper->consts.ncints > 0) {
 		wrapper->consts.cints = new long[wrapper->consts.ncints];
 		uint_size_cst int_idx = 0;
 
-		for (auto iter = consts.__intcsts.cbegin();
-			iter != consts.__intcsts.cend(); iter++)
-		{
+		for (auto iter = consts.__intcsts.cbegin(); iter != consts.__intcsts.cend(); iter++) {
 			wrapper->consts.cints[int_idx] = *iter;
 			int_idx++;
 		}
 	}
-	else wrapper->consts.cints = nullptr;
+	else
+		wrapper->consts.cints = nullptr;
 
-	if (wrapper->consts.ncdbls > 0)
-	{
+	if (wrapper->consts.ncdbls > 0) {
 		wrapper->consts.cdbls = new double[wrapper->consts.ncdbls];
 		uint_size_cst dbl_idx = 0;
 
-		for (auto iter = consts.__dblcsts.cbegin();
-			iter != consts.__dblcsts.cend(); iter++)
-		{
+		for (auto iter = consts.__dblcsts.cbegin(); iter != consts.__dblcsts.cend(); iter++) {
 			wrapper->consts.cdbls[dbl_idx] = *iter;
 			dbl_idx++;
 		}
@@ -684,8 +676,7 @@ void save_bin_file(const twrapper * wrapper, const std::string & file)
 	// write 'wrapper.consts.cstrs'
 	char ** str = wrapper->consts.cstrs;
 
-	for (uint_size_cst i = 0; i < wrapper->consts.ncstrs; i++)
-	{
+	for (uint_size_cst i = 0; i < wrapper->consts.ncstrs; i++) {
 		uint_size len_i = std::string(*str).size();
 		fwrite(&len_i, sizeof(uint_size), 1, f);
 		fwrite(*str, 1, len_i + 1, f);
@@ -699,8 +690,7 @@ twrapper * load_bin_file(const std::string & file)
 {
 	FILE * binf = fopen(file.c_str(), "rb");
 
-	if (nullptr == binf)
-	{
+	if (nullptr == binf) {
 		twarn(ErrSession_IO).warn("tanalyser::load_bin_file", file);
 		return nullptr;
 	}
@@ -721,8 +711,7 @@ twrapper * load_bin_file(const std::string & file)
 	// read 'wrapper.consts.cints'
 	uint_size_cst ncints = wrapper->consts.ncints;
 
-	if (ncints > 0)
-	{
+	if (ncints > 0) {
 		long * cints = new long[ncints]();
 		if (ncints != fread(cints, sizeof(long), ncints, binf))
 			twarn(ErrSession_IO).warn("tanalyser::load_bin_file", "");
@@ -732,8 +721,7 @@ twrapper * load_bin_file(const std::string & file)
 	// read 'wrapper.consts.cdbls'
 	uint_size_cst ncdbls = wrapper->consts.ncdbls;
 
-	if (ncdbls > 0)
-	{
+	if (ncdbls > 0) {
 		double * cdbls = new double[ncdbls]();
 		if (ncdbls != fread(cdbls, sizeof(double), ncdbls, binf))
 			twarn(ErrSession_IO).warn("tanalyser::load_bin_file", "");
@@ -743,16 +731,16 @@ twrapper * load_bin_file(const std::string & file)
 	// read 'wrapper.consts.cstrs'
 	uint_size_cst ncstrs = wrapper->consts.ncstrs;
 
-	if (ncstrs > 0)
-	{
+	if (ncstrs > 0) {
 		wrapper->consts.cstrs = new char*[ncstrs]();
 
-		for (uint_size_cst i = 0; i<ncstrs; i++)
-		{
+		for (uint_size_cst i = 0; i<ncstrs; i++) {
 			unsigned long len_i = 0;
+
 			if (1 != fread(&len_i, sizeof (unsigned long), 1, binf))
 				twarn(ErrSession_IO).warn("tanalyser::load_bin_file", "");
 			char * str_i = new char[len_i + 1]();
+
 			if (len_i + 1 != fread(str_i, 1, len_i + 1, binf))
 				twarn(ErrSession_IO).warn("tanalyser::load_bin_file", "");
 			wrapper->consts.cstrs[i] = str_i;
@@ -773,10 +761,8 @@ void clean_wrapper(twrapper * wrapper)
 		delete [] wrapper->consts.cdbls;
 	if (wrapper->consts.ncints > 0 && wrapper->consts.cints != nullptr)
 		delete [] wrapper->consts.cints;
-	if (wrapper->consts.ncstrs > 0 && wrapper->consts.cstrs != nullptr)
-	{
-		for (uint_size_cst i = 0; i < wrapper->consts.ncstrs; i++)
-		{
+	if (wrapper->consts.ncstrs > 0 && wrapper->consts.cstrs != nullptr) {
+		for (uint_size_cst i = 0; i < wrapper->consts.ncstrs; i++) {
 			if (wrapper->consts.cstrs[i] != nullptr)
 				delete [] wrapper->consts.cstrs[i];
 		}
@@ -797,24 +783,21 @@ void display_wrapper(const twrapper * wrapper)
 	printf("Max Reg. Number: %u\n", wrapper->info.reg_max);
 	printf("Const Value List (Integers): ");
 
-	for (uint_size_cst i = 0; i < wrapper->consts.ncints; i++)
-	{
+	for (uint_size_cst i = 0; i < wrapper->consts.ncints; i++) {
 		printf("%li", wrapper->consts.cints[i]);
 		if (i < wrapper->consts.ncints - 1) printf(", ");
 	}
 	printf("\n");
 	printf("Const Value List (Double Floats): ");
 
-	for (uint_size_cst i = 0; i < wrapper->consts.ncdbls; i++)
-	{
+	for (uint_size_cst i = 0; i < wrapper->consts.ncdbls; i++) {
 		printf("%f", wrapper->consts.cdbls[i]);
 		if (i < wrapper->consts.ncdbls - 1) printf(", ");
 	}
 	printf("\n");
 	printf("Const Value List (Character Strings): ");
 
-	for (uint_size_cst i = 0; i < wrapper->consts.ncstrs; i++)
-	{
+	for (uint_size_cst i = 0; i < wrapper->consts.ncstrs; i++) {
 		printf("%s", wrapper->consts.cstrs[i]);
 		if (i < wrapper->consts.ncstrs - 1) printf(", ");
 	}

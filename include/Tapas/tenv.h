@@ -513,19 +513,7 @@ tdict * add_pkg(const std::string & pkgname)
 /// Add a location `path` to the library
 void add_path(const std::string & paths)
 {
-	uint_size loc = 0, len = paths.length();
-
-	for (uint_size i = 0; i < len; i++) {
-		if (paths[i] != ';')
-			continue;
-		std::string path = paths.substr(loc, i - loc);
-
-		for (auto iter  = __paths.begin(); iter != __paths.end(); iter++)
-			if (iter->compare(path) == 0)
-				continue;
-		__paths.push_back(path);
-		loc = i + 1;
-	}
+	utils::append_to_pathpool(__paths, paths);
 }
 
 /// @return the wrapper

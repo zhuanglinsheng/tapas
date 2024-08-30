@@ -4,10 +4,82 @@
 #include "tbasis.h"
 #include "tbycs.h"
 
-#include <iostream>
 
 namespace tapas
 {
+
+namespace utils
+{
+
+/// trim the ending of a given string and return it.
+inline std::string trim_back(const std::string & str)
+{
+	if (str.empty()) return str;
+	char str_end = str.back();
+
+	if (str_end == '\n' || str_end == '\r'
+	|| str_end == '\t' || str_end == ' ' || str_end == EOF)
+		return trim_back(str.substr(0, str.length() - 1));
+	return str;
+}
+
+/// trim the beginning of a given string and return it.
+inline std::string trim_front(const std::string & str)
+{
+	if (str.empty()) return str;
+	char str_bgn = str[0];
+
+	if (str_bgn == '\n' || str_bgn == '\r'
+	|| str_bgn == '\t' || str_bgn == ' ' || str_bgn == EOF)
+		return trim_front(str.substr(1));
+	return str;
+}
+
+/// trim a given string and return it.
+inline std::string trim(const std::string & str)
+{
+	return trim_back(trim_front(str));
+}
+
+/// Get the folder path where a file is located.
+///   @param filepath - the full location of a file
+///   @return string - the folder of filepath
+inline std::string get_folderpath_from_filepath(const std::string & filepath)
+{
+	std::string path;
+	const uint_size last_slash_idx1 = filepath.rfind('/');
+	const uint_size last_slash_idx2 = filepath.rfind('\\');
+	if (std::string::npos != last_slash_idx1)
+		path = filepath.substr(0, last_slash_idx1);
+	if (std::string::npos != last_slash_idx2)
+		path = filepath.substr(0, last_slash_idx2);
+	return path + ';';
+}
+
+/// Append 'paths' (with comma at end as splitter) into 'pathpool' if it is not already in there
+inline void append_to_pathpool(std::vector<std::string> & pathpool, const std::string & pathstr)
+{
+	uint_size loc = 0;
+	uint_size len = pathstr.length();
+
+	// scanning the input `pathstr`
+	for (uint_size i = 0; i < len; i++) {
+		if (pathstr[i] == ';') {
+			std::string path = pathstr.substr(loc, i - loc);
+
+			for (auto it = pathpool.begin(); it != pathpool.end(); it++) {
+				if (0 == it->compare(path)) // two strings are equal
+					goto LOOPEND;
+			}
+			pathpool.push_back(path);
+			loc = i + 1;
+		}
+		LOOPEND: ;
+	}
+}
+
+}
+
 
 /*===========================================================================*
  * 1. Lexical Analysis (1): split a string into compilation units
@@ -20,11 +92,11 @@ namespace tapas
 class tunit_ctr
 {
 private:
-int_unit_ctr __parenthesis = 0;
-int_unit_ctr __bracket     = 0;
-int_unit_ctr __curlybrace  = 0;
-int_unit_ctr __singlequote = 0;
-int_unit_ctr __doublequote = 0;
+	int_unit_ctr __parenthesis = 0;
+	int_unit_ctr __bracket     = 0;
+	int_unit_ctr __curlybrace  = 0;
+	int_unit_ctr __singlequote = 0;
+	int_unit_ctr __doublequote = 0;
 
 public:
 
@@ -133,78 +205,32 @@ bool independent()
 
 };
 
-/// Split inputs into compilation units
-class tlexer1
+
+namespace processor
 {
-public:
-
-/// trim the ending of a given string and return it.
-std::string trim_back(const std::string & str)
-{
-	if (str.empty()) return str;
-	char str_end = str.back();
-
-	if (str_end == '\n' || str_end == '\r'
-	|| str_end == '\t' || str_end == ' ' || str_end == EOF)
-		return trim_back(str.substr(0, str.length() - 1));
-	return str;
-}
-
-/// trim the beginning of a given string and return it.
-std::string trim_front(const std::string & str)
-{
-	if (str.empty()) return str;
-	char str_bgn = str[0];
-
-	if (str_bgn == '\n' || str_bgn == '\r'
-	|| str_bgn == '\t' || str_bgn == ' ' || str_bgn == EOF)
-		return trim_front(str.substr(1));
-	return str;
-}
-
-/// trim a given string and return it.
-std::string trim(const std::string & str)
-{
-	return trim_back(trim_front(str));
-}
 
 /// remove all characters of a line since '//'
-void cancel_from_comments(std::string & buffer)
+inline void cancel_from_comments(std::string & buffer)
 {
 	for (uint_size i = 0; i < buffer.size(); i++)
 		if (buffer[i] == '/' && buffer[i+1] == '/')
 			buffer = buffer.substr(0, i);
 }
 
-/// Get the folder path where a file is under.
-///   @param file - the full location of a file
-///   @return string - the folder of file
-std::string get_folder_from_file_loc(const std::string & file)
-{
-	std::string path;
-	const uint_size last_slash_idx1 = file.rfind('/');
-	const uint_size last_slash_idx2 = file.rfind('\\');
-	if (std::string::npos != last_slash_idx1)
-		path = file.substr(0, last_slash_idx1);
-	if (std::string::npos != last_slash_idx2)
-		path = file.substr(0, last_slash_idx2);
-	return path + ";";
-}
-
 /// turn negative ('-a') into subtraction ('0-a')
-void negative_to_subtraction(std::string & cmds)
+inline void negative_to_subtraction(std::string & cmds)
 {
-	cmds = trim(cmds);
+	cmds = utils::trim(cmds);
 
 	// negative turned into subtraction
 	if (cmds[0] == '-')
-		cmds = trim("0" + cmds);
+		cmds = utils::trim("0" + cmds);
 }
 
 /// remove the outer parenthesis of 'cmds' if any
-bool remove_outer_parenthesis(std::string & cmds)
+inline bool remove_outer_parenthesis(std::string & cmds)
 {
-	cmds = trim(cmds);
+	cmds = utils::trim(cmds);
 	uint_size len = cmds.length();
 
 	if (cmds[0] != '(' || cmds[len - 1] != ')')
@@ -215,14 +241,14 @@ bool remove_outer_parenthesis(std::string & cmds)
 	for (uint_size i = 1; i < len - 1; i++)
 		if (0 == lctr.update_lex_ctrs(cmds[i]))
 			return 0;
-	cmds = trim(cmds.substr(1, len - 2));
+	cmds = utils::trim(cmds.substr(1, len - 2));
 	return 1;
 }
 
 /// remove the outer brackets of 'cmds' if any
-bool remove_outer_brackets(std::string & cmds)
+inline bool remove_outer_brackets(std::string & cmds)
 {
-	cmds = trim(cmds);
+	cmds = utils::trim(cmds);
 	uint_size len = cmds.length();
 
 	if (cmds[0] != '[' || cmds[len - 1] != ']')
@@ -233,14 +259,14 @@ bool remove_outer_brackets(std::string & cmds)
 	for (uint_size i = 1; i < len - 1; i++)
 		if (0 == lctr.update_lex_ctrs(cmds[i]))
 			return 0;
-	cmds = trim(cmds.substr(1, len - 2));
+	cmds = utils::trim(cmds.substr(1, len - 2));
 	return 1;
 }
 
 /// remove the outer curly brackets of block if needed
-bool remove_outer_curlybrackets(std::string & cmds)
+inline bool remove_outer_curlybrackets(std::string & cmds)
 {
-	cmds = trim(cmds);
+	cmds = utils::trim(cmds);
 	uint_size len = cmds.length();
 
 	if (cmds[0] != '{' || cmds[len - 1] != '}')
@@ -251,31 +277,140 @@ bool remove_outer_curlybrackets(std::string & cmds)
 	for (uint_size i = 1; i < len - 1; i++)
 		if (0 == lctr.update_lex_ctrs(cmds[i]))
 			return 0;
-	cmds = trim(cmds.substr(1, len - 2));
+	cmds = utils::trim(cmds.substr(1, len - 2));
 	return 1;
 }
 
-/// get `xxx\0` out of `xxx\nyyy\0`
-/// @param str  - input
+inline bool check_vname_validity(const std::string & str)
+{
+	// Keywords are not allowed as variable name
+	if (str == "var" || str == "let" || str == "of")
+		return false;
+	if (str == "nil")
+		return false;
+	if (str == "true" || str == "false")
+		return false;
+	if (str == "this" || str == "base")
+		return false;
+	if (str == "to" || str == "in" || str == "and" || str == "or")
+		return false;
+	if (str == "if" || str == "elif" || str == "else")
+		return false;
+	if (str == "for" || str == "while")
+		return false;
+	if (str == "break" || str == "continue")
+		return false;
+	if (str == "return")
+		return false;
+	if (str == "import" || str == "as")
+		return false;
+
+	// digital is not allowed at the beginning of variable name
+	if (isdigit(str[0]))
+		return false;
+
+	uint_size i = 0;
+
+	for (; i<str.length(); i++) {
+		// only alphabet, digital number or '_' is allowed in variable name
+		if (!isalpha(str[i]) && !isdigit(str[i]) && str[i] != '_')
+			return false;
+	}
+	return true;
+}
+
+inline bool check_unit_complete(const std::string & cmd)
+{
+	tunit_ctr ctr;
+	for (uint_size i = 0; i < cmd.size(); i++)
+		ctr.update_lex_ctrs(cmd[i]);
+	return ctr.independent();
+}
+
+/// transform a.f(x) into f(a, x)
+inline void reform_pipline(std::string & fname, std::string & params)
+{
+	uint_size loc = fname.rfind(".");
+
+	if (std::string::npos != loc) {
+		std::string p1 = fname.substr(0, loc);
+		fname = fname.substr(loc + 1);
+		params = p1.append(",").append(params);
+	}
+}
+
+};
+
+
+/// Split inputs into compilation units
+class tunit_splitter
+{
+private:
+
+/// Get `xxx\0` out of `zzzxxx\nyyy\0` where the cursor starts at the first `x`
+/// @param str - input
 /// @param line - output
-/// @param loc  - output
-bool get_first_line(const std::string & str, std::string & line, uint_size & loc)
+/// @param cursor  - input and output
+bool extract_next_line(const std::string & str, std::string & line, uint_size & cursor)
 {
 	uint_size len = str.length();
 
-	if (loc >= len)
+	if (cursor >= len)
 		return false;
-	for (uint_size i = 0; i < len - loc + 1; i++) {
-		if (str[loc + i] == '\n' || str[loc + i] == '\0') {
-			line = str.substr(loc, i);
-			loc += (i + 1);
+	for (uint_size i = 0; i < len - cursor + 1; i++) {
+		char c = str[cursor + i];
+
+		if (c == '\n' || c == '\0') {
+			line = str.substr(cursor, i);
+			cursor += (i + 1);
 			return true;
 		}
 	}
 	return false;
 }
 
-/// get `xxx` out of `(xxx)yyy`
+/// check whether a unit is complete (independent in bracket / quotation system)
+/// @param line - input, to be checked
+/// @param unit - output, appended line by line until ctr is complete
+/// @param ctr - input / output
+/// Note: The `fullcmd` may not be a unique unit since we don't check comma `;`.
+bool append_line_to_unit(const std::string & line, std::string & unit, tunit_ctr & ctr)
+{
+	for (uint_size i = 0; i < line.size(); i++)
+		ctr.update_lex_ctrs(line[i]);
+	unit.append(line + '\n');
+	return ctr.independent();
+}
+
+/// Split string by a spliter
+void split(const std::string & str, char spliter, std::vector<std::string> & units)
+{
+	std::string cmds = utils::trim(str);
+	uint_size len = cmds.length();
+	uint_size records = 0;
+	tunit_ctr lctr;
+
+	for (uint_size i = 0; i<len; i++) {
+		lctr.update_lex_ctrs(str[i]);
+
+		if (!lctr.independent())
+			continue;
+		if (cmds[i] == spliter) {
+			std::string snap = utils::trim(cmds.substr(records, i-records));
+
+			if (snap.length() > 0) {
+				units.push_back(snap); // can't add_str_consts();
+				records = i + 1;
+			}
+		}
+	}
+	std::string snap = utils::trim(cmds.substr(records));
+	if (snap.length() > 0) units.push_back(snap);
+}
+
+public:
+
+/// Get `xxx` out of `(xxx)yyy`
 bool get_first_parenthesis(const std::string & str, std::string & snap, uint_size & loc)
 {
 	if (str[0] != '(') return false;
@@ -293,7 +428,7 @@ bool get_first_parenthesis(const std::string & str, std::string & snap, uint_siz
 	return false;
 }
 
-/// get `xxx` out of `yyy(xxx)`
+/// Get `xxx` out of `yyy(xxx)`
 bool get_last_parenthesis(const std::string & str, std::string & snap, uint_size & loc)
 {
 	if (str.back() != ')') return false;
@@ -312,7 +447,7 @@ bool get_last_parenthesis(const std::string & str, std::string & snap, uint_size
 	return false;
 }
 
-/// get `xxx` out of `[xxx]yyy`
+/// Get `xxx` out of `[xxx]yyy`
 bool get_first_bracket(const std::string & str, std::string & snap, uint_size & loc)
 {
 	if (str[0] != '[') return false;
@@ -330,7 +465,7 @@ bool get_first_bracket(const std::string & str, std::string & snap, uint_size & 
 	return false;
 }
 
-/// get `xxx` out of `yyy[xxx]`
+/// Get `xxx` out of `yyy[xxx]`
 bool get_last_bracket(const std::string & str, std::string & snap, uint_size & loc)
 {
 	if (str.back() != ']') return false;
@@ -349,7 +484,7 @@ bool get_last_bracket(const std::string & str, std::string & snap, uint_size & l
 	return false;
 }
 
-/// get `xxx` out of `{xxx}yyy`
+/// Get `xxx` out of `{xxx}yyy`
 bool get_first_block(const std::string & str, std::string & snap, uint_size & loc)
 {
 	if (str[0] != '{') return false;
@@ -367,7 +502,7 @@ bool get_first_block(const std::string & str, std::string & snap, uint_size & lo
 	return false;
 }
 
-/// get `xxx` out of `yyy{xxx}`
+/// Get `xxx` out of `yyy{xxx}`
 bool get_last_block(const std::string & str, std::string & snap, uint_size & loc)
 {
 	if (str.back() != '}') return false;
@@ -386,7 +521,7 @@ bool get_last_block(const std::string & str, std::string & snap, uint_size & loc
 	return false;
 }
 
-/// get `'xxx'` out of `'xxx'yyy`
+/// Get `'xxx'` out of `'xxx'yyy`
 bool get_first_single_quote(const std::string & str, std::string & snap, uint_size & loc)
 {
 	if (str[0] != '\'') return false;
@@ -404,7 +539,7 @@ bool get_first_single_quote(const std::string & str, std::string & snap, uint_si
 	return false;
 }
 
-/// get `"xxx"` out of `"xxx"yyy`
+/// Get `"xxx"` out of `"xxx"yyy`
 bool get_first_double_quote(const std::string & str, std::string & snap, uint_size & loc)
 {
 	if (str[0] != '"') return false;
@@ -422,108 +557,69 @@ bool get_first_double_quote(const std::string & str, std::string & snap, uint_si
 	return false;
 }
 
-/// Split string by a spliter
-void split_by(const std::string & str, char spliter, std::vector<std::string> & units)
+/// Do the following things:
+///   1. "-a -> 0-a",
+///   2. remove outer-parenthesis
+///   3. trim
+void preprocessing(std::string & fullcmd)
 {
-	std::string cmds = trim(str);
-	uint_size len = cmds.length();
-	uint_size records = 0;
-	tunit_ctr lctr;
+	processor::negative_to_subtraction(fullcmd);
+	processor::remove_outer_parenthesis(fullcmd);
+	fullcmd = utils::trim(fullcmd);
+}
 
-	for (uint_size i = 0; i<len; i++) {
-		lctr.update_lex_ctrs(str[i]);
+/// Split by Semicolon `;`
+void split_units_by_semicolon(std::string & str, std::vector<std::string> & units)
+{
+	split(str, ';', units);
 
-		if (!lctr.independent())
+	for (auto iter = units.begin(); iter != units.end(); iter++) {
+		std::string unit = utils::trim(*iter);
+		preprocessing(unit);
+
+		if (unit.length() == 0)
 			continue;
-		if (cmds[i] == spliter) {
-			std::string snap = trim(cmds.substr(records, i-records));
-
-			if (snap.length() > 0) {
-				units.push_back(snap); // can't add_str_consts();
-				records = i + 1;
-			}
-		}
-	}
-
-	std::string snap = trim(cmds.substr(records));
-	if (snap.length() > 0) units.push_back(snap);
-}
-
-/// trim, "-a -> 0-a", remove outer-parenthesis,
-void preprocessing_1(std::string & fullcmd)
-{
-	negative_to_subtraction(fullcmd);
-	remove_outer_parenthesis(fullcmd);
-	fullcmd = trim(fullcmd);
-}
-
-/// split by comma, fill units.
-void preprocessings_2(std::string & fullcmd, std::vector<std::string> & units)
-{
-	std::vector<std::string> cmds;
-	split_by(fullcmd, ';', cmds);
-
-	for (auto iter = cmds.begin(); iter != cmds.end(); iter++) {
-		std::string cmd = trim(*iter);
-		preprocessing_1(cmd);
-		units.push_back(cmd);
+		*iter = unit;
 	}
 }
 
-/// splite a parameter list 'str' to get a vector
-void split_params(const std::string & str, std::vector<std::string> & params)
+/// splite a parameter list 'str' by comma `,`
+void split_params_by_comma(const std::string & str, std::vector<std::string> & params)
 {
-	split_by(str, ',', params);
+	split(str, ',', params);
 
 	// In this case nparams cannot be represented by an unsigned char
 	if (params.size() >= REGLIST_SIZE_LIMIT)
-		twarn(ErrCompile_REGOutOfLimit).warn("tsyner::split_params", "");
+		twarn(ErrCompile_REGOutOfLimit).warn("tsyner::split_params_by_comma", "too many parameters");
 
-	// Preprocessing
+	// Preprocessing each parameter
 	for (auto iter = params.begin(); iter != params.end(); iter++) {
-		std::string cmd = trim(*iter);
-		preprocessing_1(cmd);
+		std::string cmd = utils::trim(*iter);
+		preprocessing(cmd);
 
 		if (cmd.length() == 0)
-			twarn(ErrCompile_InvalidLiter).warn("split_params", "empty liter");
+			twarn(ErrCompile_InvalidLiter).warn("split_params_by_comma", "empty liter");
 		*iter = cmd;
 	}
-}
-
-bool check_independent(const std::string & cmd)
-{
-	tunit_ctr ctr;
-	for (uint_size i = 0; i < cmd.size(); i++)
-		ctr.update_lex_ctrs(cmd[i]);
-	return ctr.independent();
-}
-
-/// check whether a unit is complete (independent in bracket/quotation system)
-bool check_finished(const std::string & cmd, std::string & fullcmd, tunit_ctr & ctr)
-{
-	for (uint_size i = 0; i < cmd.size(); i++)
-		ctr.update_lex_ctrs(cmd[i]);
-	fullcmd.append(cmd + '\n');
-	return ctr.independent();
 }
 
 /// split str to get units (independent in bracket/quotation system)
 void lex_str(const std::string & str, std::vector<std::string> & units)
 {
-	std::string line;
-	std::string fullcmd;
-	uint_size loc = 0;
+	std::string tmpline;
+	std::string tmpunit;
+	uint_size cursor = 0;
 	tunit_ctr lctr;
 
-	while (get_first_line(str, line, loc)) {
-		cancel_from_comments(line);
-		std::string trimmed_back_line = trim_back(line);
-		line = "";
+	while (extract_next_line(str, tmpline, cursor)) {
+		processor::cancel_from_comments(tmpline);
+		std::string trimmed_back_line = utils::trim_back(tmpline);
+		tmpline = "";
 
-		if (check_finished(trimmed_back_line, fullcmd, lctr)) {
-			fullcmd = trim(fullcmd);
-			preprocessings_2(fullcmd, units);
-			fullcmd = "";
+		if (append_line_to_unit(trimmed_back_line, tmpunit, lctr)) {
+			tmpunit = utils::trim(tmpunit);
+			split_units_by_semicolon(tmpunit, units);
+			tmpunit = "";
 		}
 	}
 }
@@ -540,14 +636,14 @@ void lex_file(FILE * f, std::vector<std::string> & units)
 		c = fgetc(f);
 		line += c;
 
-		if (c == '\n' || c == EOF) {
-			cancel_from_comments(line);
-			std::string trimmed_back_line = trim_back(line);
+		if (c == '\n' || c == EOF || c == ';') {
+			processor::cancel_from_comments(line);
+			std::string line_backtrimmed = utils::trim_back(line);
 			line = "";
 
-			if (check_finished(trimmed_back_line, fullcmd, lctr)) {
-				fullcmd = trim(fullcmd);
-				preprocessings_2(fullcmd, units);
+			if (append_line_to_unit(line_backtrimmed, fullcmd, lctr)) {
+				fullcmd = utils::trim(fullcmd);
+				split_units_by_semicolon(fullcmd, units);
 				fullcmd = "";
 			}
 		}
@@ -560,7 +656,7 @@ void lex_file(FILE * f, std::vector<std::string> & units)
 void lex_md_file(FILE * f, std::vector<std::string> & units)
 {
 	std::string fullcmd;
-	std::string line;
+	std::string tmpline;
 	tunit_ctr lctr;
 	char c;
 
@@ -573,13 +669,13 @@ void lex_md_file(FILE * f, std::vector<std::string> & units)
 
 	while (true) {
 		c = fgetc(f);
-		line += c;
+		tmpline += c;
 
 		if (c == '\n' || c == EOF) {
-			cancel_from_comments(line);
-			std::string trimmed_line = trim(line);
-			std::string trimmed_back_line = trim_back(line);
-			line = "";
+			processor::cancel_from_comments(tmpline);
+			std::string trimmed_line = utils::trim(tmpline);
+			std::string backtrimmed_line = utils::trim_back(tmpline);
+			tmpline = "";
 
 			// entering code block
 			if (0 == in_tap_code_blk &&
@@ -593,7 +689,7 @@ void lex_md_file(FILE * f, std::vector<std::string> & units)
 				if (c == '\n')
 					continue;
 				else
-					twarn(ErrCompile_InvalidLiter).warn("tlexer1::lex_md_file", "");
+					twarn(ErrCompile_InvalidLiter).warn("tunit_splitter::lex_md_file", "");
 			}
 			// leaving code block
 			if (1 == in_tap_code_blk && 0 == tap_code_part_mark_1.compare(trimmed_line)) {
@@ -604,9 +700,9 @@ void lex_md_file(FILE * f, std::vector<std::string> & units)
 				else
 					break;
 			}
-			if (1 == in_tap_code_blk && check_finished(trimmed_back_line, fullcmd, lctr)) {
-				fullcmd = trim(fullcmd);
-				preprocessings_2(fullcmd, units);
+			if (1 == in_tap_code_blk && append_line_to_unit(backtrimmed_line, fullcmd, lctr)) {
+				fullcmd = utils::trim(fullcmd);
+				split_units_by_semicolon(fullcmd, units);
 				fullcmd = "";
 			}
 			if (c == EOF)
@@ -690,82 +786,11 @@ struct ttoken
 	std::string value_3;  ///< parameter 3
 };
 
-/// Append 'input' into 'paths' if it is not already in 'paths'
-inline void add_path(std::vector<std::string> & paths, const std::string & input)
-{
-	uint_size loc = 0;
-	uint_size len = input.length();
-
-	for (uint_size i = 0; i < len; i++) {
-		if (input[i] == ';') {
-			std::string path = input.substr(loc, i - loc);
-
-			for (auto it = paths.begin(); it != paths.end(); it++) {
-				if (it->compare(path) == 0) // two strings are equal
-					goto LOOPEND;
-			}
-			paths.push_back(path);
-			loc = i + 1;
-		}
-		LOOPEND: ;
-	}
-}
-
-inline bool check_vname_validity(const std::string & str)
-{
-	// Keywords are not allowed as variable name
-	if (str == "var" || str == "let" || str == "of")
-		return false;
-	if (str == "nil")
-		return false;
-	if (str == "true" || str == "false")
-		return false;
-	if (str == "this" || str == "base")
-		return false;
-	if (str == "to" || str == "in" || str == "and" || str == "or")
-		return false;
-	if (str == "if" || str == "elif" || str == "else")
-		return false;
-	if (str == "for" || str == "while")
-		return false;
-	if (str == "break" || str == "continue")
-		return false;
-	if (str == "return")
-		return false;
-	if (str == "import" || str == "as")
-		return false;
-
-	// digital is not allowed at the beginning of variable name
-	if (isdigit(str[0]))
-		return false;
-
-	uint_size i = 0;
-
-	for (; i<str.length(); i++) {
-		// only alphabet, digital number or '_' is allowed in variable name
-		if (!isalpha(str[i]) && !isdigit(str[i]) && str[i] != '_')
-			return false;
-	}
-	return true;
-}
-
-/// transform a.f(x) into f(a, x)
-inline void reform_pipline(std::string & fname, std::string & params)
-{
-	uint_size loc = fname.rfind(".");
-
-	if (std::string::npos != loc) {
-		std::string p1 = fname.substr(0, loc);
-		fname = fname.substr(loc + 1);
-		params = p1.append(",").append(params);
-	}
-}
-
 /// Split a syntax unit into tokens
 inline void get_tokens(const std::string & str, std::vector<ttoken> & tokens)
 {
 	std::string unit = str;
-	tlexer1 lexer;
+	tunit_splitter splitter;
 	uint_size genloc;
 	std::string gencontents;
 	// printf("unit = %s\n", unit.c_str());
@@ -799,7 +824,7 @@ inline void get_tokens(const std::string & str, std::vector<ttoken> & tokens)
 	}
 	// Statement return
 	if (unit.length() >= 6 && unit.substr(0, 6) == "return") {
-		std::string v = lexer.trim(unit.substr(6));
+		std::string v = utils::trim(unit.substr(6));
 		if (v.length() > 0)
 			tokens.push_back({ token_return, 1, v, "", "" });
 		else
@@ -808,73 +833,73 @@ inline void get_tokens(const std::string & str, std::vector<ttoken> & tokens)
 	}
 	// Statement var declare
 	if (unit.length() >= 4 && unit.substr(0, 4) == "var ") {
-		std::string vclm_expr = lexer.trim(unit.substr(4));
+		std::string vclm_expr = utils::trim(unit.substr(4));
 		uint_size idx_asg = vclm_expr.find("=");
-		std::string vsig = lexer.trim(vclm_expr.substr(0, idx_asg));
+		std::string vsig = utils::trim(vclm_expr.substr(0, idx_asg));
 		uint_size idx_of_type = vsig.find(":");
-		std::string vname = lexer.trim(vsig.substr(0, idx_of_type));
+		std::string vname = utils::trim(vsig.substr(0, idx_of_type));
 		std::string vtype = "";
 
 		if (vname.length() == 0)
-			twarn(ErrCompile_VarNoType).warn("tlexer::get_token", vname);
-		if (!check_vname_validity(vname))
-			twarn(ErrCompile_InvalidVname).warn("tlexer::get_token", vname);
+			twarn(ErrCompile_VarNoType).warn("get_token", vname);
+		if (!processor::check_vname_validity(vname))
+			twarn(ErrCompile_InvalidVname).warn("get_token", vname);
 		if (std::string::npos != idx_of_type)
-			vtype = lexer.trim(vsig.substr(idx_of_type + 1));
+			vtype = utils::trim(vsig.substr(idx_of_type + 1));
 
 		// Deal with assignment
 		if (std::string::npos == idx_asg)  // no assignment (=)
 			tokens.push_back({token_var, 2, vname, vtype, ""});
 		else {                             // there is assignment (=)
-			std::string right = lexer.trim(vclm_expr.substr(idx_asg + 1));
+			std::string right = utils::trim(vclm_expr.substr(idx_asg + 1));
 
 			if (right.length() > 0)
 				tokens.push_back({token_var, 3, vname, vtype, right});
 			else
-				twarn(ErrCompile_InvalidLiter).warn("tlexer::get_token", vname);
+				twarn(ErrCompile_InvalidLiter).warn("get_token", vname);
 		}
 		return;
 	}
 	// Statement let declare
 	if (unit.length() >= 4 && unit.substr(0, 4) == "let ") {
-		std::string vclm_expr = lexer.trim(unit.substr(4));
+		std::string vclm_expr = utils::trim(unit.substr(4));
 		uint_size idx_asg = vclm_expr.find("=");
-		std::string vsig = lexer.trim(vclm_expr.substr(0, idx_asg));
+		std::string vsig = utils::trim(vclm_expr.substr(0, idx_asg));
 		uint_size idx_of = vsig.find(":");
-		std::string vname = lexer.trim(vsig.substr(0, idx_of));
+		std::string vname = utils::trim(vsig.substr(0, idx_of));
 		std::string vtype = "";
 
 		if (vname.length() == 0)
-			twarn(ErrCompile_VarNoType).warn("tlexer::get_token", vname);
-		if (!check_vname_validity(vname))
-			twarn(ErrCompile_InvalidVname).warn("tlexer::get_token", vname);
+			twarn(ErrCompile_VarNoType).warn("get_token", vname);
+		if (!processor::check_vname_validity(vname))
+			twarn(ErrCompile_InvalidVname).warn("get_token", vname);
 		if (std::string::npos != idx_of)
-			vtype = lexer.trim(vsig.substr(idx_of + 1));
+			vtype = utils::trim(vsig.substr(idx_of + 1));
 
 		// Deal with assignment
 		if (std::string::npos == idx_asg)  // no assignment (=)
 			tokens.push_back({token_let, 2, vname, vtype, ""});
 		else {                             // there is assignment (=)
-			std::string right = lexer.trim(vclm_expr.substr(idx_asg + 1));
+			std::string right = utils::trim(vclm_expr.substr(idx_asg + 1));
 
 			if (right.length() > 0)
 				tokens.push_back({token_let, 3, vname, vtype, right});
 			else
-				twarn(ErrCompile_InvalidLiter).warn("tlexer::get_token", vname);
+				twarn(ErrCompile_InvalidLiter).warn("get_token", vname);
 		}
 		return;
 	}
 	// Statement import
 	if (unit.length() >= 7 && unit.substr(0, 7) == "import ") {
-		std::string import_body = lexer.trim(unit.substr(7));
+		std::string import_body = utils::trim(unit.substr(7));
 		uint_size spliter = import_body.find(" as ");
-		std::string file = lexer.trim(import_body.substr(0, spliter));
+		std::string file = utils::trim(import_body.substr(0, spliter));
 
 		if ((file[0] == '"' && file.back() == '"')
 		|| (file[0] == '\'' && file.back() == '\''))
-			file = lexer.trim(file.substr(1, file.length() - 2));
+			file = utils::trim(file.substr(1, file.length() - 2));
 		if (std::string::npos != spliter) {  // there is alias name
-			std::string name = lexer.trim(import_body.substr(spliter + 4));
+			std::string name = utils::trim(import_body.substr(spliter + 4));
 			tokens.push_back({token_import, 2, file, name, ""});
 		} else                               // there is no alias name
 			tokens.push_back({token_import, 1, file, "", ""});
@@ -882,19 +907,19 @@ inline void get_tokens(const std::string & str, std::vector<ttoken> & tokens)
 	}
 	// Statement while loop
 	if (unit.length() >= 5 && unit.substr(0, 5) == "while") {
-		std::string contents = lexer.trim(unit.substr(5));
+		std::string contents = utils::trim(unit.substr(5));
 		std::string cond;
 		std::string blk;
 		uint_size idx_cond;
 		uint_size idx_blk;
 
-		if (lexer.get_first_parenthesis(contents, cond, idx_cond)) {
-			std::string blk_full = lexer.trim(contents.substr(idx_cond + 1));
+		if (splitter.get_first_parenthesis(contents, cond, idx_cond)) {
+			std::string blk_full = utils::trim(contents.substr(idx_cond + 1));
 
-			if (lexer.get_first_block(blk_full, blk, idx_blk)) {
+			if (splitter.get_first_block(blk_full, blk, idx_blk)) {
 				if (idx_blk == blk_full.length()-1) {
-					cond = lexer.trim(cond);
-					blk = lexer.trim(blk);
+					cond = utils::trim(cond);
+					blk = utils::trim(blk);
 					tokens.push_back({ token_while, 2, cond, blk, "" });
 					return;
 				}
@@ -903,23 +928,23 @@ inline void get_tokens(const std::string & str, std::vector<ttoken> & tokens)
 	}
 	// Statement for loop
 	if (unit.length() >= 3 && unit.substr(0, 3) == "for") {
-		std::string contents = lexer.trim(unit.substr(3));
+		std::string contents = utils::trim(unit.substr(3));
 		std::string cond;
 		std::string blk;
 		uint_size idx_cond;
 		uint_size idx_blk;
 
-		if (lexer.get_first_parenthesis(contents, cond, idx_cond)) {
-			std::string blk_full = lexer.trim(contents.substr(idx_cond + 1));
+		if (splitter.get_first_parenthesis(contents, cond, idx_cond)) {
+			std::string blk_full = utils::trim(contents.substr(idx_cond + 1));
 
-			if (lexer.get_first_block(blk_full, blk, idx_blk)) {
+			if (splitter.get_first_block(blk_full, blk, idx_blk)) {
 				if (idx_blk == blk_full.length()-1) {
-					cond = lexer.trim(cond);
-					blk = lexer.trim(blk);
+					cond = utils::trim(cond);
+					blk = utils::trim(blk);
 					uint_size idx_in = cond.find(" in ");
 
-					std::string in_l = lexer.trim(cond.substr(0, idx_in));
-					std::string in_r = lexer.trim(cond.substr(idx_in + 4));
+					std::string in_l = utils::trim(cond.substr(0, idx_in));
+					std::string in_r = utils::trim(cond.substr(idx_in + 4));
 
 					tokens.push_back({ token_for, 3, in_l, in_r, blk });
 					return;
@@ -929,19 +954,19 @@ inline void get_tokens(const std::string & str, std::vector<ttoken> & tokens)
 	}
 	// Statement if
 	if (unit.length() >= 2 && unit.substr(0, 2) == "if") {
-		std::string contents = lexer.trim(unit.substr(2));
+		std::string contents = utils::trim(unit.substr(2));
 		std::string cond;
 		std::string blk;
 		uint_size idx_cond;
 		uint_size idx_blk;
 
-		if (lexer.get_first_parenthesis(contents, cond, idx_cond)) {
-			std::string blk_full = lexer.trim(contents.substr(idx_cond + 1));
+		if (splitter.get_first_parenthesis(contents, cond, idx_cond)) {
+			std::string blk_full = utils::trim(contents.substr(idx_cond + 1));
 
-			if (lexer.get_first_block(blk_full, blk, idx_blk)) {
+			if (splitter.get_first_block(blk_full, blk, idx_blk)) {
 				if (idx_blk == blk_full.length()-1) {
-					cond = lexer.trim(cond);
-					blk = lexer.trim(blk);
+					cond = utils::trim(cond);
+					blk = utils::trim(blk);
 					tokens.push_back({ token_if, 2, cond, blk, "" });
 					return;
 				}
@@ -950,19 +975,19 @@ inline void get_tokens(const std::string & str, std::vector<ttoken> & tokens)
 	}
 	// Statement elif
 	if (unit.length() >= 4 && unit.substr(0, 4) == "elif") {
-		std::string contents = lexer.trim(unit.substr(4));
+		std::string contents = utils::trim(unit.substr(4));
 		std::string cond;
 		std::string blk;
 		uint_size idx_cond;
 		uint_size idx_blk;
 
-		if (lexer.get_first_parenthesis(contents, cond, idx_cond)) {
-			std::string blk_full = lexer.trim(contents.substr(idx_cond + 1));
+		if (splitter.get_first_parenthesis(contents, cond, idx_cond)) {
+			std::string blk_full = utils::trim(contents.substr(idx_cond + 1));
 
-			if (lexer.get_first_block(blk_full, blk, idx_blk)) {
+			if (splitter.get_first_block(blk_full, blk, idx_blk)) {
 				if (idx_blk == blk_full.length()-1) {
-					cond = lexer.trim(cond);
-					blk = lexer.trim(blk);
+					cond = utils::trim(cond);
+					blk = utils::trim(blk);
 					tokens.push_back({ token_elif, 2, cond, blk, "" });
 					return;
 				}
@@ -971,13 +996,13 @@ inline void get_tokens(const std::string & str, std::vector<ttoken> & tokens)
 	}
 	// Statement else
 	if (unit.length() >= 4 && unit.substr(0, 4) == "else") {
-		std::string contents = lexer.trim(unit.substr(4));
+		std::string contents = utils::trim(unit.substr(4));
 		std::string blk;
 		uint_size idx_blk;
 
-		if (lexer.get_first_block(contents, blk, idx_blk)) {
+		if (splitter.get_first_block(contents, blk, idx_blk)) {
 			if (idx_blk == contents.length()-1) {
-				blk = lexer.trim(blk);
+				blk = utils::trim(blk);
 				tokens.push_back({ token_else, 1, blk, "", "" });
 				return;
 			}
@@ -991,16 +1016,17 @@ inline void get_tokens(const std::string & str, std::vector<ttoken> & tokens)
 		&& unit[genloc - 1] != '>'
 		&& unit[genloc - 1] != '<'
 		&& unit[genloc - 1] != '!') {
-			std::string right = lexer.trim(unit.substr(genloc + 1));
-			std::string left = lexer.trim(unit.substr(0, genloc));
+			std::string right = utils::trim(unit.substr(genloc + 1));
+			std::string left = utils::trim(unit.substr(0, genloc));
 
-			if (lexer.check_independent(left) && lexer.check_independent(right)) {
+			if (processor::check_unit_complete(left)
+			 && processor::check_unit_complete(right)) {
 				uint_size idxl_loc;
 				std::string idxl_params;
 
-				if (lexer.get_last_bracket(left, idxl_params, idxl_loc)) {
-					std::string arr = lexer.trim(left.substr(0, idxl_loc));
-					std::string params = lexer.trim(idxl_params);
+				if (splitter.get_last_bracket(left, idxl_params, idxl_loc)) {
+					std::string arr = utils::trim(left.substr(0, idxl_loc));
+					std::string params = utils::trim(idxl_params);
 					tokens.push_back({ token_idxl, 3, arr, params, right });
 				} else
 					tokens.push_back({ token_asg, 2, left, right, "" });
@@ -1009,51 +1035,51 @@ inline void get_tokens(const std::string & str, std::vector<ttoken> & tokens)
 		}
 	}
 	// Expression: single string   ''
-	if (lexer.get_first_single_quote(unit, gencontents, genloc)) {
+	if (splitter.get_first_single_quote(unit, gencontents, genloc)) {
 		if (genloc == unit.length() - 1) {
 			tokens.push_back({ token_sstr, 1, gencontents, "", "" });
 			return;
 		}
 	}
 	// Expression: double string   ""
-	if (lexer.get_first_double_quote(unit, gencontents, genloc)) {
+	if (splitter.get_first_double_quote(unit, gencontents, genloc)) {
 		if (genloc == unit.length() - 1) {
 			tokens.push_back({ token_sstr, 1, gencontents, "", "" });
 			return;
 		}
 	}
 	// Expression: dict  {}
-	if (lexer.get_first_block(unit, gencontents, genloc)) {
+	if (splitter.get_first_block(unit, gencontents, genloc)) {
 		if (genloc == unit.length() - 1) {
-			std::string params = lexer.trim(gencontents);
+			std::string params = utils::trim(gencontents);
 			tokens.push_back({ token_dict, 1, params, "", "" });
 			return;
 		}
 	}
 	// Expression: Kappa #{}
 	if (unit.length() >= 1 && unit.substr(0, 1) == "#") {
-		std::string contents = lexer.trim(unit.substr(1));
+		std::string contents = utils::trim(unit.substr(1));
 		std::string blk;
 		uint_size idx_blk;
 
-		if (lexer.get_first_block(contents, blk, idx_blk)) {
+		if (splitter.get_first_block(contents, blk, idx_blk)) {
 			if (idx_blk == contents.length()-1) {
-				blk = lexer.trim(blk);
+				blk = utils::trim(blk);
 				tokens.push_back({ token_kappa, 1, blk, "", "" });
 				return;
 			}
 		}
 	}
 	// Expression: function () {}
-	if (lexer.get_first_parenthesis(unit, gencontents, genloc)) {
-		std::string blk_full = lexer.trim(unit.substr(genloc + 1));
+	if (splitter.get_first_parenthesis(unit, gencontents, genloc)) {
+		std::string blk_full = utils::trim(unit.substr(genloc + 1));
 		std::string blk;
 		uint_size idx_blk;
 
-		if (lexer.get_first_block(blk_full, blk, idx_blk)) {
+		if (splitter.get_first_block(blk_full, blk, idx_blk)) {
 			if (idx_blk == blk_full.length() - 1) {
-				std::string params = lexer.trim(gencontents);
-				blk = lexer.trim(blk);
+				std::string params = utils::trim(gencontents);
+				blk = utils::trim(blk);
 				tokens.push_back({ token_func, 2, params, blk, "" });
 				return;
 			}
@@ -1072,11 +1098,11 @@ inline void get_tokens(const std::string & str, std::vector<ttoken> & tokens)
 		if (std::distance(it, unit.end()) > 4 && std::distance(unit.begin(), it) > 0
 		 && std::string(it, it + 4) == " in ") {
 			// printf("in\n");
-			std::string left = lexer.trim(std::string(unit.begin(), it));
-			std::string right = lexer.trim(std::string(it + 4, unit.end()));
+			std::string left = utils::trim(std::string(unit.begin(), it));
+			std::string right = utils::trim(std::string(it + 4, unit.end()));
 
-			if (lexer.check_independent(left)
-			 && lexer.check_independent(right)
+			if (processor::check_unit_complete(left)
+			 && processor::check_unit_complete(right)
 			 && token_in < binary_token.type)
 				binary_token = { token_in, 2, left, right, "" };
 		}
@@ -1086,11 +1112,11 @@ inline void get_tokens(const std::string & str, std::vector<ttoken> & tokens)
 		 && std::string(it - 1, it) != ":"
 		 && std::string(it + 1, it + 2) != ":") {
 			// printf("pair\n");
-			std::string left = lexer.trim(std::string(unit.begin(), it));
-			std::string right = lexer.trim(std::string(it + 1, unit.end()));
+			std::string left = utils::trim(std::string(unit.begin(), it));
+			std::string right = utils::trim(std::string(it + 1, unit.end()));
 
-			if (lexer.check_independent(left)
-			 && lexer.check_independent(right)
+			if (processor::check_unit_complete(left)
+			 && processor::check_unit_complete(right)
 			 && token_pair < binary_token.type)
 				binary_token = { token_pair, 2, left, right, "" };
 		}
@@ -1098,11 +1124,11 @@ inline void get_tokens(const std::string & str, std::vector<ttoken> & tokens)
 		if (std::distance(it, unit.end()) > 4 && std::distance(unit.begin(), it) > 0
 		 && std::string(it, it + 4) == " to ") {
 			// printf("to\n");
-			std::string left = lexer.trim(std::string(unit.begin(), it));
-			std::string right = lexer.trim(std::string(it + 4, unit.end()));
+			std::string left = utils::trim(std::string(unit.begin(), it));
+			std::string right = utils::trim(std::string(it + 4, unit.end()));
 
-			if (lexer.check_independent(left)
-			 && lexer.check_independent(right)
+			if (processor::check_unit_complete(left)
+			 && processor::check_unit_complete(right)
 			 && token_to < binary_token.type)
 				binary_token = { token_to, 2, left, right, "" };
 		}
@@ -1110,11 +1136,11 @@ inline void get_tokens(const std::string & str, std::vector<ttoken> & tokens)
 		if (std::distance(it, unit.end()) > 4 && std::distance(unit.begin(), it) > 0
 		 && std::string(it, it + 4) == " or ") {
 			// printf("or\n");
-			std::string left = lexer.trim(std::string(unit.begin(), it));
-			std::string right = lexer.trim(std::string(it + 4, unit.end()));
+			std::string left = utils::trim(std::string(unit.begin(), it));
+			std::string right = utils::trim(std::string(it + 4, unit.end()));
 
-			if (lexer.check_independent(left)
-			 && lexer.check_independent(right)
+			if (processor::check_unit_complete(left)
+			 && processor::check_unit_complete(right)
 			 && token_or < binary_token.type)
 				binary_token = { token_or, 2, left, right, "" };
 		}
@@ -1122,11 +1148,11 @@ inline void get_tokens(const std::string & str, std::vector<ttoken> & tokens)
 		if (std::distance(it, unit.end()) > 5 && std::distance(unit.begin(), it) > 0
 		 && std::string(it, it + 5) == " and ") {
 			// printf("and\n");
-			std::string left = lexer.trim(std::string(unit.begin(), it));
-			std::string right = lexer.trim(std::string(it + 5, unit.end()));
+			std::string left = utils::trim(std::string(unit.begin(), it));
+			std::string right = utils::trim(std::string(it + 5, unit.end()));
 
-			if (lexer.check_independent(left)
-			 && lexer.check_independent(right)
+			if (processor::check_unit_complete(left)
+			 && processor::check_unit_complete(right)
 			 && token_and < binary_token.type)
 				binary_token = { token_and, 2, left, right, "" };
 		}
@@ -1134,11 +1160,11 @@ inline void get_tokens(const std::string & str, std::vector<ttoken> & tokens)
 		if (std::distance(it, unit.end()) > 2 && std::distance(unit.begin(), it) > 0
 		 && std::string(it, it + 2) == "==") {
 			// printf("==\n");
-			std::string left = lexer.trim(std::string(unit.begin(), it));
-			std::string right = lexer.trim(std::string(it + 2, unit.end()));
+			std::string left = utils::trim(std::string(unit.begin(), it));
+			std::string right = utils::trim(std::string(it + 2, unit.end()));
 
-			if (lexer.check_independent(left)
-			 && lexer.check_independent(right)
+			if (processor::check_unit_complete(left)
+			 && processor::check_unit_complete(right)
 			 && token_sl < binary_token.type)
 				binary_token = { token_eq, 2, left, right, "" };
 		}
@@ -1146,11 +1172,11 @@ inline void get_tokens(const std::string & str, std::vector<ttoken> & tokens)
 		if (std::distance(it, unit.end()) > 2 && std::distance(unit.begin(), it) > 0
 		 && std::string(it, it + 2) == "!=") {
 			// printf("!=\n");
-			std::string left = lexer.trim(std::string(unit.begin(), it));
-			std::string right = lexer.trim(std::string(it + 2, unit.end()));
+			std::string left = utils::trim(std::string(unit.begin(), it));
+			std::string right = utils::trim(std::string(it + 2, unit.end()));
 
-			if (lexer.check_independent(left)
-			 && lexer.check_independent(right)
+			if (processor::check_unit_complete(left)
+			 && processor::check_unit_complete(right)
 			 && token_sl < binary_token.type)
 				binary_token = { token_ne, 2, left, right, "" };
 		}
@@ -1158,11 +1184,11 @@ inline void get_tokens(const std::string & str, std::vector<ttoken> & tokens)
 		if (std::distance(it, unit.end()) > 2 && std::distance(unit.begin(), it) > 0
 		 && std::string(it, it + 2) == ">=") {
 			// printf(">=\n");
-			std::string left = lexer.trim(std::string(unit.begin(), it));
-			std::string right = lexer.trim(std::string(it + 2, unit.end()));
+			std::string left = utils::trim(std::string(unit.begin(), it));
+			std::string right = utils::trim(std::string(it + 2, unit.end()));
 
-			if (lexer.check_independent(left)
-			 && lexer.check_independent(right)
+			if (processor::check_unit_complete(left)
+			 && processor::check_unit_complete(right)
 			 && token_sl < binary_token.type)
 				binary_token = { token_ge, 2, left, right, "" };
 		}
@@ -1170,11 +1196,11 @@ inline void get_tokens(const std::string & str, std::vector<ttoken> & tokens)
 		if (std::distance(it, unit.end()) > 2 && std::distance(unit.begin(), it) > 0
 		 && std::string(it, it + 2) == "<=") {
 			// printf("<=\n");
-			std::string left = lexer.trim(std::string(unit.begin(), it));
-			std::string right = lexer.trim(std::string(it + 2, unit.end()));
+			std::string left = utils::trim(std::string(unit.begin(), it));
+			std::string right = utils::trim(std::string(it + 2, unit.end()));
 
-			if (lexer.check_independent(left)
-			 && lexer.check_independent(right)
+			if (processor::check_unit_complete(left)
+			 && processor::check_unit_complete(right)
 			 && token_sl < binary_token.type)
 				binary_token = { token_le, 2, left, right, "" };
 		}
@@ -1182,11 +1208,11 @@ inline void get_tokens(const std::string & str, std::vector<ttoken> & tokens)
 		if (std::distance(it, unit.end()) > 1 && std::distance(unit.begin(), it) > 0
 		 && std::string(it, it + 1) == ">") {
 			// printf(">\n");
-			std::string left = lexer.trim(std::string(unit.begin(), it));
-			std::string right = lexer.trim(std::string(it + 1, unit.end()));
+			std::string left = utils::trim(std::string(unit.begin(), it));
+			std::string right = utils::trim(std::string(it + 1, unit.end()));
 
-			if (lexer.check_independent(left)
-			 && lexer.check_independent(right)
+			if (processor::check_unit_complete(left)
+			 && processor::check_unit_complete(right)
 			 && token_sl < binary_token.type)
 				binary_token = { token_sg, 2, left, right, "" };
 		}
@@ -1194,11 +1220,11 @@ inline void get_tokens(const std::string & str, std::vector<ttoken> & tokens)
 		if (std::distance(it, unit.end()) > 1 && std::distance(unit.begin(), it) > 0
 		 && std::string(it, it + 1) == "<") {
 			// printf("<\n");
-			std::string left = lexer.trim(std::string(unit.begin(), it));
-			std::string right = lexer.trim(std::string(it + 1, unit.end()));
+			std::string left = utils::trim(std::string(unit.begin(), it));
+			std::string right = utils::trim(std::string(it + 1, unit.end()));
 
-			if (lexer.check_independent(left)
-			 && lexer.check_independent(right)
+			if (processor::check_unit_complete(left)
+			 && processor::check_unit_complete(right)
 			 && token_sl < binary_token.type)
 				binary_token = { token_sl, 2, left, right, "" };
 		}
@@ -1206,11 +1232,11 @@ inline void get_tokens(const std::string & str, std::vector<ttoken> & tokens)
 		if (std::distance(it, unit.end()) > 1 && std::distance(unit.begin(), it) > 0
 		 && std::string(it, it + 1) == "+") {
 			// printf("add\n");
-			std::string left = lexer.trim(std::string(unit.begin(), it));
-			std::string right = lexer.trim(std::string(it + 1, unit.end()));
+			std::string left = utils::trim(std::string(unit.begin(), it));
+			std::string right = utils::trim(std::string(it + 1, unit.end()));
 
-			if (lexer.check_independent(left)
-			 && lexer.check_independent(right)
+			if (processor::check_unit_complete(left)
+			 && processor::check_unit_complete(right)
 			 && token_sub < binary_token.type)
 				binary_token = { token_add, 2, left, right, "" };
 		}
@@ -1218,11 +1244,11 @@ inline void get_tokens(const std::string & str, std::vector<ttoken> & tokens)
 		if (std::distance(it, unit.end()) > 1 && std::distance(unit.begin(), it) > 0
 		 && std::string(it, it + 1) == "-") {
 			// printf("sub\n");
-			std::string left = lexer.trim(std::string(unit.begin(), it));
-			std::string right = lexer.trim(std::string(it + 1, unit.end()));
+			std::string left = utils::trim(std::string(unit.begin(), it));
+			std::string right = utils::trim(std::string(it + 1, unit.end()));
 
-			if (lexer.check_independent(left)
-			 && lexer.check_independent(right)
+			if (processor::check_unit_complete(left)
+			 && processor::check_unit_complete(right)
 			 && token_sub < binary_token.type)
 				binary_token = { token_sub, 2, left, right, "" };
 		}
@@ -1230,11 +1256,11 @@ inline void get_tokens(const std::string & str, std::vector<ttoken> & tokens)
 		if (std::distance(it, unit.end()) > 1 && std::distance(unit.begin(), it) > 0
 		 && std::string(it, it + 1) == "*") {
 			// printf("mul\n");
-			std::string left = lexer.trim(std::string(unit.begin(), it));
-			std::string right = lexer.trim(std::string(it + 1, unit.end()));
+			std::string left = utils::trim(std::string(unit.begin(), it));
+			std::string right = utils::trim(std::string(it + 1, unit.end()));
 
-			if (lexer.check_independent(left)
-			 && lexer.check_independent(right)
+			if (processor::check_unit_complete(left)
+			 && processor::check_unit_complete(right)
 			 && token_mmul < binary_token.type)
 				binary_token = { token_mul, 2, left, right, "" };
 		}
@@ -1242,11 +1268,11 @@ inline void get_tokens(const std::string & str, std::vector<ttoken> & tokens)
 		if (std::distance(it, unit.end()) > 1 && std::distance(unit.begin(), it) > 0
 		 && std::string(it, it + 1) == "/") {
 			// printf("div\n");
-			std::string left = lexer.trim(std::string(unit.begin(), it));
-			std::string right = lexer.trim(std::string(it + 1, unit.end()));
+			std::string left = utils::trim(std::string(unit.begin(), it));
+			std::string right = utils::trim(std::string(it + 1, unit.end()));
 
-			if (lexer.check_independent(left)
-			 && lexer.check_independent(right)
+			if (processor::check_unit_complete(left)
+			 && processor::check_unit_complete(right)
 			 && token_mmul < binary_token.type)
 				binary_token = { token_div, 2, left, right, "" };
 		}
@@ -1254,11 +1280,11 @@ inline void get_tokens(const std::string & str, std::vector<ttoken> & tokens)
 		if (std::distance(it, unit.end()) > 1 && std::distance(unit.begin(), it) > 0
 		 && std::string(it, it + 1) == "%") {
 			// printf("mod\n");
-			std::string left = lexer.trim(std::string(unit.begin(), it));
-			std::string right = lexer.trim(std::string(it + 1, unit.end()));
+			std::string left = utils::trim(std::string(unit.begin(), it));
+			std::string right = utils::trim(std::string(it + 1, unit.end()));
 
-			if (lexer.check_independent(left)
-			 && lexer.check_independent(right)
+			if (processor::check_unit_complete(left)
+			 && processor::check_unit_complete(right)
 			 && token_mmul < binary_token.type)
 				binary_token = { token_mod, 2, left, right, "" };
 		}
@@ -1266,11 +1292,11 @@ inline void get_tokens(const std::string & str, std::vector<ttoken> & tokens)
 		if (std::distance(it, unit.end()) > 1 && std::distance(unit.begin(), it) > 0
 		 && std::string(it, it + 1) == "@") {
 			// printf("mmul\n");
-			std::string left = lexer.trim(std::string(unit.begin(), it));
-			std::string right = lexer.trim(std::string(it + 1, unit.end()));
+			std::string left = utils::trim(std::string(unit.begin(), it));
+			std::string right = utils::trim(std::string(it + 1, unit.end()));
 
-			if (lexer.check_independent(left)
-			 && lexer.check_independent(right)
+			if (processor::check_unit_complete(left)
+			 && processor::check_unit_complete(right)
 			 && token_mmul < binary_token.type)
 				binary_token = { token_mmul, 2, left, right, "" };
 		}
@@ -1278,11 +1304,11 @@ inline void get_tokens(const std::string & str, std::vector<ttoken> & tokens)
 		if (std::distance(it, unit.end()) > 1 && std::distance(unit.begin(), it) > 0
 		 && std::string(it, it + 1) == "^") {
 			// printf("pow\n");
-			std::string left = lexer.trim(std::string(unit.begin(), it));
-			std::string right = lexer.trim(std::string(it + 1, unit.end()));
+			std::string left = utils::trim(std::string(unit.begin(), it));
+			std::string right = utils::trim(std::string(it + 1, unit.end()));
 
-			if (lexer.check_independent(left)
-			 && lexer.check_independent(right)
+			if (processor::check_unit_complete(left)
+			 && processor::check_unit_complete(right)
 			 && token_pow < binary_token.type)
 				binary_token = { token_pow, 2, left, right, "" };
 		}
@@ -1297,37 +1323,36 @@ inline void get_tokens(const std::string & str, std::vector<ttoken> & tokens)
 //===========================================================================//
 
 	// Expression eval f()
-	if (lexer.get_last_parenthesis(unit, gencontents, genloc)) {
-		std::string fname = lexer.trim(unit.substr(0, genloc));
+	if (splitter.get_last_parenthesis(unit, gencontents, genloc)) {
+		std::string fname = utils::trim(unit.substr(0, genloc));
 
-		if (lexer.check_independent(fname)) {
-			std::string params = lexer.trim(gencontents);
-			reform_pipline(fname, params);
+		if (processor::check_unit_complete(fname)) {
+			std::string params = utils::trim(gencontents);
+			processor::reform_pipline(fname, params);
 			tokens.push_back({ token_eval, 2, fname, params, "" });
 			return;
 		}
 	}
 	// Expression idx arr[]
-	if (lexer.get_last_bracket(unit, gencontents, genloc)) {
-		std::string arr = lexer.trim(unit.substr(0, genloc));
+	if (splitter.get_last_bracket(unit, gencontents, genloc)) {
+		std::string arr = utils::trim(unit.substr(0, genloc));
 
-		if (lexer.check_independent(arr)) {
-			std::string params = lexer.trim(gencontents);
+		if (processor::check_unit_complete(arr)) {
+			std::string params = utils::trim(gencontents);
 			tokens.push_back({ token_idx, 2, arr, params, "" });
 			return;
 		}
 	}
 	// Expression a::b
 	if (std::string::npos != (genloc = unit.rfind("::"))) {
-		std::string left = lexer.trim(unit.substr(0, genloc));
-		std::string right = lexer.trim(unit.substr(genloc + 2));
+		std::string left = utils::trim(unit.substr(0, genloc));
+		std::string right = utils::trim(unit.substr(genloc + 2));
 
-		if (lexer.check_independent(left) && lexer.check_independent(right)) {
+		if (processor::check_unit_complete(left) && processor::check_unit_complete(right)) {
 			tokens.push_back({ token_idx2, 2, left, right, "" });
 			return;
 		}
 	}
-
 	// unrecognized
 	tokens.push_back({ token_v, 1, unit, "", "" });
 }
@@ -1398,6 +1423,7 @@ uint_size_reg get_reg_max() const
 }
 
 };
+
 
 /// Objects (variables) counter
 class tobj_ctr
@@ -1539,6 +1565,7 @@ bool is_preload(uint_size_obj loc) const
 
 };
 
+
 /// Structure of binary expressions. e.g. a + b
 struct tbin_expr
 {
@@ -1548,6 +1575,7 @@ struct tbin_expr
 	uint_size_obj   lloc;      ///< left object's loc in object list
 	uint_size_obj   rloc;      ///< right object's loc in object list
 };
+
 
 /// Compile a string/file/md file into bycodes
 class tcp
@@ -1809,7 +1837,8 @@ void parse_binop(tins ins, const ttoken & tok, tvmcmd_vect & tcmds, tconsts & co
  *      Case 2.2: If `value` is a variable, then throw a Compilation
  *                error `ErrCompile_ReturnTmpObj`.
  */
-void parse_return(const ttoken & tok, tvmcmd_vect & tcmds, tconsts & consts, std::vector<std::string> & paths, bool inblk)
+void parse_return(const ttoken & tok, tvmcmd_vect & tcmds, tconsts & consts,
+		std::vector<std::string> & paths, bool inblk)
 {
 	if (tok.nval == 1) {
 		if (__tmpctr.obj_loc(tok.value_1) != __tmpctr.obj_len_in_all())
@@ -1837,7 +1866,8 @@ void parse_return(const ttoken & tok, tvmcmd_vect & tcmds, tconsts & consts, std
  *  Case 4: If declaration is successful and a `value` is attached, then
  *      execute `value` and assign the returned to the variable `name`.
  */
-void parse_var(const ttoken & tok, tvmcmd_vect & tcmds, tconsts & consts, std::vector<std::string> & paths, bool inblk)
+void parse_var(const ttoken & tok, tvmcmd_vect & tcmds, tconsts & consts,
+		std::vector<std::string> & paths, bool inblk)
 {
 	// If the name is declared in current environment temporarily
 	uint_size_obj loc_tmp = __tmpctr.obj_loc(tok.value_1);
@@ -1880,7 +1910,8 @@ void parse_var(const ttoken & tok, tvmcmd_vect & tcmds, tconsts & consts, std::v
  *      All temporary variable will be deleted at the end of block, so
  *      it can be declared in block.
  */
-void parse_let(const ttoken & tok, tvmcmd_vect & tcmds, tconsts & consts, std::vector<std::string> & paths, bool inblk)
+void parse_let(const ttoken & tok, tvmcmd_vect & tcmds, tconsts & consts,
+		std::vector<std::string> & paths, bool inblk)
 {
 	uint_size_obj loc_obj = __objctr.obj_loc(tok.value_1);
 	uint_size_cst nameloc = UNDEF_NAMELOC;
@@ -2126,7 +2157,8 @@ void parse_asg(const ttoken & tok, tvmcmd_vect & tcmds, tconsts & consts, std::v
  *     set[idx] = value
  *  @endcode
  */
-void parse_idxl(const ttoken & tok, tvmcmd_vect & tcmds, tconsts & consts, std::vector<std::string> & paths, bool inblk)
+void parse_idxl(const ttoken & tok, tvmcmd_vect & tcmds, tconsts & consts,
+		std::vector<std::string> & paths, bool inblk)
 {
 	// Search the left value
 	uint_size_obj loc = 0;
@@ -2191,7 +2223,8 @@ void parse_idx(const ttoken & tok, tvmcmd_vect & tcmds, tconsts & consts,
  *  @endcode
  *  Equivalent to `arr['key']`
  */
-void parse_idx2(const ttoken & tok, tvmcmd_vect & tcmds, tconsts & consts, std::vector<std::string> & paths, bool inblk)
+void parse_idx2(const ttoken & tok, tvmcmd_vect & tcmds, tconsts & consts,
+		std::vector<std::string> & paths, bool inblk)
 {
 	parse_unit("'" + tok.value_2 + "'", tcmds, consts, paths, 0, inblk);
 	parse_unit(tok.value_1, tcmds, consts, paths, 0, inblk);
@@ -2201,7 +2234,8 @@ void parse_idx2(const ttoken & tok, tvmcmd_vect & tcmds, tconsts & consts, std::
 
 /** Parse evaluation expression
  */
-void parse_eval(const ttoken & tok, tvmcmd_vect & tcmds, tconsts & consts, std::vector<std::string> & paths, bool inblk)
+void parse_eval(const ttoken & tok, tvmcmd_vect & tcmds, tconsts & consts,
+		std::vector<std::string> & paths, bool inblk)
 {
 	// Compile parameters
 	uint_size_reg n = parse_params(tok.value_2, tcmds, consts, paths, inblk);
@@ -2215,7 +2249,8 @@ void parse_eval(const ttoken & tok, tvmcmd_vect & tcmds, tconsts & consts, std::
 
 /** Parse dictionary
  */
-void parse_dict(const ttoken & tok, tvmcmd_vect & tcmds, tconsts & consts, std::vector<std::string> & paths, bool inblk)
+void parse_dict(const ttoken & tok, tvmcmd_vect & tcmds, tconsts & consts,
+		std::vector<std::string> & paths, bool inblk)
 {
 	uint_size_reg n = parse_params(tok.value_1, tcmds, consts, paths, inblk);
 	tcmds.append(tbycode(OP_PUSHDICT, n));
@@ -2232,7 +2267,7 @@ void parse_func(const ttoken & tok, tvmcmd_vect & tcmds, tconsts & consts, std::
 	uint_size_reg nparams = UNDEF_NPARAMS; // undef by default
 
 	if (tok.value_1 != "...") {
-		tlexer1().split_params(tok.value_1, params);
+		tunit_splitter().split_params_by_comma(tok.value_1, params);
 		nparams = static_cast<uint_size_reg>(params.size());
 	}
 
@@ -2500,9 +2535,9 @@ tcinfo parse_unit(const std::string & str, tvmcmd_vect & tcmds, tconsts & consts
 {
 	// split by ';'
 	std::string cmd = str;
-	tlexer1 lexer;
+	tunit_splitter splitter;
 	std::vector<std::string> cmdvec;
-	lexer.split_by(cmd, ';', cmdvec);
+	tunit_splitter().split_units_by_semicolon(cmd, cmdvec);
 
 	if (cmdvec.size() > 1) {
 		for (auto it = cmdvec.begin(); it != cmdvec.end(); it++)
@@ -2511,7 +2546,7 @@ tcinfo parse_unit(const std::string & str, tvmcmd_vect & tcmds, tconsts & consts
 	}
 
 	// preprocessing of compiling : change source codes
-	lexer.preprocessing_1(cmd);
+	splitter.preprocessing(cmd);
 	uint_size len = cmd.length();
 	if (len == 0)
 		return get_compile_info();
@@ -2549,7 +2584,7 @@ uint_size_reg parse_params(const std::string & str, tvmcmd_vect & tcmds, tconsts
 			std::vector<std::string> & paths, bool inblk)
 {
 	std::vector<std::string> params;
-	tlexer1().split_params(str, params);
+	tunit_splitter().split_params_by_comma(str, params);
 	parse_unit_seqs(params, tcmds, consts, paths, 0, inblk);
 	return params.size();
 }
@@ -2563,7 +2598,7 @@ tcinfo parse_blk(const std::string & str, tvmcmd_vect & tcmds, tconsts & consts,
 		std::vector<std::string> & paths, bool cleanstk, bool inblk)
 {
 	std::vector<std::string> units;
-	tlexer1().lex_str(str, units);
+	tunit_splitter().lex_str(str, units);
 	uint_size_obj ntmps = __tmpctr.obj_len_in_all();
 	parse_unit_seqs(units, tcmds, consts, paths, cleanstk, inblk);
 	uint_size_obj newtmps = __tmpctr.obj_len_in_all() - ntmps;
@@ -2579,7 +2614,7 @@ tcinfo parse_blk(const std::string & str, tvmcmd_vect & tcmds, tconsts & consts,
 tcinfo parse_file(FILE * f, tvmcmd_vect & tcmds, tconsts & consts, std::vector<std::string> & paths)
 {
 	std::vector<std::string> units;
-	tlexer1().lex_file(f, units);
+	tunit_splitter().lex_file(f, units);
 	parse_unit_seqs(units, tcmds, consts, paths, 1, 0);
 	return get_compile_info();
 }
@@ -2588,7 +2623,7 @@ tcinfo parse_file(FILE * f, tvmcmd_vect & tcmds, tconsts & consts, std::vector<s
 tcinfo parse_md_file(FILE * f, tvmcmd_vect & tcmds, tconsts & consts, std::vector<std::string> & paths)
 {
 	std::vector<std::string> units;
-	tlexer1().lex_md_file(f, units);
+	tunit_splitter().lex_md_file(f, units);
 	parse_unit_seqs(units, tcmds, consts, paths, 1, 0);
 	return get_compile_info();
 }
@@ -2626,7 +2661,8 @@ twrapper * compile_file_2(const std::string & file, std::vector<std::string> & p
 		ismd = false;
 	else if (suffix == ".md" || suffix == ".Md" || suffix == ".MD")
 		ismd = true;
-	else twarn(ErrCompile_InvalidFile).warn("tcp::compile_file_2", file);
+	else
+		twarn(ErrCompile_InvalidFile).warn("tcp::compile_file_2", file);
 
 	if (nullptr == (f = fopen(file.c_str(), "r")))
 		twarn(ErrCompile_UnfoundFile).warn("tcp::compile_file_2", file);
@@ -2634,9 +2670,10 @@ twrapper * compile_file_2(const std::string & file, std::vector<std::string> & p
 	try {
 		tconsts consts;
 		tvmcmd_vect tcmds;
-		add_path(paths, tlexer1().get_folder_from_file_loc(file));
-		tcinfo info = ismd ? parse_md_file(f, tcmds, consts, paths)
-						   : parse_file(f, tcmds, consts, paths);
+		utils::append_to_pathpool(paths, utils::get_folderpath_from_filepath(file));
+		tcinfo info = ismd ? \
+				  parse_md_file(f, tcmds, consts, paths)
+				: parse_file(f, tcmds, consts, paths);
 		wrapper = tanalyser().wrap(tcmds, consts, info);
 	} catch(...) {
 		fclose(f);

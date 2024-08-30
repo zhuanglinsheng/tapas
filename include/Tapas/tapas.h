@@ -145,7 +145,7 @@ void eval_bycodes(const std::string & file)
 		std::string binf = file.substr(0, file.find_last_of(".")) + ".tapc";
 		twrapper * wrapper = tanalyser().load_bin_file(binf);
 		__lib->set_wrapper(wrapper);
-		__lib->add_path(tlexer1().get_folder_from_file_loc(binf));  // add path
+		__lib->add_path(utils::get_folderpath_from_filepath(binf));  // add path
 		tvm(wrapper->info.tmp_max).eval_bycodes(0, __lib);
 	} catch(...) {
 		exit(-1);
@@ -160,7 +160,7 @@ void execute_file(const std::string & file, bool interactive = true)
 {
 	try {
 		// Add directory to path
-		__lib->add_path(tlexer1().get_folder_from_file_loc(file));
+		__lib->add_path(utils::get_folderpath_from_filepath(file));
 
 		// Compile
 		tcp syner(__lib->get_default_v_names(), nullptr, interactive);

@@ -51,7 +51,7 @@ void exec_interact(tsession & sess, const std::string & p_i1)
 	std::string cmds = p_i1;
 	if ((p_i1[0] == '\'' && p_i1[p_i1.length() - 1] == '\'')
 	 ||(p_i1[0] == '"'  && p_i1[p_i1.length() - 1] == '"'))
-		cmds = tlexer1().trim(p_i1.substr(1, p_i1.length() - 2));
+		cmds = utils::trim(p_i1.substr(1, p_i1.length() - 2));
 	printf("Result:\n");
 	sess.execute_str(cmds);
 }
@@ -105,7 +105,7 @@ void cope_with_stdin(tsession & sess)
 		// Excute line
 		if (in_dpd)
 		{
-			std::string blk = tlexer1().trim(std::string(cmd));
+			std::string blk = utils::trim(std::string(cmd));
 
 			if (blk.size() == 0)
 				goto END;
