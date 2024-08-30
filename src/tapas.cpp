@@ -27,7 +27,7 @@ bool exec_cmd_seq(tsession & sess,
 
 	// Try to compile code block
 	std::vector<std::string> paths = sess.get_lib()->get_paths();
-	uint_cmds ncmd_old = tcmds.size32();
+	uint_size_cmd ncmd_old = tcmds.size32();
 	try{
 		info = syner.parse_unit(cmd, tcmds, consts, paths, 1, 0);
 	} catch(...) {
@@ -96,7 +96,7 @@ void cope_with_stdin(tsession & sess)
 		add_history(buffer);
 
 		// Scan line
-		uint_lexs i = 0;
+		uint_size i = 0;
 
 		for (; i<std::string(buffer).length(); i++)
 			uint_ctr.update_lex_ctrs(buffer[i]);
