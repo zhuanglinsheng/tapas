@@ -1410,16 +1410,16 @@ inline void gen_type(tobj * const params, uint_size_reg len, tobj & vre)
 
 	switch (params->get_type()) {
 	case tnil:
-		vre.set_v(new tstr("nil"));
+		vre.set_v(new tstr("Nil"));
 		break;
 	case tbool:
-		vre.set_v(new tstr("bool"));
+		vre.set_v(new tstr("Bool"));
 		break;
 	case tint:
-		vre.set_v(new tstr("int"));
+		vre.set_v(new tstr("Int"));
 		break;
 	case tdouble:
-		vre.set_v(new tstr("float"));
+		vre.set_v(new tstr("Float"));
 		break;
 	case tcompo:
 		vre.set_v(new tstr(params->get_v_tcompo()->get_type()));

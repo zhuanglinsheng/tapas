@@ -78,6 +78,19 @@ inline void append_to_pathpool(std::vector<std::string> & pathpool, const std::s
 	}
 }
 
+inline bool str_to_long_int(const std::string & cmds, long & it)
+{
+	return std::string::npos == cmds.find('.')
+		&& std::string::npos == cmds.find('e')
+		&& std::string::npos == cmds.find('E')
+		&& sscanf(cmds.c_str(), "%li", &it) == 1;
+}
+
+inline bool str_to_double(const std::string & cmds, double & dt)
+{
+	return sscanf(cmds.c_str(), "%lf", &dt) == 1;
+}
+
 }
 
 
@@ -1090,6 +1103,7 @@ inline void get_tokens(const std::string & str, std::vector<ttoken> & tokens)
 // Binary Expressions
 //===========================================================================//
 	ttoken binary_token = {token_v, 0, "", "", ""};
+	double test_sci_not = 0;
 
 	for (auto rit = unit.rbegin(); rit != unit.rend(); ++rit) {
 		auto it = rit.base();
@@ -1242,10 +1256,11 @@ inline void get_tokens(const std::string & str, std::vector<ttoken> & tokens)
 		}
 		// Expression first level algorithmic: a - b
 		if (std::distance(it, unit.end()) > 1 && std::distance(unit.begin(), it) > 0
-		 && std::string(it, it + 1) == "-") {
+		 && std::string(it, it + 1) == "-" && !utils::str_to_double(unit, test_sci_not)) {
 			// printf("sub\n");
 			std::string left = utils::trim(std::string(unit.begin(), it));
 			std::string right = utils::trim(std::string(it + 1, unit.end()));
+			double test;
 
 			if (processor::check_unit_complete(left)
 			 && processor::check_unit_complete(right)
@@ -1634,19 +1649,6 @@ bool find_imported_file(std::string & file, std::vector<std::string> & paths)
 	return false;
 }
 
-bool str_to_long_int(const std::string & cmds, long & it)
-{
-	return std::string::npos == cmds.find('.')
-		&& std::string::npos == cmds.find('e')
-		&& std::string::npos == cmds.find('E')
-		&& sscanf(cmds.c_str(), "%li", &it) == 1;
-}
-
-bool str_to_double(const std::string & cmds, double & dt)
-{
-	return sscanf(cmds.c_str(), "%lf", &dt) == 1;
-}
-
 void parse_v(const ttoken & tok, tvmcmd_vect & tcmds, tconsts & consts)
 {
 	if (tok.value_1.length() == 0)
@@ -1654,11 +1656,11 @@ void parse_v(const ttoken & tok, tvmcmd_vect & tcmds, tconsts & consts)
 	long   it;
 	double dt;
 
-	if (str_to_long_int(tok.value_1, it)) {
+	if (utils::str_to_long_int(tok.value_1, it)) {
 		uint_size_cst loc = consts.add_int_const(it);
 		tcmds.append(tbycode(OP_PUSHI, loc));
 		__regctr.add_reg_ctr();
-	} else if (str_to_double(tok.value_1, dt)) {
+	} else if (utils::str_to_double(tok.value_1, dt)) {
 		uint_size_cst loc = consts.add_double_const(dt);
 		tcmds.append(tbycode(OP_PUSHD, loc));
 		__regctr.add_reg_ctr();

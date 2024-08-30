@@ -60,9 +60,9 @@ void cope_with_stdin(tsession & sess)
 {
 	printf("Tapas Script (%s) Copyright (C) %s %s.\n", Tap_Basic_Info);
 	printf("MIT License: <https://opensource.org/licenses/MIT>\n\n");
-	printf("Type `exit()` for leaving,\n");
-	printf("     `binary()` for printing out binary codes, and\n");
-	printf("     `sys::__ls__()` for displaying all preloads.\n\n");
+	printf("Hint: `exit()` for leaving,\n");
+	printf("      `binary()` for printing out binary codes, and\n");
+	printf("      `sys::__ls__()` for displaying all preloads.\n\n");
 
 	// Tap lexer
 	tunit_ctr uint_ctr;
