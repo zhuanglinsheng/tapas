@@ -691,7 +691,7 @@ std::string tostring_full() const
 
 	for (auto iter = cbegin(); iter != cend(); iter++) {
 		std::pair<std::string, tobj> p = *iter;
-		is += "\"" + p.first + "\" : ";
+		is += "\t\"" + p.first + "\" : ";
 		is += p.second.tostring_abbr() + ",\n";
 	}
 	is += "}";

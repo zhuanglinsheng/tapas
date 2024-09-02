@@ -88,7 +88,9 @@ inline bool str_to_long_int(const std::string & cmds, long & it)
 
 inline bool str_to_double(const std::string & cmds, double & dt)
 {
-	return sscanf(cmds.c_str(), "%lf", &dt) == 1;
+	char* end = nullptr;
+	dt = strtof(cmds.c_str(), &end);
+	return end != cmds.c_str() && *end == '\0';
 }
 
 }
@@ -230,14 +232,14 @@ inline void cancel_from_comments(std::string & buffer)
 			buffer = buffer.substr(0, i);
 }
 
-/// turn negative ('-a') into subtraction ('0-a')
+/// turn negative ('-a') into subtraction ('(0-a)')
 inline void negative_to_subtraction(std::string & cmds)
 {
 	cmds = utils::trim(cmds);
 
 	// negative turned into subtraction
 	if (cmds[0] == '-')
-		cmds = utils::trim("0" + cmds);
+		cmds = "(0" + cmds + ")";
 }
 
 /// remove the outer parenthesis of 'cmds' if any
@@ -1256,11 +1258,10 @@ inline void get_tokens(const std::string & str, std::vector<ttoken> & tokens)
 		}
 		// Expression first level algorithmic: a - b
 		if (std::distance(it, unit.end()) > 1 && std::distance(unit.begin(), it) > 0
-		 && std::string(it, it + 1) == "-" && !utils::str_to_double(unit, test_sci_not)) {
+		 && std::string(it, it + 1) == "-" && false == utils::str_to_double(unit, test_sci_not)) {
 			// printf("sub\n");
 			std::string left = utils::trim(std::string(unit.begin(), it));
 			std::string right = utils::trim(std::string(it + 1, unit.end()));
-			double test;
 
 			if (processor::check_unit_complete(left)
 			 && processor::check_unit_complete(right)
