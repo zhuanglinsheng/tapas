@@ -8,7 +8,7 @@
 namespace tapas
 {
 
-/// String in Tap. Created by single or double quotes.
+/// String. Created by single or double quotes.
 class tstr : public tcompo_v, public std::string
 {
 private:
@@ -187,10 +187,10 @@ void set_append(const tobj * ele)
 	case tbool:
 		switch (ele->get_v_tbool()) {
 		case 0:
-			this->append("true");
+			this->append("false");
 			break;
 		case 1:
-			this->append("false");
+			this->append("true");
 			break;
 		}
 		break;
@@ -217,10 +217,10 @@ void set_insert(const tobj * ele, const long loc)
 	case tbool:
 		switch (ele->get_v_tbool()) {
 		case 0:
-			this->insert(loc, "true");
+			this->insert(loc, "false");
 			break;
 		case 1:
-			this->insert(loc, "false");
+			this->insert(loc, "true");
 			break;
 		}
 		break;
@@ -260,9 +260,19 @@ void set_delete(const tobj * key)
 	{
 		tcompo_v * v = key->get_v_tcompo();
 
-		if (v->get_compo_type_code() == compo_tpair)
-			set_delete(reinterpret_cast<tpair *>(v)->get_first(),
-					   reinterpret_cast<tpair *>(v)->get_second());
+		if (v->get_compo_type_code() == compo_titer) {
+			titer * iter = reinterpret_cast<titer *>(v);
+			int ndeleted = 0;
+
+			while (iter->next()) {
+				long idx =  iter->get_locidx();
+
+				if (idx - ndeleted < size()) {
+					this->erase(idx - ndeleted, 1);
+					ndeleted++;
+				}
+			}
+		}
 	}
 }
 
@@ -275,9 +285,9 @@ void set_delete(const tobj & start, const tobj & to)
 
 	if (i_start < 0 || i_to < 0)
 		twarn(ErrRuntime_IdxOutRange).warn("tstr::set_delete", "");
-	if (i_start > i_to || static_cast<unsigned long>(i_to) >= size())
+	if (i_start > i_to || static_cast<unsigned long>(i_to) > size())
 		twarn(ErrRuntime_IdxOutRange).warn("tstr::set_delete", "");
-	this->erase(i_start, i_to - i_start + 1);
+	this->erase(i_start, i_to - i_start);
 }
 
 bool to_bool()
@@ -313,7 +323,7 @@ double to_double()
 
 };
 
-/// List in Tap. Created by `[...]`
+/// List. Created by `[...]`
 class tlist : public tcompo_v, public std::vector<tobj>
 {
 private:
@@ -665,7 +675,7 @@ bool identical(tcompo_v * v) const
 
 };
 
-/// Dictionary in Tap. Created by `{key:value, ...}`
+/// Dict. Created by `{key:value, ...}`
 class tdict : public tcompo_v, public std::unordered_map<std::string, tobj>
 {
 public:

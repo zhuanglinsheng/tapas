@@ -1061,7 +1061,10 @@ titer(const long start, const long middle, const long end)
 /// Constructor of iterator (start to end by 1)
 titer(const long start, const long end)
 {
-	__start = start; __middle = 1; __end = end + 1; __loc = start;
+	__start = start;
+	__middle = 1;
+	__end = end + 1;
+	__loc = start;
 }
 
 /// Deconstructor
@@ -1082,7 +1085,7 @@ long get_middle() const
 /// @return the Ending location
 long get_end() const
 {
-	return __end;
+	return __end - __middle;
 }
 
 /// @return a copy of this iterator
