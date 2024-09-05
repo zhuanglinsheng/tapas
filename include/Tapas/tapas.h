@@ -1,7 +1,7 @@
 #ifndef TAPAS_H
 #define TAPAS_H
 
-#include "tc.h"
+#include "tparse.h"
 #include "tvm.h"
 
 namespace tapas
