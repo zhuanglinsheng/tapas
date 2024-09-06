@@ -12,7 +12,8 @@ namespace utils
 /// trim the ending of a given string and return it.
 inline std::string trim_back(const std::string & str)
 {
-	if (str.empty()) return str;
+	if (str.empty())
+		return str;
 	char str_end = str.back();
 
 	if (str_end == '\n' || str_end == '\r'
@@ -24,7 +25,8 @@ inline std::string trim_back(const std::string & str)
 /// trim the beginning of a given string and return it.
 inline std::string trim_front(const std::string & str)
 {
-	if (str.empty()) return str;
+	if (str.empty())
+		return str;
 	char str_bgn = str[0];
 
 	if (str_bgn == '\n' || str_bgn == '\r'
