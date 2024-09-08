@@ -811,7 +811,7 @@ inline void get_tokens(const std::string & str, std::vector<ttoken> & tokens)
 	// printf("unit = %s\n", unit.c_str());
 
 //=============================================================================
-// Units with Fixed Forms
+// Simple values
 //===========================================================================//
 	if (unit == "true") {
 		tokens.push_back({ token_true, 0, "", "", "" });
@@ -829,6 +829,10 @@ inline void get_tokens(const std::string & str, std::vector<ttoken> & tokens)
 		tokens.push_back({ token_base, 0, "", "", "" });
 		return;
 	}
+
+//=============================================================================
+// Simple statements
+//===========================================================================//
 	if (unit == "continue") {
 		tokens.push_back({ token_continue, 0, "", "", "" });
 		return;
@@ -880,16 +884,16 @@ inline void get_tokens(const std::string & str, std::vector<ttoken> & tokens)
 		std::string vclm_expr = utils::trim(unit.substr(4));
 		uint_size idx_asg = vclm_expr.find("=");
 		std::string vsig = utils::trim(vclm_expr.substr(0, idx_asg));
-		uint_size idx_of = vsig.find(":");
-		std::string vname = utils::trim(vsig.substr(0, idx_of));
+		uint_size idx_of_type = vsig.find(":");
+		std::string vname = utils::trim(vsig.substr(0, idx_of_type));
 		std::string vtype = "";
 
 		if (vname.length() == 0)
 			twarn(ErrCompile_VarNoType).warn("get_token", vname);
 		if (!processor::check_vname_validity(vname))
 			twarn(ErrCompile_InvalidVname).warn("get_token", vname);
-		if (std::string::npos != idx_of)
-			vtype = utils::trim(vsig.substr(idx_of + 1));
+		if (std::string::npos != idx_of_type)
+			vtype = utils::trim(vsig.substr(idx_of_type + 1));
 
 		// Deal with assignment
 		if (std::string::npos == idx_asg)  // no assignment (=)
@@ -910,8 +914,8 @@ inline void get_tokens(const std::string & str, std::vector<ttoken> & tokens)
 		uint_size spliter = import_body.find(" as ");
 		std::string file = utils::trim(import_body.substr(0, spliter));
 
-		if ((file[0] == '"' && file.back() == '"')
-		|| (file[0] == '\'' && file.back() == '\''))
+		if ((file[0] == '"'  && file.back() == '"')
+		 || (file[0] == '\'' && file.back() == '\''))
 			file = utils::trim(file.substr(1, file.length() - 2));
 		if (std::string::npos != spliter) {  // there is alias name
 			std::string name = utils::trim(import_body.substr(spliter + 4));
@@ -1049,6 +1053,10 @@ inline void get_tokens(const std::string & str, std::vector<ttoken> & tokens)
 			}
 		}
 	}
+
+//=============================================================================
+// Complex values
+//===========================================================================//
 	// Expression: single string   ''
 	if (splitter.get_first_single_quote(unit, gencontents, genloc)) {
 		if (genloc == unit.length() - 1) {
@@ -1369,6 +1377,7 @@ inline void get_tokens(const std::string & str, std::vector<ttoken> & tokens)
 			return;
 		}
 	}
+
 	// unrecognized
 	tokens.push_back({ token_v, 1, unit, "", "" });
 }

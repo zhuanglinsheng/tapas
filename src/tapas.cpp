@@ -50,7 +50,7 @@ void exec_interact(tsession & sess, const std::string & p_i1)
 {
 	std::string cmds = p_i1;
 	if ((p_i1[0] == '\'' && p_i1[p_i1.length() - 1] == '\'')
-	 ||(p_i1[0] == '"'  && p_i1[p_i1.length() - 1] == '"'))
+	 || (p_i1[0] == '"'  && p_i1[p_i1.length() - 1] == '"'))
 		cmds = utils::trim(p_i1.substr(1, p_i1.length() - 2));
 	printf("Result:\n");
 	sess.execute_str(cmds);
