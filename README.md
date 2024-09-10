@@ -4,8 +4,6 @@
 
 Tapas is a programming language designed for mathematical modeling. 
 
-[Documents](https://zhuanglinsheng.github.io/2024/08/28/Tapas.html)
-
 
 
 ## Features
@@ -13,6 +11,18 @@ Tapas is a programming language designed for mathematical modeling.
 - Header-Only
 - Light
 - Fast Speed
+
+
+
+## Documents
+
+[1. Syntax](./docs/1_Syntax.md) 
+
+[2. Developers Documentation](./docs/2_Developers.md) 
+
+[3. Examples](./docs/3_Examples.md) 
+
+[4. To Do List](./docs/4_ToDoList.md) 
 
 
 
@@ -56,3 +66,5 @@ g++ test.cpp -std=c++11 -I[path to the "include" folder] -o test
 ```
 
 and the Tapas script is executed. 
+
+
