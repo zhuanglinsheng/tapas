@@ -19,6 +19,7 @@ let arr = [1, 2, 3]  // create a list of integers
 
 <pre class='Tapas-Return'>
 true
+</pre>
 
 When the propriety is not clear, always use parenthesis `()`.
 
@@ -78,6 +79,7 @@ d::arr
 
 <pre class='Tapas-Return'>
 [1, 2, 3]
+</pre>
 
 ```
 d::add_one
@@ -85,6 +87,7 @@ d::add_one
 
 <pre>
 "Function at 0x107600f20"
+</pre>
 
 ### 1.3.2.3. Calling
 
