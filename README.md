@@ -58,7 +58,7 @@ let abs = (x) {
 abs(-2).std::print()
 ```
 
-Then, we just compile the C++ code by 
+Then, we compile and execute the C++ code by 
 
 ```sh
 g++ test.cpp -std=c++11 -I[path to the "include" folder] -o test
