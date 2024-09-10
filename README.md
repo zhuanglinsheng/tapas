@@ -2,7 +2,7 @@
 
 ## Overview
 
-Tapas is a programming language designed for mathematical modeling. 
+Tapas is a programming language designed to be embedded in C++. 
 
 [Documents](https://zhuanglinsheng.github.io/2024/08/28/Tapas.html)
 
