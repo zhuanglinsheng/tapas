@@ -55,6 +55,8 @@ arr[0]
 
 <pre>
 1
+</pre>
+
 
 ### 1.3.2.2. Read-only indexing
 
@@ -94,6 +96,8 @@ d::add_one(d::arr[0])
 
 <pre class='Tapas-Return'>
 2
+</pre>
+
 
 ### 1.3.2.4. Tunnel expression
 
@@ -105,6 +109,8 @@ d::arr[0].d::add_one()
 
 <pre class='Tapas-Return'>
 2
+</pre>
+
 
 <br>
 
@@ -124,6 +130,8 @@ Higher order arithmetic operations have higher priorities than lower order opera
 
 <pre class='Tapas-Return'>
 7.633333
+</pre>
+
 
 <br>
 
@@ -137,6 +145,8 @@ Expression of the 4th priority is third order logical expression. The logical op
 
 <pre class='Tapas-Return'>
 true
+</pre>
+
 
 <br>
 
@@ -152,6 +162,8 @@ Expression of the 5th priority is second order logical expression. The logical o
 <pre class='Tapas-Return'>
 true
 false
+</pre>
+
 
 <br>
 
@@ -165,6 +177,8 @@ Expression of the 6th priority is `to` expression, which looks like `v1 to v2`. 
 
 <pre>
 0 to 5 (by 1)
+</pre>
+
 
 The "To" expression is used to generate iterators for loops.
 
@@ -180,6 +194,8 @@ for (let idx in 0 to 5) {
 2
 3
 4
+</pre>
+
 
 <br>
 
@@ -193,6 +209,8 @@ Expression of the 7th priority is `pair` expression, which looks like `v1 : v2`.
 
 <pre>
 1 : 1
+</pre>
+
 
 The `dict` type in Tapas consists of a set of pairs in curly-brackets, seperated by commas:
 
@@ -208,6 +226,7 @@ The `dict` type in Tapas consists of a set of pairs in curly-brackets, seperated
 	"age" : 20,
 	"name" : Tony,
 }
+</pre>
 
 <br>
 
@@ -225,4 +244,5 @@ Operator `in` returns a boolean, standing for whether `v1` is in `v2`.
 <pre class='Tapas-Return'>
 true
 true
+</pre>
 
