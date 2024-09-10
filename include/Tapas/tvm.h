@@ -46,26 +46,22 @@ inline void operator_in_basic(const tobj & v1, T * v2_iterable, tobj & vre)
 /// operator in is an interface provided by tapas::tcompo_iter
 inline void operator_in(const tobj & v1, const tobj & v2, tobj & vre)
 {
-	if (v2.get_type() == tcompo)
-	{
+	if (v2.get_type() == tcompo) {
 		tcompo_v * v2_compo_v = v2.get_v_tcompo();
 
-		if (v2_compo_v->get_compo_type_code() == compo_titer)
-		{
+		if (v2_compo_v->get_compo_type_code() == compo_titer) {
 			titer * v2_titer = reinterpret_cast<titer *>(v2_compo_v);
 			operator_in_basic<titer>(v1, v2_titer, vre);
 			return;  // return if passing through
 		}
-		if (v2_compo_v->get_compo_type_code() == compo_tlist)
-		{
+		if (v2_compo_v->get_compo_type_code() == compo_tlist) {
 			tlist * v2_tlist = reinterpret_cast<tlist *>(v2_compo_v);
 			operator_in_basic<tlist>(v1, v2_tlist, vre);
 			return;  // return if passing through
 		}
 		tcompo_iter * v2_iterable = dynamic_cast<tcompo_iter *>(v2_compo_v);
 
-		if (v2_iterable != nullptr)
-		{
+		if (v2_iterable != nullptr) {
 			operator_in_basic<tcompo_iter>(v1, v2_iterable, vre);
 			return;  // return if passing through
 		}
@@ -721,8 +717,7 @@ void parse_import(const uint_size_cst cloc, char ** const clst, tcompo_env * con
 
 		if (v->get_compo_type_code() == compo_tdict)
 			lib->set_exposed(reinterpret_cast<tdict *>(v));
-		else
-		{
+		else {
 			delete v;
 			lib->set_exposed(new tdict());
 		}
@@ -809,8 +804,8 @@ void parse_loopas(tbycode * iter, tobj & vre, tcompo_env * const env)
 		break;
 	default:
 		tcompo_iter * pgiter = nullptr;
-		if (nullptr == (pgiter = dynamic_cast<tcompo_iter *>(it)))
-		{
+
+		if (nullptr == (pgiter = dynamic_cast<tcompo_iter *>(it))) {
 			twarn(ErrRuntime_RefType).warn("tvm::parse_loopas", "");
 		}
 		parse_loopas_basic(pgiter, idx, vre, isenv, env);
@@ -826,6 +821,7 @@ void parse_loopas_basic(T * p, uint_size_obj vloc, tobj & vre,
 	vre.set_v(bool(p->next()));
 	tobj v;
 	p->get_v_at_loc(v);
+
 	if (isenv)
 		env->set_obj(vloc, v);
 	else
