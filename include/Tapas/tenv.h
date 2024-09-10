@@ -141,15 +141,15 @@ private:
 	tobj * __vmstack;                /// VM info
 	tobj * __params;                 /// VM info
 	uint_size_obj __tmpmax;              /// VM info
-	uint_size_reg __regmax;              /// VM info
-	uint_size_reg __nparams;             /// VM info
-	uint_size_reg __dynamic_nparams = 0; /// VM info
+	uint_size_stk __regmax;              /// VM info
+	uint_size_stk __nparams;             /// VM info
+	uint_size_stk __dynamic_nparams = 0; /// VM info
 	tcompo_type __compo_type;        /// Environment as a Tree
 
 public:
 
-tcompo_env(uint_size_obj objlst_cap, tcompo_env * father_env, uint_size_reg regmax,
-		uint_size_reg tmpmax, uint_size_reg nparams, tcompo_type compo_type)
+tcompo_env(uint_size_obj objlst_cap, tcompo_env * father_env, uint_size_stk regmax,
+		uint_size_stk tmpmax, uint_size_stk nparams, tcompo_type compo_type)
 	: tcompo_env_abstract(objlst_cap, father_env)
 {
 	__vmstack = nullptr;
@@ -191,19 +191,19 @@ tcompo_env * get_father_env()
 }
 
 /// @return the number of parameters (for VM)
-uint_size_reg get_nparams() const
+uint_size_stk get_nparams() const
 {
 	return __nparams;
 }
 
 /// @return __dynamic_nparams (for VM)
-uint_size_reg get_dynamic_nparams() const
+uint_size_stk get_dynamic_nparams() const
 {
 	return __dynamic_nparams;
 }
 
 /// @return __regmax - the maximum usage of registers (for VM)
-uint_size_reg get_regmax() const
+uint_size_stk get_regmax() const
 {
 	return __regmax;
 }
@@ -227,19 +227,19 @@ tobj * get_params() const
 }
 
 /// Set the number of parameters in signiture (for VM)
-void set_nparams(uint_size_reg n)
+void set_nparams(uint_size_stk n)
 {
 	 __nparams = n;
 }
 
 /// Set the number of parameters inputted (for VM)
-void set_dynamic_nparams(uint_size_reg n)
+void set_dynamic_nparams(uint_size_stk n)
 {
 	__dynamic_nparams = n;
 }
 
 /// Set __regmax (for VM)
-void set_regmax(uint_size_reg n)
+void set_regmax(uint_size_stk n)
 {
 	__regmax = n;
 
@@ -267,7 +267,7 @@ void set_params(tobj * params)
 
 
 /// C++ Session Level Functions
-typedef void (* sessf)(tobj * const, uint_size_reg, tobj &, tcompo_env *);
+typedef void (* sessf)(tobj * const, uint_size_stk, tobj &, tcompo_env *);
 
 
 /// A wrapper of C++ Session Level Functions
@@ -351,8 +351,8 @@ private:
 	uint_size_cmd __ncmds;
 
 public:
-tfunc(uint_size_obj nlocals, tcompo_env * father_env, uint_size_reg reg_max,
-		uint_size_obj tmpmax, uint_size_reg nparams,
+tfunc(uint_size_obj nlocals, tcompo_env * father_env, uint_size_stk reg_max,
+		uint_size_obj tmpmax, uint_size_stk nparams,
 		uint_size_cmd cmdloc, uint_size_cmd ncmds)
 	: tcompo_env(nlocals, father_env, reg_max, tmpmax, nparams, compo_tfunc)
 {
@@ -363,13 +363,13 @@ tfunc(uint_size_obj nlocals, tcompo_env * father_env, uint_size_reg reg_max,
 ~tfunc() {}
 
 /// Assign `params` to the object array of this environment
-void assign_params(tobj * const params, uint_size_reg nparams)
+void assign_params(tobj * const params, uint_size_stk nparams)
 {
 	// settings: tcompo_env
 	set_objlst_len(0);
 
 	if (get_nparams() != UNDEF_NPARAMS)
-		for (uint_size_reg i = 0; i < nparams; i++) {
+		for (uint_size_stk i = 0; i < nparams; i++) {
 			add_obj();
 			set_obj(i, params[i]);
 		}
@@ -547,7 +547,7 @@ void set_exposed(tdict * v)
 }
 
 /// lib::object - Get the object from library
-void idx(const tobj * params, uint_size_reg np, tobj& vre)
+void idx(const tobj * params, uint_size_stk np, tobj& vre)
 {
 	__exposed->idx(params, np, vre);
 }

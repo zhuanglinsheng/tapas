@@ -13,64 +13,64 @@ namespace tapas
  * 3. Compilation: compile a unit (a set of tokens) into bycodes
  *===========================================================================*/
 
-/// Registers counter
-class treg_ctr
+/// Stack counter
+class tstk_ctr
 {
 private:
-	uint_size_reg __reg_ctr = 0;
-	uint_size_reg __reg_max = 0;
+	uint_size_stk __stk_ctr = 0;
+	uint_size_stk __stk_max = 0;
 
 void update_reg_max()
 {
-	__reg_max = __reg_max >= __reg_ctr ? __reg_max : __reg_ctr;
+	__stk_max = __stk_max >= __stk_ctr ? __stk_max : __stk_ctr;
 }
 
 public:
 
 /// Add register counter by 1
-void add_reg_ctr()
+void add_stk_ctr()
 {
-	if (__reg_ctr + 1 > REGLIST_SIZE_LIMIT)
-		twarn(ErrCompile_REGOutOfLimit).warn("treg_ctr::add_reg_ctr", "");
-	__reg_ctr++;
+	if (__stk_ctr + 1 > REGLIST_SIZE_LIMIT)
+		twarn(ErrCompile_REGOutOfLimit).warn("tstk_ctr::add_stk_ctr", "");
+	__stk_ctr++;
 	update_reg_max();
 }
 
 /// Add register counter by n
-void add_reg_ctr_n(uint_size_reg n)
+void add_stk_ctr_n(uint_size_stk n)
 {
-	if (__reg_ctr + n > REGLIST_SIZE_LIMIT)
-		twarn(ErrCompile_REGOutOfLimit).warn("treg_ctr::add_reg_ctr_n", "");
-	__reg_ctr += n;
+	if (__stk_ctr + n > REGLIST_SIZE_LIMIT)
+		twarn(ErrCompile_REGOutOfLimit).warn("tstk_ctr::add_stk_ctr_n", "");
+	__stk_ctr += n;
 	update_reg_max();
 }
 
 /// Deduct register counter by 1
-void ddt_reg_ctr()
+void ddt_stk_ctr()
 {
-	if (__reg_ctr == 0)
-		twarn(ErrCompile_REGOutOfLimit).warn("treg_ctr::ddt_reg_ctr", "");
-	__reg_ctr--;
+	if (__stk_ctr == 0)
+		twarn(ErrCompile_REGOutOfLimit).warn("tstk_ctr::ddt_stk_ctr", "");
+	__stk_ctr--;
 }
 
 /// Deduct register counter by n
-void ddt_reg_ctr_n(uint_size_reg n)
+void ddt_stk_ctr_n(uint_size_stk n)
 {
-	if (__reg_ctr < n)
-		twarn(ErrCompile_REGOutOfLimit).warn("treg_ctr::ddt_reg_ctr_n", "");
-	__reg_ctr -= n;
+	if (__stk_ctr < n)
+		twarn(ErrCompile_REGOutOfLimit).warn("tstk_ctr::ddt_stk_ctr_n", "");
+	__stk_ctr -= n;
 }
 
 /// Get register counter
-uint_size_reg get_reg_ctr() const
+uint_size_stk get_stk_ctr() const
 {
-	return __reg_ctr;
+	return __stk_ctr;
 }
 
 /// Get the maximum usage of registers
-uint_size_reg get_reg_max() const
+uint_size_stk get_stk_max() const
 {
-	return __reg_max;
+	return __stk_max;
 }
 
 };
@@ -235,7 +235,7 @@ private:
 	tobj_ctr  __objctr;          ///< environmental object counter
 	tobj_ctr  __tmpctr;          ///< temporary object counter
 	tunit_ctr __lexctr;          ///< lexing counter
-	treg_ctr  __regctr;          ///< register counter
+	tstk_ctr  __regctr;          ///< register counter
 	uint_size_obj __n_default_objs;  ///< (preload) default objects
 	bool      __interactive;     ///< UI
 
@@ -295,21 +295,21 @@ void parse_v(const ttoken & tok, tvmcmd_vect & tcmds, tconsts & consts)
 	if (utils::str_to_long_int(tok.value_1, it)) {
 		uint_size_cst loc = consts.add_int_const(it);
 		tcmds.append(tbycode(OP_PUSHI, loc));
-		__regctr.add_reg_ctr();
+		__regctr.add_stk_ctr();
 	} else if (utils::str_to_double(tok.value_1, dt)) {
 		uint_size_cst loc = consts.add_double_const(dt);
 		tcmds.append(tbycode(OP_PUSHD, loc));
-		__regctr.add_reg_ctr();
+		__regctr.add_stk_ctr();
 	} else {
 		uint_size_obj loc_tmp = __tmpctr.obj_loc(tok.value_1);
 		uint_size_obj loc_env = __objctr.obj_loc(tok.value_1);
 
 		if (loc_tmp < __tmpctr.obj_len_in_all()) {
 			tcmds.append(tbycode(OP_PUSHX, loc_tmp, 0));
-			__regctr.add_reg_ctr();
+			__regctr.add_stk_ctr();
 		} else if (loc_env < __objctr.obj_len_in_all()) {
 			tcmds.append(tbycode(OP_PUSHX, loc_env, 1));
-			__regctr.add_reg_ctr();
+			__regctr.add_stk_ctr();
 		} else
 			twarn(ErrCompile_InvalidLiter).warn("tcp::parse_v", tok.value_1);
 	}
@@ -385,66 +385,66 @@ void parse_binop(tins ins, const tbin_expr & expr, tvmcmd_vect & tcmds, tconsts 
 		parse_unit(expr.right, tcmds, consts, paths, 0, inblk);
 		parse_unit(expr.left, tcmds, consts, paths, 0, inblk);
 		tcmds.append(tbycode(OP_PUSHINFO, expr.al_type));
-		__regctr.add_reg_ctr(); // push info
+		__regctr.add_stk_ctr(); // push info
 		tcmds.append(tbycode(ins, uint16_t(0), uint16_t(1)));
-		__regctr.ddt_reg_ctr(); // pop info
-		__regctr.ddt_reg_ctr(); // pop top
+		__regctr.ddt_stk_ctr(); // pop info
+		__regctr.ddt_stk_ctr(); // pop top
 		break;
 	case 1: // env value
 		parse_unit(expr.right, tcmds, consts, paths, 0, inblk);
 		tcmds.append(tbycode(OP_PUSHINFO, expr.al_type));
-		__regctr.add_reg_ctr(); // push info
+		__regctr.add_stk_ctr(); // push info
 		tcmds.append(tbycode(ins, expr.lloc, 0));
-		__regctr.ddt_reg_ctr(); // pop info
+		__regctr.ddt_stk_ctr(); // pop info
 		break;
 	case 2: // value env
 		parse_unit(expr.left, tcmds, consts, paths, 0, inblk);
 		tcmds.append(tbycode(OP_PUSHINFO, expr.al_type));
-		__regctr.add_reg_ctr(); // push info
+		__regctr.add_stk_ctr(); // push info
 		tcmds.append(tbycode(ins, 0, expr.rloc));
-		__regctr.ddt_reg_ctr(); // pop info
+		__regctr.ddt_stk_ctr(); // pop info
 		break;
 	case 3: // env env
 		tcmds.append(tbycode(OP_PUSHINFO, expr.al_type));
-		__regctr.add_reg_ctr(); // push info
+		__regctr.add_stk_ctr(); // push info
 		tcmds.append(tbycode(ins, expr.lloc, expr.rloc));
-		__regctr.ddt_reg_ctr(); // pop info
-		__regctr.add_reg_ctr(); // push return
+		__regctr.ddt_stk_ctr(); // pop info
+		__regctr.add_stk_ctr(); // push return
 		break;
 	case 4: // tmp value
 		parse_unit(expr.right, tcmds, consts, paths, 0, inblk);
 		tcmds.append(tbycode(OP_PUSHINFO, expr.al_type));
-		__regctr.add_reg_ctr(); // push info
+		__regctr.add_stk_ctr(); // push info
 		tcmds.append(tbycode(ins, expr.lloc, 0));
-		__regctr.ddt_reg_ctr(); // pop info
+		__regctr.ddt_stk_ctr(); // pop info
 		break;
 	case 5: // value tmp
 		parse_unit(expr.left, tcmds, consts, paths, 0, inblk);
 		tcmds.append(tbycode(OP_PUSHINFO, expr.al_type));
-		__regctr.add_reg_ctr(); // push info
+		__regctr.add_stk_ctr(); // push info
 		tcmds.append(tbycode(ins, 0, expr.rloc));
-		__regctr.ddt_reg_ctr(); // pop info
+		__regctr.ddt_stk_ctr(); // pop info
 		break;
 	case 6: // tmp tmp
 		tcmds.append(tbycode(OP_PUSHINFO, expr.al_type));
-		__regctr.add_reg_ctr(); // push info
+		__regctr.add_stk_ctr(); // push info
 		tcmds.append(tbycode(ins, expr.lloc, expr.rloc));
-		__regctr.ddt_reg_ctr(); // pop info
-		__regctr.add_reg_ctr(); // push return
+		__regctr.ddt_stk_ctr(); // pop info
+		__regctr.add_stk_ctr(); // push return
 		break;
 	case 7: // env tmp
 		tcmds.append(tbycode(OP_PUSHINFO, expr.al_type));
-		__regctr.add_reg_ctr(); // push info
+		__regctr.add_stk_ctr(); // push info
 		tcmds.append(tbycode(ins, expr.lloc, expr.rloc));
-		__regctr.ddt_reg_ctr(); // pop info
-		__regctr.add_reg_ctr(); // push return
+		__regctr.ddt_stk_ctr(); // pop info
+		__regctr.add_stk_ctr(); // push return
 		break;
 	case 8: // tmp env
 		tcmds.append(tbycode(OP_PUSHINFO, expr.al_type));
-		__regctr.add_reg_ctr(); // push info
+		__regctr.add_stk_ctr(); // push info
 		tcmds.append(tbycode(ins, expr.lloc, expr.rloc));
-		__regctr.ddt_reg_ctr(); // pop info
-		__regctr.add_reg_ctr(); // push return
+		__regctr.ddt_stk_ctr(); // pop info
+		__regctr.add_stk_ctr(); // push return
 		break;
 	}
 }
@@ -456,8 +456,8 @@ void parse_binop(tins ins, const ttoken & tok, tvmcmd_vect & tcmds, tconsts & co
 	parse_unit(tok.value_2, tcmds, consts, paths, 0, inblk);
 	parse_unit(tok.value_1, tcmds, consts, paths, 0, inblk);
 	tcmds.append(tbycode(ins));
-	__regctr.ddt_reg_ctr_n(2);
-	__regctr.add_reg_ctr();
+	__regctr.ddt_stk_ctr_n(2);
+	__regctr.add_stk_ctr();
 }
 
 /** Parse return statement
@@ -484,7 +484,7 @@ void parse_return(const ttoken & tok, tvmcmd_vect & tcmds, tconsts & consts,
 		parse_unit(tok.value_1, tcmds, consts, paths, 0, inblk);
 	}
 	tcmds.append(tbycode(OP_RET));
-	__regctr.ddt_reg_ctr_n(__regctr.get_reg_ctr());
+	__regctr.ddt_stk_ctr_n(__regctr.get_stk_ctr());
 }
 
 /** Parse var statement
@@ -521,7 +521,7 @@ void parse_var(const ttoken & tok, tvmcmd_vect & tcmds, tconsts & consts,
 		try {
 			parse_unit(tok.value_3, tcmds, consts, paths, 0, inblk);
 			tcmds.append(tbycode(OP_POPCOV, loc, 1));
-			__regctr.ddt_reg_ctr();
+			__regctr.ddt_stk_ctr();
 		} catch (...) {
 			__objctr.obj_del_last_n(1);
 			twarn(ErrCompile_InvalidLiter).warn("tcp::parse_var", tok.value_3);
@@ -566,7 +566,7 @@ void parse_let(const ttoken & tok, tvmcmd_vect & tcmds, tconsts & consts,
 		try {
 			parse_unit(tok.value_3, tcmds, consts, paths, 0, inblk);
 			tcmds.append(tbycode(OP_POPCOV, loc_tmp, 0));
-			__regctr.ddt_reg_ctr();
+			__regctr.ddt_stk_ctr();
 		} catch (...) {
 			__tmpctr.obj_del_last_n(1);
 			twarn(ErrCompile_InvalidLiter).warn("tcp::parse_let", tok.value_3);
@@ -594,15 +594,15 @@ void parse_import(const ttoken & tok, tvmcmd_vect & tcmds, tconsts & consts,
 		tcmds.append(tbycode(OP_VCRT, nameloc, 1));
 		uint_size_cst sloc = consts.add_str_const(file);
 		tcmds.append(tbycode(OP_IMPORT, sloc));
-		__regctr.add_reg_ctr();
+		__regctr.add_stk_ctr();
 		tcmds.append(tbycode(OP_POPCOV, loc, 1));
-		__regctr.ddt_reg_ctr();
+		__regctr.ddt_stk_ctr();
 	} else {
 		uint_size_cst sloc = consts.add_str_const(file);
 		tcmds.append(tbycode(OP_IMPORT, sloc));
-		__regctr.add_reg_ctr();
+		__regctr.add_stk_ctr();
 		tcmds.append(tbycode(OP_POPN, uint16_t(1), uint16_t(0)));
-		__regctr.ddt_reg_ctr();
+		__regctr.ddt_stk_ctr();
 	}
 }
 
@@ -615,7 +615,7 @@ void parse_while (const ttoken & tok, tvmcmd_vect & tcmds, tconsts & consts, std
 
 	// Parse blk_s
 	parse_unit(tok.value_1, tcmds, consts, paths, 0, 1);
-	__regctr.ddt_reg_ctr(); // this is for the CJPFPOP ins below
+	__regctr.ddt_stk_ctr(); // this is for the CJPFPOP ins below
 	parse_blk(tok.value_2, tcmds_blk, consts, paths, 1, 1);
 
 	// Conditional Jump Forward
@@ -663,10 +663,10 @@ void parse_for (const ttoken & tok, tvmcmd_vect & tcmds, tconsts & consts,
 
 	// Prepare Loop Assignment
 	tcmds.append(tbycode(OP_LOOPAS, loc, isenv));
-	__regctr.add_reg_ctr();
+	__regctr.add_stk_ctr();
 
 	// Compile Block
-	__regctr.ddt_reg_ctr();
+	__regctr.ddt_stk_ctr();
 
 	try {
 		parse_blk(tok.value_3, tcmds_blk, consts, paths, 1, 1);
@@ -676,7 +676,7 @@ void parse_for (const ttoken & tok, tvmcmd_vect & tcmds, tconsts & consts,
 		uint_size_cmd jpb_n = 3 + tcmds_blk.size32();
 		tcmds.append(tbycode(OP_JPB, jpb_n));
 		tcmds.append(tbycode(OP_POPN, uint16_t(1), uint16_t(0)));
-		__regctr.ddt_reg_ctr();
+		__regctr.ddt_stk_ctr();
 		uint_size_obj newtmps = __tmpctr.obj_len_in_current_env() - ntmps;
 
 		// Delete temporary variables if there is any declare in for statement
@@ -699,7 +699,7 @@ void parse_if (const ttoken & tok, tvmcmd_vect & tcmds, tconsts & consts, std::v
 	// CJPFPOP
 	tcmds.append(tbycode(OP_CJPFPOP, 0));
 	uint_size_cmd loc_CJPFPOP = tcmds.size32() - 1;
-	__regctr.ddt_reg_ctr();
+	__regctr.ddt_stk_ctr();
 	// Parse BLK
 	tvmcmd_vect tcmds_blk;
 	parse_blk(tok.value_2, tcmds_blk, consts, paths, 1, 1);
@@ -725,7 +725,7 @@ void parse_elif (const ttoken & tok, tvmcmd_vect & tcmds, tconsts & consts, std:
 	tcmds.insert(tcmds.end(), tcmds_con.begin(), tcmds_con.end());
 	// CJPFPOP
 	tcmds.append(tbycode(OP_CJPFPOP, 0));
-	__regctr.ddt_reg_ctr();
+	__regctr.ddt_stk_ctr();
 	uint_size_cmd loc_CJPFPOP = tcmds.size32() - 1;
 	// Compile blk
 	tvmcmd_vect tcmds_blk;
@@ -786,7 +786,7 @@ void parse_asg(const ttoken & tok, tvmcmd_vect & tcmds, tconsts & consts, std::v
 
 	parse_unit(tok.value_2, tcmds, consts, paths, 0, inblk);
 	tcmds.append(tbycode(OP_POPCOV, loc, isenv));
-	__regctr.ddt_reg_ctr();
+	__regctr.ddt_stk_ctr();
 }
 
 /** Parse left-value indexing statement
@@ -817,10 +817,10 @@ void parse_idxl(const ttoken & tok, tvmcmd_vect & tcmds, tconsts & consts,
 	// Compile the right value
 	parse_unit(tok.value_3, tcmds, consts, paths, 0, inblk);
 	// Compile the parameters as indexes
-	uint_size_reg n = parse_params(tok.value_2, tcmds, consts, paths, inblk);
+	uint_size_stk n = parse_params(tok.value_2, tcmds, consts, paths, inblk);
 	// OP_IDXL
 	tcmds.append(tbycode(OP_IDXL, loc, n, isenv));
-	__regctr.ddt_reg_ctr_n(n + 1);
+	__regctr.ddt_stk_ctr_n(n + 1);
 }
 
 /** Parse right-value indexing statement
@@ -844,13 +844,13 @@ void parse_idx(const ttoken & tok, tvmcmd_vect & tcmds, tconsts & consts,
 		parse_unit(reform, tcmds, consts, paths, cleanstk, inblk);
 	} else {
 		// Compile parameters
-		uint_size_reg n = parse_params(tok.value_2, tcmds, consts, paths, inblk);
+		uint_size_stk n = parse_params(tok.value_2, tcmds, consts, paths, inblk);
 		// Compile the object to be indexed
 		parse_unit(tok.value_1, tcmds, consts, paths, 0, inblk);
 		// OP_IDXR
 		tcmds.append(tbycode(OP_IDXR, n));
-		__regctr.ddt_reg_ctr_n(1 + n); // arr + params
-		__regctr.add_reg_ctr_n(1);     // returned value
+		__regctr.ddt_stk_ctr_n(1 + n); // arr + params
+		__regctr.add_stk_ctr_n(1);     // returned value
 	}
 }
 
@@ -867,7 +867,7 @@ void parse_idx2(const ttoken & tok, tvmcmd_vect & tcmds, tconsts & consts,
 	parse_unit("'" + tok.value_2 + "'", tcmds, consts, paths, 0, inblk);
 	parse_unit(tok.value_1, tcmds, consts, paths, 0, inblk);
 	tcmds.append(tbycode(OP_IDXR, 1));
-	__regctr.ddt_reg_ctr(); // 1 parameter
+	__regctr.ddt_stk_ctr(); // 1 parameter
 }
 
 /** Parse evaluation expression
@@ -876,13 +876,13 @@ void parse_eval(const ttoken & tok, tvmcmd_vect & tcmds, tconsts & consts,
 		std::vector<std::string> & paths, bool inblk)
 {
 	// Compile parameters
-	uint_size_reg n = parse_params(tok.value_2, tcmds, consts, paths, inblk);
+	uint_size_stk n = parse_params(tok.value_2, tcmds, consts, paths, inblk);
 	// Compile the object to be evalated
 	parse_unit(tok.value_1, tcmds, consts, paths, 0, inblk);
 	// OP_EVAL
 	tcmds.append(tbycode(OP_EVAL, n));
-	__regctr.ddt_reg_ctr_n(1 + n);  // f + params
-	__regctr.add_reg_ctr_n(1);      // returned value
+	__regctr.ddt_stk_ctr_n(1 + n);  // f + params
+	__regctr.add_stk_ctr_n(1);      // returned value
 }
 
 /** Parse dictionary
@@ -890,10 +890,10 @@ void parse_eval(const ttoken & tok, tvmcmd_vect & tcmds, tconsts & consts,
 void parse_dict(const ttoken & tok, tvmcmd_vect & tcmds, tconsts & consts,
 		std::vector<std::string> & paths, bool inblk)
 {
-	uint_size_reg n = parse_params(tok.value_1, tcmds, consts, paths, inblk);
+	uint_size_stk n = parse_params(tok.value_1, tcmds, consts, paths, inblk);
 	tcmds.append(tbycode(OP_PUSHDICT, n));
-	__regctr.ddt_reg_ctr_n(n);
-	__regctr.add_reg_ctr();
+	__regctr.ddt_stk_ctr_n(n);
+	__regctr.add_stk_ctr();
 }
 
 /** Parse function
@@ -902,11 +902,11 @@ void parse_func(const ttoken & tok, tvmcmd_vect & tcmds, tconsts & consts, std::
 {
 	// get params (string_vect)
 	std::vector<std::string> params;
-	uint_size_reg nparams = UNDEF_NPARAMS; // undef by default
+	uint_size_stk nparams = UNDEF_NPARAMS; // undef by default
 
 	if (tok.value_1 != "...") {
 		tunit_splitter().split_params_by_comma(tok.value_1, params);
-		nparams = static_cast<uint_size_reg>(params.size());
+		nparams = static_cast<uint_size_stk>(params.size());
 	}
 
 	// get new_syner
@@ -920,16 +920,16 @@ void parse_func(const ttoken & tok, tvmcmd_vect & tcmds, tconsts & consts, std::
 	uint_size_cmd ncmds = tcmdblk.size32();
 	uint_size_obj nobjs = info.obj_max;
 	uint_size_obj ntmps = info.tmp_max;
-	uint_size_reg nregs = info.reg_max;
+	uint_size_stk nregs = info.reg_max;
 
 	tcmds.append(tbycode(OP_PUSHINFO, nobjs));
 	tcmds.append(tbycode(OP_PUSHINFO, ntmps));
 	tcmds.append(tbycode(OP_PUSHINFO, nregs));
 	tcmds.append(tbycode(OP_PUSHINFO, nparams));
-	__regctr.add_reg_ctr_n(4); // push infos
+	__regctr.add_stk_ctr_n(4); // push infos
 	tcmds.append(tbycode(OP_PUSHF, ncmds));
-	__regctr.ddt_reg_ctr_n(4); // pop infos
-	__regctr.add_reg_ctr();    // push function
+	__regctr.ddt_stk_ctr_n(4); // pop infos
+	__regctr.add_stk_ctr();    // push function
 	tcmds.insert(tcmds.end(), tcmdblk.begin(), tcmdblk.end());
 }
 
@@ -953,16 +953,16 @@ void parse_kappa(const ttoken & tok, tvmcmd_vect & tcmds, tconsts & consts, std:
 	uint_size_cmd ncmds = tcmdblk.size32();
 	uint_size_obj nobjs = info.obj_max;
 	uint_size_obj ntmps = info.tmp_max;
-	uint_size_reg nregs = info.reg_max;
+	uint_size_stk nregs = info.reg_max;
 
 	tcmds.append(tbycode(OP_PUSHINFO, nobjs));
 	tcmds.append(tbycode(OP_PUSHINFO, ntmps));
 	tcmds.append(tbycode(OP_PUSHINFO, nregs));
 	tcmds.append(tbycode(OP_PUSHINFO, 0)); // nparams
-	__regctr.add_reg_ctr_n(4); // push infos
+	__regctr.add_stk_ctr_n(4); // push infos
 	tcmds.append(tbycode(OP_PUSHF, ncmds));
-	__regctr.ddt_reg_ctr_n(4); // pop infos
-	__regctr.add_reg_ctr();    // push function
+	__regctr.ddt_stk_ctr_n(4); // pop infos
+	__regctr.add_stk_ctr();    // push function
 	tcmds.insert(tcmds.end(), tcmdblk.begin(), tcmdblk.end());
 }
 
@@ -1082,27 +1082,27 @@ void parse_token(const ttoken & tok, tvmcmd_vect & tcmds, tconsts & consts,
 	// expression: values
 	case token_true:
 		tcmds.append(tbycode(OP_PUSHB, 1));
-		__regctr.add_reg_ctr();
+		__regctr.add_stk_ctr();
 		break;
 	case token_false:
 		tcmds.append(tbycode(OP_PUSHB, 0));
-		__regctr.add_reg_ctr();
+		__regctr.add_stk_ctr();
 		break;
 	case token_this:
 		tcmds.append(tbycode(OP_THIS));
-		__regctr.add_reg_ctr();
+		__regctr.add_stk_ctr();
 		break;
 	case token_base:
 		tcmds.append(tbycode(OP_BASE));
-		__regctr.add_reg_ctr();
+		__regctr.add_stk_ctr();
 		break;
 	case token_sstr:
 		tcmds.append(tbycode(OP_PUSHS, consts.add_str_const(tok.value_1)));
-		__regctr.add_reg_ctr();
+		__regctr.add_stk_ctr();
 		break;
 	case token_dstr:
 		tcmds.append(tbycode(OP_PUSHS, consts.add_str_const(tok.value_1)));
-		__regctr.add_reg_ctr();
+		__regctr.add_stk_ctr();
 		break;
 	case token_dict:
 		parse_dict(tok, tcmds, consts, paths, inblk);
@@ -1119,18 +1119,18 @@ void parse_token(const ttoken & tok, tvmcmd_vect & tcmds, tconsts & consts,
 	}
 }
 
-void clean_stk(tvmcmd_vect & tcmds, bool isroot, uint_size_reg regs_ori)
+void clean_stk(tvmcmd_vect & tcmds, bool isroot, uint_size_stk regs_ori)
 {
-	uint_size_reg regs_now = __regctr.get_reg_ctr();
+	uint_size_stk regs_now = __regctr.get_stk_ctr();
 
 	if (regs_now < regs_ori)
 		twarn(ErrCompile_REGOutOfLimit).warn("tcp::cmd_cleanStk", "");
 	if (false == isroot || regs_now == regs_ori)
 		return;
 
-	uint_size_reg regs_ddt = regs_now - regs_ori;
+	uint_size_stk regs_ddt = regs_now - regs_ori;
 	tcmds.append(tbycode(OP_POPN, uint16_t(regs_ddt), uint16_t(__interactive)));
-	__regctr.ddt_reg_ctr_n(regs_ddt);
+	__regctr.ddt_stk_ctr_n(regs_ddt);
 }
 
 public:
@@ -1164,7 +1164,7 @@ tcinfo get_compile_info()
 {
 	return tcinfo { __objctr.obj_max_in_current_env(),
 			__tmpctr.obj_max_in_current_env(),
-			__regctr.get_reg_max(), 0 };
+			__regctr.get_stk_max(), 0 };
 }
 
 /// Parse a syntax unit
@@ -1194,7 +1194,7 @@ tcinfo parse_unit(const std::string & str, tvmcmd_vect & tcmds, tconsts & consts
 	get_tokens(cmd, tokens);
 
 	// the register number becore compilation of cmds
-	uint_size_reg regs_ori = __regctr.get_reg_ctr();
+	uint_size_stk regs_ori = __regctr.get_stk_ctr();
 
 	// compilation
 	for (auto iter = tokens.begin(); iter != tokens.end(); iter++)
@@ -1218,7 +1218,7 @@ void parse_unit_seqs(std::vector<std::string> & units, tvmcmd_vect & tcmds, tcon
 }
 
 /// Parse parameter list and return nparams
-uint_size_reg parse_params(const std::string & str, tvmcmd_vect & tcmds, tconsts & consts,
+uint_size_stk parse_params(const std::string & str, tvmcmd_vect & tcmds, tconsts & consts,
 			std::vector<std::string> & paths, bool inblk)
 {
 	std::vector<std::string> params;

@@ -8,7 +8,7 @@ namespace tapas
 {
 
 /// ls(lib): list library variables
-inline void lib_ls(tobj* const params, uint_size_reg len, tobj& vre, tcompo_env * env)
+inline void lib_ls(tobj* const params, uint_size_stk len, tobj& vre, tcompo_env * env)
 {
 	if (len != 1 && len != 0)
 		twarn(ErrRuntime_ParamsCtr).warn("lib_ls", "");
@@ -32,7 +32,7 @@ inline void lib_ls(tobj* const params, uint_size_reg len, tobj& vre, tcompo_env 
 }
 
 /// path([lib]): list library paths
-inline void lib_path(tobj* const params, uint_size_reg len, tobj& vre, tcompo_env * env)
+inline void lib_path(tobj* const params, uint_size_stk len, tobj& vre, tcompo_env * env)
 {
 	if (len != 0 && len != 1)
 		twarn(ErrRuntime_ParamsCtr).warn("lib_path", "");
@@ -53,7 +53,7 @@ inline void lib_path(tobj* const params, uint_size_reg len, tobj& vre, tcompo_en
 }
 
 /// __param__(idx): used in functions, return the value of the idx-th params.
-inline void tf_param(tobj* const params, uint_size_reg len, tobj& vre, tcompo_env * env)
+inline void tf_param(tobj* const params, uint_size_stk len, tobj& vre, tcompo_env * env)
 {
 	if (env->get_father_env() == nullptr)
 		twarn(ErrRuntime_EnvInconsis).warn("tf_param", "");
@@ -69,7 +69,7 @@ inline void tf_param(tobj* const params, uint_size_reg len, tobj& vre, tcompo_en
 }
 
 /// __nparam__(): used in functions, return the number of params.
-inline void tf_nparam(tobj * const params, uint_size_reg len, tobj& vre, tcompo_env * env)
+inline void tf_nparam(tobj * const params, uint_size_stk len, tobj& vre, tcompo_env * env)
 {
 	if (env->get_father_env() == nullptr)
 		twarn(ErrRuntime_EnvInconsis).warn("tf_nparam", "");

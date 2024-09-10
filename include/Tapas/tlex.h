@@ -17,7 +17,7 @@ inline std::string trim_back(const std::string & str)
 	char str_end = str.back();
 
 	if (str_end == '\n' || str_end == '\r'
-	|| str_end == '\t' || str_end == ' ' || str_end == EOF)
+	 || str_end == '\t' || str_end == ' ' || str_end == EOF)
 		return trim_back(str.substr(0, str.length() - 1));
 	return str;
 }
@@ -30,7 +30,7 @@ inline std::string trim_front(const std::string & str)
 	char str_bgn = str[0];
 
 	if (str_bgn == '\n' || str_bgn == '\r'
-	|| str_bgn == '\t' || str_bgn == ' ' || str_bgn == EOF)
+	 || str_bgn == '\t' || str_bgn == ' ' || str_bgn == EOF)
 		return trim_front(str.substr(1));
 	return str;
 }

@@ -116,7 +116,7 @@ tcompo_type get_compo_type_code() const
 	return compo_tstr;
 }
 
-void idx(const tobj * params, uint_size_reg nparams, tobj & idxre)
+void idx(const tobj * params, uint_size_stk nparams, tobj & idxre)
 {
 	if (nparams != 1)
 		twarn(ErrRuntime_ParamsCtr).warn("tstr::idx", "1 parameter");
@@ -135,7 +135,7 @@ void idx(const tobj * params, uint_size_reg nparams, tobj & idxre)
 		idx_int(params->get_v_tint(), idxre);
 }
 
-void iset(const tobj * params, uint_size_reg nparams, const tobj & v)
+void iset(const tobj * params, uint_size_stk nparams, const tobj & v)
 {
 	// Determine v
 	if (v.get_type() != tcompo)
@@ -433,9 +433,9 @@ tlist(const std::vector<tobj> & params)
 		set_append(*iter);
 }
 
-tlist(tobj * const params, uint_size_reg len)
+tlist(tobj * const params, uint_size_stk len)
 {
-	for (uint_size_reg i = 0; i < len; i++)
+	for (uint_size_stk i = 0; i < len; i++)
 		set_append(params + i);
 }
 
@@ -500,7 +500,7 @@ long len() const
 	return static_cast<long>(size());
 }
 
-void idx(const tobj * params, uint_size_reg nparams, tobj & idxre)
+void idx(const tobj * params, uint_size_stk nparams, tobj & idxre)
 {
 	if (nparams != 1)
 		twarn(ErrRuntime_ParamsCtr).warn("tlist::idx", "1 parameter");
@@ -517,7 +517,7 @@ void idx(const tobj * params, uint_size_reg nparams, tobj & idxre)
 	}
 }
 
-void iset(const tobj * params, uint_size_reg nparams, const tobj & v)
+void iset(const tobj * params, uint_size_stk nparams, const tobj & v)
 {
 	if (nparams != 1)
 		twarn(ErrRuntime_ParamsCtr).warn("tlist::iset", "1 parameter");
@@ -743,7 +743,7 @@ bool identical(tcompo_v * v) const
 	return v == this;
 }
 
-void idx(const tobj * params, uint_size_reg nparams, tobj & idxre)
+void idx(const tobj * params, uint_size_stk nparams, tobj & idxre)
 {
 	if (nparams != 1)
 		twarn(ErrRuntime_ParamsCtr).warn("tdict::idx", "1 parameter");
@@ -773,7 +773,7 @@ void set(const std::string & key, const tobj & v)
 		v.get_v_tcompo()->add_refctr();
 }
 
-void iset(const tobj * params, uint_size_reg nparams, const tobj & v)
+void iset(const tobj * params, uint_size_stk nparams, const tobj & v)
 {
 	if (nparams != 1)
 		twarn(ErrRuntime_ParamsCtr).warn("tdict::iset", "1 parameter");
@@ -839,7 +839,7 @@ tlist * values()
 }
 
 /// add cpp function
-void add_cppf(const char * fname, cppf f, uint_size_reg nparams)
+void add_cppf(const char * fname, cppf f, uint_size_stk nparams)
 {
 	tobj v_cppf;
 	v_cppf.set_v(new tcppgenf(f, fname, nparams));
@@ -948,7 +948,7 @@ void operator_rsub(const tobj & v, tobj & vre)
 
 
 /// Transform string into boolean value
-inline void str_to_bool(tobj * const params, uint_size_reg len, tobj & vre)
+inline void str_to_bool(tobj * const params, uint_size_stk len, tobj & vre)
 {
 	if (len != 1)
 		twarn(ErrRuntime_ParamsCtr).warn("str_to_bool", "");
@@ -960,7 +960,7 @@ inline void str_to_bool(tobj * const params, uint_size_reg len, tobj & vre)
 }
 
 /// Transform string into integer value
-inline void str_to_int(tobj * const params, uint_size_reg len, tobj & vre)
+inline void str_to_int(tobj * const params, uint_size_stk len, tobj & vre)
 {
 	if (len != 1)
 		twarn(ErrRuntime_ParamsCtr).warn("str_to_int", "");
@@ -972,7 +972,7 @@ inline void str_to_int(tobj * const params, uint_size_reg len, tobj & vre)
 }
 
 /// Transform string into double float value
-inline void str_to_double(tobj * const params, uint_size_reg len, tobj & vre)
+inline void str_to_double(tobj * const params, uint_size_stk len, tobj & vre)
 {
 	if (len != 1)
 		twarn(ErrRuntime_ParamsCtr).warn("str_to_double", "");
@@ -984,7 +984,7 @@ inline void str_to_double(tobj * const params, uint_size_reg len, tobj & vre)
 }
 
 /// tostr(value)
-inline void to_str(tobj * const params, uint_size_reg len, tobj & vre)
+inline void to_str(tobj * const params, uint_size_stk len, tobj & vre)
 {
 	if (len != 1)
 		twarn(ErrRuntime_ParamsCtr).warn("to_str", "");
@@ -992,13 +992,13 @@ inline void to_str(tobj * const params, uint_size_reg len, tobj & vre)
 }
 
 /// tolist(v1, v2, ...)
-inline void to_list(tobj * const params, uint_size_reg len, tobj & vre)
+inline void to_list(tobj * const params, uint_size_stk len, tobj & vre)
 {
 	vre.set_v(new tlist(params, len));
 }
 
 /// append(set, ele)
-inline void set_append(tobj * const params, uint_size_reg len, tobj & vre)
+inline void set_append(tobj * const params, uint_size_stk len, tobj & vre)
 {
 	vre.set_nil();
 
@@ -1028,7 +1028,7 @@ inline void set_append(tobj * const params, uint_size_reg len, tobj & vre)
 }
 
 /// append(set, ele, loc)
-inline void set_insert(tobj * const params, uint_size_reg len, tobj & vre)
+inline void set_insert(tobj * const params, uint_size_stk len, tobj & vre)
 {
 	vre.set_nil();
 
@@ -1059,7 +1059,7 @@ inline void set_insert(tobj * const params, uint_size_reg len, tobj & vre)
 }
 
 /// pop(set)
-inline void set_pop(tobj * const params, uint_size_reg len, tobj & vre)
+inline void set_pop(tobj * const params, uint_size_stk len, tobj & vre)
 {
 	vre.set_nil();
 
@@ -1083,7 +1083,7 @@ inline void set_pop(tobj * const params, uint_size_reg len, tobj & vre)
 }
 
 /// delete(set, loc)
-inline void set_delete(tobj * const params, uint_size_reg len, tobj & vre)
+inline void set_delete(tobj * const params, uint_size_stk len, tobj & vre)
 {
 	vre.set_nil();
 
@@ -1115,7 +1115,7 @@ inline void set_delete(tobj * const params, uint_size_reg len, tobj & vre)
 }
 
 /// union(set1, set2)
-inline void set_union(tobj * const params, uint_size_reg len, tobj & vre)
+inline void set_union(tobj * const params, uint_size_stk len, tobj & vre)
 {
 	if (len != 2)
 		twarn(ErrRuntime_ParamsCtr).warn("set_union", "2 parameters");
@@ -1167,7 +1167,7 @@ inline void set_union(tobj * const params, uint_size_reg len, tobj & vre)
 }
 
 /// keys(tdict): Get a string list of tdict keys.
-inline void dict_keys(tobj* const params, uint_size_reg len, tobj& vre)
+inline void dict_keys(tobj* const params, uint_size_stk len, tobj& vre)
 {
 	if (len != 1)
 		twarn(ErrRuntime_ParamsCtr).warn("dict_keys", "");
@@ -1181,7 +1181,7 @@ inline void dict_keys(tobj* const params, uint_size_reg len, tobj& vre)
 }
 
 /// values(dict): Get a list of tdict values.
-inline void dict_values(tobj* const params, uint_size_reg len, tobj& vre)
+inline void dict_values(tobj* const params, uint_size_stk len, tobj& vre)
 {
 	if (len != 1)
 		twarn(ErrRuntime_ParamsCtr).warn("dict_values", "");
@@ -1195,7 +1195,7 @@ inline void dict_values(tobj* const params, uint_size_reg len, tobj& vre)
 }
 
 /// now()
-inline void time_now(tobj* const params, uint_size_reg len, tobj& vre)
+inline void time_now(tobj* const params, uint_size_stk len, tobj& vre)
 {
 	if (len != 0 || params->get_type() != tcompo)
 		twarn(ErrRuntime_ParamsCtr).warn("time_now", "");

@@ -542,7 +542,7 @@ struct tcinfo
 {
 	uint_size_obj obj_max; ///< maximum number of environmental objects
 	uint_size_obj tmp_max; ///< maximum number of temporary objects
-	uint_size_reg reg_max; ///< maximum number of stack location used
+	uint_size_stk reg_max; ///< maximum number of stack location used
 	uint16_t padding_1;
 };
 

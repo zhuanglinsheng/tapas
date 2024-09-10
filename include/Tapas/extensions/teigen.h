@@ -60,7 +60,7 @@ long len() const
 	return this->rows() * this->cols();
 }
 
-void idx(const tobj * params, uint_size_reg np, tobj& vre)
+void idx(const tobj * params, uint_size_stk np, tobj& vre)
 {
 	if (np != 2)
 		twarn(ErrRuntime_ParamsCtr).warn("tarr_general::idx", "");
@@ -132,7 +132,7 @@ void idx(const tobj * params, uint_size_reg np, tobj& vre)
 }
 
 /// tright can only be `tbool` or `tdouble`
-void iset(const tobj * params, uint_size_reg np, const tobj & vright, ttypes tright)
+void iset(const tobj * params, uint_size_stk np, const tobj & vright, ttypes tright)
 {
 	if (np != 2)
 		twarn(ErrRuntime_ParamsCtr).warn("tarr_general::iset", "");
@@ -332,7 +332,7 @@ tbarr * copy()
 	return new tbarr(*this);
 }
 
-void idx(const tobj * params, uint_size_reg np, tobj& vre)
+void idx(const tobj * params, uint_size_stk np, tobj& vre)
 {
 	tarr::idx(params, np, vre);
 
@@ -345,7 +345,7 @@ void idx(const tobj * params, uint_size_reg np, tobj& vre)
 	vre.set_v(arr);
 }
 
-void iset(const tobj * params, uint_size_reg np, const tobj& vright)
+void iset(const tobj * params, uint_size_stk np, const tobj& vright)
 {
 	tarr::iset(params, np, vright, tbool);
 }
@@ -481,7 +481,7 @@ tdarr * copy()
 	return new tdarr(*this);
 }
 
-void idx(const tobj * params, uint_size_reg np, tobj & vre)
+void idx(const tobj * params, uint_size_stk np, tobj & vre)
 {
 	tarr::idx(params, np, vre);
 
@@ -494,7 +494,7 @@ void idx(const tobj * params, uint_size_reg np, tobj & vre)
 	}
 }
 
-void iset(const tobj * params, uint_size_reg np, const tobj & vright)
+void iset(const tobj * params, uint_size_stk np, const tobj & vright)
 {
 	tarr::iset(params, np, vright, tdouble);
 }
@@ -724,7 +724,7 @@ void operator_rle(const class tobj & v, tobj & vre)
 
 /// toarr(nrow, ncol, v)
 /// v coule be a number or a list of numbers
-inline void to_arr(tobj * const params, uint_size_reg len, tobj & vre)
+inline void to_arr(tobj * const params, uint_size_stk len, tobj & vre)
 {
 	if (len != 3)
 		twarn(ErrRuntime_ParamsCtr).warn("to_arr", "3 parameters");
@@ -769,7 +769,7 @@ inline void to_arr(tobj * const params, uint_size_reg len, tobj & vre)
 }
 
 /// random(nrow, ncol)
-inline void to_arr_random(tobj* const params, uint_size_reg len, tobj& vre)
+inline void to_arr_random(tobj* const params, uint_size_stk len, tobj& vre)
 {
 	if (len != 2)
 		twarn(ErrRuntime_ParamsCtr).warn("to_arr_random", "2 parameters");
@@ -782,7 +782,7 @@ inline void to_arr_random(tobj* const params, uint_size_reg len, tobj& vre)
 }
 
 /// rows(arr)
-inline void arr_rows(tobj* const params, uint_size_reg len, tobj& vre)
+inline void arr_rows(tobj* const params, uint_size_stk len, tobj& vre)
 {
 	if (len != 1)
 		twarn(ErrRuntime_ParamsCtr).warn("arr_rows", "1 parameter");
@@ -801,7 +801,7 @@ inline void arr_rows(tobj* const params, uint_size_reg len, tobj& vre)
 }
 
 /// cols(arr)
-inline void arr_cols(tobj * const params, uint_size_reg len, tobj & vre)
+inline void arr_cols(tobj * const params, uint_size_stk len, tobj & vre)
 {
 	if (len != 1)
 		twarn(ErrRuntime_ParamsCtr).warn("arr_cols", "1 parameter");
@@ -820,7 +820,7 @@ inline void arr_cols(tobj * const params, uint_size_reg len, tobj & vre)
 }
 
 /// t(arr)
-inline void arr_transpose(tobj * const params, uint_size_reg len, tobj & vre)
+inline void arr_transpose(tobj * const params, uint_size_stk len, tobj & vre)
 {
 	if (len != 1)
 		twarn(ErrRuntime_ParamsCtr).warn("arr_transpose", "1 parameter");
@@ -863,7 +863,7 @@ struct arr_border {
 };
 
 inline arr_corner
-get_arr_corner_params(tobj * const params, uint_size_reg len)
+get_arr_corner_params(tobj * const params, uint_size_stk len)
 {
 	if (len != 3)
 		twarn(ErrRuntime_ParamsCtr).warn("arr_topright", "2 Parameters");
@@ -903,7 +903,7 @@ get_arr_corner_params(tobj * const params, uint_size_reg len)
 	return arr_corner();
 }
 
-inline arr_border get_arr_border_params(tobj * const params, uint_size_reg len)
+inline arr_border get_arr_border_params(tobj * const params, uint_size_stk len)
 {
 	if (len != 2)
 		twarn(ErrRuntime_ParamsCtr).warn("arr_topright", "2 Parameters");
@@ -942,7 +942,7 @@ inline arr_border get_arr_border_params(tobj * const params, uint_size_reg len)
 }
 
 /// topright(arr, p, q)
-inline void arr_topright(tobj * const params, uint_size_reg len, tobj & vre)
+inline void arr_topright(tobj * const params, uint_size_stk len, tobj & vre)
 {
 	arr_corner ps = get_arr_corner_params(params, len);
 
@@ -953,7 +953,7 @@ inline void arr_topright(tobj * const params, uint_size_reg len, tobj & vre)
 }
 
 /// topleft(arr, p, q)
-inline void arr_topleft(tobj * const params, uint_size_reg len, tobj & vre)
+inline void arr_topleft(tobj * const params, uint_size_stk len, tobj & vre)
 {
 	arr_corner ps = get_arr_corner_params(params, len);
 
@@ -964,7 +964,7 @@ inline void arr_topleft(tobj * const params, uint_size_reg len, tobj & vre)
 }
 
 /// bottomright(arr, p, q)
-inline void arr_bottomright(tobj * const params, uint_size_reg len, tobj & vre)
+inline void arr_bottomright(tobj * const params, uint_size_stk len, tobj & vre)
 {
 	arr_corner ps = get_arr_corner_params(params, len);
 
@@ -975,7 +975,7 @@ inline void arr_bottomright(tobj * const params, uint_size_reg len, tobj & vre)
 }
 
 /// bottomleft(arr, p, q)
-inline void arr_bottomleft(tobj * const params, uint_size_reg len, tobj & vre)
+inline void arr_bottomleft(tobj * const params, uint_size_stk len, tobj & vre)
 {
 	arr_corner ps = get_arr_corner_params(params, len);
 
@@ -986,7 +986,7 @@ inline void arr_bottomleft(tobj * const params, uint_size_reg len, tobj & vre)
 }
 
 /// top(arr, p)
-inline void arr_toprows(tobj * const params, uint_size_reg len, tobj & vre)
+inline void arr_toprows(tobj * const params, uint_size_stk len, tobj & vre)
 {
 	arr_border ps = get_arr_border_params(params, len);
 
@@ -997,7 +997,7 @@ inline void arr_toprows(tobj * const params, uint_size_reg len, tobj & vre)
 }
 
 /// bottom(arr, p)
-inline void arr_bottomrows(tobj * const params, uint_size_reg len, tobj & vre)
+inline void arr_bottomrows(tobj * const params, uint_size_stk len, tobj & vre)
 {
 	arr_border ps = get_arr_border_params(params, len);
 
@@ -1008,7 +1008,7 @@ inline void arr_bottomrows(tobj * const params, uint_size_reg len, tobj & vre)
 }
 
 /// left(arr, p)
-inline void arr_leftcols(tobj * const params, uint_size_reg len, tobj & vre)
+inline void arr_leftcols(tobj * const params, uint_size_stk len, tobj & vre)
 {
 	arr_border ps = get_arr_border_params(params, len);
 
@@ -1019,7 +1019,7 @@ inline void arr_leftcols(tobj * const params, uint_size_reg len, tobj & vre)
 }
 
 /// right(arr, p)
-inline void arr_rightcols(tobj * const params, uint_size_reg len, tobj & vre)
+inline void arr_rightcols(tobj * const params, uint_size_stk len, tobj & vre)
 {
 	arr_border ps = get_arr_border_params(params, len);
 
@@ -1058,7 +1058,7 @@ inline tbarr * eigf_isinf(tdarr * arr) { return new tbarr(arr->isInf()); }
 inline tbarr * eigf_isnan(tdarr * arr) { return new tbarr(arr->isNaN()); }
 
 template <class Tre1, class Tre2>
-void eigf_wrapper(tobj * const params, uint_size_reg len, tobj & vre,
+void eigf_wrapper(tobj * const params, uint_size_stk len, tobj & vre,
 			const char * fname, Tre1 (*f)(double), Tre2 * (*eigf)(tdarr *))
 {
 	if (len != 1)
@@ -1080,13 +1080,13 @@ void eigf_wrapper(tobj * const params, uint_size_reg len, tobj & vre,
 }
 
 /// abs(v)
-inline void arr_abs(tobj * const params, uint_size_reg len, tobj & vre)
+inline void arr_abs(tobj * const params, uint_size_stk len, tobj & vre)
 {
 	eigf_wrapper<double, tdarr>(params, len, vre, "arr_abs", &std::abs, &eigf_abs);
 }
 
 /// eleinv(v)
-inline void arr_eleinv(tobj * const params, uint_size_reg len, tobj & vre)
+inline void arr_eleinv(tobj * const params, uint_size_stk len, tobj & vre)
 {
 	if (len != 1)
 		twarn(ErrRuntime_ParamsCtr).warn("arr_eleinv", "");
@@ -1108,7 +1108,7 @@ inline void arr_eleinv(tobj * const params, uint_size_reg len, tobj & vre)
 }
 
 /// conjugate(v)
-inline void arr_conjugate(tobj * const params, uint_size_reg len, tobj & vre)
+inline void arr_conjugate(tobj * const params, uint_size_stk len, tobj & vre)
 {
 	if (len != 1)
 		twarn(ErrRuntime_ParamsCtr).warn("arr_conjugate", "");
@@ -1123,31 +1123,31 @@ inline void arr_conjugate(tobj * const params, uint_size_reg len, tobj & vre)
 }
 
 /// exp(v)
-inline void arr_exp(tobj * const params, uint_size_reg len, tobj & vre)
+inline void arr_exp(tobj * const params, uint_size_stk len, tobj & vre)
 {
 	eigf_wrapper<double, tdarr>(params, len, vre, "arr_exp", &std::exp, &eigf_exp);
 }
 
 /// log(v)
-inline void arr_log(tobj * const params, uint_size_reg len, tobj & vre)
+inline void arr_log(tobj * const params, uint_size_stk len, tobj & vre)
 {
 	eigf_wrapper<double, tdarr>(params, len, vre, "arr_log", &std::log, &eigf_log);
 }
 
 /// log1p(v)
-inline void arr_log1p(tobj * const params, uint_size_reg len, tobj & vre)
+inline void arr_log1p(tobj * const params, uint_size_stk len, tobj & vre)
 {
 	eigf_wrapper<double, tdarr>(params, len, vre, "arr_log1p", &std::log1p, &eigf_log1p);
 }
 
 /// log10(v)
-inline void arr_log10(tobj * const params, uint_size_reg len, tobj & vre)
+inline void arr_log10(tobj * const params, uint_size_stk len, tobj & vre)
 {
 	eigf_wrapper<double, tdarr>(params, len, vre, "arr_log10", &std::log1p, &eigf_log10);
 }
 
 /// pow(v)
-inline void arr_pow(tobj * const params, uint_size_reg len, tobj & vre)
+inline void arr_pow(tobj * const params, uint_size_stk len, tobj & vre)
 {
 	if (len != 2)
 		twarn(ErrRuntime_ParamsCtr).warn("arr_pow", "");
@@ -1204,13 +1204,13 @@ inline void arr_pow(tobj * const params, uint_size_reg len, tobj & vre)
 }
 
 /// sqrt(v)
-inline void arr_sqrt(tobj * const params, uint_size_reg len, tobj & vre)
+inline void arr_sqrt(tobj * const params, uint_size_stk len, tobj & vre)
 {
 	eigf_wrapper<double, tdarr>(params, len, vre, "arr_sqrt", &std::sqrt, &eigf_sqrt);
 }
 
 /// rsqrt(v)
-inline void arr_rsqrt(tobj * const params, uint_size_reg len, tobj & vre)
+inline void arr_rsqrt(tobj * const params, uint_size_stk len, tobj & vre)
 {
 	if (len != 1) twarn(ErrRuntime_ParamsCtr).warn("arr_rsqrt", "");
 
@@ -1231,91 +1231,91 @@ inline void arr_rsqrt(tobj * const params, uint_size_reg len, tobj & vre)
 }
 
 /// sin(v)
-inline void arr_sin(tobj * const params, uint_size_reg len, tobj & vre)
+inline void arr_sin(tobj * const params, uint_size_stk len, tobj & vre)
 {
 	eigf_wrapper<double, tdarr>(params, len, vre, "arr_sin", &std::sin, &eigf_sin);
 }
 
 /// asin(v)
-inline void arr_asin(tobj * const params, uint_size_reg len, tobj & vre)
+inline void arr_asin(tobj * const params, uint_size_stk len, tobj & vre)
 {
 	eigf_wrapper<double, tdarr>(params, len, vre, "arr_asin", &std::asin, &eigf_asin);
 }
 
 ///cos(v)
-inline void arr_cos(tobj * const params, uint_size_reg len, tobj & vre)
+inline void arr_cos(tobj * const params, uint_size_stk len, tobj & vre)
 {
 	eigf_wrapper<double, tdarr>(params, len, vre, "arr_cos", &std::cos, &eigf_cos);
 }
 
 /// acos(v)
-inline void arr_acos(tobj * const params, uint_size_reg len, tobj & vre)
+inline void arr_acos(tobj * const params, uint_size_stk len, tobj & vre)
 {
 	eigf_wrapper<double, tdarr>(params, len, vre, "arr_acos", &std::acos, &eigf_acos);
 }
 
 /// tan(v)
-inline void arr_tan(tobj * const params, uint_size_reg len, tobj & vre)
+inline void arr_tan(tobj * const params, uint_size_stk len, tobj & vre)
 {
 	eigf_wrapper<double, tdarr>(params, len, vre, "arr_atn", &std::tan, &eigf_tan);
 }
 
 /// atan(v)
-inline void arr_atan(tobj * const params, uint_size_reg len, tobj & vre)
+inline void arr_atan(tobj * const params, uint_size_stk len, tobj & vre)
 {
 	eigf_wrapper<double, tdarr>(params, len, vre, "arr_atan", &std::atan, &eigf_atan);
 }
 
 /// sinh(v)
-inline void arr_sinh(tobj * const params, uint_size_reg len, tobj & vre)
+inline void arr_sinh(tobj * const params, uint_size_stk len, tobj & vre)
 {
 	eigf_wrapper<double, tdarr>(params, len, vre, "arr_sinh", &std::sinh, &eigf_sinh);
 }
 
 /// cosh(v)
-inline void arr_cosh(tobj * const params, uint_size_reg len, tobj & vre)
+inline void arr_cosh(tobj * const params, uint_size_stk len, tobj & vre)
 {
 	eigf_wrapper<double, tdarr>(params, len, vre, "arr_cosh", &std::cosh, &eigf_cosh);
 }
 
 /// tanh(v)
-inline void arr_tanh(tobj * const params, uint_size_reg len, tobj & vre)
+inline void arr_tanh(tobj * const params, uint_size_stk len, tobj & vre)
 {
 	eigf_wrapper<double, tdarr>(params, len, vre, "arr_tanh", &std::tanh, &eigf_tanh);
 }
 
 /// ceil(v)
-inline void arr_ceil(tobj * const params, uint_size_reg len, tobj & vre)
+inline void arr_ceil(tobj * const params, uint_size_stk len, tobj & vre)
 {
 	eigf_wrapper<double, tdarr>(params, len, vre, "arr_ceil", &std::ceil, &eigf_ceil);
 }
 
 /// floor(v)
-inline void arr_floor(tobj * const params, uint_size_reg len, tobj & vre)
+inline void arr_floor(tobj * const params, uint_size_stk len, tobj & vre)
 {
 	eigf_wrapper<double, tdarr>(params, len, vre, "arr_floor", &std::floor, &eigf_floor);
 }
 
 /// round(v)
-inline void arr_round(tobj * const params, uint_size_reg len, tobj & vre)
+inline void arr_round(tobj * const params, uint_size_stk len, tobj & vre)
 {
 	eigf_wrapper<double, tdarr>(params, len, vre, "arr_round", &std::round, &eigf_round);
 }
 
 /// isfinite(v)
-inline void arr_isFinite(tobj * const params, uint_size_reg len, tobj & vre)
+inline void arr_isFinite(tobj * const params, uint_size_stk len, tobj & vre)
 {
 	eigf_wrapper<bool, tbarr>(params, len, vre, "arr_isFinite", &std::isfinite, &eigf_isfinite);
 }
 
 /// isinf(v)
-inline void arr_isInf(tobj * const params, uint_size_reg len, tobj & vre)
+inline void arr_isInf(tobj * const params, uint_size_stk len, tobj & vre)
 {
 	eigf_wrapper<bool, tbarr>(params, len, vre, "arr_isInf", &std::isinf, &eigf_isinf);
 }
 
 /// isnan(v)
-inline void arr_isNaN(tobj * const params, uint_size_reg len, tobj & vre)
+inline void arr_isNaN(tobj * const params, uint_size_stk len, tobj & vre)
 {
 	eigf_wrapper<bool, tbarr>(params, len, vre, "arr_isNaN", &std::isnan, &eigf_isnan);
 }

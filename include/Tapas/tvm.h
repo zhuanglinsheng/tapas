@@ -479,17 +479,17 @@ class tvm : tobj_array
 {
 private:
 	/// Runtime: maximum registers in vmstack
-	uint_size_reg __regmax;
+	uint_size_stk __regmax;
 
 	/// Runtime: not created by tvm
 	tobj * __stk;
-	uint_size_reg __stklen;
+	uint_size_stk __stklen;
 
 	/// Runtime: returned value
 	tobj __rev;
 
 	/// Runtime: in the layer of loops
-	uint_size_reg __inloop;
+	uint_size_stk __inloop;
 
 	/// Compilation
 	std::vector<std::string> __paths;
@@ -501,19 +501,19 @@ void set_rev_empty()
 }
 
 /// Get the length of vmstack.
-uint_size_reg vmstk_size() const
+uint_size_stk vmstk_size() const
 {
 	return __stklen;
 }
 
 /// Get the element of vmstack at loc
-tobj & vmstk_at(uint_size_reg loc)
+tobj & vmstk_at(uint_size_stk loc)
 {
 	return __stk[__stklen - loc - 1];
 }
 
 /// Get the pointer of vmstack since n
-tobj * vmstk_get_top_n(uint_size_reg n)
+tobj * vmstk_get_top_n(uint_size_stk n)
 {
 	return __stk + __stklen - n;
 }
@@ -549,9 +549,9 @@ void vmstk_pop_clean_front()
 }
 
 /// Pop the first n elements of vmstack and clean them.
-void vmstk_pop_clean_front_n(uint_size_reg n)
+void vmstk_pop_clean_front_n(uint_size_stk n)
 {
-	for (uint_size_reg i = 0; i<n; i++)
+	for (uint_size_stk i = 0; i<n; i++)
 		vmstk_pop_clean_front();
 }
 
@@ -581,7 +581,7 @@ void copy_env(tcompo_env * env_basic, tobj & rev)
 }
 
 /// OP_IDXR
-void parse_idx(const uint_size_reg nparams)
+void parse_idx(const uint_size_stk nparams)
 {
 	tobj & obj = vmstk_top();
 	vmstk_pop_front();
@@ -623,7 +623,7 @@ void parse_idx(const uint_size_reg nparams)
 /// Push to the top of vmstack the value of 'arr[idxs]' where
 /// idxs are top nparams of vmstack
 template<typename T>
-void parse_idx_basic(const uint_size_reg nparams, T * arr, tobj & obj)
+void parse_idx_basic(const uint_size_stk nparams, T * arr, tobj & obj)
 {
 	tobj * params = vmstk_get_top_n(nparams);
 	arr->idx(params, nparams, __rev);
@@ -636,7 +636,7 @@ void parse_idx_basic(const uint_size_reg nparams, T * arr, tobj & obj)
 /// OP_EVAL
 void parse_eval(tbycode * iter, tcompo_env * env)
 {
-	uint_size_reg nparams = static_cast<uint_size_reg>(iter->get_U());
+	uint_size_stk nparams = static_cast<uint_size_stk>(iter->get_U());
 	tobj & obj = vmstk_top();
 	tobj * params = this->vmstk_get_top_n(nparams + 1);
 
@@ -664,7 +664,7 @@ void parse_eval(tbycode * iter, tcompo_env * env)
 }
 
 /// OP_EVALTF (Not yet)
-void parse_eval_tf(tcompo_v * v, tobj * params, uint_size_reg nparams, tcompo_env * env)
+void parse_eval_tf(tcompo_v * v, tobj * params, uint_size_stk nparams, tcompo_env * env)
 {
 	tfunc * f = reinterpret_cast<tfunc *>(v);
 	// check environment tree looping (recursion)
@@ -734,7 +734,7 @@ void parse_import(const uint_size_cst cloc, char ** const clst, tcompo_env * con
 }
 
 /// OP_IDXL
-void parse_idxl(const uint_size_obj loc, const uint_size_reg nparams,
+void parse_idxl(const uint_size_obj loc, const uint_size_stk nparams,
 		bool isenv, tcompo_env * env)
 {
 	tobj & obj = isenv ? env->get_obj(loc) : get_obj(loc);
@@ -775,7 +775,7 @@ void parse_idxl(const uint_size_obj loc, const uint_size_reg nparams,
 
 /// Set 'arr[vmstk_get_top_n(nparams)] = vmstk_at(nparams)'
 template<typename T>
-void parse_idxl_basic(const uint_size_reg nparams, T * arr)
+void parse_idxl_basic(const uint_size_stk nparams, T * arr)
 {
 	tobj & rv = vmstk_at(nparams);
 	tobj * params = vmstk_get_top_n(nparams);
@@ -835,27 +835,27 @@ void parse_loopas_basic(T * p, uint_size_obj vloc, tobj & vre,
 /// OP_ADD : OP_OR
 /// @details ee tcp::binop_split and tcp::parse_binop for the types
 void parse_binop(const binopf & f, tbycode * iter,
-			uint_size_reg type, tcompo_env * const env)
+			uint_size_stk type, tcompo_env * const env)
 {
 	uint16_t left = iter->get_L();
 	uint16_t right = iter->get_R();
 
 	switch (type) {
 	case 0: // value value
-		f(vmstk_at(static_cast<uint_size_reg>(left)),
-		  vmstk_at(static_cast<uint_size_reg>(right)),
-		  vmstk_at(static_cast<uint_size_reg>(right)));
+		f(vmstk_at(static_cast<uint_size_stk>(left)),
+		  vmstk_at(static_cast<uint_size_stk>(right)),
+		  vmstk_at(static_cast<uint_size_stk>(right)));
 		vmstk_pop_clean_front();
 		break;
 	case 1: // env value
 		f(env->get_obj(left),
-		  vmstk_at(static_cast<uint_size_reg>(right)),
-		  vmstk_at(static_cast<uint_size_reg>(right)));
+		  vmstk_at(static_cast<uint_size_stk>(right)),
+		  vmstk_at(static_cast<uint_size_stk>(right)));
 		break;
 	case 2: // value env
-		f(vmstk_at(static_cast<uint_size_reg>(left)),
+		f(vmstk_at(static_cast<uint_size_stk>(left)),
 		  env->get_obj(right),
-		  vmstk_at(static_cast<uint_size_reg>(left)));
+		  vmstk_at(static_cast<uint_size_stk>(left)));
 		break;
 	case 3: // env env
 		f(env->get_obj(left), env->get_obj(right), topfree_rv());
@@ -863,13 +863,13 @@ void parse_binop(const binopf & f, tbycode * iter,
 		break;
 	case 4: // tmp value
 		f(get_obj(left),
-		  vmstk_at(static_cast<uint_size_reg>(right)),
-		  vmstk_at(static_cast<uint_size_reg>(right)));
+		  vmstk_at(static_cast<uint_size_stk>(right)),
+		  vmstk_at(static_cast<uint_size_stk>(right)));
 		break;
 	case 5: // value tmp
-		f(vmstk_at(static_cast<uint_size_reg>(left)),
+		f(vmstk_at(static_cast<uint_size_stk>(left)),
 		  get_obj(right),
-		  vmstk_at(static_cast<uint_size_reg>(left)));
+		  vmstk_at(static_cast<uint_size_stk>(left)));
 		break;
 	case 6: // tmp tmp
 		f(get_obj(left), get_obj(right), topfree_rv());
@@ -985,7 +985,7 @@ void exec_tin(tbycode *& iter, uint_size_cmd & idx, uint_size_cmd end, tcompo_en
 	case OP_POPN: {
 		bool print = iter->get_R();
 
-		for (uint_size_reg i = 0; i < static_cast<uint_size_reg>(iter->get_L()); i++) {
+		for (uint_size_stk i = 0; i < static_cast<uint_size_stk>(iter->get_L()); i++) {
 			if (print && vmstk_top().get_type() != tnil)
 				printf("%s\n", vmstk_top().tostring_full().c_str());
 			vmstk_pop_clean_front();
@@ -1095,10 +1095,10 @@ void exec_tin(tbycode *& iter, uint_size_cmd & idx, uint_size_cmd end, tcompo_en
 	}
 	case OP_PUSHDICT: {
 		tdict * dict = new tdict();
-		uint_size_reg nparams = static_cast<uint_size_reg>(iter->get_U());
+		uint_size_stk nparams = static_cast<uint_size_stk>(iter->get_U());
 		tobj * params = vmstk_get_top_n(nparams);
 
-		for (uint_size_reg i = 0; i < nparams; i++) {
+		for (uint_size_stk i = 0; i < nparams; i++) {
 			dict->set_append(params);
 			params++;
 		}
@@ -1118,7 +1118,7 @@ void exec_tin(tbycode *& iter, uint_size_cmd & idx, uint_size_cmd end, tcompo_en
 		break;
 	}
 	case OP_IDXR: {
-		parse_idx(static_cast<uint_size_reg>(iter->get_U()));
+		parse_idx(static_cast<uint_size_stk>(iter->get_U()));
 		break;
 	}
 	case OP_EVAL: {
@@ -1126,7 +1126,7 @@ void exec_tin(tbycode *& iter, uint_size_cmd & idx, uint_size_cmd end, tcompo_en
 		break;
 	}
 	case OP_EVALSF: {
-		uint_size_reg nparams = static_cast<uint_size_reg>(iter->get_U());
+		uint_size_stk nparams = static_cast<uint_size_stk>(iter->get_U());
 		tcompo_v * v = vmstk_top().get_v_tcompo();
 		tobj * params = this->vmstk_get_top_n(nparams + 1);
 		reinterpret_cast<tcppsessf *>(v)->get_f()(params, nparams, __rev, env);
@@ -1136,7 +1136,7 @@ void exec_tin(tbycode *& iter, uint_size_cmd & idx, uint_size_cmd end, tcompo_en
 		break;
 	}
 	case OP_EVALCF: {
-		uint_size_reg nparams = static_cast<uint_size_reg>(iter->get_U());
+		uint_size_stk nparams = static_cast<uint_size_stk>(iter->get_U());
 		tcompo_v * v = vmstk_top().get_v_tcompo();
 		tobj * params = this->vmstk_get_top_n(nparams + 1);
 		reinterpret_cast<tcppgenf *>(v)->get_f()(params, nparams, __rev);
@@ -1150,16 +1150,16 @@ void exec_tin(tbycode *& iter, uint_size_cmd & idx, uint_size_cmd end, tcompo_en
 	}
 	case OP_IDXL: {
 		uint_size_obj loc = iter->get_L();
-		uint_size_reg nparams = iter->get_b();
+		uint_size_stk nparams = iter->get_b();
 		bool isenv = iter->get_i();
 		parse_idxl(loc, nparams, isenv, env);
 		break;
 	}
 	case OP_PUSHF: {
 		uint_size_cmd ncmds = iter->get_U();
-		uint_size_reg nparams = static_cast<uint_size_reg>(vmstk_top().get_v_tint());
+		uint_size_stk nparams = static_cast<uint_size_stk>(vmstk_top().get_v_tint());
 		vmstk_pop_front();
-		uint_size_reg fregmax = static_cast<uint_size_reg>(vmstk_top().get_v_tint());
+		uint_size_stk fregmax = static_cast<uint_size_stk>(vmstk_top().get_v_tint());
 		vmstk_pop_front();
 		uint_size_obj ntmps = static_cast<uint_size_obj>(vmstk_top().get_v_tint());
 		vmstk_pop_front();
@@ -1173,91 +1173,91 @@ void exec_tin(tbycode *& iter, uint_size_cmd & idx, uint_size_cmd end, tcompo_en
 		break;
 	}
 	case OP_ADD: {
-		uint_size_reg type = static_cast<uint_size_reg>(vmstk_top().get_v_tint());
+		uint_size_stk type = static_cast<uint_size_stk>(vmstk_top().get_v_tint());
 		vmstk_pop_front();
 		parse_binop(operator_add, iter, type, env);
 		break;
 	}
 	case OP_SUB: {
-		uint_size_reg type = static_cast<uint_size_reg>(vmstk_top().get_v_tint());
+		uint_size_stk type = static_cast<uint_size_stk>(vmstk_top().get_v_tint());
 		vmstk_pop_front();
 		parse_binop(operator_sub, iter, type, env);
 		break;
 	}
 	case OP_MUL: {
-		uint_size_reg type = static_cast<uint_size_reg>(vmstk_top().get_v_tint());
+		uint_size_stk type = static_cast<uint_size_stk>(vmstk_top().get_v_tint());
 		vmstk_pop_front();
 		parse_binop(operator_mul, iter, type, env);
 		break;
 	}
 	case OP_DIV: {
-		uint_size_reg type = static_cast<uint_size_reg>(vmstk_top().get_v_tint());
+		uint_size_stk type = static_cast<uint_size_stk>(vmstk_top().get_v_tint());
 		vmstk_pop_front();
 		parse_binop(operator_div, iter, type, env);
 		break;
 	}
 	case OP_MOD: {
-		uint_size_reg type = static_cast<uint_size_reg>(vmstk_top().get_v_tint());
+		uint_size_stk type = static_cast<uint_size_stk>(vmstk_top().get_v_tint());
 		vmstk_pop_front();
 		parse_binop(operator_mod, iter, type, env);
 		break;
 	}
 	case OP_POW: {
-		uint_size_reg type = static_cast<uint_size_reg>(vmstk_top().get_v_tint());
+		uint_size_stk type = static_cast<uint_size_stk>(vmstk_top().get_v_tint());
 		vmstk_pop_front();
 		parse_binop(operator_pow, iter, type, env);
 		break;
 	}
 	case OP_MMUL: {
-		uint_size_reg type = static_cast<uint_size_reg>(vmstk_top().get_v_tint());
+		uint_size_stk type = static_cast<uint_size_stk>(vmstk_top().get_v_tint());
 		vmstk_pop_front();
 		parse_binop(operator_mmul, iter, type, env);
 		break;
 	}
 	case OP_EQ: {
-		uint_size_reg type = static_cast<uint_size_reg>(vmstk_top().get_v_tint());
+		uint_size_stk type = static_cast<uint_size_stk>(vmstk_top().get_v_tint());
 		vmstk_pop_front();
 		parse_binop(operator_eq, iter, type, env);
 		break;
 	}
 	case OP_NE: {
-		uint_size_reg type = static_cast<uint_size_reg>(vmstk_top().get_v_tint());
+		uint_size_stk type = static_cast<uint_size_stk>(vmstk_top().get_v_tint());
 		vmstk_pop_front();
 		parse_binop(operator_ne, iter, type, env);
 		break;
 	}
 	case OP_GE: {
-		uint_size_reg type = static_cast<uint_size_reg>(vmstk_top().get_v_tint());
+		uint_size_stk type = static_cast<uint_size_stk>(vmstk_top().get_v_tint());
 		vmstk_pop_front();
 		parse_binop(operator_ge, iter, type, env);
 		break;
 	}
 	case OP_SG: {
-		uint_size_reg type = static_cast<uint_size_reg>(vmstk_top().get_v_tint());
+		uint_size_stk type = static_cast<uint_size_stk>(vmstk_top().get_v_tint());
 		vmstk_pop_front();
 		parse_binop(operator_sg, iter, type, env);
 		break;
 	}
 	case OP_LE: {
-		uint_size_reg type = static_cast<uint_size_reg>(vmstk_top().get_v_tint());
+		uint_size_stk type = static_cast<uint_size_stk>(vmstk_top().get_v_tint());
 		vmstk_pop_front();
 		parse_binop(operator_le, iter, type, env);
 		break;
 	}
 	case OP_SL: {
-		uint_size_reg type = static_cast<uint_size_reg>(vmstk_top().get_v_tint());
+		uint_size_stk type = static_cast<uint_size_stk>(vmstk_top().get_v_tint());
 		vmstk_pop_front();
 		parse_binop(operator_sl, iter, type, env);
 		break;
 	}
 	case OP_AND: {
-		uint_size_reg type = static_cast<uint_size_reg>(vmstk_top().get_v_tint());
+		uint_size_stk type = static_cast<uint_size_stk>(vmstk_top().get_v_tint());
 		vmstk_pop_front();
 		parse_binop(operator_and, iter, type, env);
 		break;
 	}
 	case OP_OR: {
-		uint_size_reg type = static_cast<uint_size_reg>(vmstk_top().get_v_tint());
+		uint_size_stk type = static_cast<uint_size_stk>(vmstk_top().get_v_tint());
 		vmstk_pop_front();
 		parse_binop(operator_or, iter, type, env);
 		break;
@@ -1311,7 +1311,7 @@ void set_tmpmax(uint_size_obj tmpmax)
  *  @param vmstack - (tapv *) A pointer to array of taps as vmstack
  *  @param nreg - (uint_regs) The maximum number of registers in vamstack
  */
-void set_vmstack(tobj * vmstack, uint_size_reg nreg)
+void set_vmstack(tobj * vmstack, uint_size_stk nreg)
 {
 	__stk = vmstack;
 	__regmax = nreg;
@@ -1366,9 +1366,9 @@ void eval_bycodes(uint_size_cmd from, tlib * lib)
  *===========================================================================*/
 
 /// print(v1, v2, ...)
-inline void gen_print(tobj * const params, uint_size_reg len, tobj & vre)
+inline void gen_print(tobj * const params, uint_size_stk len, tobj & vre)
 {
-	for (uint_size_reg i = 0; i < len; i++) {
+	for (uint_size_stk i = 0; i < len; i++) {
 		tobj * atom_i = params + i;
 		printf("%s", atom_i->tostring_abbr().c_str());
 	}
@@ -1377,9 +1377,9 @@ inline void gen_print(tobj * const params, uint_size_reg len, tobj & vre)
 }
 
 /// sprt(v1, v2, ...)
-inline void gen_sprt(tobj* const params, uint_size_reg len, tobj& vre)
+inline void gen_sprt(tobj* const params, uint_size_stk len, tobj& vre)
 {
-	for (uint_size_reg i = 0; i < len; i++) {
+	for (uint_size_stk i = 0; i < len; i++) {
 		tobj* atom_i = params + i;
 		printf("%s", atom_i->tostring_full().c_str());
 	}
@@ -1388,7 +1388,7 @@ inline void gen_sprt(tobj* const params, uint_size_reg len, tobj& vre)
 }
 
 /// len(value)
-inline void gen_len(tobj * const params, uint_size_reg len, tobj & vre)
+inline void gen_len(tobj * const params, uint_size_stk len, tobj & vre)
 {
 	if (len != 1)
 		twarn(ErrRuntime_ParamsCtr).warn("gen_len", "1 parameter");
@@ -1403,7 +1403,7 @@ inline void gen_len(tobj * const params, uint_size_reg len, tobj & vre)
 }
 
 /// type(obj)
-inline void gen_type(tobj * const params, uint_size_reg len, tobj & vre)
+inline void gen_type(tobj * const params, uint_size_stk len, tobj & vre)
 {
 	if (len != 1)
 		twarn(ErrRuntime_ParamsCtr).warn("gen_type", "");
@@ -1428,7 +1428,7 @@ inline void gen_type(tobj * const params, uint_size_reg len, tobj & vre)
 }
 
 /// copy(value)
-inline void gen_copy(tobj * const params, uint_size_reg len, tobj & vre)
+inline void gen_copy(tobj * const params, uint_size_stk len, tobj & vre)
 {
 	if (len != 1)
 		twarn(ErrRuntime_ParamsCtr).warn("gen_copy", "");
@@ -1437,7 +1437,7 @@ inline void gen_copy(tobj * const params, uint_size_reg len, tobj & vre)
 }
 
 /// identical(v1, v2)
-inline void gen_identical(tobj * const params, uint_size_reg len, tobj & vre)
+inline void gen_identical(tobj * const params, uint_size_stk len, tobj & vre)
 {
 	if (len != 2)
 		twarn(ErrRuntime_ParamsCtr).warn("gen_identical", "");
@@ -1448,7 +1448,7 @@ inline void gen_identical(tobj * const params, uint_size_reg len, tobj & vre)
 }
 
 /// tobool(value)
-inline void to_bool(tobj * const params, uint_size_reg len, tobj & vre)
+inline void to_bool(tobj * const params, uint_size_stk len, tobj & vre)
 {
 	if (len != 1)
 		twarn(ErrRuntime_ParamsCtr).warn("to_bool", "");
@@ -1474,7 +1474,7 @@ inline void to_bool(tobj * const params, uint_size_reg len, tobj & vre)
 }
 
 /// toint(value)
-inline void to_int(tobj * const params, uint_size_reg len, tobj & vre)
+inline void to_int(tobj * const params, uint_size_stk len, tobj & vre)
 {
 	if (len != 1)
 		twarn(ErrRuntime_ParamsCtr).warn("to_int", "");
@@ -1500,7 +1500,7 @@ inline void to_int(tobj * const params, uint_size_reg len, tobj & vre)
 }
 
 /// todouble(value)
-inline void to_double(tobj * const params, uint_size_reg len, tobj & vre)
+inline void to_double(tobj * const params, uint_size_stk len, tobj & vre)
 {
 	if (len != 1)
 		twarn(ErrRuntime_ParamsCtr).warn("to_double", "");
@@ -1526,7 +1526,7 @@ inline void to_double(tobj * const params, uint_size_reg len, tobj & vre)
 }
 
 /// topair(v1, v2): cpp function for pair construction
-inline void to_pair(tobj * const params, uint_size_reg len, tobj& vre)
+inline void to_pair(tobj * const params, uint_size_stk len, tobj& vre)
 {
 	if (len != 2)
 		twarn(ErrRuntime_ParamsCtr).warn("to_iter", "");
@@ -1537,7 +1537,7 @@ inline void to_pair(tobj * const params, uint_size_reg len, tobj& vre)
 }
 
 /// toiter(from, by, to): cpp function for iter construction
-inline void to_iter(tobj * const params, uint_size_reg len, tobj& vre)
+inline void to_iter(tobj * const params, uint_size_stk len, tobj& vre)
 {
 	if (len != 3)
 		twarn(ErrRuntime_ParamsCtr).warn("to_iter", "");

@@ -66,9 +66,9 @@ typedef uint32_t uint_size_cst;
 /// Alias for uint16_t, the location in variable list
 typedef uint16_t uint_size_obj;
 
-/// The size type for register list.
+/// The size type for stack.
 /// Alias for uint8_t, the location in vm stack
-typedef uint8_t  uint_size_reg;
+typedef uint8_t  uint_size_stk;
 
 /// Each module can contains at most this number of bycodes.
 /// Alias for C_Limit (67,108,863), the limit of a commands

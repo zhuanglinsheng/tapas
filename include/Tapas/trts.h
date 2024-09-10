@@ -740,7 +740,7 @@ bool identical(tcompo_v * v) const
 }
 
 /// Indexing the element by 0 or 1
-void idx(const tobj * params, uint_size_reg np, tobj& vre)
+void idx(const tobj * params, uint_size_stk np, tobj& vre)
 {
 	if (np != 1)
 		twarn(ErrRuntime_ParamsCtr).warn("tpair::idx", "1 parameter");
@@ -756,7 +756,7 @@ void idx(const tobj * params, uint_size_reg np, tobj& vre)
 }
 
 /// Set the elements by indexing of 0 or 1
-void iset(const tobj * params, uint_size_reg np, const tobj & v)
+void iset(const tobj * params, uint_size_stk np, const tobj & v)
 {
 	if (np != 1)
 		twarn(ErrRuntime_ParamsCtr).warn("tpair::idx", "1 parameter");
@@ -1021,9 +1021,9 @@ class tcompo_idx
 public:
 virtual ~tcompo_idx() {};
 /// arr[params]
-virtual void idx(const tobj * params, uint_size_reg np, tobj& vre) = 0;
+virtual void idx(const tobj * params, uint_size_stk np, tobj& vre) = 0;
 /// arr[params] = v
-virtual void iset(const tobj * params, uint_size_reg np, const tobj& v) = 0;
+virtual void iset(const tobj * params, uint_size_stk np, const tobj& v) = 0;
 };
 
 /// Basic iteration methods in Tap
@@ -1193,7 +1193,7 @@ bool identical(tcompo_v * v) const
  *===========================================================================*/
 
 /// C++ General Functions
-typedef void (* cppf)(tobj * const, uint_size_reg, tobj &);
+typedef void (* cppf)(tobj * const, uint_size_stk, tobj &);
 
 /// A wrapper of C++ General Functions
 class tcppgenf : public tcompo_v
@@ -1201,11 +1201,11 @@ class tcppgenf : public tcompo_v
 private:
 	cppf __f;
 	const char * __name;
-	uint_size_reg __nparams;
+	uint_size_stk __nparams;
 
 public:
 /// Constructor: a wrapper of cppf `f`
-tcppgenf(const cppf & f, const char * name, uint_size_reg nparams)
+tcppgenf(const cppf & f, const char * name, uint_size_stk nparams)
 {
 	__f = f; __name = name; __nparams = nparams;
 }
@@ -1220,7 +1220,7 @@ cppf & get_f()
 }
 
 /// @return the number of parameters
-uint_size_reg get_nparams() const
+uint_size_stk get_nparams() const
 {
 	return __nparams;
 }
