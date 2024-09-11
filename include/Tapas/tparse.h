@@ -20,7 +20,7 @@ private:
 	uint_size_stk __stk_ctr = 0;
 	uint_size_stk __stk_max = 0;
 
-void update_reg_max()
+void update_std_max()
 {
 	__stk_max = __stk_max >= __stk_ctr ? __stk_max : __stk_ctr;
 }
@@ -33,7 +33,7 @@ void add_stk_ctr()
 	if (__stk_ctr + 1 > REGLIST_SIZE_LIMIT)
 		twarn(ErrCompile_REGOutOfLimit).warn("tstk_ctr::add_stk_ctr", "");
 	__stk_ctr++;
-	update_reg_max();
+	update_std_max();
 }
 
 /// Add register counter by n
@@ -42,7 +42,7 @@ void add_stk_ctr_n(uint_size_stk n)
 	if (__stk_ctr + n > REGLIST_SIZE_LIMIT)
 		twarn(ErrCompile_REGOutOfLimit).warn("tstk_ctr::add_stk_ctr_n", "");
 	__stk_ctr += n;
-	update_reg_max();
+	update_std_max();
 }
 
 /// Deduct register counter by 1
@@ -97,13 +97,17 @@ public:
 /// Constructor: at top level with no preclude objects contained
 tobj_ctr()
 {
-	__father = nullptr; __current_env_objmax = 0; __npreload = 0;
+	__father = nullptr;
+	__current_env_objmax = 0;
+	__npreload = 0;
 }
 
 /// Constructor: has father
 tobj_ctr(tobj_ctr * father)
 {
-	__father = father; __current_env_objmax = 0; __npreload = 0;
+	__father = father;
+	__current_env_objmax = 0;
+	__npreload = 0;
 }
 
 /** Constructor: general
