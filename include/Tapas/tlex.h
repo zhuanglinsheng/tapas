@@ -693,9 +693,9 @@ void lex_md_file(FILE * f, std::vector<std::string> & units)
 			tmpline = "";
 
 			// entering code block
-			if (0 == in_tap_code_blk &&
-			 ((0 == tap_code_part_mark_1.compare(trimmed_line))
-			||(0 == tap_code_part_mark_2.compare(trimmed_line))
+			if (0 == in_tap_code_blk &&(
+		    //(0 == tap_code_part_mark_1.compare(trimmed_line))
+			  (0 == tap_code_part_mark_2.compare(trimmed_line))
 			||(0 == tap_code_part_mark_3.compare(trimmed_line))
 			||(0 == tap_code_blk_enter_4.compare(trimmed_line))
 			||(0 == tap_code_blk_enter_5.compare(trimmed_line)))) {
