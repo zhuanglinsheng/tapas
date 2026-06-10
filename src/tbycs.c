@@ -1,0 +1,1086 @@
+#include "tapas/tbycs.h"
+
+#include "tapas/tbasis.h"
+
+
+/*===========================================================================*
+ * 1. Single Bytecode (tbycode)
+ *===========================================================================*/
+
+/**
+ * Each bytecode instruction is packed into a single uint32_t.
+ * The low 6 bits encode the instruction (tins).
+ * The upper 26 bits encode parameters depending on instruction type:
+ *   U-type:  26-bit unsigned parameter
+ *   LR-type: 13-bit L (left), 13-bit R (right)
+ *   CP-type: 18-bit C, 8-bit P
+ *   Lbi-type: 13-bit L, 8-bit b, 5-bit i
+ */
+
+/* ---- Constructors ---- */
+
+/** OP_PASS (no params) */
+tbycode tbycode_make(uint8_t ins)
+{
+	return ((uint32_t)ins << 2) >> 2;
+}
+
+/** U-type: 26-bit unsigned parameter */
+tbycode tbycode_make_u(uint8_t ins, uint32_t u)
+{
+	uint32_t tmp = 0;
+	tmp += (u << 6);
+	tmp += (((uint32_t)ins << 2) >> 2);
+	return tmp;
+}
+
+/** LR-type: 13-bit L, 13-bit R */
+tbycode tbycode_make_lr(uint8_t ins, uint16_t L, uint16_t R)
+{
+	uint32_t tmp = 0;
+	uint32_t iL = L;
+	uint32_t iR = R;
+	tmp += (iR << 19);
+	tmp += ((iL << 19) >> 13);
+	tmp += (((uint32_t)ins << 2) >> 2);
+	return tmp;
+}
+
+/** CP-type: 18-bit C, 8-bit P */
+static tbycode tbycode_make_cp(uint8_t ins, uint32_t C, uint8_t P)
+{
+	uint32_t tmp = 0;
+	uint32_t iP = P;
+	tmp += (iP << 24);
+	tmp += ((C << 14) >> 8);
+	tmp += (((uint32_t)ins << 2) >> 2);
+	return tmp;
+}
+
+/** Lbi-type: 13-bit L, 8-bit b, 5-bit i */
+tbycode tbycode_make_lbi(uint8_t ins, uint16_t L, uint8_t b, uint8_t i)
+{
+	uint32_t tmp = 0;
+	uint32_t iL = L;
+	uint32_t ib = b;
+	uint32_t ii = i;
+	tmp += (ii << 27);
+	tmp += ((ib << 24) >> 5);
+	tmp += ((iL << 19) >> 13);
+	tmp += (((uint32_t)ins << 2) >> 2);
+	return tmp;
+}
+
+/* ---- Getters ---- */
+
+/** Extract instruction type (low 6 bits) */
+tins tbycode_ins(tbycode c)
+{
+	return (tins)(((c << 26) >> 26));
+}
+
+/** Extract U parameter (upper 26 bits, shift right 6) */
+uint32_t tbycode_get_U(tbycode c)
+{
+	return c >> 6;
+}
+
+/** Add A to the U field */
+static tbycode tbycode_plus_U(tbycode c, uint32_t A)
+{
+	return c + (A << 6);
+}
+
+/** Extract L parameter */
+uint16_t tbycode_get_L(tbycode c)
+{
+	return (uint16_t)(((c << 13) >> 19));
+}
+
+/** Extract R parameter */
+uint16_t tbycode_get_R(tbycode c)
+{
+	return (uint16_t)(c >> 19);
+}
+
+/** Extract C parameter */
+static uint32_t tbycode_get_C(tbycode c)
+{
+	return ((c << 8) >> 14);
+}
+
+/** Extract P parameter */
+static uint8_t tbycode_get_P(tbycode c)
+{
+	return (uint8_t)(c >> 24);
+}
+
+/** Extract b parameter */
+uint8_t tbycode_get_b(tbycode c)
+{
+	return (uint8_t)(((c << 5) >> 24));
+}
+
+/** Extract i parameter */
+uint8_t tbycode_get_i(tbycode c)
+{
+	return (uint8_t)(c >> 27);
+}
+
+/** Set instruction type (replace low 6 bits) */
+static tbycode tbycode_set_ins(tbycode c, uint8_t ins)
+{
+	c >>= 6;
+	c <<= 6;
+	c += ((((uint32_t)ins) << 2) >> 2);
+	return c;
+}
+
+/**
+ * Convert bytecode to debug string representation.
+ * Writes to caller-provided buffer of at least 128 bytes.
+ */
+void tbycode_tostring(tbycode c, char *buf)
+{
+	tins ins = tbycode_ins(c);
+	switch (ins) {
+	case OP_PASS:
+		sprintf(buf, "OP_PASS     ");
+		break;
+	case OP_VCRT:
+		sprintf(buf,
+			"OP_VCRT     %u  %u",
+			(unsigned)tbycode_get_L(c),
+			(unsigned)tbycode_get_R(c));
+		break;
+	case OP_TMPDEL:
+		sprintf(buf, "OP_TMPDEL   %u", (unsigned)tbycode_get_U(c));
+		break;
+	case OP_THIS:
+		sprintf(buf, "OP_THIS     ");
+		break;
+	case OP_BASE:
+		sprintf(buf, "OP_BASE     ");
+		break;
+	case OP_BREAK:
+		sprintf(buf, "OP_BREAK    ");
+		break;
+	case OP_CONTI:
+		sprintf(buf, "OP_CONTI    ");
+		break;
+	case OP_RET:
+		sprintf(buf, "OP_RET      ");
+		break;
+	case OP_IN:
+		sprintf(buf, "OP_IN       ");
+		break;
+	case OP_PAIR:
+		sprintf(buf, "OP_PAIR     ");
+		break;
+	case OP_TO:
+		sprintf(buf, "OP_TO       ");
+		break;
+	case OP_POPN:
+		sprintf(buf,
+			"OP_POPN     %u  %u",
+			(unsigned)tbycode_get_L(c),
+			(unsigned)tbycode_get_R(c));
+		break;
+	case OP_POPCOV:
+		sprintf(buf,
+			"OP_POPCOV   %u  %u",
+			(unsigned)tbycode_get_L(c),
+			(unsigned)tbycode_get_R(c));
+		break;
+	case OP_LOOPAS:
+		sprintf(buf,
+			"OP_LOOPAS   %u  %u",
+			(unsigned)tbycode_get_L(c),
+			(unsigned)tbycode_get_R(c));
+		break;
+	case OP_LOOPIAS:
+		sprintf(buf,
+			"OP_LOOPIAS  %u  %u",
+			(unsigned)tbycode_get_L(c),
+			(unsigned)tbycode_get_R(c));
+		break;
+	case OP_LOOPLAS:
+		sprintf(buf,
+			"OP_LOOPLS   %u  %u",
+			(unsigned)tbycode_get_L(c),
+			(unsigned)tbycode_get_R(c));
+		break;
+	case OP_LOOPGAS:
+		sprintf(buf,
+			"OP_LOOPGAS  %u  %u",
+			(unsigned)tbycode_get_L(c),
+			(unsigned)tbycode_get_R(c));
+		break;
+	case OP_JPF:
+		sprintf(buf, "OP_JPF      %u", (unsigned)tbycode_get_U(c));
+		break;
+	case OP_JPB:
+		sprintf(buf, "OP_JPB      %u", (unsigned)tbycode_get_U(c));
+		break;
+	case OP_CJPFPOP:
+		sprintf(buf, "OP_CJPFPOP  %u", (unsigned)tbycode_get_U(c));
+		break;
+	case OP_CJPBPOP:
+		sprintf(buf, "OP_CJPBPOP  %u", (unsigned)tbycode_get_U(c));
+		break;
+	case OP_PUSHX:
+		if (!tpushx_isenv(tbycode_get_R(c)))
+			sprintf(buf,
+				"OP_PUSHX    %u  tmp",
+				(unsigned)tbycode_get_L(c));
+		else if (!tpushx_is_upval(tbycode_get_R(c)))
+			sprintf(buf,
+				"OP_PUSHX    %u  local",
+				(unsigned)tbycode_get_L(c));
+		else
+			sprintf(buf,
+				"OP_PUSHX    %u  upval %u",
+				(unsigned)tbycode_get_L(c),
+				(unsigned)tpushx_depth(tbycode_get_R(c)));
+		break;
+	case OP_PUSHI:
+		sprintf(buf, "OP_PUSHI    %u", (unsigned)tbycode_get_U(c));
+		break;
+	case OP_PUSHFLT:
+		sprintf(buf, "OP_PUSHFLT  %u", (unsigned)tbycode_get_U(c));
+		break;
+	case OP_PUSHB:
+		sprintf(buf, "OP_PUSHB    %u", (unsigned)tbycode_get_U(c));
+		break;
+	case OP_PUSHS:
+		sprintf(buf, "OP_PUSHS    %u", (unsigned)tbycode_get_U(c));
+		break;
+	case OP_PUSHDICT:
+		sprintf(buf, "OP_PUSHDICT %u", (unsigned)tbycode_get_U(c));
+		break;
+	case OP_PUSHINFO:
+		sprintf(buf, "OP_PUSHINFO %u", (unsigned)tbycode_get_U(c));
+		break;
+	case OP_IMPORT:
+		sprintf(buf, "OP_IMPORT   %u", (unsigned)tbycode_get_U(c));
+		break;
+	case OP_IDXR:
+		sprintf(buf, "OP_IDXR     %u", (unsigned)tbycode_get_U(c));
+		break;
+	case OP_EVAL:
+		sprintf(buf, "OP_EVAL     %u", (unsigned)tbycode_get_U(c));
+		break;
+	case OP_EVALSF:
+		sprintf(buf, "OP_EVALSF   %u", (unsigned)tbycode_get_U(c));
+		break;
+	case OP_EVALCF:
+		sprintf(buf, "OP_EVALCF   %u", (unsigned)tbycode_get_U(c));
+		break;
+	case OP_EVALTF:
+		sprintf(buf, "OP_EVALTF   %u", (unsigned)tbycode_get_U(c));
+		break;
+	case OP_IDXL:
+		sprintf(buf,
+			"OP_IDXL     %u  %u  %u",
+			(unsigned)tbycode_get_L(c),
+			(unsigned)tbycode_get_b(c),
+			(unsigned)tbycode_get_i(c));
+		break;
+	case OP_PUSHF:
+		sprintf(buf, "OP_PUSHF    %u", (unsigned)tbycode_get_U(c));
+		break;
+	case OP_ADD:
+		sprintf(buf,
+			"OP_ADD      %u  %u",
+			(unsigned)tbycode_get_L(c),
+			(unsigned)tbycode_get_R(c));
+		break;
+	case OP_SUB:
+		sprintf(buf,
+			"OP_SUB      %u  %u",
+			(unsigned)tbycode_get_L(c),
+			(unsigned)tbycode_get_R(c));
+		break;
+	case OP_MUL:
+		sprintf(buf,
+			"OP_MUL      %u  %u",
+			(unsigned)tbycode_get_L(c),
+			(unsigned)tbycode_get_R(c));
+		break;
+	case OP_DIV:
+		sprintf(buf,
+			"OP_DIV      %u  %u",
+			(unsigned)tbycode_get_L(c),
+			(unsigned)tbycode_get_R(c));
+		break;
+	case OP_MOD:
+		sprintf(buf,
+			"OP_MOD      %u  %u",
+			(unsigned)tbycode_get_L(c),
+			(unsigned)tbycode_get_R(c));
+		break;
+	case OP_POW:
+		sprintf(buf,
+			"OP_POW      %u  %u",
+			(unsigned)tbycode_get_L(c),
+			(unsigned)tbycode_get_R(c));
+		break;
+	case OP_MMUL:
+		sprintf(buf,
+			"OP_MMUL     %u  %u",
+			(unsigned)tbycode_get_L(c),
+			(unsigned)tbycode_get_R(c));
+		break;
+	case OP_EQ:
+		sprintf(buf,
+			"OP_EQ       %u  %u",
+			(unsigned)tbycode_get_L(c),
+			(unsigned)tbycode_get_R(c));
+		break;
+	case OP_NE:
+		sprintf(buf,
+			"OP_NE       %u  %u",
+			(unsigned)tbycode_get_L(c),
+			(unsigned)tbycode_get_R(c));
+		break;
+	case OP_GE:
+		sprintf(buf,
+			"OP_GE       %u  %u",
+			(unsigned)tbycode_get_L(c),
+			(unsigned)tbycode_get_R(c));
+		break;
+	case OP_SG:
+		sprintf(buf,
+			"OP_SG       %u  %u",
+			(unsigned)tbycode_get_L(c),
+			(unsigned)tbycode_get_R(c));
+		break;
+	case OP_LE:
+		sprintf(buf,
+			"OP_LE       %u  %u",
+			(unsigned)tbycode_get_L(c),
+			(unsigned)tbycode_get_R(c));
+		break;
+	case OP_SL:
+		sprintf(buf,
+			"OP_SL       %u  %u",
+			(unsigned)tbycode_get_L(c),
+			(unsigned)tbycode_get_R(c));
+		break;
+	case OP_AND:
+		sprintf(buf,
+			"OP_AND      %u  %u",
+			(unsigned)tbycode_get_L(c),
+			(unsigned)tbycode_get_R(c));
+		break;
+	case OP_OR:
+		sprintf(buf,
+			"OP_OR       %u  %u",
+			(unsigned)tbycode_get_L(c),
+			(unsigned)tbycode_get_R(c));
+		break;
+	default:
+		buf[0] = '\0';
+		break;
+	}
+}
+
+/*===========================================================================*
+ * 2. Dynamic Bytecode Vector (replacing tvmcmd_vect)
+ *===========================================================================*/
+
+void tvmcmd_vect_init(tvmcmd_vect *v)
+{
+	v->data = NULL;
+	v->locs = NULL;
+	v->size = 0;
+	v->capacity = 0;
+}
+
+static void tsource_loc_clear(tsource_loc *loc)
+{
+	if (!loc)
+		return;
+	tstring_free(loc->source);
+	tstring_free(loc->file);
+	memset(loc, 0, sizeof(*loc));
+}
+
+static void tsource_loc_array_clear(tsource_loc *locs, uint_cmds count)
+{
+	if (!locs)
+		return;
+	for (uint_cmds i = 0; i < count; i++)
+		tsource_loc_clear(&locs[i]);
+	free(locs);
+}
+
+static void tsource_loc_copy(tsource_loc *dst, const tsource_loc *src)
+{
+	memset(dst, 0, sizeof(*dst));
+	if (!src)
+		return;
+	dst->source = src->source ? tstring_dup(src->source) : NULL;
+	dst->file = src->file ? tstring_dup(src->file) : NULL;
+	dst->line = src->line;
+	dst->column = src->column;
+}
+
+static void tsource_loc_capture(tsource_loc *dst)
+{
+	const char *source = terror_current_source_context();
+	const char *file = terror_current_file_context();
+	memset(dst, 0, sizeof(*dst));
+	dst->source = source ? tstring_new(source) : NULL;
+	dst->file = file ? tstring_new(file) : NULL;
+	dst->line = terror_current_line_context();
+	dst->column = terror_current_column_context();
+}
+
+static void tvmcmd_vect_reserve(tvmcmd_vect *v, uint32_t needed)
+{
+	while (needed > v->capacity) {
+		v->capacity = v->capacity ? v->capacity * 2 : 64;
+		v->data = (tbycode *)realloc(v->data,
+					     v->capacity * sizeof(tbycode));
+		v->locs = (tsource_loc *)realloc(v->locs,
+						 v->capacity * sizeof(tsource_loc));
+		if (!v->data || !v->locs)
+			twarn(ErrRuntime_Other, "tvmcmd_vect_reserve", "out of memory");
+	}
+}
+
+void tvmcmd_vect_free(tvmcmd_vect *v)
+{
+	free(v->data);
+	tsource_loc_array_clear(v->locs, v->size);
+	v->data = NULL;
+	v->locs = NULL;
+	v->size = 0;
+	v->capacity = 0;
+}
+
+uint_cmds tvmcmd_vect_size32(tvmcmd_vect *v)
+{
+	return (uint_cmds)v->size;
+}
+
+tbycode tvmcmd_vect_back(tvmcmd_vect *v)
+{
+	return v->data[v->size - 1];
+}
+
+void tvmcmd_vect_pop_back(tvmcmd_vect *v)
+{
+	if (v->size > 0) {
+		tsource_loc_clear(&v->locs[v->size - 1]);
+		v->size--;
+	}
+}
+
+void tvmcmd_vect_append(tvmcmd_vect *v, tbycode cmd)
+{
+	if (v->size >= CMD_LIMIT - 1)
+		twarn(ErrCompile_CMDOutOfLimit, "tvmcmd_vect_append", "");
+	tvmcmd_vect_reserve(v, v->size + 1);
+	v->data[v->size] = cmd;
+	tsource_loc_capture(&v->locs[v->size]);
+	v->size++;
+}
+
+void tvmcmd_vect_insert_range(
+		tvmcmd_vect *v, uint32_t pos, tbycode *src, uint32_t count)
+{
+	tvmcmd_vect_reserve(v, v->size + count);
+	memmove(v->data + pos + count,
+		v->data + pos,
+		(v->size - pos) * sizeof(tbycode));
+	memmove(v->locs + pos + count,
+		v->locs + pos,
+		(v->size - pos) * sizeof(tsource_loc));
+	memcpy(v->data + pos, src, count * sizeof(tbycode));
+	for (uint32_t i = 0; i < count; i++)
+		tsource_loc_capture(&v->locs[pos + i]);
+	v->size += count;
+}
+
+void tvmcmd_vect_insert_vect(tvmcmd_vect *v, uint32_t pos, const tvmcmd_vect *src)
+{
+	uint32_t count = src ? src->size : 0;
+	tvmcmd_vect_reserve(v, v->size + count);
+	memmove(v->data + pos + count,
+		v->data + pos,
+		(v->size - pos) * sizeof(tbycode));
+	memmove(v->locs + pos + count,
+		v->locs + pos,
+		(v->size - pos) * sizeof(tsource_loc));
+	for (uint32_t i = 0; i < count; i++) {
+		v->data[pos + i] = src->data[i];
+		tsource_loc_copy(&v->locs[pos + i], &src->locs[i]);
+	}
+	v->size += count;
+}
+
+/*===========================================================================*
+ * 3. Constant Vectors (using tstring instead of char*)
+ *===========================================================================*/
+
+void consts_str_vect_init(consts_str_vect *v)
+{
+	v->data = NULL;
+	v->size = 0;
+	v->capacity = 0;
+}
+
+void consts_str_vect_free(consts_str_vect *v)
+{
+	uint32_t i;
+	for (i = 0; i < v->size; i++)
+		tstring_free(v->data[i]);
+	free(v->data);
+	v->data = NULL;
+	v->size = 0;
+	v->capacity = 0;
+}
+
+static uint_csts consts_str_vect_size32(consts_str_vect *v)
+{
+	return (uint_csts)v->size;
+}
+
+uint_csts consts_str_vect_add(consts_str_vect *v, const char *str)
+{
+	uint32_t i;
+	for (i = 0; i < v->size; i++) {
+		if (tstring_eq_cstr(v->data[i], str))
+			return i;
+	}
+	if (v->size >= CST_LIMIT - 1)
+		twarn(ErrCompile_CSTOutOfLimit, "consts_str_vect_append", "");
+	if (v->size >= v->capacity) {
+		v->capacity = v->capacity ? v->capacity * 2 : 64;
+		v->data = (tstring **)realloc(v->data, v->capacity * sizeof(tstring *));
+	}
+	v->data[v->size] = tstring_new(str);
+	return v->size++;
+}
+
+void consts_long_vect_init(consts_long_vect *v)
+{
+	v->data = NULL;
+	v->size = 0;
+	v->capacity = 0;
+}
+
+void consts_long_vect_free(consts_long_vect *v)
+{
+	free(v->data);
+	v->data = NULL;
+	v->size = 0;
+	v->capacity = 0;
+}
+
+static uint_csts consts_long_vect_size32(consts_long_vect *v)
+{
+	return (uint_csts)v->size;
+}
+
+uint_csts consts_long_vect_add(consts_long_vect *v, long val)
+{
+	uint32_t i;
+	for (i = 0; i < v->size; i++) {
+		if (v->data[i] == val)
+			return i;
+	}
+	if (v->size >= CST_LIMIT - 1)
+		twarn(ErrCompile_CSTOutOfLimit, "consts_long_vect_append", "");
+	if (v->size >= v->capacity) {
+		v->capacity = v->capacity ? v->capacity * 2 : 64;
+		v->data = (long *)realloc(v->data, v->capacity * sizeof(long));
+	}
+	v->data[v->size] = val;
+	return v->size++;
+}
+
+void consts_float_vect_init(consts_float_vect *v)
+{
+	v->data = NULL;
+	v->size = 0;
+	v->capacity = 0;
+}
+
+void consts_float_vect_free(consts_float_vect *v)
+{
+	free(v->data);
+	v->data = NULL;
+	v->size = 0;
+	v->capacity = 0;
+}
+
+static uint_csts consts_float_vect_size32(consts_float_vect *v)
+{
+	return (uint_csts)v->size;
+}
+
+uint_csts consts_float_vect_add(consts_float_vect *v, double val)
+{
+	uint32_t i;
+	for (i = 0; i < v->size; i++) {
+		if (v->data[i] == val)
+			return i;
+	}
+	if (v->size >= CST_LIMIT - 1)
+		twarn(ErrCompile_CSTOutOfLimit,
+			  "consts_float_vect_append",
+			  "");
+	if (v->size >= v->capacity) {
+		v->capacity = v->capacity ? v->capacity * 2 : 64;
+		v->data = (double *)realloc(
+			v->data, v->capacity * sizeof(double));
+	}
+	v->data[v->size] = val;
+	return v->size++;
+}
+
+void tconsts_init(tconsts *c)
+{
+	consts_str_vect_init(&c->__strcsts);
+	consts_long_vect_init(&c->__intcsts);
+	consts_float_vect_init(&c->__fltcsts);
+}
+
+void tconsts_free(tconsts *c)
+{
+	consts_str_vect_free(&c->__strcsts);
+	consts_long_vect_free(&c->__intcsts);
+	consts_float_vect_free(&c->__fltcsts);
+}
+
+uint_csts tconsts_add_str_const(tconsts *c, const char *str)
+{
+	return consts_str_vect_add(&c->__strcsts, str);
+}
+
+uint_csts tconsts_add_int_const(tconsts *c, long val)
+{
+	return consts_long_vect_add(&c->__intcsts, val);
+}
+
+uint_csts tconsts_add_float_const(tconsts *c, double val)
+{
+	return consts_float_vect_add(&c->__fltcsts, val);
+}
+
+void tconsts_copy(tconsts *dst, tconsts *src)
+{
+	uint32_t i;
+	tconsts_init(dst);
+	for (i = 0; i < src->__strcsts.size; i++)
+		consts_str_vect_add(&dst->__strcsts,
+			tstring_cstr(src->__strcsts.data[i]));
+	for (i = 0; i < src->__intcsts.size; i++)
+		consts_long_vect_add(&dst->__intcsts, src->__intcsts.data[i]);
+	for (i = 0; i < src->__fltcsts.size; i++)
+		consts_float_vect_add(&dst->__fltcsts, src->__fltcsts.data[i]);
+}
+
+
+/**
+ * Build a twrapper from compiling data (tvmcmd_vect, tconsts, tcinfo).
+ * The wrapper owns deep copies of all data, leaving the compiler state intact.
+ */
+twrapper *tanalyser_wrap(tvmcmd_vect *tcmds, tconsts *consts, tcinfo *info)
+{
+	twrapper *wrapper = (twrapper *)calloc(1, sizeof(twrapper));
+	if (!wrapper)
+		return NULL;
+
+	wrapper->info = *info;
+	wrapper->ncmds = tvmcmd_vect_size32(tcmds);
+	wrapper->cmdarr = (tbycode *)malloc(wrapper->ncmds * sizeof(tbycode));
+	if (wrapper->ncmds > 0 && !wrapper->cmdarr) {
+		free(wrapper);
+		return NULL;
+	}
+	if (wrapper->ncmds > 0)
+		memcpy(wrapper->cmdarr, tcmds->data, wrapper->ncmds * sizeof(tbycode));
+	if (wrapper->ncmds > 0) {
+		wrapper->source_locs =
+			(tsource_loc *)calloc(wrapper->ncmds, sizeof(tsource_loc));
+		if (!wrapper->source_locs)
+			goto wrap_err;
+		for (uint_cmds i = 0; i < wrapper->ncmds; i++)
+			tsource_loc_copy(&wrapper->source_locs[i], &tcmds->locs[i]);
+	}
+
+	wrapper->consts.ncstrs = consts->__strcsts.size;
+	wrapper->consts.ncints = consts->__intcsts.size;
+	wrapper->consts.ncflts = consts->__fltcsts.size;
+
+	/* Strings */
+	if (wrapper->consts.ncstrs > 0) {
+		uint_csts i;
+		wrapper->consts.cstrs =
+			(tstring **)calloc(wrapper->consts.ncstrs, sizeof(tstring *));
+		if (!wrapper->consts.cstrs)
+			goto wrap_err;
+		for (i = 0; i < wrapper->consts.ncstrs; i++) {
+			wrapper->consts.cstrs[i] = tstring_dup(consts->__strcsts.data[i]);
+			if (!wrapper->consts.cstrs[i])
+				goto wrap_err;
+		}
+	} else {
+		wrapper->consts.cstrs = NULL;
+	}
+
+	/* Integers */
+	if (wrapper->consts.ncints > 0) {
+		wrapper->consts.cints =
+			(long *)malloc(wrapper->consts.ncints * sizeof(long));
+		if (!wrapper->consts.cints)
+			goto wrap_err;
+		memcpy(wrapper->consts.cints,
+			   consts->__intcsts.data,
+			   wrapper->consts.ncints * sizeof(long));
+	} else {
+		wrapper->consts.cints = NULL;
+	}
+
+	/* Doubles */
+	if (wrapper->consts.ncflts > 0) {
+		wrapper->consts.cflts = (double *)malloc(
+			wrapper->consts.ncflts * sizeof(double));
+		if (!wrapper->consts.cflts)
+			goto wrap_err;
+		memcpy(wrapper->consts.cflts,
+			   consts->__fltcsts.data,
+			   wrapper->consts.ncflts * sizeof(double));
+	} else {
+		wrapper->consts.cflts = NULL;
+	}
+
+	return wrapper;
+
+wrap_err:
+	tanalyser_clean_wrapper(wrapper);
+	return NULL;
+}
+
+#define TAPC_SOURCE_MAP_MAGIC ((uint64_t)0x5450415352433031ULL)
+
+static void tapc_write_tstring(FILE *f, const tstring *s)
+{
+	uint8_t has_value = s != NULL;
+	fwrite(&has_value, sizeof(has_value), 1, f);
+	if (has_value) {
+		uint64_t len = tstring_len(s);
+		fwrite(&len, sizeof(len), 1, f);
+		fwrite(tstring_cstr(s), 1, len + 1, f);
+	}
+}
+
+static int tapc_read_tstring(FILE *f, tstring **out)
+{
+	uint8_t has_value = 0;
+	*out = NULL;
+	if (1 != fread(&has_value, sizeof(has_value), 1, f))
+		return 0;
+	if (!has_value)
+		return 1;
+	uint64_t len = 0;
+	if (1 != fread(&len, sizeof(len), 1, f))
+		return 0;
+	char *raw = (char *)calloc((size_t)(len + 1), 1);
+	if (!raw)
+		return 0;
+	if (len + 1 != fread(raw, 1, len + 1, f)) {
+		free(raw);
+		return 0;
+	}
+	*out = tstring_new(raw);
+	free(raw);
+	return *out != NULL;
+}
+
+static void tapc_write_source_map(FILE *f, const twrapper *wrapper)
+{
+	uint64_t magic = TAPC_SOURCE_MAP_MAGIC;
+	uint64_t count = wrapper->source_locs ? wrapper->ncmds : 0;
+	fwrite(&magic, sizeof(magic), 1, f);
+	fwrite(&count, sizeof(count), 1, f);
+	for (uint_cmds i = 0; i < count; i++) {
+		tsource_loc *loc = &wrapper->source_locs[i];
+		fwrite(&loc->line, sizeof(loc->line), 1, f);
+		fwrite(&loc->column, sizeof(loc->column), 1, f);
+		tapc_write_tstring(f, loc->source);
+		tapc_write_tstring(f, loc->file);
+	}
+}
+
+static void tapc_read_source_map(FILE *f, twrapper *wrapper)
+{
+	uint64_t magic = 0;
+	uint64_t count = 0;
+	if (1 != fread(&magic, sizeof(magic), 1, f))
+		return;
+	if (magic != TAPC_SOURCE_MAP_MAGIC)
+		return;
+	if (1 != fread(&count, sizeof(count), 1, f))
+		return;
+	if (count != wrapper->ncmds)
+		return;
+	wrapper->source_locs =
+		(tsource_loc *)calloc(wrapper->ncmds, sizeof(tsource_loc));
+	if (!wrapper->source_locs)
+		return;
+	for (uint_cmds i = 0; i < wrapper->ncmds; i++) {
+		tsource_loc *loc = &wrapper->source_locs[i];
+		if (1 != fread(&loc->line, sizeof(loc->line), 1, f))
+			goto load_loc_err;
+		if (1 != fread(&loc->column, sizeof(loc->column), 1, f))
+			goto load_loc_err;
+		if (!tapc_read_tstring(f, &loc->source))
+			goto load_loc_err;
+		if (!tapc_read_tstring(f, &loc->file))
+			goto load_loc_err;
+	}
+	return;
+
+load_loc_err:
+	tsource_loc_array_clear(wrapper->source_locs, wrapper->ncmds);
+	wrapper->source_locs = NULL;
+}
+
+/**
+ * Save wrapper to binary file (.tapc format).
+ * Returns 0 on success, -1 on error.
+ */
+int tanalyser_save_bin_file(const twrapper *wrapper, const char *filename)
+{
+	FILE *f = fopen(filename, "wb");
+	uint_csts i;
+	twrapper header;
+
+	if (!f) {
+		twarn(ErrSession_IO, "tanalyser_save_bin_file", filename);
+		return -1;
+	}
+
+	/* Write wrapper header */
+	header = *wrapper;
+	header.source_locs = NULL;
+	fwrite(&header, sizeof(twrapper), 1, f);
+
+	/* Write cmdarr */
+	fwrite(wrapper->cmdarr, sizeof(tbycode), wrapper->ncmds, f);
+
+	/* Write cints */
+	if (wrapper->consts.ncints > 0)
+		fwrite(wrapper->consts.cints,
+			   sizeof(long),
+			   wrapper->consts.ncints,
+			   f);
+
+	/* Write cflts */
+	if (wrapper->consts.ncflts > 0)
+		fwrite(wrapper->consts.cflts,
+			   sizeof(double),
+			   wrapper->consts.ncflts,
+			   f);
+
+	/* Write cstrs */
+	for (i = 0; i < wrapper->consts.ncstrs; i++) {
+		tstring *ts = wrapper->consts.cstrs[i];
+		uint64_t len_i = tstring_len(ts);
+		fwrite(&len_i, sizeof(uint64_t), 1, f);
+		fwrite(tstring_cstr(ts), 1, len_i + 1, f);
+	}
+
+	tapc_write_source_map(f, wrapper);
+
+	fclose(f);
+	return 0;
+}
+
+/**
+ * Load wrapper from binary file (.tapc format).
+ * Returns twrapper* on success, NULL on error.
+ */
+twrapper *tanalyser_load_bin_file(const char *filename)
+{
+	FILE *f = fopen(filename, "rb");
+	twrapper *wrapper;
+	uint_csts i;
+
+	if (!f) {
+		twarn(ErrSession_IO, "tanalyser_load_bin_file", filename);
+		return NULL;
+	}
+
+	wrapper = (twrapper *)calloc(1, sizeof(twrapper));
+	if (!wrapper) {
+		fclose(f);
+		return NULL;
+	}
+
+	/* Read wrapper header */
+	if (1 != fread(wrapper, sizeof(twrapper), 1, f)) {
+		twarn(ErrSession_IO, "tanalyser_load_bin_file", "");
+		free(wrapper);
+		fclose(f);
+		return NULL;
+	}
+	wrapper->source_locs = NULL;
+
+	/* Read cmdarr */
+	{
+		uint_cmds cmdlen = wrapper->ncmds;
+		tbycode *cmdarr = (tbycode *)calloc(cmdlen, sizeof(tbycode));
+		if (!cmdarr
+		 || cmdlen != fread(cmdarr, sizeof(tbycode), cmdlen, f)) {
+			free(cmdarr);
+			free(wrapper);
+			fclose(f);
+			return NULL;
+		}
+		wrapper->cmdarr = cmdarr;
+	}
+
+	/* Read cints */
+	if (wrapper->consts.ncints > 0) {
+		uint_csts ncints = wrapper->consts.ncints;
+		long *cints = (long *)calloc(ncints, sizeof(long));
+		if (!cints || ncints != fread(cints, sizeof(long), ncints, f)) {
+			free(cints);
+			free(wrapper->cmdarr);
+			free(wrapper);
+			fclose(f);
+			return NULL;
+		}
+		wrapper->consts.cints = cints;
+	}
+
+	/* Read cflts */
+	if (wrapper->consts.ncflts > 0) {
+		uint_csts ncflts = wrapper->consts.ncflts;
+		double *cflts = (double *)calloc(ncflts, sizeof(double));
+		if (!cflts ||
+			ncflts != fread(cflts, sizeof(double), ncflts, f)) {
+			free(cflts);
+			free(wrapper->consts.cints);
+			free(wrapper->cmdarr);
+			free(wrapper);
+			fclose(f);
+			return NULL;
+		}
+		wrapper->consts.cflts = cflts;
+	}
+
+	/* Read cstrs */
+	if (wrapper->consts.ncstrs > 0) {
+		uint_csts ncstrs = wrapper->consts.ncstrs;
+		wrapper->consts.cstrs = (tstring **)calloc(ncstrs, sizeof(tstring *));
+		if (!wrapper->consts.cstrs) {
+			free(wrapper->consts.cflts);
+			free(wrapper->consts.cints);
+			free(wrapper->cmdarr);
+			free(wrapper);
+			fclose(f);
+			return NULL;
+		}
+
+		for (i = 0; i < ncstrs; i++) {
+			uint64_t len_i = 0;
+			if (1 != fread(&len_i, sizeof(uint64_t), 1, f))
+				goto load_str_err;
+			char *raw = (char *)calloc((size_t)(len_i + 1), 1);
+			if (!raw)
+				goto load_str_err;
+			if (len_i + 1 != fread(raw, 1, len_i + 1, f)) {
+				free(raw);
+				goto load_str_err;
+			}
+			wrapper->consts.cstrs[i] = tstring_new(raw);
+			free(raw);
+		}
+		goto load_done;
+
+	load_str_err:
+		for (; i > 0;) {
+			i--;
+			tstring_free(wrapper->consts.cstrs[i]);
+		}
+		free(wrapper->consts.cstrs);
+		free(wrapper->consts.cflts);
+		free(wrapper->consts.cints);
+		free(wrapper->cmdarr);
+		free(wrapper);
+		fclose(f);
+		return NULL;
+	}
+load_done:;
+
+	tapc_read_source_map(f, wrapper);
+
+	fclose(f);
+	return wrapper;
+}
+
+/**
+ * Release wrapper memory.
+ */
+void tanalyser_clean_wrapper(twrapper *wrapper)
+{
+	uint_csts i;
+	if (!wrapper)
+		return;
+	free(wrapper->cmdarr);
+	tsource_loc_array_clear(wrapper->source_locs, wrapper->ncmds);
+	if (wrapper->consts.ncflts > 0)
+		free(wrapper->consts.cflts);
+	if (wrapper->consts.ncints > 0)
+		free(wrapper->consts.cints);
+	if (wrapper->consts.ncstrs > 0) {
+		for (i = 0; i < wrapper->consts.ncstrs; i++)
+			tstring_free(wrapper->consts.cstrs[i]);
+		free(wrapper->consts.cstrs);
+	}
+	free(wrapper);
+}
+
+/**
+ * Display wrapper contents (debug).
+ */
+void tanalyser_display_wrapper(const twrapper *wrapper)
+{
+	uint_cmds i;
+	char buf[128];
+	for (i = 0; i < wrapper->ncmds; i++) {
+		tbycode_tostring(wrapper->cmdarr[i], buf);
+		printf("[%u]%s\n", (unsigned)i, buf);
+	}
+	printf("Max Obj. Number: %u\n", (unsigned)wrapper->info.obj_max);
+	printf("Max Tmp. Number: %u\n", (unsigned)wrapper->info.tmp_max);
+	printf("Max Reg. Number: %u\n", (unsigned)wrapper->info.reg_max);
+	printf("Const Value List (Integers): ");
+	for (i = 0; i < wrapper->consts.ncints; i++) {
+		printf("%li", wrapper->consts.cints[i]);
+		if (i < wrapper->consts.ncints - 1)
+			printf(", ");
+	}
+	printf("\n");
+	printf("Const Value List (Double Floats): ");
+	for (i = 0; i < wrapper->consts.ncflts; i++) {
+		printf("%f", wrapper->consts.cflts[i]);
+		if (i < wrapper->consts.ncflts - 1)
+			printf(", ");
+	}
+	printf("\n");
+	printf("Const Value List (Character Strings): ");
+	for (i = 0; i < wrapper->consts.ncstrs; i++) {
+		printf("%s", tstring_cstr(wrapper->consts.cstrs[i]));
+		if (i < wrapper->consts.ncstrs - 1)
+			printf(", ");
+	}
+	printf("\n");
+}

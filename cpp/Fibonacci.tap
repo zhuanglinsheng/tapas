@@ -1,0 +1,19 @@
+// Fibonacci benchmark for the C++ Tapas implementation.
+//
+// Run:
+//   ./Cpp/tapas ./Cpp/Fibonacci.tap
+
+let fib: fn = (n) {
+	if (n < 2) {
+		return n
+	}
+	return this(n - 1) + this(n - 2)
+}
+
+let n: int = 26
+let begin: time = std::now()
+let result: int = fib(n)
+let elapsed: time = std::now() - begin
+
+std::print('fib(', n, ') = ', result)
+std::print('elapsed seconds = ', elapsed)

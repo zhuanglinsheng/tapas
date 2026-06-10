@@ -1,348 +1,373 @@
-﻿#ifndef Tap_CONSTS_H
-#define Tap_CONSTS_H
-
-// if Visual C++ is used
-#ifdef _MSC_VER
-#ifndef _CRT_SECURE_NO_WARNINGS
-#define _CRT_SECURE_NO_WARNINGS
-#endif
-#endif
+#ifndef T_BASIS_H
+#define T_BASIS_H
 
 /* ctypes */
-#include <cstdio>
-#include <cstdint>
-#include <cmath>
+#include <math.h>
+#include <setjmp.h>
+#include <stdint.h>
+#include <stdio.h>
 
-/* cpp stl */
-#include <string>
-#include <vector>
+/* cpp stl replacements */
+#include <stdlib.h>
+#include <string.h>
 
-namespace tapas
-{
+#include "tapas/ds/tstring.h"
 
-#define Tap_Version     "1.0"
-#define Tap_Year        "2021"
-#define Tap_Author      "zhuanglinsheng@outlook.com"
-#define Tap_Basic_Info  Tap_Version, Tap_Year, Tap_Author
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-//=============================================================================
-// Limits in Tapas
-//===========================================================================//
 
-/// `int_unit_ctr` is used in `tapas::tunit_ctr` for lexing
-/// Note that we use signed integers in counter since Tapas users may write
-/// script wronly, like `) ... (`, which leads to a negative counting of
-/// parenthesis.
-typedef int64_t int_unit_ctr;
+/*===========================================================================*
+ * Version & Meta Info
+ *===========================================================================*/
 
-/// uint_size is an alias of `size_t`
-typedef size_t uint_size;
+#define Tap_Version "1.0"
+#define Tap_Year    "2021"
+#define Tap_Author  "linsheng.z@outlook.com"
 
-/// The maximum number of parameter `U` of the bycode (U tyoe) can express.
-/// Alias for (2^26) - 1 = 67,108,863
-#define Limit_U static_cast<uint32_t>(67108863)
 
-/// The maximum number of parameter `L` and `R` of the bycode (LR type) can express.
-/// Alias for (2^13) - 1 = 8,191
-#define Limit_LR static_cast<uint16_t>(8191)
+/*===========================================================================*
+ * Optimization Flags
+ *===========================================================================*/
 
-/// The maximum number of parameter `C` of the bycode (CP tyoe) can express.
-/// Alias for (2^18) - 1 = 262,143
-#define Limit_C static_cast<uint32_t>(262143)
+#define Tap_Static_OPT
+#define Tap_Runtime_OPT
 
-/// The maximum number of parameter `P` of the bycode (CP tyoe) can express.
-/// Alias for (2^08) - 1 = 255
-#define Limit_P static_cast<uint8_t>(255)
 
-/// The size type for bycode list.
-/// Alias for uint32_t, the location in of bycodes list
-typedef uint32_t uint_size_cmd;
+/*===========================================================================*
+ * Limits
+ *===========================================================================*/
 
-/// The size type for constant list.
-/// Alias for uint16_t, the location in constant list
-typedef uint32_t uint_size_cst;
+#define Tap_Long_MAX (2e31 - 1)
 
-/// The size type for object list.
-/// Alias for uint16_t, the location in variable list
-typedef uint16_t uint_size_obj;
 
-/// The size type for stack.
-/// Alias for uint8_t, the location in vm stack
-typedef uint8_t  uint_size_stk;
+/*===========================================================================*
+ * Type Aliases
+ *===========================================================================*/
 
-/// Each module can contains at most this number of bycodes.
-/// Alias for C_Limit (67,108,863), the limit of a commands
-#define CMDLIST_SIZE_LIMIT Limit_U
+typedef uint64_t uint_lexs;
+typedef int64_t int_lexs;
 
-/// Each module can contains at most this number of literals in its literal table.
-/// Alias for R_Limit (262,143), the limit of literals list
-#define LITLIST_SIZE_LIMIT Limit_C
+typedef uint32_t uint_cmds;
 
-/// Each module can contains at most this number of objects in its
-/// Alias for R_Limit (8,191), the limit of Tap object list
-#define OBJLIST_SIZE_LIMIT Limit_LR
+typedef uint32_t uint_csts;
 
-/// Alias for Limit_P (255), the limit of VM stack
-#define REGLIST_SIZE_LIMIT Limit_P
+typedef uint16_t uint_objs;
 
-/// Mark for cpp functions whose nparams is undetermined
-#define UNDEF_NPARAMS REGLIST_SIZE_LIMIT
+typedef uint8_t uint_regs;
 
-/// Mark that the object has no name
-#define UNDEF_NAMELOC LITLIST_SIZE_LIMIT
 
-/// Mark that the object is not an environmental object
-#define UNDEF_ENVLOC OBJLIST_SIZE_LIMIT
+/*===========================================================================*
+ * System Limits
+ *===========================================================================*/
 
-/** Type of Tap bycodes
- *  @details See the file tap_bycs.h for more details of their operations.
- *  The type of bycodes in Tap includes
- *  - **no params**
- *  - **U** (1 parameter)
- *  - **CP** (2 parameters)
- *  - **LR** (2 parameters)
- *  - **Lbi** (3 parameters)
+#define Limit_U ((uint32_t)67108863)
+#define Limit_C ((uint32_t)262143)
+#define Limit_L ((uint16_t)8191)
+#define Limit_P ((uint8_t)255)
+
+#define CMD_LIMIT Limit_U
+#define CST_LIMIT Limit_C
+#define OBJ_LIMIT Limit_L
+#define REG_LIMIT Limit_P
+
+
+/*===========================================================================*
+ * Special Markers
+ *===========================================================================*/
+
+#define UNDEF_NPARAMS REG_LIMIT
+#define UNDEF_NAMELOC CST_LIMIT
+#define UNDEF_ENVLOC OBJ_LIMIT
+
+/*===========================================================================*
+ * OP_PUSHX Address Encoding
+ *===========================================================================*/
+
+/* OP_PUSHX keeps L as the slot/location. R is packed as:
+ *   bit 0    : isenv    (0 = tmp, 1 = env)
+ *   bit 1    : is_upval (0 = local env, 1 = outer env)
+ *   bit 2-12 : depth    (number of father_env hops for upval)
  *
- *  Explanations of the parameters of Tap bycodes:
- *  - **nreg**    - number of objects pop out of stack.
- *  - **oloc**    - location of object in object list.
- *  - **cloc**    - location of constant in constant list.
- *  - **ncmd**    - number of commands in command list.
- *  - **nparams** - number of parameters to be pushed in stack.
+ * Common R values:
+ *   0  -> tmp[L]
+ *   1  -> current env slot L
+ *   7  -> father env depth 1, slot L
+ *   11 -> father env depth 2, slot L
  */
-enum tins : uint8_t
+static inline uint16_t tpushx_tmp_addr(void)
 {
-	OP_PASS,      ///< no params
-	OP_VCRT,      ///< CP  - cloc, isenv
-	OP_TMPDEL,    ///< U   - nobj
-	OP_THIS,      ///< no params
-	OP_BASE,      ///< no params
-	OP_BREAK,     ///< no params
-	OP_CONTI,     ///< no params
-	OP_RET,       ///< no params
-	OP_IN,        ///< no params
-	OP_PAIR,      ///< no params
-	OP_TO,        ///< no params
-	OP_POPN,      ///< LR  - nreg, interactive
-	OP_POPCOV,    ///< LR  - oloc, isenv
-	OP_LOOPAS,    ///< LR  - oloc, isenv
-	OP_LOOPIAS,   ///< LR  - oloc, isenv
-	OP_LOOPLAS,   ///< LR  - oloc, isenv
-	OP_LOOPGAS,   ///< LR  - oloc, isenv
-	OP_JPF,       ///< U   - ncmd
-	OP_JPB,       ///< U   - ncmd
-	OP_CJPFPOP,   ///< U   - ncmd
-	OP_CJPBPOP,   ///< U   - ncmd
-	OP_PUSHX,     ///< LR  - oloc, isenv
-	OP_PUSHI,     ///< U   - cloc
-	OP_PUSHD,     ///< U   - cloc
-	OP_PUSHB,     ///< U   - cloc
-	OP_PUSHS,     ///< U   - cloc
-	OP_PUSHDICT,  ///< U   - nparams
-	OP_PUSHINFO,  ///< U   - an unsigned integer
-	OP_IMPORT,    ///< U   - cloc
-	OP_IDXR,      ///< U   - nparams
-	OP_EVAL,      ///< U   - nparams
-	OP_EVALSF,    ///< U   - nparams
-	OP_EVALCF,    ///< U   - nparams
-	OP_EVALTF,    ///< U   - nparams
-	OP_IDXL,      ///< Lbi - oloc, nreg, isenv
-	OP_PUSHF,     ///< U   - ncmd
-	OP_ADD,       ///< LR  - oloc, oloc
-	OP_SUB,       ///< LR  - oloc, oloc
-	OP_MUL,       ///< LR  - oloc, oloc
-	OP_DIV,       ///< LR  - oloc, oloc
-	OP_MOD,       ///< LR  - oloc, oloc
-	OP_POW,       ///< LR  - oloc, oloc
-	OP_MMUL,      ///< LR  - oloc, oloc
-	OP_EQ,        ///< LR  - oloc, oloc
-	OP_NE,        ///< LR  - oloc, oloc
-	OP_GE,        ///< LR  - oloc, oloc
-	OP_SG,        ///< LR  - oloc, oloc
-	OP_LE,        ///< LR  - oloc, oloc
-	OP_SL,        ///< LR  - oloc, oloc
-	OP_AND,       ///< LR  - oloc, oloc
-	OP_OR,        ///< LR  - oloc, oloc
-};
-
-/**  The errors in Tap are emitted whenever there is something wrong
- *   @details
- *   Errors could be devided into three categories, which are
- *   - **Compiling error**: Errors detected in compiling process
- *   - **Session error**:   Errors when Tap virtual machine (VM) breaks down
- *   - **Runtime error**:   Errors that are only detected in runtime
- */
-enum terror_type : uint8_t
-{
-	ErrCompile_Other,           ///< Compile Error
-	ErrCompile_UnfoundFile,     ///< Compile Error - Unfound File
-	ErrCompile_BracketsOpen,    ///< Compile Error - Bracket Open
-	ErrCompile_VarNoType,       ///< Compile Error - Variable Declaration of no Type
-	ErrCompile_DblVDeclare,     ///< Compile Error - Duplicate Variable Declaration
-	ErrCompile_InBlkVarDef,     ///< Compile Error - Variable Declaration in Block
-	ErrCompile_ObjUnfound,      ///< Compile Error - Object Unfound
-	ErrCompile_InvalidVname,    ///< Compile Error - Invalid Variable Name
-	ErrCompile_InvalidLiter,    ///< Compile Error - Invalid Literal Value
-	ErrCompile_AsgDefault,      ///< Compile Error - Assign Values to Defaults
-	ErrCompile_REGOutOfLimit,   ///< Compile Error - Parameters Overflow
-	ErrCompile_CMDOutOfLimit,   ///< Compile Error - Command Overflow
-	ErrCompile_OBJOutOfLimit,   ///< Compile Error - Variable Overflow
-	ErrCompile_CSTOutOfLimit,   ///< Compile Error - Constants Overflow
-	ErrCompile_ReturnTmpObj,    ///< Compile Error - Return Temporary Object
-	ErrCompile_InvalidFile,     ///< Compile Error - Invalid File Name/Suffix
-
-	ErrSession_IO,              ///< Session Error - IO
-
-	ErrRuntime_Other,           ///< Runtime Error
-	ErrRuntime_DivIntZero,      ///< Runtime Error - Divided by Integer Zero
-	ErrRuntime_ParamsCtr,       ///< Runtime Error - Parameters Count Inconsistency
-	ErrRuntime_ParamsType,      ///< Runtime Error - Parameters Type Inconsistency
-	ErrRuntime_IdxOutRange,     ///< Runtime Error - Index out of Range
-	ErrRuntime_InvalidIndex,    ///< Runtime Error - Invalid Index
-	ErrRuntime_LoopRef,         ///< Runtime Error - Looping Reference
-	ErrRuntime_RefType,         ///< Runtime Error - Referred Type Inconsistency
-	ErrRuntime_LenInconsis,     ///< Runtime Error - Length Inconsistency
-	ErrRuntime_AssignNil,       ///< Runtime Error - Try to Assign Nil
-	ErrRuntime_ObjUnfound,      ///< Runtime Error - Object Unfound
-	ErrRuntime_IntOutOfRange,   ///< Runtime Error - Integer Value out of Range
-	ErrRuntime_RefEmptySet,     ///< Runtime Error - Refer to the Value of Empty Set
-	ErrRuntime_StringEval,      ///< Runtime Error - String Evaluation
-	ErrRuntime_EnvInconsis,     ///< Runtime Error - Environment Inconsistecy
-	ErrRuntime_RecurseRefRet,   ///< Runtime Error - Return Local Reference in Recursion
-};
-
-/// Throw a warning and stop the Tap process
-class twarn
-{
-private:
-terror_type __type;
-
-public:
-/// Generate a warning of terror_type being 'type'
-twarn(terror_type type)
-{
-	__type = type;
+	return 0;
 }
 
-/** Dealing with error signals in Tap.
- *  @details Print info and exit the program.
- *  @param fname  The name of the Cpp function where error signal is emitted.
- *  @param info   The error info that you want to print out.
- */
-void warn(const std::string & fname, const std::string & info)
+static inline uint16_t tpushx_local_addr(void)
 {
-	switch (__type)
-	{
-	case ErrCompile_Other:
-		printf("Compile Error");
-		break;
-	case ErrCompile_UnfoundFile:
-		printf("Compile Error - Unfound File");
-		break;
-	case ErrCompile_BracketsOpen:
-		printf("Compile Error - Bracket Open");
-		break;
-	case ErrCompile_VarNoType:
-		printf("Compile Error - Variable Declaration of no Type");
-		break;
-	case ErrCompile_DblVDeclare:
-		printf("Compile Error - Duplicate Variable Declaration");
-		break;
-	case ErrCompile_InBlkVarDef:
-		printf("Compile Error - Variable Declaration in Block");
-		break;
-	case ErrCompile_ObjUnfound:
-		printf("Compile Error - Object Unfound");
-		break;
-	case ErrCompile_InvalidVname:
-		printf("Compile Error - Invalid Variable Name");
-		break;
-	case ErrCompile_InvalidLiter:
-		printf("Compile Error - Invalid Literal Value");
-		break;
-	case ErrCompile_AsgDefault:
-		printf("Compile Error - Assign Values to Defaults");
-		break;
-	case ErrCompile_REGOutOfLimit:
-		printf("Compile Error - Parameters Overflow");
-		break;
-	case ErrCompile_CMDOutOfLimit:
-		printf("Compile Error - Command Overflow");
-		break;
-	case ErrCompile_OBJOutOfLimit:
-		printf("Compile Error - Variable Overflow");
-		break;
-	case ErrCompile_CSTOutOfLimit:
-		printf("Compile Error - Constants Overflow");
-		break;
-	case ErrCompile_ReturnTmpObj:
-		printf("Compile Error - Return Temporary Object");
-		break;
-	case ErrCompile_InvalidFile:
-		printf("Compile Error - Invalid File Name/Suffix");
-		break;
-
-	case ErrSession_IO:
-		printf("Session Error - IO");
-		break;
-
-	case ErrRuntime_Other:
-		printf("Runtime Error");
-		break;
-	case ErrRuntime_DivIntZero:
-		printf("Runtime Error - Divided by Integer Zero");
-		break;
-	case ErrRuntime_ParamsCtr:
-		printf("Runtime Error - Parameters Count Inconsistency");
-		break;
-	case ErrRuntime_ParamsType:
-		printf("Runtime Error - Parameters Type Inconsistency");
-		break;
-	case ErrRuntime_RefType:
-		printf("Runtime Error - Referred Type Inconsistency");
-		break;
-	case ErrRuntime_IdxOutRange:
-		printf("Runtime Error - Index out of Range");
-		break;
-	case ErrRuntime_InvalidIndex:
-		printf("Runtime Error - Invalid Index");
-		break;
-	case ErrRuntime_LoopRef:
-		printf("Runtime Error - Looping Reference");
-		break;
-	case ErrRuntime_LenInconsis:
-		printf("Runtime Error - Length Inconsistency");
-		break;
-	case ErrRuntime_AssignNil:
-		printf("Runtime Error - Try to Assign Nil");
-		break;
-	case ErrRuntime_ObjUnfound:
-		printf("Runtime Error - Object Unfound");
-		break;
-	case ErrRuntime_IntOutOfRange:
-		printf("Runtime Error - Integer Value out of Range");
-		break;
-	case ErrRuntime_RefEmptySet:
-		printf("Runtime Error - Refer to the Value of Empty Set");
-		break;
-	case ErrRuntime_StringEval:
-		printf("Runtime Error - String Evaluation");
-		break;
-	case ErrRuntime_EnvInconsis:
-		printf("Runtime Error - Environment Inconsistecy");
-		break;
-	case ErrRuntime_RecurseRefRet:
-		printf("Runtime Error - Return Local Reference in Recursion");
-		break;
-	}
-	printf(" - tapas::%s.\n", fname.c_str());
-	printf("  %s\n", info.c_str());
-	throw "twarn::warn";
+	return 1;
 }
 
-};
-
-
+static inline uint16_t tpushx_upval_addr(uint16_t depth)
+{
+	return (uint16_t)(1u | 2u | ((uint16_t)depth << 2));
 }
 
-#endif // Tap_CONSTS_H
+static inline int tpushx_isenv(uint16_t r)
+{
+	return (int)(r & 1u);
+}
+
+static inline int tpushx_is_upval(uint16_t r)
+{
+	return (int)((r >> 1) & 1u);
+}
+
+static inline uint16_t tpushx_depth(uint16_t r)
+{
+	return (uint16_t)(r >> 2);
+}
+
+
+/*===========================================================================*
+ * Bytecode Instructions
+ *===========================================================================*/
+
+typedef enum {
+	OP_PASS,
+	OP_VCRT,
+	OP_TMPDEL,
+	OP_THIS,
+	OP_BASE,
+	OP_BREAK,
+	OP_CONTI,
+	OP_RET,
+	OP_IN,
+	OP_PAIR,
+	OP_TO,
+	OP_POPN,
+	OP_POPCOV,
+	OP_LOOPAS,
+	OP_LOOPIAS,
+	OP_LOOPLAS,
+	OP_LOOPGAS,
+	OP_JPF,
+	OP_JPB,
+	OP_CJPFPOP,
+	OP_CJPBPOP,
+	OP_PUSHX,
+	OP_PUSHI,
+	OP_PUSHFLT,
+	OP_PUSHB,
+	OP_PUSHS,
+	OP_PUSHDICT,
+	OP_PUSHINFO,
+	OP_IMPORT,
+	OP_IDXR,
+	OP_EVAL,
+	OP_EVALSF,
+	OP_EVALCF,
+	OP_EVALTF,
+	OP_IDXL,
+	OP_PUSHF,
+	OP_ADD,
+	OP_SUB,
+	OP_MUL,
+	OP_DIV,
+	OP_MOD,
+	OP_POW,
+	OP_MMUL,
+	OP_EQ,
+	OP_NE,
+	OP_GE,
+	OP_SG,
+	OP_LE,
+	OP_SL,
+	OP_AND,
+	OP_OR
+} tins;
+
+
+/*===========================================================================*
+ * Token Types (for lexer/compiler)
+ *===========================================================================*/
+
+typedef enum {
+	token_continue,
+	token_break,
+	token_return,
+	token_var,
+	token_let,
+	token_import,
+	token_while,
+	token_for,
+	token_if,
+	token_elif,
+	token_else,
+	token_asg,
+	token_idxl,
+
+	token_in,
+	token_pair,
+	token_to,
+	token_and,
+	token_or,
+	token_eq,
+	token_ne,
+	token_ge,
+	token_le,
+	token_sg,
+	token_sl,
+	token_add,
+	token_sub,
+	token_mul,
+	token_div,
+	token_mod,
+	token_mmul,
+	token_pow,
+
+	token_eval,
+	token_idx,
+	token_idx2,
+
+	token_true,
+	token_false,
+	token_this,
+	token_base,
+	token_sstr,
+	token_dstr,
+	token_dict,
+	token_func,
+	token_kappa,
+
+	token_v
+} token_type;
+
+
+/*===========================================================================*
+ * Value Type Codes
+ *===========================================================================*/
+
+typedef enum {
+	tnil    = 0,
+	tbool   = 1,
+	tint    = 2,
+	tfloat = 3,
+	tcompo  = 4
+} ttypes;
+
+
+/*===========================================================================*
+ * Composite Type Codes
+ *===========================================================================*/
+
+typedef enum {
+	compo_tstr     = 0,
+	compo_tlist    = 1,
+	compo_tpair    = 2,
+	compo_tdict    = 3,
+	compo_tfunc    = 4,
+	compo_tlib     = 5,
+	compo_titer    = 6,
+	compo_tbarr    = 7,
+	compo_tdarr    = 8,
+	compo_tarr     = 9,
+	compo_cppfunc  = 10,
+	compo_sessfunc = 11,
+	compo_time     = 12
+} tcompo_type;
+
+
+/*===========================================================================*
+ * Error Types
+ *===========================================================================*/
+
+typedef enum {
+	ErrCompile_Other,
+	ErrCompile_UnfoundFile,
+	ErrCompile_BracketsOpen,
+	ErrCompile_VarNoType,
+	ErrCompile_DblVDeclare,
+	ErrCompile_InBlkVarDef,
+	ErrCompile_ObjUnfound,
+	ErrCompile_InvalidVname,
+	ErrCompile_InvalidLiter,
+	ErrCompile_AsgDefault,
+	ErrCompile_REGOutOfLimit,
+	ErrCompile_CMDOutOfLimit,
+	ErrCompile_OBJOutOfLimit,
+	ErrCompile_CSTOutOfLimit,
+	ErrCompile_ReturnTmpObj,
+	ErrCompile_InvalidFile,
+
+	ErrSession_IO,
+
+	ErrRuntime_Other,
+	ErrRuntime_DivIntZero,
+	ErrRuntime_ParamsCtr,
+	ErrRuntime_ParamsType,
+	ErrRuntime_IdxOutRange,
+	ErrRuntime_InvalidIndex,
+	ErrRuntime_LoopRef,
+	ErrRuntime_RefType,
+	ErrRuntime_LenInconsis,
+	ErrRuntime_AssignNil,
+	ErrRuntime_ObjUnfound,
+	ErrRuntime_IntOutOfRange,
+	ErrRuntime_RefEmptySet,
+	ErrRuntime_StringEval,
+	ErrRuntime_EnvInconsis,
+	ErrRuntime_RecurseRefRet
+} terror_type;
+
+/*===========================================================================*
+ * Error System — declarations
+ *===========================================================================*/
+
+typedef enum {
+	TErrorPhase_Compile,
+	TErrorPhase_Runtime,
+	TErrorPhase_Session,
+	TErrorPhase_Unknown
+} terror_phase;
+
+typedef struct {
+	terror_type type;
+	terror_phase phase;
+	const char *reason;
+	tstring *where;
+	tstring *detail;
+	tstring *source;
+	tstring *file;
+	uint64_t line;
+	uint64_t column;
+	uint_cmds instruction;
+	int has_location;
+	int has_instruction;
+} terror;
+
+const char *terror_type_name(terror_type t);
+const char *terror_phase_name(terror_phase p);
+const terror *terror_last(void);
+void terror_clear_last(void);
+void terror_set_source_context(const char *source);
+void terror_set_source_context_borrowed(const char *source);
+void terror_clear_source_context(void);
+const char *terror_current_source_context(void);
+void terror_set_file_context(const char *file, uint64_t line, uint64_t column);
+void terror_set_file_context_borrowed(const char *file, uint64_t line, uint64_t column);
+void terror_clear_file_context(void);
+const char *terror_current_file_context(void);
+uint64_t terror_current_line_context(void);
+uint64_t terror_current_column_context(void);
+void terror_set_instruction_context(uint_cmds instruction);
+void terror_clear_instruction_context(void);
+void twarn(terror_type type, const char *fname, const char *info);
+
+/* Optional error recovery hook used by the interactive CLI. */
+extern jmp_buf tapas_error_jmpbuf;
+extern int tapas_error_recover_enabled;
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* T_BASIS_H */

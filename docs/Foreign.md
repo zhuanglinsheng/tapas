@@ -1,0 +1,277 @@
+# Tapas C Interaction
+
+This document describes how to call Tapas code from C and how to expose C
+functions to Tapas scripts.
+
+The public C API is declared in the headers under `include/tapas`. Most users
+only need `tapas/tapas.h`, which includes the session API and the runtime value
+types.
+
+
+
+## Calling Tapas Scripts From C
+
+Tapas source files are text files with the suffix `.tap`. A C program can run a
+Tapas file in either of two ways:
+
+- Compile a `.tap` file to a `.tapc` bytecode file, then evaluate the bytecode.
+- Execute a `.tap` file directly without keeping a `.tapc` file.
+
+The main session functions are:
+
+```c
+tsession *tsession_new(void);
+void tsession_free(tsession *sess);
+
+void tsession_compile_file(tsession *sess, const char *file, int interactive);
+void tsession_eval_bycodes(tsession *sess, const char *file);
+void tsession_execute_file(tsession *sess, const char *file, int interactive);
+void tsession_execute_str(tsession *sess, const char *str, int interactive);
+```
+
+For example, suppose `test_calling.tap` contains:
+
+```tapas
+var abs = (x){
+    if(x >= 0){
+        return x
+    }
+    else{
+        return -x
+    }
+}
+
+abs(-2).print()
+```
+
+The following C program compiles and executes it:
+
+```c
+#include "tapas/tapas.h"
+
+int main(void)
+{
+    tsession *sess = tsession_new();
+
+    tsession_compile_file(sess, "test_calling.tap", 1);
+    tsession_eval_bycodes(sess, "test_calling.tapc");
+
+    tsession_free(sess);
+    return 0;
+}
+```
+
+If the bytecode file does not need to be saved, call
+`tsession_execute_file` instead:
+
+```c
+#include "tapas/tapas.h"
+
+int main(void)
+{
+    tsession *sess = tsession_new();
+
+    tsession_execute_file(sess, "test_calling.tap", 1);
+
+    tsession_free(sess);
+    return 0;
+}
+```
+
+Tapas code can also be executed from a C string:
+
+```c
+#include "tapas/tapas.h"
+
+int main(void)
+{
+    tsession *sess = tsession_new();
+
+    tsession_execute_str(sess, "print(1 + 2)", 1);
+
+    tsession_free(sess);
+    return 0;
+}
+```
+
+
+
+## Extending Tapas With C Functions
+
+C functions can be exposed to Tapas by wrapping them as Tapas callable values
+and adding them to the current session library.
+
+The function pointer type is:
+
+```c
+typedef void (*genf_t)(tobj *params, uint_regs len, tobj *vre);
+```
+
+The parameters are:
+
+- `params`: an array of Tapas values passed by the script.
+- `len`: the number of arguments.
+- `vre`: the output value that receives the function result.
+
+Register the function with:
+
+```c
+void tlib_add_cppf(tlib *lb, const char *name, genf_t f, uint_regs nparams_sig);
+```
+
+Despite the historical name `cppf`, this is the C API used by the current C
+runtime. The last argument, `nparams_sig`, is the expected parameter count. Use
+`UNDEF_NPARAMS` when the function accepts a variable number of arguments.
+
+Here is a C implementation of an integer sum function:
+
+```c
+#include "tapas/tapas.h"
+
+static void c_int_sum(tobj *params, uint_regs len, tobj *vre)
+{
+    long sum = 0;
+
+    for(uint_regs i = 0; i < len; i++){
+        if(tobj_get_type(&params[i]) != tint){
+            tobj_set_nil(vre);
+            return;
+        }
+        sum += tobj_get_v_tint(&params[i]);
+    }
+
+    tobj_set_int(vre, sum);
+}
+```
+
+Then register it before running the Tapas script:
+
+```c
+#include "tapas/tapas.h"
+
+static void c_int_sum(tobj *params, uint_regs len, tobj *vre)
+{
+    long sum = 0;
+
+    for(uint_regs i = 0; i < len; i++){
+        if(tobj_get_type(&params[i]) != tint){
+            tobj_set_nil(vre);
+            return;
+        }
+        sum += tobj_get_v_tint(&params[i]);
+    }
+
+    tobj_set_int(vre, sum);
+}
+
+int main(void)
+{
+    tsession *sess = tsession_new();
+
+    tlib_add_cppf(tsession_get_lib(sess), "int_sum", c_int_sum, UNDEF_NPARAMS);
+    tsession_execute_file(sess, "test_extension.tap", 1);
+
+    tsession_free(sess);
+    return 0;
+}
+```
+
+The Tapas file can call `int_sum` like any other function:
+
+```tapas
+var s = int_sum(1, 2, 3, 4, 5)
+print(s)
+```
+
+The output should be 15. 
+
+
+
+
+## Working With Tapas Values
+
+Tapas values are represented by the tagged union type `tobj`.
+
+The main runtime type codes are:
+
+```c
+tnil
+tbool
+tint
+tfloat
+tcompo
+```
+
+Use the helper functions in `tapas/tval.h` rather than modifying fields
+directly:
+
+```c
+void tobj_set_nil(tobj *v);
+void tobj_set_bool(tobj *v, int b);
+void tobj_set_int(tobj *v, long i);
+void tobj_set_float(tobj *v, double d);
+void tobj_set_compo(tobj *v, tcompo_v *compo);
+
+ttypes tobj_get_type(const tobj *v);
+long tobj_get_v_tint(const tobj *v);
+double tobj_get_v_tfloat(const tobj *v);
+int tobj_get_v_tbool(const tobj *v);
+tcompo_v *tobj_get_v_tcompo(const tobj *v);
+```
+
+Composite Tapas values, such as strings, lists, dictionaries, functions, and
+libraries, are reference values. When returning or storing composite values, use
+the existing constructor and setter functions so that reference counts remain
+consistent.
+
+
+## Extending Tapas With C Data Types
+
+Custom C data types can be exposed to Tapas by embedding `tcompo_v` as the first
+field of the C struct and providing a `tcompo_vtable`.
+
+At minimum, a composite value must provide functions for:
+
+- Returning its Tapas type name.
+- Returning its composite type code.
+- Reporting its length.
+- Copying itself.
+- Freeing itself.
+- Testing identity.
+- Formatting itself as a string.
+
+The core vtable type also contains optional binary operator hooks:
+
+```c
+typedef struct {
+    compo_get_type_fn get_type;
+    compo_get_code_fn get_compo_type_code;
+    compo_len_fn len;
+    compo_copy_fn copy;
+    compo_free_fn free;
+    compo_identical_fn identical;
+    compo_tostring_abbr_fn tostring_abbr;
+    compo_tostring_full_fn tostring_full;
+
+    compo_op_bin_fn op_add;
+    compo_op_bin_fn op_sub;
+    compo_op_bin_fn op_mul;
+    compo_op_bin_fn op_div;
+    compo_op_bin_fn op_mod;
+    compo_op_bin_fn op_pow;
+    compo_op_bin_fn op_mmul;
+    compo_op_bin_fn op_eq;
+    compo_op_bin_fn op_ne;
+    compo_op_bin_fn op_sg;
+    compo_op_bin_fn op_sl;
+    compo_op_bin_fn op_ge;
+    compo_op_bin_fn op_le;
+    compo_op_bin_fn op_and;
+    compo_op_bin_fn op_or;
+} tcompo_vtable;
+```
+
+After creating the C type, expose a C function that constructs an instance and
+returns it with `tobj_set_compo`. Register that constructor with
+`tlib_add_cppf`, and Tapas code can create values of the custom type.
+
