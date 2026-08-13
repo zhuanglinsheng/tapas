@@ -119,8 +119,7 @@ Register the function with:
 void tlib_add_cppf(tlib *lb, const char *name, genf_t f, uint_regs nparams_sig);
 ```
 
-Despite the historical name `cppf`, this is the C API used by the current C
-runtime. The last argument, `nparams_sig`, is the expected parameter count. Use
+The last argument, `nparams_sig`, is the expected parameter count. Use
 `UNDEF_NPARAMS` when the function accepts a variable number of arguments.
 
 Here is a C implementation of an integer sum function:
@@ -219,10 +218,57 @@ int tobj_get_v_tbool(const tobj *v);
 tcompo_v *tobj_get_v_tcompo(const tobj *v);
 ```
 
-Composite Tapas values, such as strings, lists, dictionaries, functions, and
-libraries, are reference values. When returning or storing composite values, use
-the existing constructor and setter functions so that reference counts remain
-consistent.
+Composite Tapas values, such as strings, lists, dictionaries, arrays,
+functions, libraries, and time values, are reference values. When returning or
+storing composite values, use the existing constructor and setter functions so
+that reference counts remain consistent.
+
+The built-in collection constructors include:
+
+```c
+tstr *tstr_new(const char *s);
+tlist *tlist_new(void);
+tpair *tpair_new(const tobj *first, const tobj *second);
+tdict *tdict_new(void);
+titer *titer_new(long start, long end);
+
+tdarr *tdarr_new(size_t rows, size_t cols, double value);
+tbarr *tbarr_new(size_t rows, size_t cols, int value);
+ttime *ttime_new(void);
+```
+
+Lists and dictionaries retain composite values inserted into them. Dense arrays
+own contiguous row-major storage and expose checked accessors:
+
+```c
+double tdarr_at(const tdarr *arr, size_t row, size_t col);
+void tdarr_set(tdarr *arr, size_t row, size_t col, double value);
+int tbarr_at(const tbarr *arr, size_t row, size_t col);
+void tbarr_set(tbarr *arr, size_t row, size_t col, int value);
+
+tdarr *tdarr_transpose(const tdarr *arr);
+tbarr *tbarr_transpose(const tbarr *arr);
+tdarr *tdarr_matmul(const tdarr *left, const tdarr *right);
+```
+
+Use `tobj_set_compo` when returning a newly constructed composite value from a
+C function:
+
+```c
+static void make_identity(tobj *params, uint_regs len, tobj *vre)
+{
+    (void)params;
+    if(len != 0){
+        tobj_set_nil(vre);
+        return;
+    }
+
+    tdarr *matrix = tdarr_new(2, 2, 0.0);
+    tdarr_set(matrix, 0, 0, 1.0);
+    tdarr_set(matrix, 1, 1, 1.0);
+    tobj_set_compo(vre, (tcompo_v *)matrix);
+}
+```
 
 
 ## Extending Tapas With C Data Types
@@ -274,4 +320,3 @@ typedef struct {
 After creating the C type, expose a C function that constructs an instance and
 returns it with `tobj_set_compo`. Register that constructor with
 `tlib_add_cppf`, and Tapas code can create values of the custom type.
-

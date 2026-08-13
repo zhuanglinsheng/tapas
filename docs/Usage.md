@@ -8,11 +8,23 @@ For language syntax and built-in functions, see `Syntax.md`.
 
 ## Build
 
-Tapas is built with CMake. GNU readline is required for the interactive REPL.
+Tapas is built with CMake. A C23 compiler and GNU Readline are required.
 
 ```sh
 cmake -S . -B build
 cmake --build build
+```
+
+Build and run the tests with:
+
+```sh
+ctest --test-dir build --output-on-failure
+```
+
+Install the executable into the configured CMake prefix with:
+
+```sh
+cmake --install build
 ```
 
 The executable is written to:

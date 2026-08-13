@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.10)
 project(tapas C)
 
+include(CTest)
+
 # ============================================================================
 # 1. Project Configuration
 # ============================================================================
@@ -71,11 +73,28 @@ add_executable(tapas
     src/ds/tstring.c
     src/ds/tobj_vec.c
     src/ds/thashtbl.c
+    src/ds/tarray.c
 )
 target_include_directories(tapas PRIVATE ${READLINE_INCLUDE_DIR})
 target_link_libraries(tapas PRIVATE ${READLINE_LIBRARY})
 if(MATH_LIBRARY)
     target_link_libraries(tapas PRIVATE ${MATH_LIBRARY})
+endif()
+
+if(BUILD_TESTING)
+    add_executable(test_data_structures
+        test/test_data_structures.c
+        src/tbasis.c
+        src/tval.c
+        src/ds/tstring.c
+        src/ds/tobj_vec.c
+        src/ds/thashtbl.c
+        src/ds/tarray.c
+    )
+    if(MATH_LIBRARY)
+        target_link_libraries(test_data_structures PRIVATE ${MATH_LIBRARY})
+    endif()
+    add_test(NAME data_structures COMMAND test_data_structures)
 endif()
 
 set_target_properties(tapas PROPERTIES

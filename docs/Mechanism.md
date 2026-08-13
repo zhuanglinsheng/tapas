@@ -62,16 +62,16 @@ stack is empty again.
 
 Tapas uses reference counting to manage reference-type values.
 
-The reference-counting mechanism is built around ``tcompo_v``. Each reference
-type stores a 16-bit unsigned counter that records how many references point to
-the value.
+The reference-counting mechanism is built around ``tcompo_v``. Each composite
+value stores an integer counter that records how many owning references point
+to the value.
 
 Tapas values can be stored in four main places:
 
 - **Case 1.** the variable list in an environment
 - **Case 2.** collection values
 - **Case 3.** the virtual machine runtime stack
-- **Case 4.** the virtual machine return-value register, ``tvm::__ret``
+- **Case 4.** the virtual machine result register, ``tvm::rev``
 
 In principle, when a reference value is stored in any of these places, its
 reference count should increase by one. In practice, Tapas tracks the first two
@@ -83,7 +83,7 @@ The reference counting rules are very simple:
 - **Case 1.** A newly created reference value starts with a reference count of zero.
 - **Case 2.** A newly created reference value must then be placed somewhere that owns or uses it.
 - **Case 3.** When a variable refers to a reference value, the reference count increases by one. When the variable releases it, the count decreases by one.
-- **Case 4.** When a collection, such as ``tpair``, ``tlist``, or ``tdict``, stores a reference value, the reference count increases by one. When the collection releases it, the count decreases by one.
+- **Case 4.** When a collection, such as ``tpair``, ``tlist``, or ``tdict``, stores a reference value, the reference count increases by one. Dense arrays instead own their contiguous scalar storage directly. When a collection releases a composite element, its reference count decreases by one.
 - **Case 5.** A function return value is pushed onto the VM stack after the return instruction finishes.
 - **Case 6.** When a statement finishes, the VM clears its transient stack values.
 - **Case 7.** Whenever a reference count decreases, Tapas checks the value. If the count reaches zero, the value is released.

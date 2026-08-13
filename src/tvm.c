@@ -285,6 +285,17 @@ void operator_mod(const tobj *v1, const tobj *v2, tobj *vre)
 
 void operator_pow(const tobj *v1, const tobj *v2, tobj *vre)
 {
+	if (v1->type == tcompo && v1->val.v_tcompo->vtable->op_pow) {
+		v1->val.v_tcompo->vtable->op_pow(v1->val.v_tcompo, v2, 0, vre);
+		return;
+	}
+	if (v2->type == tcompo && v2->val.v_tcompo->vtable->op_pow) {
+		v2->val.v_tcompo->vtable->op_pow(v2->val.v_tcompo, v1, 1, vre);
+		return;
+	}
+	if ((v1->type != tint && v1->type != tfloat) ||
+	    (v2->type != tint && v2->type != tfloat))
+		twarn(ErrRuntime_ParamsType, "operator_pow", "unsupported type for ^");
 	double a =
 		(v1->type == tint) ? (double)v1->val.v_tint : v1->val.v_tfloat;
 	double b =
@@ -334,52 +345,82 @@ DEF_CMP(le, <=)
 
 void operator_eq(const tobj *v1, const tobj *v2, tobj *vre)
 {
-	if (!eq_impl(v1->type, v2->type, v1, v2, vre))
-		tobj_set_bool(vre, tobj_identical(v1, v2));
+	if (eq_impl(v1->type, v2->type, v1, v2, vre)) return;
+	if (v1->type == tcompo && v1->val.v_tcompo->vtable->op_eq) {
+		v1->val.v_tcompo->vtable->op_eq(v1->val.v_tcompo, v2, 0, vre); return;
+	}
+	if (v2->type == tcompo && v2->val.v_tcompo->vtable->op_eq) {
+		v2->val.v_tcompo->vtable->op_eq(v2->val.v_tcompo, v1, 1, vre); return;
+	}
+	tobj_set_bool(vre, tobj_identical(v1, v2));
 }
 
 void operator_ne(const tobj *v1, const tobj *v2, tobj *vre)
 {
-	if (!ne_impl(v1->type, v2->type, v1, v2, vre))
-		tobj_set_bool(vre, !tobj_identical(v1, v2));
+	if (ne_impl(v1->type, v2->type, v1, v2, vre)) return;
+	if (v1->type == tcompo && v1->val.v_tcompo->vtable->op_ne) {
+		v1->val.v_tcompo->vtable->op_ne(v1->val.v_tcompo, v2, 0, vre); return;
+	}
+	if (v2->type == tcompo && v2->val.v_tcompo->vtable->op_ne) {
+		v2->val.v_tcompo->vtable->op_ne(v2->val.v_tcompo, v1, 1, vre); return;
+	}
+	tobj_set_bool(vre, !tobj_identical(v1, v2));
 }
+
+#define COMPO_CMP_BODY(field, impl, opname) do { \
+	if (impl(v1->type, v2->type, v1, v2, vre)) return; \
+	if (v1->type == tcompo && v1->val.v_tcompo->vtable->field) { \
+		v1->val.v_tcompo->vtable->field(v1->val.v_tcompo, v2, 0, vre); return; \
+	} \
+	if (v2->type == tcompo && v2->val.v_tcompo->vtable->field) { \
+		v2->val.v_tcompo->vtable->field(v2->val.v_tcompo, v1, 1, vre); return; \
+	} \
+	twarn(ErrRuntime_ParamsType, opname, "unsupported comparison"); \
+} while (0)
 
 void operator_sg(const tobj *v1, const tobj *v2, tobj *vre)
 {
-	sg_impl(v1->type, v2->type, v1, v2, vre);
+	COMPO_CMP_BODY(op_sg, sg_impl, "operator_sg");
 }
 
 void operator_sl(const tobj *v1, const tobj *v2, tobj *vre)
 {
-	sl_impl(v1->type, v2->type, v1, v2, vre);
+	COMPO_CMP_BODY(op_sl, sl_impl, "operator_sl");
 }
 
 void operator_ge(const tobj *v1, const tobj *v2, tobj *vre)
 {
-	ge_impl(v1->type, v2->type, v1, v2, vre);
+	COMPO_CMP_BODY(op_ge, ge_impl, "operator_ge");
 }
 
 void operator_le(const tobj *v1, const tobj *v2, tobj *vre)
 {
-	le_impl(v1->type, v2->type, v1, v2, vre);
+	COMPO_CMP_BODY(op_le, le_impl, "operator_le");
 }
 
 void operator_and(const tobj *v1, const tobj *v2, tobj *vre)
 {
 	if (v1->type == tbool && v2->type == tbool)
 		tobj_set_bool(vre, v1->val.v_tbool && v2->val.v_tbool);
-	else
-		twarn(ErrRuntime_ParamsType, "operator_and", "");
+	else if (v1->type == tcompo && v1->val.v_tcompo->vtable->op_and)
+		v1->val.v_tcompo->vtable->op_and(v1->val.v_tcompo, v2, 0, vre);
+	else if (v2->type == tcompo && v2->val.v_tcompo->vtable->op_and)
+		v2->val.v_tcompo->vtable->op_and(v2->val.v_tcompo, v1, 1, vre);
+	else twarn(ErrRuntime_ParamsType, "operator_and", "");
 }
 
 void operator_or(const tobj *v1, const tobj *v2, tobj *vre)
 {
 	if (v1->type == tbool && v2->type == tbool)
 		tobj_set_bool(vre, v1->val.v_tbool || v2->val.v_tbool);
-	else
-		twarn(ErrRuntime_ParamsType, "operator_or", "");
+	else if (v1->type == tcompo && v1->val.v_tcompo->vtable->op_or)
+		v1->val.v_tcompo->vtable->op_or(v1->val.v_tcompo, v2, 0, vre);
+	else if (v2->type == tcompo && v2->val.v_tcompo->vtable->op_or)
+		v2->val.v_tcompo->vtable->op_or(v2->val.v_tcompo, v1, 1, vre);
+	else twarn(ErrRuntime_ParamsType, "operator_or", "");
 }
 
+#undef COMPO_CMP_BODY
 #undef DEF_CMP
 
 /*===========================================================================*
@@ -626,6 +667,10 @@ static void gen_idx(tobj *params, uint_regs len, tobj *vre)
 	case compo_tdict:
 		tdict_idx((tdict *)v, &params[1], 1, vre);
 		return;
+	case compo_tdarr:
+	case compo_tbarr:
+		tarr_idx(v, &params[1], 1, vre);
+		return;
 	default:
 		break;
 	}
@@ -726,6 +771,71 @@ static void gen_iter(tobj *params, uint_regs len, tobj *vre)
 		step = params[1].val.v_tint;
 	}
 	tobj_set_compo(vre, (tcompo_v *)titer_new_step(start, step, end));
+}
+
+static size_t array_dimension(const tobj *v, const char *where)
+{
+	if (v->type != tint || v->val.v_tint < 0)
+		twarn(ErrRuntime_ParamsType, where, "array dimensions must be non-negative integers");
+	return (size_t)v->val.v_tint;
+}
+
+static void gen_array(tobj *params, uint_regs len, tobj *vre)
+{
+	gen_check_nparams("array", len, 3);
+	size_t rows = array_dimension(&params[0], "array");
+	size_t cols = array_dimension(&params[1], "array");
+	const tobj *value = &params[2];
+	if (value->type == tbool)
+		tobj_set_compo(vre, (tcompo_v *)tbarr_new(rows, cols, value->val.v_tbool));
+	else if (value->type == tint || value->type == tfloat)
+		tobj_set_compo(vre, (tcompo_v *)tdarr_new(rows, cols,
+			value->type == tint ? (double)value->val.v_tint : value->val.v_tfloat));
+	else if (value->type == tcompo && tobj_compo_type(value) == compo_tlist) {
+		tlist *list = (tlist *)value->val.v_tcompo;
+		const tobj *first = tlist_size(list) ? tlist_at(list, 0) : NULL;
+		if (first && first->type == tbool)
+			tobj_set_compo(vre, (tcompo_v *)tbarr_from_list(rows, cols, list));
+		else
+			tobj_set_compo(vre, (tcompo_v *)tdarr_from_list(rows, cols, list));
+	} else
+		twarn(ErrRuntime_ParamsType, "array", "value must be scalar or list");
+}
+
+static tcompo_v *array_param(tobj *params, uint_regs len, const char *where)
+{
+	gen_check_nparams(where, len, 1);
+	if (params[0].type != tcompo ||
+	    (tobj_compo_type(&params[0]) != compo_tdarr &&
+	     tobj_compo_type(&params[0]) != compo_tbarr))
+		twarn(ErrRuntime_ParamsType, where, "array required");
+	return params[0].val.v_tcompo;
+}
+
+static void gen_array_rows(tobj *p, uint_regs n, tobj *r)
+{
+	tobj_set_int(r, (long)tarr_rows(array_param(p, n, "array::rows")));
+}
+
+static void gen_array_cols(tobj *p, uint_regs n, tobj *r)
+{
+	tobj_set_int(r, (long)tarr_cols(array_param(p, n, "array::cols")));
+}
+
+static void gen_array_transpose(tobj *p, uint_regs n, tobj *r)
+{
+	tcompo_v *arr = array_param(p, n, "array::transpose");
+	if (arr->vtable->get_compo_type_code() == compo_tdarr)
+		tobj_set_compo(r, (tcompo_v *)tdarr_transpose((tdarr *)arr));
+	else
+		tobj_set_compo(r, (tcompo_v *)tbarr_transpose((tbarr *)arr));
+}
+
+static void gen_now(tobj *params, uint_regs len, tobj *vre)
+{
+	(void)params;
+	gen_check_nparams("now", len, 0);
+	tobj_set_compo(vre, (tcompo_v *)ttime_new());
 }
 
 static void gen_append(tobj *params, uint_regs len, tobj *vre)
@@ -1444,6 +1554,10 @@ void vm_idxr(tvm *vm, uint_regs nparams)
 	case compo_tlib:
 		tlib_idx((tlib *)arr, params, nparams, &vm->rev);
 		break;
+	case compo_tdarr:
+	case compo_tbarr:
+		tarr_idx(arr, params, nparams, &vm->rev);
+		break;
 	default:
 		twarn(ErrRuntime_RefType, "vm_idxr", "unindexable type");
 	}
@@ -1475,6 +1589,10 @@ vm_idxl(tvm *vm, uint_objs loc, uint_regs nparams, int isenv, tcompo_env *env)
 		break;
 	case compo_tlist:
 		tlist_iset((tlist *)arr, params, nparams, rv);
+		break;
+	case compo_tdarr:
+	case compo_tbarr:
+		tarr_iset(arr, params, nparams, rv);
 		break;
 	default:
 		twarn(ErrRuntime_RefType, "vm_idxl", "");
@@ -2103,6 +2221,7 @@ void eval_bycodes(tvm *vm, uint_cmds from, tlib *lib)
 void register_cppfuncs(tlib *lib)
 {
 	tdict *math_pkg;
+	tdict *array_pkg;
 
 	/* output / inspection */
 	tlib_add_cppf(lib, "print", gen_print, UNDEF_NPARAMS);
@@ -2112,6 +2231,8 @@ void register_cppfuncs(tlib *lib)
 	tlib_add_cppf(lib, "copy", gen_copy, 1);
 	tlib_add_cppf(lib, "identical", gen_identical, 2);
 	tlib_add_cppf(lib, "clock", gen_clock, 0);
+	tlib_add_cppf(lib, "now", gen_now, 0);
+	tlib_add_cppf(lib, "array", gen_array, 3);
 
 	/* conversion */
 	tlib_add_cppf(lib, "int", gen_int, 1);
@@ -2144,6 +2265,13 @@ void register_cppfuncs(tlib *lib)
 	tlib_add_cppf(lib, "sort", gen_sort, 1);
 
 	/* scalar math package */
+	/* Keep the C++ implementation's public eig:: namespace. */
+	array_pkg = tlib_add_pkg(lib, "eig");
+	tdict_add_cppf(array_pkg, "new", gen_array, 3);
+	tdict_add_cppf(array_pkg, "rows", gen_array_rows, 1);
+	tdict_add_cppf(array_pkg, "cols", gen_array_cols, 1);
+	tdict_add_cppf(array_pkg, "transpose", gen_array_transpose, 1);
+
 	math_pkg = tlib_add_pkg(lib, "math");
 	ADD_MATH(math_pkg, abs, 1);
 	ADD_MATH(math_pkg, fabs, 1);

@@ -54,8 +54,8 @@ Generally, there are two kinds of values in Tapas: value types and composite
 types.
 
 Value types contain their data directly. Composite types, such as strings,
-lists, dictionaries, functions, and libraries, are reference values and follow
-Tapas's shallow-copy rule unless explicitly copied.
+lists, dictionaries, arrays, functions, libraries, and time values, are
+reference values and follow Tapas's shallow-copy rule unless explicitly copied.
 
 #### Nil
 
@@ -649,6 +649,106 @@ Dictionary follows the shallow copy rule: only the pointer is stored if dictiona
 
 
 
+#### Dense Array
+
+Tapas provides row-major, two-dimensional dense arrays. An array containing
+numbers is a real array; an array containing booleans is a boolean array.
+
+Use `array(rows, cols, value)` to construct an array. A scalar fills every
+element. A list fills the array in row-major order and must contain exactly
+`rows * cols` elements.
+
+```tapas
+let numbers = array(2, 3, [1, 2, 3, 4, 5, 6])
+let flags = array(2, 2, false)
+
+sprint(numbers)
+sprint(flags)
+```
+<pre class='Tapas-Return'>
+[[1, 2, 3],
+ [4, 5, 6]]
+[[false, false],
+ [false, false]]
+</pre>
+
+The same constructor is available as `eig::new`. The `eig` package also
+provides shape inspection and transposition:
+
+```tapas
+print(eig::rows(numbers), ' x ', eig::cols(numbers))
+sprint(eig::transpose(numbers))
+```
+<pre class='Tapas-Return'>
+2 x 3
+[[1, 4],
+ [2, 5],
+ [3, 6]]
+</pre>
+
+Arrays use two indices. Each index can be an integer or a half-open slice. A
+scalar index returns a scalar; using a slice in either dimension returns a new
+array. Negative integer indices and negative slice endpoints count from the end.
+
+```tapas
+numbers[1, 2]
+numbers[0:2, 1]
+```
+<pre class='Tapas-Return'>
+6
+[[2],
+ [5]]
+</pre>
+
+Elements and slices can be assigned. Slice assignment requires an array of the
+same type and shape.
+
+```tapas
+numbers[0, 0] = 10
+numbers[0:2, 1:2] = array(2, 1, [20, 50])
+sprint(numbers)
+```
+<pre class='Tapas-Return'>
+[[10, 20, 3],
+ [4, 50, 6]]
+</pre>
+
+Real arrays support element-wise `+`, `-`, `*`, `/`, and `^` with a scalar or
+another real array of the same shape. Comparisons return boolean arrays.
+Matrix multiplication uses `**`; the left column count must equal the right row
+count.
+
+```tapas
+let a = array(2, 2, [1, 2, 3, 4])
+sprint(a + 1)
+sprint(a > 2)
+sprint(a ** eig::transpose(a))
+```
+<pre class='Tapas-Return'>
+[[2, 3],
+ [4, 5]]
+[[false, false],
+ [true, true]]
+[[5, 11],
+ [11, 25]]
+</pre>
+
+Boolean arrays support element-wise `and` and `or` with a boolean scalar or a
+boolean array of the same shape.
+
+
+#### Time
+
+The function `now()` returns the current local time. Time values can be copied,
+compared for identity, formatted with `sprint`, and subtracted. Subtracting two
+time values returns their difference in seconds as a float.
+
+```tapas
+let started = now()
+sprint(started)
+```
+
+
 #### Function
 
 Function is defined by the combination of parentheses and curly braces ``(){}``. Parameters are listed in
@@ -784,7 +884,8 @@ More details about module importing are covered in the Environment section.
 
 ### Arithmetic Operator
 
-Including ``+``,  ``-``,  ``*``,  ``/``,  ``%``,  ``^``.
+Including ``+``, ``-``, ``*``, ``/``, ``%``, ``^``, and ``**``. The `**`
+operator performs matrix multiplication on compatible real arrays.
 
 ```tapas
 2.3 + 4 / 3.0 * 2^2
@@ -976,7 +1077,8 @@ Arithmetic expressions are evaluated after values, calls, and indexing. They can
 be divided into three precedence levels:
 
 - Third order  ``^`` (power calculation)
-- Second order  ``*`` (multiplication), ``/`` (division) and ``%`` (modulo calculation)
+- Second order  ``*`` (multiplication), ``/`` (division), ``%`` (modulo
+  calculation), and ``**`` (matrix multiplication)
 - First order  ``+`` (addition) and ``-`` (subtraction)
 
 Higher order arithmetic operations are executed first inside an arithmetic operation.
@@ -1532,8 +1634,8 @@ M['inv'](-10).print()
 
 ## Built-In Functions
 
-The C version registers standard functions directly in the root environment. Use
-the function name without a package prefix.
+Tapas registers standard functions directly in the root environment. Use the
+function name without a package prefix.
 
 ### Core
 
@@ -1546,6 +1648,8 @@ Output and inspection:
 > type(...)
 > copy(...)
 > identical(a, b)
+> clock()
+> now()
 > ```
 
 Conversions:
@@ -1564,6 +1668,7 @@ Composite constructors and helpers:
 > iter(start, step, end)
 > pair(first, second)
 > list(...)
+> array(rows, cols, scalar_or_list)
 > 
 > push(list, value)
 > append(target, value)
@@ -1588,6 +1693,21 @@ Session functions:
 > __nparam__()
 > __binary__([env])
 > ```
+
+
+### Dense Arrays
+
+Dense-array helpers are registered in the default `eig` package:
+
+> ```
+> eig::new(rows, cols, scalar_or_list)
+> eig::rows(array)
+> eig::cols(array)
+> eig::transpose(array)
+> ```
+
+`array(...)` and `eig::new(...)` are equivalent. See the Dense Array section
+under Composite Types for indexing, slicing, assignment, and operators.
 
 
 
@@ -1677,5 +1797,5 @@ Scalar math predicates:
 > math::isunordered(x, y)
 > ```
 
-These math functions accept scalar `int` and `float` values. Array-oriented
-math is not part of the C version yet.
+These math functions accept scalar `int` and `float` values. Dense arrays have
+their own element-wise operators and the helpers in the `eig` package.
