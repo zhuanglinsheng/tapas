@@ -1,6 +1,6 @@
-#include "tapas/tbycs.h"
+#include "Tapas/tbycs.h"
 
-#include "tapas/tbasis.h"
+#include "Tapas/tbasis.h"
 
 
 /*===========================================================================*
@@ -331,6 +331,12 @@ void tbycode_tostring(tbycode c, char *buf)
 			(unsigned)tbycode_get_L(c),
 			(unsigned)tbycode_get_R(c));
 		break;
+	case OP_POS:
+		sprintf(buf, "OP_POS");
+		break;
+	case OP_NEG:
+		sprintf(buf, "OP_NEG");
+		break;
 	case OP_EQ:
 		sprintf(buf,
 			"OP_EQ       %u  %u",
@@ -376,6 +382,18 @@ void tbycode_tostring(tbycode c, char *buf)
 	case OP_OR:
 		sprintf(buf,
 			"OP_OR       %u  %u",
+			(unsigned)tbycode_get_L(c),
+			(unsigned)tbycode_get_R(c));
+		break;
+	case OP_BAND:
+		sprintf(buf,
+			"OP_BAND     %u  %u",
+			(unsigned)tbycode_get_L(c),
+			(unsigned)tbycode_get_R(c));
+		break;
+	case OP_BOR:
+		sprintf(buf,
+			"OP_BOR      %u  %u",
 			(unsigned)tbycode_get_L(c),
 			(unsigned)tbycode_get_R(c));
 		break;

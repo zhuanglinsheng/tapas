@@ -1,0 +1,79 @@
+{
+  "name": "tapas-language",
+  "displayName": "Tapas Language Support",
+  "description": "Language support backed by the Tapas Language Server",
+  "version": "0.1.0",
+  "publisher": "tapas-language",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "activationEvents": [
+    "onLanguage:tapas",
+    "onCommand:tapas.runFile"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "tapas",
+        "aliases": ["Tapas", "tapas"],
+        "extensions": [".tap"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "tapas",
+        "scopeName": "source.tapas",
+        "path": "./syntaxes/tapas.tmLanguage.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "tapas.runFile",
+        "title": "Tapas: Run Current File",
+        "icon": "$(play)"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "tapas.runFile",
+          "when": "editorLangId == tapas",
+          "group": "navigation@10"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "tapas.runFile",
+          "when": "editorLangId == tapas",
+          "group": "navigation"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Tapas",
+      "properties": {
+        "tapas.languageServer.path": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "description": "Absolute path to tapas-language-server. Empty searches the workspace build and PATH."
+        },
+        "tapas.runtime.path": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "description": "Path to the tapas executable. Empty uses the bundled runtime, a workspace build, or tapas on PATH."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "test": "node test/protocol.test.js"
+  }
+}

@@ -2,103 +2,71 @@
 
 # Tapas
 
-Tapas is a compact, expression-oriented programming language and runtime for
-economic modelling, numerical experiments, and embeddable scripting. The
-current implementation is written in C23 and includes a bytecode compiler,
-stack-based virtual machine, interactive REPL, module system, Markdown
-execution, and a public C API.
+简体中文 | [English](README_en.md)
 
-## Features
+Tapas 是一门轻量、以表达式为核心的编程语言，可用于经济建模、数值实验，也可
+作为脚本语言嵌入其他程序。Tapas 使用 C23 编写，配有字节码编译器、栈式虚拟机、
+交互式 REPL、模块系统、Markdown 执行工具和公共 C API。
 
-- Small C runtime with CMake-based builds.
-- Interactive execution, source files, and reusable `.tapc` bytecode.
-- Integers, floats, booleans, strings, lists, pairs, dictionaries, iterators,
-  functions, libraries, dense arrays, and time values.
-- First-class functions, closures, recursion, and module imports.
-- Dense numeric and boolean arrays with slicing, element-wise operations,
-  comparisons, transposition, and matrix multiplication.
-- Scalar mathematics through the built-in `math` package.
-- Execution of fenced Tapas blocks inside Markdown documents.
-- Session and runtime APIs for embedding Tapas in C programs.
+## 主要能力
 
-## Build
+- 交互式执行、脚本、模块和可复用的 `.tapc` 字节码。
+- 一等函数、闭包、递归以及常用容器和稠密数组。
+- 编译期类型标注、结构 Type、联合 Type 和运行时反射。
+- 可执行 Tapas 代码与 Markdown 文档中的 Tapas 代码块。
+- 公共 C API、语言服务器和 Visual Studio Code 扩展。
 
-Tapas requires a C23 compiler, CMake 3.10 or newer, and GNU Readline.
+## 构建
 
-On macOS, Readline can be installed with Homebrew:
+Tapas 需要支持 C23 的编译器、CMake 3.10 或更高版本和 GNU Readline。
 
-```sh
-brew install readline
-```
-
-On Debian or Ubuntu:
-
-```sh
-sudo apt install build-essential cmake libreadline-dev
-```
-
-Configure and build the project:
+在项目根目录运行：
 
 ```sh
 cmake -S . -B build
 cmake --build build
 ```
 
-The executable is generated at `build/bin/tapas`.
+依赖安装、测试和安装方式参见[使用说明](docs/Usage_zh.md)。
 
-Run the test suite with:
+## 快速开始
 
-```sh
-ctest --test-dir build --output-on-failure
-```
-
-To install the command into the selected CMake prefix:
-
-```sh
-cmake --install build
-```
-
-## Quick Start
-
-Start the interactive REPL:
-
-```sh
-build/bin/tapas
-```
-
-Run a command directly:
-
-```sh
-build/bin/tapas -i "print(1 + 2)"
-```
-
-Create a file named `hello.tap`:
+创建 `hello.tap`：
 
 ```tapas
-let values = [1, 2, 3, 4]
-let matrix = array(2, 2, values)
-
-print('values = ', values)
-sprint(matrix ** eig::transpose(matrix))
+print('Hello, Tapas!')
 ```
+<pre class='Tapas-Return'>
+Hello, Tapas!
+</pre>
 
-Then execute it:
+运行该文件：
 
 ```sh
 build/bin/tapas hello.tap
 ```
 
-Tapas can also compile source into bytecode and execute it later:
+REPL、命令字符串、字节码、Markdown 执行和模块路径等用法参见
+[使用说明](docs/Usage_zh.md)。
+
+## Visual Studio Code 支持
+
+VS Code 扩展位于 [editors/vscode](editors/vscode)，支持语法高亮、实时诊断、
+悬停类型信息、代码补全、定义跳转、引用查找、重命名、工作区模块分析，以及运行
+当前 Tapas 文件。
+
+构建项目后即可安装扩展：
 
 ```sh
-build/bin/tapas -c hello.tap
-build/bin/tapas -e hello.tapc
+editors/vscode/install.sh
 ```
 
-## Using Tapas From C
+安装完成后，在 VS Code 中执行 **Developer: Reload Window**。功能与配置说明详见
+[VS Code 扩展说明](editors/vscode/README_zh.md)。
 
-The public headers are under `include/tapas`. A session can execute source from
-a file or a string:
+## 在 C 程序中嵌入 Tapas
+
+公共头文件位于 `include/tapas`。以下程序通过会话接口执行一段 Tapas 源码：
 
 ```c
 #include "tapas/tapas.h"
@@ -113,28 +81,28 @@ int main(void)
 }
 ```
 
-The runtime also exposes constructors and operations for strings, lists,
-dictionaries, iterators, dense arrays, and time values through
-`tapas/tval.h` and the headers under `tapas/ds`.
+接口、链接方式和扩展类型说明参见 [C 交互](docs/Foreign_zh.md)。
 
-## Documentation
+## 文档
 
-- [Usage](docs/Usage.md) — building, command-line options, scripts, bytecode,
-  Markdown execution, and module paths.
-- [Language Reference](docs/Syntax.md) — syntax, types, operators, statements,
-  functions, modules, arrays, and built-ins.
-- [C Interaction](docs/Foreign.md) — embedding sessions, registering C
-  functions, working with values, and extending composite types.
-- [Runtime Mechanism](docs/Mechanism.md) — compiler, bytecode, virtual machine,
-  environments, and reference counting.
-- [Examples](docs/examples) — Fibonacci, sorting algorithms, bytecode, and
-  module layouts.
+- [使用说明](docs/Usage_zh.md)：构建、命令行选项、脚本、字节码、
+  Markdown 执行和模块路径。
+- [语言规范](docs/Syntax_zh.md)：语法、值类别、运算符、
+  语句、函数、模块、数组和内置接口。
+- [类型系统设计](docs/TypeSystem_zh.md)：编译期标注、Type 值、结构 Type
+  和 `types` 包。
+- [C 交互](docs/Foreign_zh.md)：嵌入会话、注册 C 函数、
+  值操作和复合类型扩展。
+- [运行机制](docs/Mechanism_zh.md)：编译器、字节码、虚拟机、
+  环境和引用计数。
+- 示例：[递归斐波那契](docs/examples/Fibonacci_zh.md) 和
+  [排序算法](docs/examples/Sort_zh.md)。
 
-## License
+## 许可证
 
-Tapas is distributed under the MIT License. See [LICENSE](LICENSE).
+Tapas 使用 MIT 许可证发布，详见 [LICENSE](LICENSE)。
 
-## Contact
+## 联系方式
 
-Issues and pull requests are welcome. Contact:
-<zhuanglinsheng@outlook.com>.
+欢迎通过 Issue 反馈问题，也欢迎提交 Pull Request。联系邮箱：
+<linsheng.z@outlook.com>。

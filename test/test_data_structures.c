@@ -1,4 +1,8 @@
 #include "tapas/tval.h"
+#include "tapas/runtime/tarray.h"
+#include "tapas/runtime/tlist.h"
+#include "tapas/runtime/tpair.h"
+#include "tapas/runtime/ttime.h"
 
 #include <assert.h>
 #include <math.h>
@@ -91,6 +95,13 @@ static void test_boolean_array_and_time(void)
 	tobj_set_compo(&other, (tcompo_v *)before);
 	after->base.vtable->op_sub(after, &other, 0, &delta);
 	assert(delta.type == tfloat && fabs(delta.val.v_tfloat - 45.0) < 1e-9);
+	assert(ttime_unix(before) == 100);
+	ttime *shifted = ttime_shift(before, 30);
+	assert(ttime_unix(shifted) == 130);
+	tstring *formatted = ttime_format(before, "%Y");
+	assert(tstring_len(formatted) > 0);
+	tstring_free(formatted);
+	shifted->base.vtable->free(shifted);
 	before->base.vtable->free(before);
 	after->base.vtable->free(after);
 }

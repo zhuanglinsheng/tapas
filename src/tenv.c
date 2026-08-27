@@ -1,5 +1,8 @@
-#include "tapas/tenv.h"
+#include "Tapas/tenv.h"
 
+#include "tapas/runtime/tdict.h"
+#include "tapas/runtime/tlist.h"
+#include "tapas/runtime/tstr.h"
 #include "tapas/tval.h"
 
 #include <stddef.h>
@@ -342,79 +345,7 @@ void tcompo_env_copy_to_obj(tcompo_env *env, tobj *vre)
 
 
 /*===========================================================================*
- * 3. Session-Level C Function (tcppsessf) — name uses tstring
- *===========================================================================*/
-
-static const char *tcppsessf_get_type(void)
-{
-	return "C Session Function";
-}
-
-static tcompo_type tcppsessf_get_code(void)
-{
-	return compo_sessfunc;
-}
-
-static long tcppsessf_len(void *self)
-{
-	(void)self;
-	return 0;
-}
-
-static void *tcppsessf_copy(void *self)
-{
-	tcppsessf *s = (tcppsessf *)self;
-	tcppsessf *n = (tcppsessf *)calloc(1, sizeof(tcppsessf));
-	n->base.vtable = s->base.vtable;
-	n->f = s->f;
-	n->name = tstring_dup(s->name);
-	return n;
-}
-
-static void tcppsessf_free(void *self)
-{
-	tcppsessf *s = (tcppsessf *)self;
-	tstring_free(s->name);
-	free(s);
-}
-
-static int tcppsessf_identical(void *self, void *other)
-{
-	return self == other;
-}
-
-static tstring *tcppsessf_tostring_abbr(void *self)
-{
-	return tobj_tostring_pointer("C Session Function", self);
-}
-
-static tstring *tcppsessf_tostring_full(void *self)
-{
-	return tobj_tostring_pointer("C Session Function", self);
-}
-
-tcompo_vtable tcppsessf_vtable = {
-	tcppsessf_get_type,	 tcppsessf_get_code,	 tcppsessf_len,
-	tcppsessf_copy,		 tcppsessf_free,	 tcppsessf_identical,
-	tcppsessf_tostring_abbr, tcppsessf_tostring_full
-};
-
-tcppsessf *tcppsessf_new(sessf_t f, const char *name)
-{
-	tcppsessf *s = (tcppsessf *)calloc(1, sizeof(tcppsessf));
-	s->base.vtable = &tcppsessf_vtable;
-	s->f = f;
-	s->name = tstring_new(name ? name : "");
-	return s;
-}
-
-sessf_t tcppsessf_get_f(tcppsessf *s)
-{
-	return s->f;
-}
-
-/*===========================================================================*
- * 4. Tap Function (tfunc)
+ * 3. Tap Function (tfunc)
  *===========================================================================*/
 
 static const char *tfunc_get_type(void)

@@ -1,7 +1,7 @@
 #ifndef T_HASHTBL_H
 #define T_HASHTBL_H
 
-#include "tapas/tbycs.h"
+#include "Tapas/tbycs.h"
 
 #ifdef __cplusplus
 extern "C" {

@@ -1,6 +1,15 @@
-#include "tapas/tvm.h"
+#include "Tapas/tvm.h"
 
 #include "tapas/tcompile.h"
+#include "tapas/runtime/tarray.h"
+#include "tapas/runtime/tdict.h"
+#include "tapas/runtime/titer.h"
+#include "tapas/runtime/tlist.h"
+#include "tapas/runtime/tcfn.h"
+#include "tapas/runtime/tpair.h"
+#include "tapas/runtime/tstr.h"
+#include "tapas/runtime/ttime.h"
+#include "tapas/runtime/ttype.h"
 
 #include <errno.h>
 #include <stdlib.h>
@@ -270,6 +279,18 @@ void operator_div(const tobj *v1, const tobj *v2, tobj *vre)
 
 void operator_mod(const tobj *v1, const tobj *v2, tobj *vre)
 {
+	if (v1->type == tcompo && v1->val.v_tcompo->vtable->op_mod) {
+		v1->val.v_tcompo->vtable->op_mod(v1->val.v_tcompo, v2, 0, vre);
+		return;
+	}
+	if (v2->type == tcompo && v2->val.v_tcompo->vtable->op_mod) {
+		v2->val.v_tcompo->vtable->op_mod(v2->val.v_tcompo, v1, 1, vre);
+		return;
+	}
+	if ((v1->type != tint && v1->type != tfloat) ||
+	    (v2->type != tint && v2->type != tfloat))
+		twarn(ErrRuntime_ParamsType, "operator_mod",
+		      "unsupported type for %");
 	if (v1->type == tint && v2->type == tint) {
 		if (v2->val.v_tint == 0)
 			twarn(ErrRuntime_DivIntZero, "operator_mod", "");
@@ -301,6 +322,33 @@ void operator_pow(const tobj *v1, const tobj *v2, tobj *vre)
 	double b =
 		(v2->type == tint) ? (double)v2->val.v_tint : v2->val.v_tfloat;
 	tobj_set_float(vre, pow(a, b));
+}
+
+static void operator_pos(tobj *value)
+{
+	if (value->type != tint && value->type != tfloat)
+		twarn(ErrRuntime_ParamsType, "operator_pos",
+		      "unary + requires a number");
+}
+
+static void operator_neg(tobj *value)
+{
+	if (value->type == tint) {
+		value->val.v_tint = -value->val.v_tint;
+		return;
+	}
+	if (value->type == tfloat) {
+		value->val.v_tfloat = -value->val.v_tfloat;
+		return;
+	}
+	if (value->type == tcompo &&
+	    tobj_compo_type(value) == compo_tdarr) {
+		tdarr *result = tdarr_neg((tdarr *)value->val.v_tcompo);
+		tobj_set_compo(value, (tcompo_v *)result);
+		return;
+	}
+	twarn(ErrRuntime_ParamsType, "operator_neg",
+	      "unary - requires a number or real array");
 }
 
 #define DEF_CMP(fn_name, op)                                                   \
@@ -667,6 +715,9 @@ static void gen_idx(tobj *params, uint_regs len, tobj *vre)
 	case compo_tdict:
 		tdict_idx((tdict *)v, &params[1], 1, vre);
 		return;
+	case compo_ttypeval:
+		ttypeval_idx((ttypeval *)v, &params[1], 1, vre);
+		return;
 	case compo_tdarr:
 	case compo_tbarr:
 		tarr_idx(v, &params[1], 1, vre);
@@ -680,10 +731,25 @@ static void gen_idx(tobj *params, uint_regs len, tobj *vre)
 static void gen_keys(tobj *params, uint_regs len, tobj *vre)
 {
 	gen_check_nparams("keys", len, 1);
-	if (params[0].type != tcompo ||
-	    tobj_compo_type(&params[0]) != compo_tdict)
+	if (params[0].type != tcompo)
 		twarn(ErrRuntime_ParamsType, "keys", "");
-	tobj_set_compo(vre, (tcompo_v *)tdict_keys((tdict *)params[0].val.v_tcompo));
+	if (tobj_compo_type(&params[0]) == compo_tdict)
+		tobj_set_compo(
+			vre,
+			(tcompo_v *)tdict_keys((tdict *)params[0].val.v_tcompo));
+	else if (tobj_compo_type(&params[0]) == compo_ttypeval) {
+		tlist *keys = tlist_new();
+		long position = 0;
+		tobj key;
+		tobj_set_nil(&key);
+		while (ttypeval_next_key(
+			(ttypeval *)params[0].val.v_tcompo, &position, &key)) {
+			tlist_push(keys, &key);
+			tobj_ddc_ref_clear(&key);
+		}
+		tobj_set_compo(vre, (tcompo_v *)keys);
+	} else
+		twarn(ErrRuntime_ParamsType, "keys", "Dictionary or Type required");
 }
 
 static void gen_pair(tobj *params, uint_regs len, tobj *vre)
@@ -836,6 +902,44 @@ static void gen_now(tobj *params, uint_regs len, tobj *vre)
 	(void)params;
 	gen_check_nparams("now", len, 0);
 	tobj_set_compo(vre, (tcompo_v *)ttime_new());
+}
+
+static ttime *time_param(const tobj *value, const char *where)
+{
+	if (value->type != tcompo || tobj_compo_type(value) != compo_time)
+		twarn(ErrRuntime_ParamsType, where, "time value required");
+	return (ttime *)value->val.v_tcompo;
+}
+
+static void gen_time_from_unix(tobj *params, uint_regs len, tobj *vre)
+{
+	gen_check_nparams("time::from_unix", len, 1);
+	if (params[0].type != tint)
+		twarn(ErrRuntime_ParamsType, "time::from_unix",
+		      "integer Unix seconds required");
+	tobj_set_compo(vre,
+		      (tcompo_v *)ttime_from_unix(params[0].val.v_tint));
+}
+
+static void gen_time_unix(tobj *params, uint_regs len, tobj *vre)
+{
+	gen_check_nparams("time::unix", len, 1);
+	tobj_set_int(vre, ttime_unix(time_param(&params[0], "time::unix")));
+}
+
+static void gen_time_format(tobj *params, uint_regs len, tobj *vre)
+{
+	gen_check_nparams("time::format", len, 2);
+	ttime *value = time_param(&params[0], "time::format");
+	if (params[1].type != tcompo ||
+	    tobj_compo_type(&params[1]) != compo_tstr)
+		twarn(ErrRuntime_ParamsType, "time::format",
+		      "format string required");
+	tstr *pattern = (tstr *)params[1].val.v_tcompo;
+	tstring *formatted = ttime_format(value, tstring_cstr(pattern->data));
+	tobj_set_compo(vre,
+		      (tcompo_v *)tstr_new(tstring_cstr(formatted)));
+	tstring_free(formatted);
 }
 
 static void gen_append(tobj *params, uint_regs len, tobj *vre)
@@ -1156,6 +1260,246 @@ static void gen_math_signbit(tobj *params, uint_regs len, tobj *vre)
 {
 	gen_check_nparams("math::signbit", len, 1);
 	tobj_set_bool(vre, signbit(math_arg_double(&params[0], "math::signbit")));
+}
+
+static void require_count(const char *name, uint_regs actual, uint_regs expected)
+{
+	if (actual != expected)
+		twarn(ErrRuntime_ParamsCtr, name, "incorrect parameter count");
+}
+
+static ttypeval *require_type(const tobj *value, const char *name)
+{
+	if (!value || value->type != tcompo ||
+	    tobj_compo_type(value) != compo_ttypeval)
+		twarn(ErrRuntime_ParamsType, name, "Type value required");
+	return (ttypeval *)value->val.v_tcompo;
+}
+
+static void return_type(tobj *result, ttypeval *type)
+{
+	tobj_set_compo(result, (tcompo_v *)type);
+}
+
+static void gen_types_make_type(tobj *params, uint_regs len, tobj *result)
+{
+	if (len == 0)
+		twarn(ErrRuntime_ParamsCtr, "types::make_type",
+		      "at least one field is required");
+	ttype_field *fields = (ttype_field *)calloc(len, sizeof(ttype_field));
+	if (!fields)
+		twarn(ErrRuntime_Other, "types::make_type", "out of memory");
+	for (uint_regs i = 0; i < len; i++) {
+		if (params[i].type != tcompo ||
+		    tobj_compo_type(&params[i]) != compo_tpair)
+			twarn(ErrRuntime_ParamsType, "types::make_type",
+			      "field Pair required");
+		tpair *pair = (tpair *)params[i].val.v_tcompo;
+		if (pair->first.type != tcompo ||
+		    tobj_compo_type(&pair->first) != compo_tstr)
+			twarn(ErrRuntime_ParamsType, "types::make_type",
+			      "field name must be String");
+		fields[i].name = ((tstr *)pair->first.val.v_tcompo)->data;
+		fields[i].type = require_type(&pair->second, "types::make_type");
+	}
+	ttypeval *type = ttypeval_new_fields(fields, len);
+	free(fields);
+	return_type(result, type);
+}
+
+static void gen_types_union(tobj *params, uint_regs len, tobj *result)
+{
+	if (len < 2)
+		twarn(ErrRuntime_ParamsCtr, "types::union",
+		      "at least two Type values are required");
+	ttypeval **members = (ttypeval **)calloc(len, sizeof(ttypeval *));
+	if (!members)
+		twarn(ErrRuntime_Other, "types::union", "out of memory");
+	for (uint_regs i = 0; i < len; i++)
+		members[i] = require_type(&params[i], "types::union");
+	ttypeval *type = ttypeval_new_union(members, len);
+	free(members);
+	return_type(result, type);
+}
+
+static void gen_types_list(tobj *params, uint_regs len, tobj *result)
+{
+	require_count("types::list", len, 1);
+	return_type(result,
+		    ttypeval_new_list(require_type(&params[0], "types::list")));
+}
+
+static void gen_types_pair(tobj *params, uint_regs len, tobj *result)
+{
+	require_count("types::pair", len, 2);
+	return_type(result,
+		    ttypeval_new_pair(require_type(&params[0], "types::pair"),
+				      require_type(&params[1], "types::pair")));
+}
+
+static void gen_types_dictionary(tobj *params, uint_regs len, tobj *result)
+{
+	require_count("types::dictionary", len, 2);
+	return_type(result,
+		    ttypeval_new_dictionary(
+			    require_type(&params[0], "types::dictionary"),
+			    require_type(&params[1], "types::dictionary")));
+}
+
+static ttypeval *type_of_value(const tobj *value)
+{
+	switch (value->type) {
+	case tnil:
+		return ttypeval_builtin(ttype_builtin_nil);
+	case tbool:
+		return ttypeval_builtin(ttype_builtin_bool);
+	case tint:
+		return ttypeval_builtin(ttype_builtin_int);
+	case tfloat:
+		return ttypeval_builtin(ttype_builtin_float);
+	case tcompo:
+		break;
+	}
+	switch (tobj_compo_type(value)) {
+	case compo_tstr:
+		return ttypeval_builtin(ttype_builtin_string);
+	case compo_tlist:
+		return ttypeval_builtin(ttype_builtin_list);
+	case compo_tpair:
+		return ttypeval_builtin(ttype_builtin_pair);
+	case compo_tdict:
+		return ttypeval_builtin(ttype_builtin_dictionary);
+	case compo_titer:
+		return ttypeval_builtin(ttype_builtin_iterator);
+	case compo_tfunc:
+	case compo_cppfunc:
+	case compo_sessfunc:
+		return ttypeval_builtin(ttype_builtin_function);
+	case compo_tlib:
+		return ttypeval_builtin(ttype_builtin_library);
+	case compo_tdarr:
+		return ttypeval_builtin(ttype_builtin_real_array);
+	case compo_tbarr:
+		return ttypeval_builtin(ttype_builtin_bool_array);
+	case compo_time:
+		return ttypeval_builtin(ttype_builtin_time);
+	case compo_ttypeval:
+		return ttypeval_builtin(ttype_builtin_type);
+	default:
+		twarn(ErrRuntime_ParamsType, "types::of", "unsupported value type");
+	}
+	return NULL;
+}
+
+static void gen_types_of(tobj *params, uint_regs len, tobj *result)
+{
+	require_count("types::of", len, 1);
+	return_type(result, type_of_value(&params[0]));
+}
+
+static void gen_types_matches(tobj *params, uint_regs len, tobj *result)
+{
+	require_count("types::matches", len, 2);
+	tobj_set_bool(result,
+		      ttypeval_matches(&params[0],
+				       require_type(&params[1], "types::matches")));
+}
+
+static void copy_definition_entry(const tobj *key, const tobj *value,
+				  void *context)
+{
+	tdict_set((tdict *)context, key, value);
+}
+
+static tdict *definition_copy(const ttypeval *type)
+{
+	tdict *copy = tdict_new();
+	thashtbl_each(ttypeval_definition(type), copy_definition_entry, copy);
+	return copy;
+}
+
+static void gen_types_fields(tobj *params, uint_regs len, tobj *result)
+{
+	require_count("types::fields", len, 1);
+	ttypeval *type = require_type(&params[0], "types::fields");
+	tdict *fields = tdict_new();
+	for (uint_objs i = 0; i < ttypeval_field_count(type); i++) {
+		const tobj *name;
+		ttypeval *field;
+		ttypeval_field_at(type, i, &name, &field);
+		tobj value;
+		tobj_set_nil(&value);
+		tobj_set_compo(&value, (tcompo_v *)field);
+		tdict_set(fields, name, &value);
+	}
+	tobj_set_compo(result, (tcompo_v *)fields);
+}
+
+static void gen_types_members(tobj *params, uint_regs len, tobj *result)
+{
+	require_count("types::members", len, 1);
+	ttypeval *type = require_type(&params[0], "types::members");
+	tlist *members = tlist_new();
+	uint_objs count = ttypeval_member_count(type);
+	if (count == 0) {
+		tlist_push(members, &params[0]);
+	} else {
+		for (uint_objs i = 0; i < count; i++) {
+			tobj value;
+			tobj_set_nil(&value);
+			tobj_set_compo(
+				&value, (tcompo_v *)ttypeval_member_at(type, i));
+			tlist_push(members, &value);
+		}
+	}
+	tobj_set_compo(result, (tcompo_v *)members);
+}
+
+static void gen_types_base(tobj *params, uint_regs len, tobj *result)
+{
+	require_count("types::base", len, 1);
+	return_type(result,
+		    ttypeval_base(require_type(&params[0], "types::base")));
+}
+
+static void set_parameter(tdict *parameters, const char *name, ttypeval *type)
+{
+	if (!type)
+		return;
+	tobj key;
+	tobj value;
+	tobj_set_nil(&key);
+	tobj_set_nil(&value);
+	tobj_set_compo(&key, (tcompo_v *)tstr_new(name));
+	tobj_set_compo(&value, (tcompo_v *)type);
+	tdict_set(parameters, &key, &value);
+	tobj_try_clear(&key);
+}
+
+static void gen_types_parameters(tobj *params, uint_regs len, tobj *result)
+{
+	require_count("types::parameters", len, 1);
+	ttypeval *type = require_type(&params[0], "types::parameters");
+	tdict *parameters = tdict_new();
+	if (type->kind == ttype_kind_list)
+		set_parameter(parameters, "item", ttypeval_parameter(type, "item"));
+	else if (type->kind == ttype_kind_pair) {
+		set_parameter(parameters, "first", ttypeval_parameter(type, "first"));
+		set_parameter(parameters, "second", ttypeval_parameter(type, "second"));
+	} else if (type->kind == ttype_kind_dictionary) {
+		set_parameter(parameters, "key", ttypeval_parameter(type, "key"));
+		set_parameter(parameters, "value", ttypeval_parameter(type, "value"));
+	}
+	tobj_set_compo(result, (tcompo_v *)parameters);
+}
+
+static void gen_types_definition(tobj *params, uint_regs len, tobj *result)
+{
+	require_count("types::definition", len, 1);
+	tobj_set_compo(
+		result,
+		(tcompo_v *)definition_copy(
+			require_type(&params[0], "types::definition")));
 }
 
 static void tdict_add_cppf(tdict *pkg, const char *name, genf_t f, uint_regs nparams_sig)
@@ -1551,6 +1895,9 @@ void vm_idxr(tvm *vm, uint_regs nparams)
 	case compo_tdict:
 		tdict_idx((tdict *)arr, params, nparams, &vm->rev);
 		break;
+	case compo_ttypeval:
+		ttypeval_idx((ttypeval *)arr, params, nparams, &vm->rev);
+		break;
 	case compo_tlib:
 		tlib_idx((tlib *)arr, params, nparams, &vm->rev);
 		break;
@@ -1671,6 +2018,22 @@ void vm_loopas(tvm *vm, tbycode *iter, uint_cmds ins_idx, uint_objs idx, int ise
 		*iter = tbycode_make_lr(OP_LOOPLAS, (uint16_t)idx, (uint16_t)isenv);
 		vm_looplas(vm, ins_idx, idx, isenv, env);
 		return;
+	case compo_ttypeval: {
+		tloop_state *state = tvm_loop_state(vm, ins_idx);
+		tobj key;
+		tobj_set_nil(&key);
+		int has_next = ttypeval_next_key(
+			(ttypeval *)it, &state->pos, &key);
+		if (has_next) {
+			if (isenv)
+				tcompo_env_set_obj(env, idx, &key);
+			else
+				tobj_array_set_obj(&vm->tmps, idx, &key);
+			tobj_ddc_ref_clear(&key);
+		}
+		vm_loop_push_cond(vm, has_next);
+		return;
+	}
 	default:
 		twarn(ErrRuntime_RefType, "vm_loopas", "unsupported iterator");
 	}
@@ -2173,6 +2536,22 @@ void exec_tin(tvm *vm,
 		stk_popc(vm);
 		vm_parse_binop(vm, operator_or, *iter, type, env);
 	} break;
+	case OP_BAND: {
+		uint_regs type = (uint_regs)stk_top(vm)->val.v_tint;
+		stk_popc(vm);
+		vm_parse_binop(vm, operator_and, *iter, type, env);
+	} break;
+	case OP_BOR: {
+		uint_regs type = (uint_regs)stk_top(vm)->val.v_tint;
+		stk_popc(vm);
+		vm_parse_binop(vm, operator_or, *iter, type, env);
+	} break;
+	case OP_POS:
+		operator_pos(stk_top(vm));
+		break;
+	case OP_NEG:
+		operator_neg(stk_top(vm));
+		break;
 	default:
 		break;
 	}
@@ -2221,127 +2600,30 @@ void eval_bycodes(tvm *vm, uint_cmds from, tlib *lib)
 void register_cppfuncs(tlib *lib)
 {
 	tdict *math_pkg;
-	tdict *array_pkg;
+	tdict *dense_pkg;
+	tdict *time_pkg;
+	tdict *types_pkg;
 
-	/* output / inspection */
-	tlib_add_cppf(lib, "print", gen_print, UNDEF_NPARAMS);
-	tlib_add_cppf(lib, "sprint", gen_sprint, UNDEF_NPARAMS);
-	tlib_add_cppf(lib, "len", gen_len, 1);
-	tlib_add_cppf(lib, "type", gen_type, 1);
-	tlib_add_cppf(lib, "copy", gen_copy, 1);
-	tlib_add_cppf(lib, "identical", gen_identical, 2);
-	tlib_add_cppf(lib, "clock", gen_clock, 0);
-	tlib_add_cppf(lib, "now", gen_now, 0);
-	tlib_add_cppf(lib, "array", gen_array, 3);
-
-	/* conversion */
-	tlib_add_cppf(lib, "int", gen_int, 1);
-	tlib_add_cppf(lib, "float", gen_float, 1);
-	tlib_add_cppf(lib, "bool", gen_bool, 1);
-	tlib_add_cppf(lib, "str", gen_str, 1);
-	tlib_add_cppf(lib, "list", gen_list, UNDEF_NPARAMS);
-
-	/* list */
-	tlib_add_cppf(lib, "push", gen_push, 2);
-	tlib_add_cppf(lib, "append", gen_append, 2);
-	tlib_add_cppf(lib, "insert", gen_insert, 3);
-	tlib_add_cppf(lib, "pop", gen_pop, UNDEF_NPARAMS);
-	tlib_add_cppf(lib, "delete", gen_delete, 2);
-	tlib_add_cppf(lib, "idx", gen_idx, 2);
-
-	/* dict */
-	tlib_add_cppf(lib, "keys", gen_keys, 1);
-	tlib_add_cppf(lib, "dkeys", gen_keys, 1);
-	tlib_add_cppf(lib, "dvalues", gen_dvalues, 1);
-	tlib_add_cppf(lib, "union", gen_union, 2);
-
-	/* pair */
-	tlib_add_cppf(lib, "pair", gen_pair, 2);
-
-	/* iter */
-	tlib_add_cppf(lib, "iter", gen_iter, UNDEF_NPARAMS);
-
-	/* sort */
-	tlib_add_cppf(lib, "sort", gen_sort, 1);
-
-	/* scalar math package */
-	/* Keep the C++ implementation's public eig:: namespace. */
-	array_pkg = tlib_add_pkg(lib, "eig");
-	tdict_add_cppf(array_pkg, "new", gen_array, 3);
-	tdict_add_cppf(array_pkg, "rows", gen_array_rows, 1);
-	tdict_add_cppf(array_pkg, "cols", gen_array_cols, 1);
-	tdict_add_cppf(array_pkg, "transpose", gen_array_transpose, 1);
-
-	math_pkg = tlib_add_pkg(lib, "math");
-	ADD_MATH(math_pkg, abs, 1);
-	ADD_MATH(math_pkg, fabs, 1);
-	ADD_MATH(math_pkg, sqrt, 1);
-	ADD_MATH(math_pkg, rsqrt, 1);
-	ADD_MATH(math_pkg, cbrt, 1);
-	ADD_MATH(math_pkg, pow, 2);
-	ADD_MATH(math_pkg, hypot, 2);
-	ADD_MATH(math_pkg, sin, 1);
-	ADD_MATH(math_pkg, cos, 1);
-	ADD_MATH(math_pkg, tan, 1);
-	ADD_MATH(math_pkg, asin, 1);
-	ADD_MATH(math_pkg, acos, 1);
-	ADD_MATH(math_pkg, atan, 1);
-	ADD_MATH(math_pkg, atan2, 2);
-	ADD_MATH(math_pkg, sinh, 1);
-	ADD_MATH(math_pkg, cosh, 1);
-	ADD_MATH(math_pkg, tanh, 1);
-	ADD_MATH(math_pkg, asinh, 1);
-	ADD_MATH(math_pkg, acosh, 1);
-	ADD_MATH(math_pkg, atanh, 1);
-	ADD_MATH(math_pkg, exp, 1);
-	ADD_MATH(math_pkg, exp2, 1);
-	ADD_MATH(math_pkg, expm1, 1);
-	ADD_MATH(math_pkg, log, 1);
-	ADD_MATH(math_pkg, log2, 1);
-	ADD_MATH(math_pkg, log10, 1);
-	ADD_MATH(math_pkg, log1p, 1);
-	ADD_MATH(math_pkg, logb, 1);
-	ADD_MATH(math_pkg, ilogb, 1);
-	ADD_MATH(math_pkg, frexp, 1);
-	ADD_MATH(math_pkg, modf, 1);
-	ADD_MATH(math_pkg, ldexp, 2);
-	ADD_MATH(math_pkg, scalbn, 2);
-	ADD_MATH(math_pkg, scalbln, 2);
-	ADD_MATH(math_pkg, erf, 1);
-	ADD_MATH(math_pkg, erfc, 1);
-	ADD_MATH(math_pkg, lgamma, 1);
-	ADD_MATH(math_pkg, tgamma, 1);
-	ADD_MATH(math_pkg, ceil, 1);
-	ADD_MATH(math_pkg, floor, 1);
-	ADD_MATH(math_pkg, nearbyint, 1);
-	ADD_MATH(math_pkg, rint, 1);
-	ADD_MATH(math_pkg, lrint, 1);
-	ADD_MATH(math_pkg, llrint, 1);
-	ADD_MATH(math_pkg, round, 1);
-	ADD_MATH(math_pkg, lround, 1);
-	ADD_MATH(math_pkg, llround, 1);
-	ADD_MATH(math_pkg, trunc, 1);
-	ADD_MATH(math_pkg, fmod, 2);
-	ADD_MATH(math_pkg, remainder, 2);
-	ADD_MATH(math_pkg, remquo, 2);
-	ADD_MATH(math_pkg, copysign, 2);
-	ADD_MATH(math_pkg, nextafter, 2);
-	ADD_MATH(math_pkg, fdim, 2);
-	ADD_MATH(math_pkg, fmax, 2);
-	ADD_MATH(math_pkg, fmin, 2);
-	ADD_MATH(math_pkg, fma, 3);
-	ADD_MATH(math_pkg, eleinv, 1);
-	ADD_MATH(math_pkg, make_nan, 0);
-	ADD_MATH(math_pkg, isfinite, 1);
-	ADD_MATH(math_pkg, isinf, 1);
-	ADD_MATH(math_pkg, isnan, 1);
-	ADD_MATH(math_pkg, isnormal, 1);
-	ADD_MATH(math_pkg, fpclassify, 1);
-	ADD_MATH(math_pkg, signbit, 1);
-	ADD_MATH(math_pkg, isgreater, 2);
-	ADD_MATH(math_pkg, isgreaterequal, 2);
-	ADD_MATH(math_pkg, isless, 2);
-	ADD_MATH(math_pkg, islessequal, 2);
-	ADD_MATH(math_pkg, islessgreater, 2);
-	ADD_MATH(math_pkg, isunordered, 2);
+#define TAPAS_ROOT(name, implementation, arity, signature) \
+	tlib_add_cppf(lib, #name, implementation, arity);
+#define TAPAS_SESSION(name, implementation, signature)
+#define TAPAS_PACKAGE(name) name##_pkg = tlib_add_pkg(lib, #name);
+#define TAPAS_MEMBER(package, name, implementation, arity, signature) \
+	tdict_add_cppf(package##_pkg, #name, implementation, arity);
+#define TAPAS_TYPE(name, builtin, signature) do { \
+		tobj key, value; \
+		tobj_set_nil(&key); \
+		tobj_set_nil(&value); \
+		tobj_set_compo(&key, (tcompo_v *)tstr_new(#name)); \
+		tobj_set_compo(&value, (tcompo_v *)ttypeval_builtin(builtin)); \
+		tdict_set(types_pkg, &key, &value); \
+		tobj_try_clear(&key); \
+		tobj_set_nil(&value); \
+	} while (0);
+#include "stdlib.def"
+#undef TAPAS_ROOT
+#undef TAPAS_SESSION
+#undef TAPAS_PACKAGE
+#undef TAPAS_MEMBER
+#undef TAPAS_TYPE
 }

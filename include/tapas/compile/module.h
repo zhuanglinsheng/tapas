@@ -1,0 +1,59 @@
+#ifndef TAPAS_COMPILE_MODULE_H
+#define TAPAS_COMPILE_MODULE_H
+
+#include "tapas/compile/frontend.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+typedef enum {
+	tmodule_symbol_value,
+	tmodule_symbol_function,
+	tmodule_symbol_package,
+	tmodule_symbol_type
+} tmodule_symbol_kind;
+
+typedef struct {
+	tstring *name;
+	tstring *detail;
+	tstring *definition_uri;
+	tstring *namespace_uri;
+	tsource_span name_span;
+	tsource_span definition_span;
+	uint32_t local_symbol;
+	tmodule_symbol_kind kind;
+} tmodule_export;
+
+typedef struct {
+	tstring *uri;
+	tmodule_export *exports;
+	uint32_t export_count;
+	uint32_t export_capacity;
+	uint64_t version;
+	uint8_t builtin;
+} tmodule_interface;
+
+typedef struct {
+	const char *package;
+	const char *name;
+	const char *detail;
+	tmodule_symbol_kind kind;
+} tstandard_symbol;
+
+void tmodule_interface_init(tmodule_interface *interface, const char *uri);
+void tmodule_interface_free(tmodule_interface *interface);
+void tmodule_interface_extract(const tfrontend *frontend, const char *uri,
+			       uint64_t version,
+			       tmodule_interface *interface);
+const tmodule_export *tmodule_interface_find(
+	const tmodule_interface *interface, const char *name);
+uint32_t tstandard_symbol_count(void);
+const tstandard_symbol *tstandard_symbol_at(uint32_t index);
+const tstandard_symbol *tstandard_package(const char *name);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif

@@ -2,6 +2,9 @@
 #define T_ENV_H
 
 #include "tval.h"
+#include "ds/tobj_array.h"
+#include "runtime/tcfn.h"
+#include "tbycs.h"
 
 #include <stddef.h>
 
@@ -80,24 +83,7 @@ tcompo_v *tcompo_env_as_compo(tcompo_env *env);
 void tcompo_env_copy_to_obj(tcompo_env *env, tobj *vre);
 
 /*===========================================================================*
- * 3. Session-Level Function (tcppsessf) — name uses tstring
- *===========================================================================*/
-
-typedef void (*sessf_t)(tobj *params, uint_regs len, tobj *vre, tcompo_env *env);
-
-struct tcppsessf {
-	tcompo_v base;
-	sessf_t f;
-	tstring *name;
-};
-
-extern tcompo_vtable tcppsessf_vtable;
-
-tcppsessf *tcppsessf_new(sessf_t f, const char *name);
-sessf_t tcppsessf_get_f(tcppsessf *s);
-
-/*===========================================================================*
- * 4. Tap Function (tfunc)
+ * 3. Tap Function (tfunc)
  *===========================================================================*/
 
 struct tfunc {
@@ -117,7 +103,7 @@ uint_cmds tfunc_get_ncmds(tfunc *f);
 tcompo_env *tfunc_get_env(tfunc *f);
 
 /*===========================================================================*
- * 5. Library (tlib) — string fields now use tstring
+ * 4. Library (tlib) — string fields now use tstring
  *===========================================================================*/
 
 struct tlib {

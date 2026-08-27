@@ -1,0 +1,21 @@
+let make_counter = (start){
+    var current = start
+    return (){
+        current = current + 1
+        return current
+    }
+}
+
+let counter = make_counter(10)
+print(counter())
+print(counter())
+
+let argument_count = (...){
+    return __nparam__()
+}
+print(argument_count(1, 2, 3))
+
+let compatibility = function(value){
+    return value * 2
+}
+print(compatibility(4))

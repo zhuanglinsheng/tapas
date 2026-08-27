@@ -1,4 +1,6 @@
 #include "tapas/ds/thashtbl.h"
+#include "tapas/runtime/tstr.h"
+#include "tapas/runtime/ttype.h"
 #include "tapas/tval.h"
 
 #include <stdint.h>
@@ -62,6 +64,11 @@ static uint64_t thash_tobj_hash(const tobj *key)
 			tstr *s = (tstr *)key->val.v_tcompo;
 			return thash_mix(0x50 ^ tstring_hash(s->data));
 		}
+		if (key->val.v_tcompo && key->val.v_tcompo->vtable &&
+		    key->val.v_tcompo->vtable->get_compo_type_code() ==
+			    compo_ttypeval)
+			return thash_mix(
+				0x70 ^ ttypeval_hash((ttypeval *)key->val.v_tcompo));
 		return thash_mix(0x60 ^ (uintptr_t)key->val.v_tcompo);
 	}
 	return thash_mix(0xff);
@@ -81,6 +88,10 @@ static int thash_tobj_key_eq(const tobj *a, const tobj *b)
 	if (a->val.v_tcompo->vtable->get_compo_type_code() == compo_tstr &&
 	    b->val.v_tcompo->vtable->get_compo_type_code() == compo_tstr)
 		return tobj_identical(a, b);
+	if (a->val.v_tcompo->vtable->get_compo_type_code() == compo_ttypeval &&
+	    b->val.v_tcompo->vtable->get_compo_type_code() == compo_ttypeval)
+		return ttypeval_equal((ttypeval *)a->val.v_tcompo,
+				      (ttypeval *)b->val.v_tcompo);
 	return 0;
 }
 

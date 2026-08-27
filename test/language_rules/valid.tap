@@ -1,0 +1,90 @@
+let returnValue = 7
+let ifValue = 1
+let forValue = 2
+let whileValue = 3
+let elifValue = 4
+let elseValue = 5
+let functionValue = 6
+print(returnValue + ifValue + forValue + whileValue + elifValue + elseValue + functionValue)
+
+print(true or false and false)
+print(true | false & false)
+print((true | false) & false)
+print(1 < 2 & 3 < 4)
+print(true | false and false)
+print(2 ^ 3 ^ 2)
+print((1 < 2) == true)
+
+let unaryValue = 2
+print(-(unaryValue + 1))
+print(+unaryValue)
+print(2 * -unaryValue)
+print(2 ^ -unaryValue)
+print(-2 ^ 2)
+print((-2) ^ 2)
+print(--unaryValue)
+
+print(0)
+print(10)
+print(.5)
+print(5.)
+print(1e3)
+print(1.5e-3)
+print(1.e-3)
+let value1e = 5
+print(value1e - 2)
+
+let denseMatrix = dense::new(2, 3, 0)
+print(dense::rows(denseMatrix))
+print(dense::cols(denseMatrix))
+let matrixProductLeft = array(1, 2, [1, 2])
+let matrixProductRight = array(2, 1, [3, 4])
+sprint(matrixProductLeft @ matrixProductRight)
+let blasArrayA = array(1, 2, [1, 2])
+let blasArrayB = array(1, 2, [3, 4])
+sprint(blasArrayA + blasArrayB)
+sprint(blasArrayB - blasArrayA)
+sprint(2 * blasArrayA)
+sprint(-blasArrayA)
+sprint(blasArrayA + 10)
+sprint(blasArrayA * blasArrayB)
+sprint(blasArrayB / blasArrayA)
+sprint(blasArrayB % blasArrayA)
+sprint(blasArrayB % 3)
+sprint(10 % blasArrayB)
+sprint(array(1, 2, [-5, 5]) % 3)
+let booleanArrayA = array(1, 3, [true, false, true])
+let booleanArrayB = array(1, 3, [false, true, true])
+sprint(booleanArrayA & true)
+sprint(false | booleanArrayA)
+sprint(booleanArrayA & booleanArrayB)
+sprint(booleanArrayA | booleanArrayB)
+var assignedBooleanArray = array(1, 3, [false, false, false])
+assignedBooleanArray = booleanArrayA & booleanArrayB | true
+sprint(assignedBooleanArray)
+
+var loopTotal = 0
+for(let loopItem in 0 to 5){
+    if(loopItem == 1){
+        continue
+    }
+    if(loopItem == 4){
+        break
+    }
+    loopTotal = loopTotal + loopItem
+}
+print(loopTotal)
+
+let epochTime = time::from_unix(100)
+let laterTime = epochTime + 20
+print(time::unix(epochTime))
+print(time::unix(laterTime))
+print(laterTime - epochTime)
+print(time::unix(laterTime - 5))
+print(epochTime < laterTime)
+print(laterTime > epochTime)
+print(epochTime <= epochTime)
+print(laterTime >= epochTime)
+print(epochTime == time::from_unix(100))
+print(epochTime != laterTime)
+print(len(time::format(epochTime, '%Y')) > 0)

@@ -1,4 +1,4 @@
-#include "tapas/tapas.h"
+#include "Tapas/tapas.h"
 
 #include <readline/history.h>
 #include <readline/readline.h>

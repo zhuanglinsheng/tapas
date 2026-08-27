@@ -1,5 +1,7 @@
-#include "tapas/tapas.h"
-#include "tapas/tvm.h"
+#include "Tapas/tapas.h"
+#include "tapas/runtime/tdict.h"
+#include "tapas/runtime/tlist.h"
+#include "Tapas/tvm.h"
 
 #include <setjmp.h>
 #include <stdio.h>
@@ -172,16 +174,20 @@ void register_os_sessf(tlib *lib)
 {
 	tobj v;
 	tobj_set_nil(&v);
-	tobj_set_compo(&v, (tcompo_v *)tcppsessf_new(lib_ls, "__ls__"));
-	tlib_lib_add_obj(lib, "__ls__", &v);
-	tobj_set_compo(&v, (tcompo_v *)tcppsessf_new(lib_path, "__path__"));
-	tlib_lib_add_obj(lib, "__path__", &v);
-	tobj_set_compo(&v, (tcompo_v *)tcppsessf_new(tf_param, "__param__"));
-	tlib_lib_add_obj(lib, "__param__", &v);
-	tobj_set_compo(&v, (tcompo_v *)tcppsessf_new(tf_nparam, "__nparam__"));
-	tlib_lib_add_obj(lib, "__nparam__", &v);
-	tobj_set_compo(&v, (tcompo_v *)tcppsessf_new(tf_binary, "__binary__"));
-	tlib_lib_add_obj(lib, "__binary__", &v);
+#define TAPAS_ROOT(name, implementation, arity, signature)
+#define TAPAS_SESSION(name, implementation, signature) do { \
+		tobj_set_compo(&v, (tcompo_v *)tcppsessf_new(implementation, #name)); \
+		tlib_lib_add_obj(lib, #name, &v); \
+	} while (0);
+#define TAPAS_PACKAGE(name)
+#define TAPAS_MEMBER(package, name, implementation, arity, signature)
+#define TAPAS_TYPE(name, builtin, signature)
+#include "stdlib.def"
+#undef TAPAS_ROOT
+#undef TAPAS_SESSION
+#undef TAPAS_PACKAGE
+#undef TAPAS_MEMBER
+#undef TAPAS_TYPE
 	tobj_try_clear(&v);
 }
 

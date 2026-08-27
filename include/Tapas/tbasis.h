@@ -182,7 +182,11 @@ typedef enum {
 	OP_LE,
 	OP_SL,
 	OP_AND,
-	OP_OR
+	OP_OR,
+	OP_POS,
+	OP_NEG,
+	OP_BAND,
+	OP_BOR
 } tins;
 
 
@@ -210,6 +214,8 @@ typedef enum {
 	token_to,
 	token_and,
 	token_or,
+	token_band,
+	token_bor,
 	token_eq,
 	token_ne,
 	token_ge,
@@ -223,6 +229,8 @@ typedef enum {
 	token_mod,
 	token_mmul,
 	token_pow,
+	token_pos,
+	token_neg,
 
 	token_eval,
 	token_idx,
@@ -250,7 +258,7 @@ typedef enum {
 	tnil    = 0,
 	tbool   = 1,
 	tint    = 2,
-	tfloat = 3,
+	tfloat  = 3,
 	tcompo  = 4
 } ttypes;
 
@@ -272,7 +280,8 @@ typedef enum {
 	compo_tarr     = 9,
 	compo_cppfunc  = 10,
 	compo_sessfunc = 11,
-	compo_time     = 12
+	compo_time     = 12,
+	compo_ttypeval = 13
 } tcompo_type;
 
 

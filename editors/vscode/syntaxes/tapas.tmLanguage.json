@@ -1,0 +1,66 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Tapas",
+  "scopeName": "source.tapas",
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#strings" },
+    { "include": "#numbers" },
+    { "include": "#keywords" },
+    { "include": "#constants" },
+    { "include": "#types" },
+    { "include": "#operators" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        { "name": "comment.line.double-slash.tapas", "match": "//.*$" }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.tapas",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [{ "name": "constant.character.escape.tapas", "match": "\\\\." }]
+        },
+        {
+          "name": "string.quoted.single.tapas",
+          "begin": "'",
+          "end": "'",
+          "patterns": [{ "name": "constant.character.escape.tapas", "match": "\\\\." }]
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        { "name": "constant.numeric.float.tapas", "match": "\\b(?:\\d+\\.\\d*|\\.\\d+)(?:[eE][+-]?\\d+)?\\b" },
+        { "name": "constant.numeric.integer.tapas", "match": "\\b(?:0[xX][0-9a-fA-F]+|0[oO][0-7]+|\\d+)\\b" }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        { "name": "keyword.control.tapas", "match": "\\b(?:if|elif|else|while|for|in|to|break|continue|return)\\b" },
+        { "name": "storage.type.tapas", "match": "\\b(?:let|var|function|import|as)\\b" },
+        { "name": "keyword.operator.logical.tapas", "match": "\\b(?:and|or)\\b" }
+      ]
+    },
+    "constants": {
+      "patterns": [
+        { "name": "constant.language.tapas", "match": "\\b(?:nil|true|false|this)\\b" }
+      ]
+    },
+    "types": {
+      "patterns": [
+        { "name": "support.type.tapas", "match": "\\b(?:AnyType|Nil|Bool|Int|Float|String|List|Pair|Dictionary|Iterator|Function|Library|RealArray|BoolArray|Time|Type)\\b" },
+        { "name": "support.namespace.tapas", "match": "\\btypes\\b" }
+      ]
+    },
+    "operators": {
+      "patterns": [
+        { "name": "keyword.operator.tapas", "match": "::|==|!=|>=|<=|\\.\\.\\.|[=<>+\\-*/%^@&|.:#]" }
+      ]
+    }
+  }
+}

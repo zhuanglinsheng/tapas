@@ -1,7 +1,7 @@
 #ifndef T_OBJ_VEC_H
 #define T_OBJ_VEC_H
 
-#include "tapas/tbycs.h"
+#include "Tapas/tbycs.h"
 
 #ifdef __cplusplus
 extern "C" {
