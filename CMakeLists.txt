@@ -192,6 +192,25 @@ if(BUILD_TESTING)
             -P ${CMAKE_CURRENT_SOURCE_DIR}/test/test_language_rules.cmake
     )
 
+    # Top-level examples are standalone programs and form part of the public
+    # language surface. Keep modules in subdirectories so they are not treated
+    # as executable entry points.
+    file(GLOB TAPAS_EXAMPLES CONFIGURE_DEPENDS
+        "${CMAKE_CURRENT_SOURCE_DIR}/examples/*.tap"
+    )
+    foreach(EXAMPLE IN LISTS TAPAS_EXAMPLES)
+        get_filename_component(EXAMPLE_NAME "${EXAMPLE}" NAME_WE)
+        add_test(
+            NAME "example_${EXAMPLE_NAME}"
+            COMMAND ${CMAKE_COMMAND} -E env
+                "TAPAS_BLAS_LIBRARY=$<TARGET_FILE:test_cblas>"
+                $<TARGET_FILE:tapas> "${EXAMPLE}"
+        )
+        set_tests_properties("example_${EXAMPLE_NAME}" PROPERTIES
+            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+        )
+    endforeach()
+
     # Markdown documentation is executable: all `tapas` fences in one file are
     # compiled and run in document order. The archived C++ implementation is
     # intentionally outside this documentation set.

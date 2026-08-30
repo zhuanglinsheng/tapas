@@ -1,6 +1,6 @@
 # Tapas C Interaction
 
-[简体中文](Foreign_zh.md) | English
+[简体中文](Foreign_zh.md) | English | [Project Home](../README_en.md)
 
 This document describes how to call Tapas code from C and how to expose C
 functions to Tapas scripts.

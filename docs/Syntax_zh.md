@@ -1,6 +1,6 @@
 # Tapas 编程语言规范
 
-简体中文 | [English](Syntax_en.md)
+简体中文 | [English](Syntax_en.md) | [项目主页](../README.md)
 
 本文是 Tapas 的规范性语言定义。它独立于当前编译器实现；符合规范的编译器、
 格式化工具和语言服务器都必须遵守本文规则。

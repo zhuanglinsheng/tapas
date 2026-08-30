@@ -1,0 +1,53 @@
+// Greatest common divisor, least common multiple, and extended Euclid.
+// Euclidean reduction takes O(log(min(a, b))) iterations.
+
+var gcd = (a, b){
+    let left = math::abs(a)
+    let right = math::abs(b)
+    while(right != 0){
+        let remainder = left % right
+        left = right
+        right = remainder
+    }
+    return left + 0
+}
+
+var lcm = (a, b){
+    if(a == 0 or b == 0){
+        return 0
+    }
+    return math::abs((a / gcd(a, b)) * b)
+}
+
+// Return [g, x, y], where a*x + b*y = g = gcd(a, b).
+var extended_gcd = (a, b){
+    let IntTriple = types::list(types::Int)
+    let old_r = a
+    let r = b
+    let old_s = 1
+    let s = 0
+    let old_t = 0
+    let t = 1
+
+    while(r != 0){
+        let quotient = old_r / r
+
+        let next_r = old_r - quotient * r
+        old_r = r
+        r = next_r
+
+        let next_s = old_s - quotient * s
+        old_s = s
+        s = next_s
+
+        let next_t = old_t - quotient * t
+        old_t = t
+        t = next_t
+    }
+    let result: IntTriple = [old_r, old_s, old_t]
+    return result.copy()
+}
+
+print('gcd(252, 105) = ', gcd(252, 105))
+print('lcm(21, 6) = ', lcm(21, 6))
+sprint('extended_gcd(252, 105) = ', extended_gcd(252, 105))

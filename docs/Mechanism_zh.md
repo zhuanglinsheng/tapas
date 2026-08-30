@@ -1,6 +1,6 @@
 # Tapas 运行机制
 
-简体中文 | [English](Mechanism_en.md)
+简体中文 | [English](Mechanism_en.md) | [项目主页](../README.md)
 
 可以从四个层次理解 Tapas：编译、运行时状态、虚拟机和 C 交互 API。
 

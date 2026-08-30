@@ -1,0 +1,39 @@
+// Breadth-first traversal of a graph represented by an adjacency dictionary.
+// Time: O(V + E); auxiliary space: O(V).
+
+let StringList = types::list(types::String)
+let Graph = types::dictionary(types::String, StringList)
+
+var breadth_first_search = (graph, start){
+    // Type aliases used inside a function belong in that function scope.
+    let VertexList = types::list(types::String)
+    let queue: VertexList = [start]
+    let visited: VertexList = [start]
+    let order: VertexList = []
+
+    while(queue.len() > 0){
+        let vertex = queue[0]
+        queue.pop(0)
+        order.append(vertex)
+
+        for(let neighbor in graph[vertex]){
+            if((neighbor in visited) == false){
+                // Mark on enqueue so a vertex never enters the queue twice.
+                visited.append(neighbor)
+                queue.append(neighbor)
+            }
+        }
+    }
+    return order.copy()
+}
+
+let graph: Graph = {
+    'A' : ['B', 'C'],
+    'B' : ['A', 'D', 'E'],
+    'C' : ['A', 'F'],
+    'D' : ['B'],
+    'E' : ['B', 'F'],
+    'F' : ['C', 'E'],
+}
+
+sprint('BFS from A: ', breadth_first_search(graph, 'A'))

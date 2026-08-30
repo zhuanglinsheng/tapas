@@ -1,6 +1,6 @@
 # The Tapas Programming Language
 
-[简体中文](Syntax_zh.md) | English
+[简体中文](Syntax_zh.md) | English | [Project Home](../README_en.md)
 
 This document is the normative language specification for Tapas. It defines
 the source language independently of the current compiler implementation. A

@@ -1,6 +1,6 @@
 # Tapas 使用说明
 
-简体中文 | [English](Usage_en.md)
+简体中文 | [English](Usage_en.md) | [项目主页](../README.md)
 
 本文说明如何构建和运行 Tapas 命令行程序。语言语法和内置函数请参阅
 `Syntax_zh.md`。

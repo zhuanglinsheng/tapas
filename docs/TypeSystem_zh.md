@@ -1,6 +1,6 @@
 # Tapas 类型系统
 
-简体中文 | [English](TypeSystem_en.md)
+简体中文 | [English](TypeSystem_en.md) | [项目主页](../README.md)
 
 本文定义 Tapas 当前支持的类型系统，包括类型标注、运行时 `Type` 值、静态检查、
 `types` 包和实现约束。本文是 `Syntax_zh.md` 中语言定义的类型系统补充；涉及类型

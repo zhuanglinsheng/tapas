@@ -1,6 +1,6 @@
 # How Tapas Works
 
-[简体中文](Mechanism_zh.md) | English
+[简体中文](Mechanism_zh.md) | English | [Project Home](../README_en.md)
 
 Tapas can be understood through four layers: compilation, runtime state, the
 virtual machine, and the C interaction API.

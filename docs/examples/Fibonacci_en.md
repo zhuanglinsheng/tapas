@@ -1,6 +1,6 @@
 # Recursive Fibonacci
 
-[简体中文](Fibonacci_zh.md) | English
+[简体中文](Fibonacci_zh.md) | English | [Project Home](../../README_en.md)
 
 This example implements the Fibonacci sequence with direct recursion. It is
 intentionally not optimized with memoization, because the goal is to stress

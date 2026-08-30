@@ -1,6 +1,6 @@
 # Tapas 与 C 交互
 
-简体中文 | [English](Foreign_en.md)
+简体中文 | [English](Foreign_en.md) | [项目主页](../README.md)
 
 本文说明如何从 C 调用 Tapas 代码，以及如何向 Tapas 脚本公开 C 函数。
 

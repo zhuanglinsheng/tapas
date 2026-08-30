@@ -1,6 +1,6 @@
 # Sorting Algorithms
 
-[简体中文](Sort_zh.md) | English
+[简体中文](Sort_zh.md) | English | [Project Home](../../README_en.md)
 
 This document implements seven classic ascending sort algorithms in Tapas.
 Each section introduces one algorithm and gives its Tapas implementation. The

@@ -1,0 +1,54 @@
+// Dynamic programming for the longest common subsequence problem.
+// Time: O(m*n); table space: O(m*n).
+
+var longest_common_subsequence = (left, right){
+    let StringList = types::list(types::String)
+    let rows = left.len() + 1
+    let columns = right.len() + 1
+    // lengths[i, j] stores the best length for both prefixes ending at i, j.
+    let lengths: RealArray = array(rows, columns, 0)
+
+    for(let i in 1 to rows){
+        for(let j in 1 to columns){
+            if(left[i - 1] == right[j - 1]){
+                lengths[i, j] = lengths[i - 1, j - 1] + 1
+            }
+            elif(lengths[i - 1, j] >= lengths[i, j - 1]){
+                lengths[i, j] = lengths[i - 1, j]
+            }
+            else{
+                lengths[i, j] = lengths[i, j - 1]
+            }
+        }
+    }
+
+    let i = left.len()
+    let j = right.len()
+    // Backtracking discovers characters from the end, so reverse once later.
+    let reversed: StringList = []
+    while(i > 0 and j > 0){
+        if(left[i - 1] == right[j - 1]){
+            reversed.append(left[i - 1])
+            i = i - 1
+            j = j - 1
+        }
+        elif(lengths[i - 1, j] >= lengths[i, j - 1]){
+            i = i - 1
+        }
+        else{
+            j = j - 1
+        }
+    }
+
+    let result: String = ''
+    for(let index in iter(reversed.len() - 1, -1, -1)){
+        result.append(reversed[index])
+    }
+    return str(result)
+}
+
+let left: String = 'ALGORITHM'
+let right: String = 'LOGARITHM'
+print('left: ', left)
+print('right: ', right)
+print('longest common subsequence: ', longest_common_subsequence(left, right))

@@ -1,0 +1,28 @@
+// Fibonacci numbers: recursive definition and iterative construction.
+// Recursive time: O(2^n). Iterative time: O(n); sequence space: O(n).
+
+var fibonacci_recursive = (n){
+    if(n < 2){
+        return n
+    }
+    return this(n - 1) + this(n - 2)
+}
+
+var fibonacci_sequence = (count){
+    let IntList = types::list(types::Int)
+    let sequence: IntList = []
+    let previous = 0
+    let current = 1
+
+    for(let i in 0 to count){
+        sequence.append(previous)
+        // Update both consecutive values only after saving the emitted term.
+        let next = previous + current
+        previous = current
+        current = next
+    }
+    return sequence.copy()
+}
+
+print('fib(10) = ', fibonacci_recursive(10))
+sprint('first 12 Fibonacci numbers: ', fibonacci_sequence(12))

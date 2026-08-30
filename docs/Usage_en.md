@@ -1,6 +1,6 @@
 # How to Use Tapas
 
-[简体中文](Usage_zh.md) | English
+[简体中文](Usage_zh.md) | English | [Project Home](../README_en.md)
 
 This document explains how to build and run the Tapas command-line program.
 

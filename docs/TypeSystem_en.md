@@ -1,6 +1,6 @@
 # The Tapas Type System
 
-[简体中文](TypeSystem_zh.md) | English
+[简体中文](TypeSystem_zh.md) | English | [Project Home](../README_en.md)
 
 This document defines the type system currently supported by Tapas: type
 annotations, runtime `Type` values, static checking, the `types` package, and
