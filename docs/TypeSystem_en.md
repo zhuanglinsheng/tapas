@@ -1,14 +1,14 @@
-# Tapas Type System Design
+# The Tapas Type System
 
 [简体中文](TypeSystem_zh.md) | English
 
-This document defines the next stage of the Tapas type system: type
+This document defines the type system currently supported by Tapas: type
 annotations, runtime `Type` values, static checking, the `types` package, and
-implementation constraints. Syntax and interfaces that have not yet entered
-the current language specification are described here with their proposed
-normative semantics.
+implementation constraints. It supplements the language definition in
+`Syntax_en.md`; for type annotations, Type construction, static checking, and
+runtime Type operations, the rules in this document are normative.
 
-The design follows four principles:
+The current type system follows four principles:
 
 - Type annotations participate only in compile-time analysis. They do not
   change the runtime representation of a value or insert implicit checks or
@@ -58,9 +58,10 @@ value. Users cannot construct an empty Type:
 types::make_type() // Compile error: a field Type must not be empty.
 ```
 
-Every definition path must eventually reach `types::AnyType`. This design does
-not support direct or indirect recursion. Self-reference, mutual references
-within a module, and cyclic references across modules are all compile errors.
+Every definition path must eventually reach `types::AnyType`. The current type
+system does not support direct or indirect recursion. Self-reference, mutual
+references within a module, and cyclic references across modules are all
+compile errors.
 
 ### 1.2 Predefined Types
 
@@ -189,7 +190,7 @@ let OtherPerson = types::make_type(name_field) // Compile error
 
 Field names are case-sensitive and are compared as their original UTF-8 byte
 sequences; no Unicode normalization is performed. Every field is required.
-This design has no optional fields.
+The current type system has no optional fields.
 
 A value matches a field Type if and only if it is a Dictionary, contains every
 required field, and the value of each required field recursively matches the
@@ -215,8 +216,8 @@ let Matrix = types::list(types::list(types::Float))
 
 Constructor arguments must be static Type expressions and may be nested to a
 finite depth. An annotation accepts only a Type reference, so a constructed
-Type should first be bound to a name. This design does not add syntax such as
-`List[Int]`:
+Type should first be bound to a name. The current syntax does not provide forms
+such as `List[Int]`:
 
 ```tapas
 let values: IntList = [1, 2, 3]
@@ -231,8 +232,8 @@ let raw_list_is_distinct = types::List != types::list(types::AnyType)
 
 A field Type and a uniform-key/value Dictionary Type are separate constraints.
 The former requires a fixed set of fields; the latter checks every key and
-value in the container. This design cannot combine both constraints in one
-Type.
+value in the container. The current type system cannot combine both constraints
+in one Type.
 
 Iterators do not currently support an element Type because `types::matches`
 cannot check every element without consuming the Iterator. Arrays continue to
@@ -818,9 +819,9 @@ the `Dictionary[String, Type]` logical model remain unchanged.
 
 
 
-## 8. Current Scope
+## 8. Current Limitations
 
-This design does not currently represent:
+The current type system does not represent:
 
 - recursive Types;
 - optional fields;

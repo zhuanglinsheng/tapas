@@ -91,6 +91,8 @@ int main(void)
   语句、函数、模块、数组和内置接口。
 - [类型系统设计](docs/TypeSystem_zh.md)：编译期标注、Type 值、结构 Type
   和 `types` 包。
+- [可验证 Agent 环境设计](docs/AgentEnvironment_zh.md)：实体、状态转换、业务政策、
+  场景生成、结果判定和确定性回放。
 - [C 交互](docs/Foreign_zh.md)：嵌入会话、注册 C 函数、
   值操作和复合类型扩展。
 - [运行机制](docs/Mechanism_zh.md)：编译器、字节码、虚拟机、

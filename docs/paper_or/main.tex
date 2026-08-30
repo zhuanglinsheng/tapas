@@ -1,0 +1,574 @@
+\documentclass[UTF8,11pt,a4paper,fontset=none]{ctexart}
+
+\usepackage{iftex}
+\ifPDFTeX
+  \renewcommand{\CJKrmdefault}{gbsn}
+  \renewcommand{\CJKsfdefault}{gbsn}
+  \renewcommand{\CJKttdefault}{gbsn}
+\else
+  \setCJKmainfont{FandolSong-Regular.otf}[
+    BoldFont=FandolSong-Bold.otf,
+    ItalicFont=FandolKai-Regular.otf
+  ]
+  \setCJKsansfont{FandolHei-Regular.otf}[
+    BoldFont=FandolHei-Bold.otf
+  ]
+  \setCJKmonofont{FandolFang-Regular.otf}
+\fi
+
+\usepackage[a4paper,margin=2.55cm]{geometry}
+\usepackage{amsmath,amssymb,mathtools}
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{hyperref}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue!55!black,
+  citecolor=blue!55!black,
+  urlcolor=blue!55!black,
+  pdftitle={Constraint-Aware Sequential Design for Risk-Region Identification in Implicit Combinatorial Spaces}
+}
+\setlist{nosep,leftmargin=2em}
+\setlength{\parindent}{2em}
+\setlength{\parskip}{0.15em}
+\newtheorem{definition}{定义}
+\newtheorem{problem}{问题}
+\newtheorem{remark}{说明}
+\newtheorem{assumption}{假设}
+
+\newcommand{\X}{\mathcal X}
+\newcommand{\D}{\mathcal D}
+\newcommand{\Hh}{\mathcal H}
+\newcommand{\Rr}{\mathcal R}
+\newcommand{\Cc}{\mathcal C}
+\newcommand{\Aacq}{\mathcal A}
+\newcommand{\E}{\mathbb E}
+\newcommand{\Pp}{\mathbb P}
+\newcommand{\1}{\mathbf 1}
+
+\title{Constraint-Aware Sequential Design for Risk-Region Identification\\
+in Implicit Combinatorial Spaces\\[0.6em]
+\large 隐式组合域中的风险区域识别：约束感知的序贯实验设计}
+\author{匿名作者}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+黑盒决策策略部署到订单履约、动态调度或信用审批等业务流程时，部署规则需要按输入状态决定使用自动策略还是备用流程。该规则取决于各可行输入状态下的失效概率。资源、权限、时序和跨实体一致性约束通常形成规模大、稀疏且不可枚举的组合可行域，而失效结果只能通过具有随机性和运行成本的黑盒实验获得。历史分布抽样可能遗漏测度较小但损失较高的区域；标准水平集估计则通常依赖显式候选集或易于积分的连续输入域。
+
+本文定义有限运行预算下的\emph{决策驱动风险区域学习}问题。正常运行成本、备用流程成本和失效损失确定状态相关风险阈值及最优部署区域。实验设计在探索新输入状态和复验已有状态之间分配预算，以最小化部署规则相对于完全信息规则的期望后悔。所提出的约束感知逐步不确定性削减方法以约束单元表示可行域，用单元质量度量各单元在参考测度下的权重，并计算单元级后验部署风险界和采集价值界。方法在选定单元内进行条件采样，将点采集值按变量取值、区间和低阶交互聚合为变量条件采集景观，以选择分裂变量和分裂阈值。景观用于确定展开顺序，单元界用于剪枝和停止判定。理论分析考察采集近似误差、后验部署风险界和自适应复验；计算实验包括可枚举合成实例、大规模经典决策策略和交互式 AI Agent。Tapas 提供确定性业务约束描述和增量约束传播，单元分裂、质量计算、条件采样和黑盒运行由外部实验系统实现。
+\end{abstract}
+
+\noindent\textbf{关键词：}序贯实验设计；约束规划；水平集估计；仿真优化；风险区域；选择性部署；黑盒决策策略
+
+\section{引言}
+
+补货、调度和信用审批策略可能由启发式规则、预测模型、商业求解器、外部服务及人工复核等模块构成；AI Agent 还会通过多轮观察和工具调用改变业务状态。此类策略的输入--输出关系难以从内部结构解析，部署前性能通常通过仿真、沙箱运行或受控实验估计。
+
+平均失效率不足以确定部署规则。例如，某策略在普通订单上成本低且失效率低，但在“部分退款、跨仓拆单、额度刚好越过审批线”等状态组合中可能频繁违反业务规则。此时可在低风险状态使用自动策略，并将高风险状态转交人工或备用流程。因此，部署决策需要估计自动策略与备用流程之间随状态变化的\emph{运营边界}。
+
+设 $x$ 表示一个完整业务状态，$p(x)$ 表示黑盒策略在该状态下的失效概率。若自动策略的正常成本为 $c_\pi(x)$，备用方式的成本为 $c_0(x)$，一次失效的期望损失为 $\ell(x)$，那么只有当
+\begin{equation}
+  c_\pi(x)+p(x)\ell(x)\leq c_0(x)
+  \label{eq:intro-deploy}
+\end{equation}
+时，自动策略在状态 $x$ 上的期望成本不高于备用流程。式~\eqref{eq:intro-deploy} 因而定义自动策略的部署区域，以及需要由人工审核或备用流程覆盖的状态集合。
+
+$p(x)$ 未知，且输入状态受到业务约束。库存守恒、权限匹配、任务先后关系以及实体间的容量、额度和一致性要求共同限定可行输入。若原始变量空间为 $\D$，令 $C_j$ 表示第 $j$ 个业务约束谓词，则可行输入集合为
+\begin{equation}
+  \X=\{x\in\D:C_j(x)\text{ holds},\ j\in\mathcal J\},
+  \label{eq:feasible-set}
+\end{equation}
+其中 $C_j$ 可以是代数等式或不等式、逻辑蕴含与析取、表约束，或 \texttt{AllDifferent}、\texttt{NoOverlap} 和 \texttt{Cumulative} 等可传播的全局约束。对数值约束，可取 $C_j(x)\Longleftrightarrow g_j(x)\leq0$；本文不要求 $g_j$ 连续、可微或凸，也不要求把全局约束分解为标量不等式。那么 $|\D|$ 往往随变量数指数增长，而 $\X$ 只由约束系统隐式给出。即使求得一个可行输入状态并不困难，列举全部可行输入状态、计算每个状态的风险或在整个集合上积分仍然不可行。
+
+一次黑盒运行可能涉及长时仿真、远程模型调用或完整业务工作流。同一输入状态上的独立运行也会因需求扰动、仿真随机数或策略随机性产生不同结果。在有限预算下，实验设计需要在未观察区域、部署边界附近和已有状态的复验之间分配运行次数。
+
+随机仿真和历史回放主要估计常见业务流量下的平均表现，对低频高损失组合的覆盖有限。黑盒优化和自适应压力测试通常搜索最坏点或高概率失效轨迹，不估计部署区域的参考测度。随机水平集估计能够恢复阈值集合，但其采集函数通常定义在显式候选集或易于积分的连续域上。约束规划可以传播业务规则并生成可行解，但不根据随机运行结果优化实验点。本文研究运营损失、随机黑盒响应和隐式组合可行域同时存在时的序贯实验设计。
+
+研究问题如下：
+
+\begin{quote}
+在由约束系统隐式定义且无法枚举的组合可行域中，如何利用有限的随机黑盒运行预算，序贯选择输入状态与复验次数，从而学习由运营成本诱导的最优策略部署区域，并最小化预算耗尽后的部署后悔？
+\end{quote}
+
+固定候选池上的标准主动学习不能控制池外误差。全局逐步不确定性削减准则需要聚合整个可行域的后验部署风险，并计算各候选运行带来的期望风险下降。当 $\X$ 不可枚举时，风险聚合、采集值计算和采集函数最大化都需要在隐式组合域上完成。预先抽取的固定候选池既不能度量池外遗漏的参考测度质量，也不能直接给出完整可行域上的风险界。
+
+本文用约束搜索树表示序贯实验设计的计算域。树节点是由部分赋值和传播后变量域定义的约束单元 $U$。约束传播删除不可行分支，精确或近似计数给出单元质量，后验模型给出单元部署风险界和采集价值界。算法在需要继续细分的单元内条件采样，将点采集值按变量取值、区间和低阶交互聚合，据此选择分裂变量和分裂阈值。分支定界优先展开采集上界较高的单元，并依据有效界剪枝；具体输入状态仅在需要进行点级评价时实例化。
+
+本文的研究内容包括四部分。第一，定义隐式组合可行域上的决策驱动风险区域学习模型，由正常运行成本、备用流程成本和失效损失确定状态相关部署阈值，并以完全信息规则为基准定义部署后悔。第二，构造约束感知逐步不确定性削减方法，将约束单元、约束传播和单元质量用于全局后验部署风险及采集函数的计算。第三，构造分支定界采集搜索：单元界用于剪枝和误差控制，变量条件采集景观用于选择分裂；搜索同时处理新状态探索和已有状态复验。第四，设计涵盖可枚举合成问题和大规模业务环境的计算实验，与随机可行采样、固定候选池水平集估计、压力测试方法及消融版本比较。
+
+本文将黑盒策略定义为能够在给定输入状态下运行并返回可判定随机结果的策略，包括启发式调度器、学习型库存策略、仿真控制器、商业规则引擎和 LLM Agent。Tapas 表达确定性业务约束并执行部分赋值下的增量传播；外部实验系统负责状态生成、策略运行、轨迹记录和失效判定。C-SUR 通过该传播接口访问可行域。
+
+\section{相关研究与研究缺口}
+
+\subsection{随机水平集估计与序贯仿真}
+
+水平集估计关注从有限观测中恢复 $\{x:f(x)\geq a\}$。Gotovos et al.~\cite{gotovos2013} 用 Gaussian process（GP）置信界同时推进采样与集合分类；Bogunovic et al.~\cite{bogunovic2016} 以截断方差削减统一处理水平集估计、点成本和异方差噪声。在可靠性和计算机实验中，Bect et al.~\cite{bect2012} 从 Bayes 决策角度推导逐步不确定性削减（SUR）准则以估计失效集合的测度，Chevalier et al.~\cite{chevalier2014} 进一步研究其批量化与快速计算。针对随机响应，Lyu et al.~\cite{lyu2021} 系统比较了带噪水平集估计中的代理模型与序贯设计。本文沿用这些工作中的后验集合风险和采集价值定义。
+
+这些方法通常在有限候选集、规则网格或便于采样、积分和连续优化的欧氏集合上计算。实际 SUR 需要反复近似全域积分并优化采集函数，其计算成本已有专门研究~\cite{chevalier2014}。本文所考虑的 $\X$ 由混合逻辑和整数约束隐式定义，且不能预先充分离散化；部署损失聚合和下一运行点搜索均在该域上进行。仅用约束系统过滤候选点无法控制固定候选池以外的遗漏质量。
+
+离散仿真优化中的 optimal computing budget allocation 研究如何在有限备选方案之间分配复验次数，以提高选择正确方案的概率~\cite{chen2000}。Song~\cite{song2021} 在输入模型不确定性下定义候选解的 Bayesian risk set，并序贯选择需要仿真的“解--输入模型”组合。该 risk set 不同于本文按状态失效概率定义的部署区域；两类模型都以终端集合损失评价复验分配。这些方法通常从显式有限备选集出发。隐式约束域还需要联合决定搜索哪些未观测区域以及在已有状态上追加多少次运行。
+
+\subsection{压力测试、可靠性与失效发现}
+
+可靠性分析和稀有事件仿真关注失效概率的高效估计。例如，subset simulation 将小概率失效事件分解为一系列较常见的条件事件~\cite{au2001}。黑盒安全验证还包括 falsification、最可能失效搜索和失效概率估计等不同任务；Corso et al.~\cite{corso2021} 对优化、路径规划、强化学习与重要性采样路线作了系统综述。Adaptive stress testing 进一步把可能失效轨迹的搜索形式化为序贯控制问题~\cite{lee2020}。
+
+这些方法用于发现系统薄弱点、搜索高严重度或高似然失效轨迹，或者估计聚合失效概率。其目标函数通常不包含状态相关部署区域的集合损失。点式搜索还可能在同一失效机制附近重复取样。本文的损失函数按参考测度和失效代价加权区域误判，因此与最坏点搜索和整体失效概率估计对应不同的决策目标。
+
+\subsection{约束规划与受约束测试}
+
+约束规划以原生逻辑、整数和全局约束表示组合可行域，并通过传播与搜索避免展开全部赋值；Rossi et al.~\cite{rossi2006} 给出了该领域的系统总结，R\'{e}gin~\cite{regin1994} 对 \texttt{AllDifferent} 的过滤算法则展示了保留全局约束结构为何能显著增强传播。与本文的单元质量和条件生成接口直接相关，hashing-based 方法已经能够对大型 Boolean 约束进行带置信保证的近似模型计数~\cite{chakraborty2013count} 和近似均匀的可满足赋值生成~\cite{chakraborty2013sample}。这些成果提供了实现 $\operatorname{mass}$ 与 $\operatorname{sample}$ 可行域操作的候选技术，但本身不利用随机黑盒运行结果决定下一次昂贵实验。
+
+组合交互测试在约束存在时通常构造 constrained covering array，以覆盖所有可行的低阶参数交互；Wu et al.~\cite{wu2019} 综述了约束表示与测试生成技术。Constrained locating array 在可行测试中加入故障交互定位能力~\cite{jin2020}。这类方法主要优化测试套件规模、交互覆盖或确定性故障定位。本文还包含状态相关随机失效概率、非均匀参考测度和不对称部署损失，并需要约束求解器为风险聚合、采集搜索和停止判定提供单元表示、单元质量与有效界。
+
+\subsection{研究缺口}
+
+现有研究分别给出了带噪水平集的序贯统计准则、有限备选集上的复验分配、黑盒失效搜索，以及组合可行域的传播、计数和测试生成。本文考察的计算问题是：在不枚举可行输入状态的条件下，将约束传播和单元质量纳入全局后验部署风险与序贯采集计算，并用部署后悔评价终端集合误差。该问题要求在同一算法中处理随机响应、组合可行域和状态相关部署损失。
+
+主要基线先由约束求解器生成固定可行候选池，再在池内运行标准 SUR。C-SUR 与该基线比较全域加权部署后悔、达到给定采集精度所需的计算量，以及完整可行域上的后验部署风险界。
+
+\section{决策模型}
+
+\subsection{可行输入状态、随机轨迹与失效概率}
+
+令 $x=(x_1,\ldots,x_d)\in\X$ 表示一次运行开始时提供给黑盒策略的完整业务状态，简称\emph{输入状态}。变量可以是布尔、整数、类别、集合或时序对象；满足式~\eqref{eq:feasible-set} 的输入状态称为\emph{可行输入状态}。式~\eqref{eq:feasible-set} 保留约束的原生谓词与全局结构，因为这种结构决定传播强度以及后续单元分裂和质量计算的效率；仅仅把一个全局约束改写成逻辑等价的不等式系统，未必在计算上等价。参考测度 $\mu$ 定义在 $\X$ 上，表示部署流量、情景重要性或管理者指定的压力测试权重。本文不要求 $\mu$ 与实验设计产生的选点分布相同。
+
+给定黑盒策略 $\pi$，在输入状态 $x$ 上的一次\emph{运行}产生轨迹
+\begin{equation}
+  \tau(x;\pi,\omega)
+  =\bigl((s_k,o_k,a_k,e_k)_{k=0}^{K-1},s_K,o_K\bigr),
+\end{equation}
+其中 $s_0=x$，$s_k$ 表示第 $k$ 步后的业务状态，$o_k$ 表示策略获得的观察，$a_k$ 表示策略采取的动作，$e_k$ 表示动作执行后由环境返回的反馈，$K$ 为轨迹的终止步；$\omega$ 汇总策略、仿真器和外部环境的随机性。反馈 $e_k$ 可以是工具返回值、状态变化或事件记录，本文不要求策略具有强化学习意义上的数值奖励函数。预先固定的确定性判定器 $F$ 根据终端目标、过程规则和运行错误将完整轨迹映射为失效标签
+\begin{equation}
+  Y(x,\omega)=F\!\left(\tau(x;\pi,\omega)\right)\in\{0,1\},
+  \qquad
+  p(x)=\Pp\{Y(x,\omega)=1\mid x\}.
+  \label{eq:failure-probability}
+\end{equation}
+其中 $Y=1$ 表示本次运行失效。确定性业务约束界定可作为实验输入的集合 $\X$；给定 $x\in\X$ 后，随机性只进入轨迹的生成过程，而不进入 $F$ 对既定轨迹的判定。本文从有限次运行中学习未知失效概率 $p(x)$，而不重新学习已知的输入可行性约束。除非另有说明，本文假设策略、判定器和仿真环境的版本在实验期间保持固定，且给定同一输入状态的不同运行条件独立。
+
+下文统一用“输入状态”指一次运行的初始完整状态 $x$，用“轨迹状态”指运行过程中的 $s_k$，用“运行”指一次黑盒执行，用“实验动作”指对输入状态及复验次数的选择，并用“约束单元” $U$ 指由部分赋值及传播后变量域表示的可行域子集。
+
+\subsection{由运营成本诱导的最优部署区域}
+
+在状态 $x$ 上，部署者选择动作 $z(x)\in\{1,0\}$：$z=1$ 表示使用策略 $\pi$，$z=0$ 表示转交人工或备用策略。相应期望成本为
+\begin{equation}
+  C(x,z;p)=
+  z\,[c_\pi(x)+p(x)\ell(x)]
+  +(1-z)c_0(x).
+  \label{eq:deployment-cost}
+\end{equation}
+假设 $\ell(x)>0$。在完全知道 $p(x)$ 时，逐状态最优规则为
+\begin{equation}
+  z^*(x)=\1\{p(x)\leq\alpha(x)\},
+  \qquad
+  \alpha(x)=\frac{c_0(x)-c_\pi(x)}{\ell(x)}.
+  \label{eq:optimal-deployment}
+\end{equation}
+若 $\alpha(x)<0$，备用策略严格占优；若 $\alpha(x)>1$，自动策略严格占优；边界情形可能出现成本相同。仅当 $0<\alpha(x)<1$ 时，部署决策依赖未知的 $p(x)$。最优自动部署区域与高风险区域分别为
+\begin{equation}
+  \D^*=\{x\in\X:p(x)\leq\alpha(x)\},
+  \qquad
+  \Rr^*=\X\setminus\D^*.
+  \label{eq:regions}
+\end{equation}
+固定阈值水平集是式~\eqref{eq:regions} 的特例；状态相关阈值则使业务损失高的状态接受更保守的自动化边界。
+
+给定估计部署规则 $\widehat z$，相对于完全信息规则的部署后悔为
+\begin{equation}
+  \mathcal L(\widehat z;p)
+  =\int_{\X}
+  \left[C(x,\widehat z(x);p)-C(x,z^*(x);p)\right]\,\mathrm d\mu(x).
+  \label{eq:deployment-regret}
+\end{equation}
+将式~\eqref{eq:deployment-cost} 代入式~\eqref{eq:deployment-regret}，两类误判的局部损失均为 $|p(x)-\alpha(x)|\ell(x)$。因此，区域误判权重由运营成本确定。靠近边界的状态分类难度较高，但局部误判损失较小。
+
+\subsection{有限运行预算下的序贯实验设计}
+
+完成 $t$ 次黑盒运行后的实验历史为
+\begin{equation}
+  \Hh_t=\{(x_i,Y_i,c_i):i=1,\ldots,t\},
+\end{equation}
+其中 $c_i$ 是第 $i$ 次运行成本。序贯实验策略 $\Aacq$ 根据 $\Hh_t$ 选择下一输入状态 $x_{t+1}\in\X$；再次选择已有输入状态称为\emph{复验}，选择尚未运行过的输入状态称为\emph{探索}。设预算耗尽时共完成 $N_B$ 次运行，则
+\begin{equation}
+  \sum_{i=1}^{N_B}c_i\leq B.
+\end{equation}
+预算耗尽后，序贯实验策略输出部署规则 $\widehat z_B^{\Aacq}$。
+
+\begin{problem}[决策驱动的约束风险区域学习]
+在仅能通过式~\eqref{eq:failure-probability} 获得随机运行结果、且 $\X$ 只能通过业务约束及其传播接口隐式访问的条件下，设计序贯实验策略 $\Aacq$，求解
+\begin{equation}
+  \min_{\Aacq}
+  \E_{\Aacq,\omega}
+  \left[\mathcal L(\widehat z_B^{\Aacq};p)\right]
+  \quad\text{s.t.}\quad
+  x_t\in\X,
+  \quad \sum_{t=1}^{N_B}c_t\leq B.
+  \label{eq:primary-problem}
+\end{equation}
+\end{problem}
+
+式~\eqref{eq:primary-problem} 给出本文的优化问题。最大化 $p(x)$ 对应最坏点搜索；最大化独特失效数需要预先定义失效签名；估计整体平均失效率对应聚合概率估计。这些目标不等价于最小化部署后悔。
+
+\section{标准方法的计算限制}
+
+\subsection{完全枚举下的理想后验部署风险}
+
+为使采集目标与式~\eqref{eq:deployment-regret} 的终端损失严格一致，定义在输入状态 $x$ 处选择自动部署和备用流程的后验局部后悔分别为
+\begin{align}
+  \rho_t^{\mathrm{auto}}(x)
+  &=\ell(x)\E[(p(x)-\alpha(x))_+\mid\Hh_t],\\
+  \rho_t^{\mathrm{back}}(x)
+  &=\ell(x)\E[(\alpha(x)-p(x))_+\mid\Hh_t],
+\end{align}
+其中 $(u)_+=\max\{u,0\}$。相应的后验部署规则在两种动作中选择后验期望后悔较小者；等价地，当 $\E[p(x)\mid\Hh_t]\leq\alpha(x)$ 时选择自动部署。定义局部后验部署风险
+\begin{equation}
+  r_t(x)=\min\{\rho_t^{\mathrm{auto}}(x),
+                 \rho_t^{\mathrm{back}}(x)\},
+\end{equation}
+则当前全局后验部署风险为
+\begin{equation}
+  R_t=\int_{\X}r_t(x)\,\mathrm d\mu(x).
+  \label{eq:bayes-risk}
+\end{equation}
+若能够枚举 $\X$，一个理想的单位成本一步 SUR 采集函数为
+\begin{equation}
+  a_t(x)=
+  \frac{R_t-\E[R_{t+1}\mid\Hh_t,\text{在 }x\text{ 处运行一次}]}{c(x)}.
+  \label{eq:point-acquisition}
+\end{equation}
+下一次运行选择 $\arg\max_{x\in\X}a_t(x)$。该准则按单位成本的期望全局后验部署风险下降评价输入状态。
+
+\subsection{三个组合计算障碍}
+
+在隐式组合域中，式~\eqref{eq:bayes-risk}--\eqref{eq:point-acquisition} 同时遇到三个障碍。第一，计算 $R_t$ 需要对全部可行输入状态的参考测度求和或积分。第二，计算某个点的预期风险下降，需要估计该运行结果对整个可行域的后验影响。第三，即使能够近似评价 $a_t(x)$，在混合逻辑与整数约束下全局最大化它仍然困难。
+
+固定候选池方法预先采样 $S\subset\X$，并将积分和最大化限制在 $S$ 上。其近似误差包括池外高风险区域的遗漏，以及候选池经验分布与参考测度 $\mu$ 的偏差。扩大候选池会增加代理预测和采集计算成本，但不能直接给出池外遗漏质量的上界。
+
+\section{约束感知的逐步不确定性削减方法}
+
+本文将所提出的方法称为约束感知逐步不确定性削减（Constraint-Aware Stepwise Uncertainty Reduction, C-SUR）。方法包括后验部署风险模型、约束单元、单元级界、变量条件采集景观、分支定界采集搜索和复验分配。
+
+\subsection{用约束单元表示不可枚举空间}
+
+令 $U$ 表示部分变量被固定、其余变量保留当前域的约束单元。单元对应的可行输入状态集合为
+\begin{equation}
+  \X(U)=\{x\in\X:x\text{ 与 }U\text{ 中的部分赋值一致}\}.
+\end{equation}
+根单元包含整个 $\X$。对某个未固定变量分支可得到互不相交的子单元，其并集覆盖父单元。约束传播将当前部分赋值的逻辑后果写回变量域，并尽早识别 $\X(U)=\varnothing$ 的单元。
+
+算法使用以下可行域操作；这些操作可以由约束传播器与外部计数、采样模块组合实现：
+\begin{align}
+  &\operatorname{propagate}(U)
+    &&\text{传播约束并判定空单元},\\
+  &\operatorname{split}(U)
+    &&\text{生成覆盖父单元的子单元},\\
+  &\operatorname{mass}(U)
+    &&\text{计算或估计 }M(U)=\mu(\X(U)),\\
+  &\operatorname{sample}(U)
+    &&\text{从 }\X(U)\text{ 条件生成完整可行输入状态}.
+\end{align}
+本文称 $M(U)$ 为\emph{单元质量}。它可以通过精确加权模型计数、近似计数、重要性采样或领域特定动态规划获得。近似质量必须同时返回误差区间，供后续风险界传播。
+
+\subsection{单元级部署风险与采集价值界}
+
+对风险分割中的每个约束单元 $U$，算法维护其全局后验部署风险贡献的聚合界：
+\begin{equation}
+  \underline R_t(U)
+  \leq
+  \int_{\X(U)}r_t(x)\,\mathrm d\mu(x)
+  \leq
+  \overline R_t(U),
+  \label{eq:cell-risk-bound}
+\end{equation}
+其中 $r_t(x)$ 已由式~\eqref{eq:bayes-risk} 定义。界可以结合 $M(U)$、单元内后验均值与方差范围、代理模型的 Lipschitz 或核结构，以及单元质量估计误差构造。类似地，为单元中最佳下一运行点的采集价值建立
+\begin{equation}
+  \underline a_t(U)
+  \leq
+  \max_{x\in\X(U)}a_t(x)
+  \leq
+  \overline a_t(U).
+  \label{eq:cell-acq-bound}
+\end{equation}
+约束过滤候选池仅在点级计算中使用可行性约束；式~\eqref{eq:cell-risk-bound}--\eqref{eq:cell-acq-bound} 还将约束单元用于风险聚合、搜索排序和停止判定。
+
+\subsection{变量条件采集景观与自适应分裂}
+
+式~\eqref{eq:cell-acq-bound} 用于选择待展开单元，但不指定分裂变量。固定变量顺序和最小域优先等约束规划启发式主要依据可满足性信息。C-SUR 在选定的前沿单元 $U$ 内构造变量条件采集景观（variable-conditioned acquisition landscape），用点级采集值估计各候选分裂下的采集值异质性。
+
+具体地，从约束条件分布
+\begin{equation}
+  x^{(1)},\ldots,x^{(m_U)}
+  \sim \nu_U(\cdot)
+  \quad\text{on }\X(U)
+  \label{eq:landscape-sampling}
+\end{equation}
+生成可行输入状态，并计算其点采集值或廉价近似 $\widetilde a_t(x^{(k)})$。当 $\nu_U$ 不等于目标条件测度 $\mu(\cdot\mid\X(U))$ 时，使用重要性权重校正聚合量。对类别或有限域变量 $X_j$ 的取值 $v$，定义
+\begin{equation}
+  \widehat G_{t,j,v}(U)
+  =
+  \frac{
+    \sum_{k=1}^{m_U}w_k\,
+    \widetilde a_t(x^{(k)})
+    \1\{x_j^{(k)}=v\}}
+  {
+    \sum_{k=1}^{m_U}w_k\,
+    \1\{x_j^{(k)}=v\}}
+  ,
+  \label{eq:variable-landscape}
+\end{equation}
+其中 $w_k$ 为测度校正权重。$\widehat G_{t,j,v}(U)$ 估计在当前约束条件下固定 $X_j=v$ 后的平均采集值。相应的加权单元质量估计反映该取值覆盖的参考测度。对于整数或连续变量，候选阈值 $b$ 将样本分为 $X_j\leq b$ 和 $X_j>b$；对于大有限域变量，可按约束结构或后验相似性合并取值。样本量足够时，还可估计 $\widehat G_{t,jk,v,u}(U)$ 等低阶交互量。
+
+景观随后用于评价约束单元 $U$ 的候选分裂 $\mathcal S(U)=\{U_1,\ldots,U_K\}$。一个基本的异质性评分为
+\begin{equation}
+  H_t(\mathcal S\mid U)
+  =
+  \sum_{h=1}^{K}
+  \widehat M(U_h)
+  \left[
+    \widehat G_t(U_h)-\widehat G_t(U)
+  \right]^2,
+  \label{eq:landscape-heterogeneity}
+\end{equation}
+其中 $\widehat G_t(U_h)$ 是落入子单元 $U_h$ 的加权平均采集值。实际分裂分数还可结合预期界收紧和单元质量平衡：
+\begin{equation}
+  \operatorname{SplitScore}_t(\mathcal S\mid U)
+  =\lambda_H H_t(\mathcal S\mid U)
+  +\lambda_B\widehat\Delta_t^{\mathrm{bound}}(\mathcal S)
+  +\lambda_M\operatorname{Balance}(\mathcal S),
+  \label{eq:landscape-split-score}
+\end{equation}
+分数仅对传播后非空的子单元计算。第一项度量子单元之间的采集值异质性，第二项度量单元界的预计收紧量，第三项控制子单元质量的不平衡程度。
+
+景观估计不用于剪枝或误差认证，因为有限条件样本可能遗漏狭窄区域，且 $\widetilde a_t$ 含有代理误差。剪枝、采集差距和后验部署风险界均依据有效的单元上下界。单元再次进入前沿时，可以追加条件样本并重新计算分裂分数。
+
+\subsection{分支定界式采集搜索}
+
+每一轮 C-SUR 从根单元建立采集搜索前沿 $\mathcal Q_t$。算法选择 $\overline a_t(U)$ 最大的前沿单元。空单元直接删除；若单元上界不超过当前最优点的采集值下界，也将其删除。其余单元追加条件样本并更新变量条件采集景观，再按式~\eqref{eq:landscape-split-score} 选择分裂变量和阈值。约束传播收紧子单元变量域并删除空分支，随后更新单元质量区间和单元界。当单元规模或界宽达到预设阈值时，算法从中实例化可行输入状态并计算点采集值。
+
+搜索在满足
+\begin{equation}
+  \max_{U\in\mathcal Q_t}\overline a_t(U)
+  -a_t(\widehat x_t)\leq\varepsilon_t
+  \label{eq:acq-certificate}
+\end{equation}
+时停止。式~\eqref{eq:acq-certificate} 给出相对于枚举式一步 SUR 采集基准的采集差距上界。界的有效性条件取决于代理模型和单元质量估计方法；本文分别讨论确定性界和高概率界。从 $\mathcal Q_t$ 删除单元仅终止本轮在该单元内的采集点搜索，该单元仍保留在全局风险计算中。
+
+\subsection{新状态探索与已有状态复验}
+
+随机响应意味着同一个 $x$ 的一次运行结果不能可靠估计 $p(x)$。在每轮，实验动作集合同时包括：从某个单元产生新输入状态，以及在已观察输入状态追加一次或多次复验。对已有状态 $x_i$，复验动作的价值仍由式~\eqref{eq:point-acquisition} 的风险削减原则定义，但后验更新只增加该状态的复验次数。对新状态，价值同时来自空间覆盖和对相关状态的后验迁移。
+
+算法比较单位成本预期后验部署风险下降，并允许批量实验动作
+\begin{equation}
+  (x_{t+1},m_{t+1})
+  \in\X\times\{1,2,\ldots\},
+\end{equation}
+其中 $m_{t+1}$ 是计划在 $x_{t+1}$ 处执行的独立运行次数。相应的批量采集值可写为
+\begin{equation}
+  a_t(x,m)=
+  \frac{R_t-\E[R_{t+m}\mid\Hh_t,
+  \text{在 }x\text{ 处独立运行 }m\text{ 次}]}{m\,c(x)}.
+\end{equation}
+为限制单轮复验批量，可在每次运行后重新计算采集值，也可采用小批量前瞻。计算实验比较固定复验次数、方差阈值复验和决策价值驱动复验，并分析异方差响应与状态相关运行成本的影响。
+
+\subsection{全局后验风险区间与任意时刻停止证书}
+
+令 $\mathcal P_t$ 表示覆盖整个 $\X$ 的风险分割，其单元两两不相交。将式~\eqref{eq:cell-risk-bound} 在全部风险分割单元上求和，可得到
+\begin{equation}
+  \underline R_t
+  =\sum_{U\in\mathcal P_t}\underline R_t(U),
+  \qquad
+  \overline R_t
+  =\sum_{U\in\mathcal P_t}\overline R_t(U).
+  \label{eq:anytime-risk}
+\end{equation}
+区间 $[\underline R_t,\overline R_t]$ 用于报告当前部署规则仍可能承担的后验部署风险，并可形成停止条件
+\begin{equation}
+  \overline R_t-\underline R_t\leq\delta_R
+  \quad\text{或}\quad
+  \overline R_t\leq R_{\max}.
+\end{equation}
+使用近似单元质量或概率后验界时，区间同时报告相应的置信水平。风险分割 $\mathcal P_t$ 始终覆盖完整可行域，用于计算式~\eqref{eq:anytime-risk}；采集搜索前沿 $\mathcal Q_t$ 仅用于本轮采集点搜索。
+
+\subsection{理论分析}
+
+理论分析包括三项。第一，在单元质量精确、单元界有效、搜索完备且仅依据有效界剪枝的条件下，证明分支定界返回的 $\widehat x_t$ 满足式~\eqref{eq:acq-certificate}。景观仅影响节点展开顺序和搜索量。第二，给出单元质量误差和后验近似误差对采集差距界的传播关系，并分析景观采样误差与节点展开数的关系。第三，在可识别性和持续探索条件下，研究部署区域估计的一致性或终端部署后悔上界。理论结论的适用范围将按有限约束满足问题、代理模型结构和概率界条件分别陈述。
+
+\section{Tapas 的角色与方法边界}
+
+Tapas 提供\emph{确定性业务规则描述与约束传播}。它用规则定义式~\eqref{eq:feasible-set} 中的可行域 $\X$，接收部分赋值或变量域，并返回不可行判定及传播后收紧的变量域。分裂变量选择、单元质量估计、条件采样、黑盒运行、统计后验和采集函数由外部实验系统处理。
+
+外部实验系统按以下方式调用传播接口：C-SUR 生成约束单元和候选分裂；计数与采样模块基于传播结果实现 $\operatorname{mass}$ 和 $\operatorname{sample}$；黑盒运行器实例化输入状态、执行策略并记录轨迹和成本；固定的轨迹判定器 $F$ 根据终止目标、过程规则和运行错误生成标签 $Y$。
+
+上述模块形成以下闭环：
+\begin{equation}
+  \begin{aligned}
+  \text{C-SUR}&\longrightarrow
+  \text{约束单元与候选分裂}
+  \longrightarrow \text{Tapas 约束传播}
+  \longrightarrow \text{外部计数/采样}\\
+  &\longrightarrow x\in\X
+  \longrightarrow \text{外部黑盒运行与 }F
+  \longrightarrow (Y,\tau,c)
+  \longrightarrow \text{C-SUR 后验更新}.
+  \end{aligned}
+\end{equation}
+
+Tapas 侧的接口要求包括规则表示、增量传播、传播后变量域查询、分支状态复制和规则来源映射。外部实验系统提供条件采样、单元分裂、精确或近似质量估计、状态去重、黑盒运行、多随机种子复验和轨迹判定。C-SUR 只使用传播接口，因此也可接入约束规划、SAT、混合整数规划或领域专用生成器。
+
+\section{说明性示例：订单履约策略的部署边界}
+
+考虑一个订单履约系统。状态
+\begin{equation}
+  x=(q,I_1,I_2,R_1,R_2,S,V,A)
+\end{equation}
+包含订单量 $q$、两个仓库的库存 $I_i$、预留量 $R_i$、是否允许拆单 $S$、订单价值 $V$ 与审批状态 $A$。可行输入状态满足
+\begin{align}
+  &0\leq R_i\leq I_i,\quad i=1,2,\\
+  &q\geq1,\\
+  &V>V_0\ \Longrightarrow\
+    (S=0\ \text{或}\ A=\text{已审批}),\\
+  &\text{发货量不得超过 }(I_1-R_1)+(I_2-R_2).
+\end{align}
+被测策略可以是启发式履约器、学习型调度策略或调用工具的 AI Agent。它选择单仓发货、拆单、等待补货或升级审批，轨迹判定器检查库存和审批规则。
+
+假设自动策略的运行成本低于人工处理，且错误拆分未审批高价值订单的损失较大。根据式~\eqref{eq:optimal-deployment}，相应输入状态具有较低的 $\alpha(x)$。待估计对象是可继续自动履约的输入状态集合。
+
+初始运行后，一个约束单元
+\begin{equation}
+  U_1=\{V>V_0,\ A=\text{未审批},\ I_1-R_1<q\}
+\end{equation}
+可能具有较大的单元质量、较高的后验部署风险和较宽的风险界。约束传播给出拆单和库存变量的可行范围，并删除无法履约的组合。C-SUR 在 $U_1$ 中条件生成可行订单状态，按审批状态、订单价值、库存余量及其低阶交互聚合点采集值。若采集值主要集中在总可用库存接近订单量的样本，且按仓库标识分组的差异较小，则分裂评分会优先选择库存余量阈值。分裂后重新计算各子单元的采集界；采集上界低于当前最优点下界的子单元被剪枝。
+
+实验动作包括在未观察的边界输入状态运行，以及复验后验分布仍跨越 $\alpha(x)$ 的已有状态。算法按单位成本的期望全局后验部署风险下降比较两类动作。输出包括部署区域估计、风险区间和约束单元描述，例如
+\begin{equation}
+  V>V_0,\quad A=\text{未审批},\quad
+  I_1-R_1<q\leq\sum_i(I_i-R_i).
+\end{equation}
+该描述只表示统计性高风险关联；若要断言某一条件导致失效，还需要额外干预实验。
+
+\section{计算实验设计}
+
+\subsection{研究问题}
+
+计算实验回答以下问题：
+\begin{enumerate}
+  \item 在相同黑盒运行预算下，C-SUR 是否降低部署后悔与加权区域误判？
+  \item 约束传播、单元质量、单元界和变量条件采集景观各自贡献多少？
+  \item 景观引导能否用更少的节点展开、可行输入状态实例化和求解器调用达到相同的采集证书？
+  \item 分支定界采集相对于枚举式采集基准的差距和计算节省如何变化？
+  \item 状态相关运行成本与随机性增强时，自适应复验是否优于固定复验次数？
+  \item 方法能否从可枚举小实例扩展到固定候选池无法充分覆盖的大型可行域？
+\end{enumerate}
+
+\subsection{实例层次}
+
+第一类实例为可完全枚举的合成约束满足问题，包括受约束背包、配置和调度。大量独立仿真用于近似 $p(x)$、$\D^*$ 和枚举式 SUR 采集基准，并据此计算区域损失、采集差距和证书覆盖率。第二类实例为不可枚举的大型组合问题，用于测量运行时间、内存、传播剪枝率、单元质量估计误差和预算效率。第三类实例包括经典黑盒策略和由 Tapas 描述业务规则的 LLM Agent 环境。
+
+\subsection{基线和消融}
+
+主要基线为约束过滤候选池 SUR（CP-filtered SUR）：约束求解器预先生成固定可行候选池，标准 SUR 在该候选池内选点。其他基线包括按 $\mu$ 随机可行采样、覆盖驱动组合测试、阈值邻近采样、点式贝叶斯优化、自适应压力测试，以及采用固定复验次数的离散风险集方法。分支策略比较固定变量顺序、最小域优先、单元质量平衡分裂、后验方差分裂和景观引导分裂。消融实验分别移除单元质量、传播剪枝、单元采集界、交互景观、自适应复验和决策成本权重，并改变景观样本量。
+
+\subsection{评价指标与公平性}
+
+统计指标包括部署后悔~\eqref{eq:deployment-regret} 关于累计运行成本的曲线及曲线下面积、参考测度加权的假阴性与假阳性、风险区间宽度和自动化覆盖率。计算指标包括墙钟时间、求解器调用次数、峰值内存、节点展开数、可行输入状态实例化数、剪枝比例、单元质量估计误差和式~\eqref{eq:acq-certificate} 的采集差距。景观模块另报告达到指定采集差距所需的搜索量、所选分裂与枚举式采集基准的符合程度，以及景观计算成本。各方法使用相同的黑盒运行成本预算、初始信息和独立验证集。条件样本未经过黑盒运行，因此只计入计算成本，不计入运行历史。结果按多个随机种子报告置信区间，并记录实例、预算轨迹和失效判定规则。
+
+\section{研究假设与适用范围}
+
+计算实验检验两个主要假设。其一，在相同总成本下，C-SUR 的全域部署后悔低于约束过滤候选池 SUR。其二，在达到相同采集差距时，景观引导分裂所需的节点展开数少于通用约束规划分支规则。实验进一步考察这些差异与可行域稀疏度、采集值异质性、候选池遗漏质量和运行成本之间的关系。可行域较小、采集值近似均匀或固定候选池覆盖充分时，景观计算成本可能抵消搜索量的减少。
+
+采集差距和风险界仅在单元质量区间及单元界满足相应有效性条件时报告。景观估计不用于替代这些界。本文不提供任意黑盒策略的全局安全证明，也不从统计风险区域推断因果关系。判定器错误、策略版本变化和部署分布变化分别影响标签 $Y$、失效概率 $p(x)$ 和参考测度 $\mu$，并在敏感性分析中处理。
+
+\section{论文结构}
+
+第~2 节回顾随机水平集估计、仿真风险集推断、压力测试和约束组合测试。第~3 节定义部署成本、状态相关阈值、部署后悔和信息结构。第~4 节定义约束单元、单元质量和后验部署风险分解。第~5 节给出 C-SUR、变量条件采集景观、分支定界采集搜索和探索--复验联合规则。第~6 节分析采集近似与任意时刻风险界。第~7 节介绍实例、基线、实现和预算协议。第~8 节报告计算结果与消融分析。第~9 节讨论参考测度选择、判定器误差、策略版本变化和外部效度。
+
+\begin{thebibliography}{99}
+
+\bibitem{gotovos2013}
+Gotovos, A., Casati, N., Hitz, G., and Krause, A. (2013).
+Active learning for level set estimation.
+\emph{Proceedings of the 23rd International Joint Conference on Artificial Intelligence}, 1344--1350.
+
+\bibitem{bogunovic2016}
+Bogunovic, I., Scarlett, J., Krause, A., and Cevher, V. (2016).
+Truncated variance reduction: A unified approach to Bayesian optimization and level-set estimation.
+\emph{Advances in Neural Information Processing Systems}, 29.
+
+\bibitem{bect2012}
+Bect, J., Ginsbourger, D., Li, L., Picheny, V., and Vazquez, E. (2012).
+Sequential design of computer experiments for the estimation of a probability of failure.
+\emph{Statistics and Computing}, 22:773--793.
+
+\bibitem{chevalier2014}
+Chevalier, C., Bect, J., Ginsbourger, D., Vazquez, E., Picheny, V., and Richet, Y. (2014).
+Fast parallel kriging-based stepwise uncertainty reduction with application to the identification of an excursion set.
+\emph{Technometrics}, 56(4):455--465.
+
+\bibitem{lyu2021}
+Lyu, X., Binois, M., and Ludkovski, M. (2021).
+Evaluating Gaussian process metamodels and sequential designs for noisy level set estimation.
+\emph{Statistics and Computing}, 31:43.
+
+\bibitem{chen2000}
+Chen, C.-H., Lin, J., Y\"{u}cesan, E., and Chick, S. E. (2000).
+Simulation budget allocation for further enhancing the efficiency of ordinal optimization.
+\emph{Discrete Event Dynamic Systems}, 10:251--270.
+
+\bibitem{song2021}
+Song, E. (2021).
+Sequential Bayesian risk set inference for robust discrete optimization via simulation.
+arXiv:2101.07466.
+
+\bibitem{au2001}
+Au, S.-K. and Beck, J. L. (2001).
+Estimation of small failure probabilities in high dimensions by subset simulation.
+\emph{Probabilistic Engineering Mechanics}, 16(4):263--277.
+
+\bibitem{corso2021}
+Corso, A., Moss, R. J., Koren, M., Lee, R., and Kochenderfer, M. J. (2021).
+A survey of algorithms for black-box safety validation of cyber-physical systems.
+\emph{Journal of Artificial Intelligence Research}, 72:377--428.
+
+\bibitem{lee2020}
+Lee, R., Mengshoel, O. J., Saksena, A., et al. (2020).
+Adaptive stress testing: Finding likely failure events with reinforcement learning.
+\emph{Journal of Artificial Intelligence Research}, 69:1165--1201.
+
+\bibitem{rossi2006}
+Rossi, F., van Beek, P., and Walsh, T., eds. (2006).
+\emph{Handbook of Constraint Programming}.
+Elsevier.
+
+\bibitem{regin1994}
+R\'{e}gin, J.-C. (1994).
+A filtering algorithm for constraints of difference in CSPs.
+\emph{Proceedings of the 12th National Conference on Artificial Intelligence}, 362--367.
+
+\bibitem{chakraborty2013count}
+Chakraborty, S., Meel, K. S., and Vardi, M. Y. (2013a).
+A scalable approximate model counter.
+\emph{Proceedings of the 19th International Conference on Principles and Practice of Constraint Programming}, 200--216.
+
+\bibitem{chakraborty2013sample}
+Chakraborty, S., Meel, K. S., and Vardi, M. Y. (2013b).
+A scalable and nearly uniform generator of SAT witnesses.
+\emph{Proceedings of the 25th International Conference on Computer Aided Verification}, 608--622.
+
+\bibitem{wu2019}
+Wu, H., Nie, C., Petke, J., Jia, Y., and Harman, M. (2019).
+A survey of constrained combinatorial testing.
+arXiv:1908.02480.
+
+\bibitem{jin2020}
+Jin, H. and Tsuchiya, T. (2020).
+Constrained locating arrays for combinatorial interaction testing.
+\emph{Journal of Systems and Software}, 170:110771.
+
+\end{thebibliography}
+
+\end{document}
