@@ -141,6 +141,9 @@ See [C Interaction](docs/Foreign_en.md) for API, linking, and extension details.
   functions, modules, arrays, and built-ins.
 - [Type System Design](docs/TypeSystem_en.md) — compile-time annotations,
   runtime Type values, structural Types, and the `types` package.
+- [`declare` and Declaration IR Design](docs/Declare_zh.md) (in Chinese) —
+  first-class declarations, typed IR, dynamic construction, `eval()`, and
+  `compile()`.
 - [C Interaction](docs/Foreign_en.md) — embedding sessions, registering C
   functions, working with values, and extending composite types.
 - [Runtime Mechanism](docs/Mechanism_en.md) — compiler, bytecode, virtual machine,
