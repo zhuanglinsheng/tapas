@@ -69,6 +69,7 @@ add_library(tapas_frontend STATIC
     src/compile/ast.c
     src/compile/parser.c
     src/compile/semantic.c
+    src/compile/static_type.c
     src/compile/type_info.c
     src/compile/frontend.c
     src/compile/module.c
@@ -88,16 +89,14 @@ add_executable(tapas
     src/tbycs.c
     src/tval.c
     src/tenv.c
-    src/compile/lexer.c
+    src/compile/unit.c
+    src/compile/emit_helpers.c
     src/compile/ast_emit.c
-    src/compile/ast_typecheck.c
+    src/compile/type_emit.c
     src/compile/statement_ast_emit.c
     src/compile/context.c
     src/compile/binding.c
-    src/compile/typecheck.c
-    src/compile/expression.c
-    src/compile/statement.c
-    src/compile/dispatch.c
+    src/compile/type_bridge.c
     src/compile/source.c
     src/tvm.c
     src/tblas.c
@@ -132,14 +131,14 @@ set_target_properties(tapas-language-server PROPERTIES
 )
 
 if(BUILD_TESTING)
-    add_library(test_cblas SHARED test/test_cblas.c)
+    add_library(test_cblas SHARED test/support/test_cblas.c)
 
-    add_executable(test_compile_frontend test/test_compile_frontend.c)
+    add_executable(test_compile_frontend test/unit/test_compile_frontend.c)
     target_link_libraries(test_compile_frontend PRIVATE tapas_frontend)
     add_test(NAME compile_frontend COMMAND test_compile_frontend)
 
     add_executable(test_language_server
-        test/test_language_server.c
+        test/unit/test_language_server.c
         src/lsp/json.c
         src/lsp/server.c
     )
@@ -155,7 +154,7 @@ if(BUILD_TESTING)
     endif()
 
     add_executable(test_data_structures
-        test/test_data_structures.c
+        test/unit/test_data_structures.c
         src/tbasis.c
         src/tval.c
         src/tblas.c
@@ -189,7 +188,7 @@ if(BUILD_TESTING)
             -DTAPAS=$<TARGET_FILE:tapas>
             -DFIXTURE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/test/language_rules
             -DTEST_BLAS=$<TARGET_FILE:test_cblas>
-            -P ${CMAKE_CURRENT_SOURCE_DIR}/test/test_language_rules.cmake
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/test/cmake/language_rules.cmake
     )
 
     # Top-level examples are standalone programs and form part of the public
@@ -226,12 +225,16 @@ if(BUILD_TESTING)
         string(REGEX REPLACE "[^A-Za-z0-9]+" "_" DOCUMENT_TEST_NAME "${DOCUMENT_RELATIVE}")
         add_test(
             NAME "documentation_${DOCUMENT_TEST_NAME}"
-            COMMAND ${CMAKE_COMMAND} -E env
-                "TAPAS_BLAS_LIBRARY=$<TARGET_FILE:test_cblas>"
-                $<TARGET_FILE:tapas> --stdout "${DOCUMENT}"
+            COMMAND ${CMAKE_COMMAND}
+                -DTAPAS=$<TARGET_FILE:tapas>
+                -DDOCUMENT=${DOCUMENT}
+                -DSOURCE_ROOT=${CMAKE_CURRENT_SOURCE_DIR}
+                -DTEST_BLAS=$<TARGET_FILE:test_cblas>
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/test/cmake/documentation.cmake
         )
         set_tests_properties("documentation_${DOCUMENT_TEST_NAME}" PROPERTIES
             WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+            RESOURCE_LOCK source_bytecode
         )
     endforeach()
 endif()

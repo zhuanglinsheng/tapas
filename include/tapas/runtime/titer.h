@@ -1,5 +1,5 @@
-#ifndef T_RUNTIME_ITER_H
-#define T_RUNTIME_ITER_H
+#ifndef TAPAS_RUNTIME_TITER_H
+#define TAPAS_RUNTIME_TITER_H
 
 #include "tapas/tval.h"
 
@@ -29,4 +29,4 @@ int titer_in(titer *it, const tobj *v);
 }
 #endif
 
-#endif /* T_RUNTIME_ITER_H */
+#endif /* TAPAS_RUNTIME_TITER_H */

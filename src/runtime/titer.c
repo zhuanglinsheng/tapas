@@ -67,9 +67,14 @@ static tstring *titer_tostring_full(void *self)
 }
 
 tcompo_vtable titer_vtable = {
-	titer_get_type,	     titer_get_code,	 titer_len,
-	titer_copy,	     titer_free,	 titer_identical,
-	titer_tostring_abbr, titer_tostring_full
+	.get_type = titer_get_type,
+	.get_compo_type_code = titer_get_code,
+	.len = titer_len,
+	.copy = titer_copy,
+	.free = titer_free,
+	.identical = titer_identical,
+	.tostring_abbr = titer_tostring_abbr,
+	.tostring_full = titer_tostring_full
 };
 
 titer *titer_new_step(long start, long step, long end)

@@ -13,17 +13,23 @@ typedef struct {
 	tconsts *constants;
 	tstring **paths;
 	uint_lexs npaths;
+	const ttypeval *current_function_type;
+	const ttypeval *expected_return_type;
+	const ttypeval *pending_function_type;
+	uint8_t allow_pending_type_references;
 } tast_emitter;
 
-int tast_expression_supported(const tast_arena *arena, tast_id id);
 void tast_emit_expression(tast_emitter *emitter, tast_id id);
-int tast_statement_supported(const tast_arena *arena, tast_id id);
+int tast_block_definitely_returns(const tast_arena *arena,
+				  const tast_node *block);
 void tast_emit_block(tast_emitter *emitter, const tast_node *block,
 		     tstring **paths, uint_lexs npaths, int inblk);
 ttypeval *tast_resolve_annotation(tast_emitter *emitter,
 				  tsource_span annotation);
 ttypeval *tast_infer_expression_type(tast_emitter *emitter, tast_id id,
 				     ttypeval **static_value);
+ttypeval *tast_function_signature(tast_emitter *emitter,
+				  const tast_node *function);
 int tast_expression_assignable_to(tast_emitter *emitter, tast_id id,
 				  const ttypeval *target);
 void tast_validate_node(tast_emitter *emitter, tast_id id);

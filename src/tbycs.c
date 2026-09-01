@@ -1,6 +1,6 @@
-#include "Tapas/tbycs.h"
+#include "tapas/tbycs.h"
 
-#include "Tapas/tbasis.h"
+#include "tapas/tbasis.h"
 
 
 /*===========================================================================*
@@ -13,7 +13,6 @@
  * The upper 26 bits encode parameters depending on instruction type:
  *   U-type:  26-bit unsigned parameter
  *   LR-type: 13-bit L (left), 13-bit R (right)
- *   CP-type: 18-bit C, 8-bit P
  *   Lbi-type: 13-bit L, 8-bit b, 5-bit i
  */
 
@@ -46,17 +45,6 @@ tbycode tbycode_make_lr(uint8_t ins, uint16_t L, uint16_t R)
 	return tmp;
 }
 
-/** CP-type: 18-bit C, 8-bit P */
-static tbycode tbycode_make_cp(uint8_t ins, uint32_t C, uint8_t P)
-{
-	uint32_t tmp = 0;
-	uint32_t iP = P;
-	tmp += (iP << 24);
-	tmp += ((C << 14) >> 8);
-	tmp += (((uint32_t)ins << 2) >> 2);
-	return tmp;
-}
-
 /** Lbi-type: 13-bit L, 8-bit b, 5-bit i */
 tbycode tbycode_make_lbi(uint8_t ins, uint16_t L, uint8_t b, uint8_t i)
 {
@@ -69,71 +57,6 @@ tbycode tbycode_make_lbi(uint8_t ins, uint16_t L, uint8_t b, uint8_t i)
 	tmp += ((iL << 19) >> 13);
 	tmp += (((uint32_t)ins << 2) >> 2);
 	return tmp;
-}
-
-/* ---- Getters ---- */
-
-/** Extract instruction type (low 6 bits) */
-tins tbycode_ins(tbycode c)
-{
-	return (tins)(((c << 26) >> 26));
-}
-
-/** Extract U parameter (upper 26 bits, shift right 6) */
-uint32_t tbycode_get_U(tbycode c)
-{
-	return c >> 6;
-}
-
-/** Add A to the U field */
-static tbycode tbycode_plus_U(tbycode c, uint32_t A)
-{
-	return c + (A << 6);
-}
-
-/** Extract L parameter */
-uint16_t tbycode_get_L(tbycode c)
-{
-	return (uint16_t)(((c << 13) >> 19));
-}
-
-/** Extract R parameter */
-uint16_t tbycode_get_R(tbycode c)
-{
-	return (uint16_t)(c >> 19);
-}
-
-/** Extract C parameter */
-static uint32_t tbycode_get_C(tbycode c)
-{
-	return ((c << 8) >> 14);
-}
-
-/** Extract P parameter */
-static uint8_t tbycode_get_P(tbycode c)
-{
-	return (uint8_t)(c >> 24);
-}
-
-/** Extract b parameter */
-uint8_t tbycode_get_b(tbycode c)
-{
-	return (uint8_t)(((c << 5) >> 24));
-}
-
-/** Extract i parameter */
-uint8_t tbycode_get_i(tbycode c)
-{
-	return (uint8_t)(c >> 27);
-}
-
-/** Set instruction type (replace low 6 bits) */
-static tbycode tbycode_set_ins(tbycode c, uint8_t ins)
-{
-	c >>= 6;
-	c <<= 6;
-	c += ((((uint32_t)ins) << 2) >> 2);
-	return c;
 }
 
 /**
@@ -162,12 +85,6 @@ void tbycode_tostring(tbycode c, char *buf)
 	case OP_BASE:
 		sprintf(buf, "OP_BASE     ");
 		break;
-	case OP_BREAK:
-		sprintf(buf, "OP_BREAK    ");
-		break;
-	case OP_CONTI:
-		sprintf(buf, "OP_CONTI    ");
-		break;
 	case OP_RET:
 		sprintf(buf, "OP_RET      ");
 		break;
@@ -192,27 +109,18 @@ void tbycode_tostring(tbycode c, char *buf)
 			(unsigned)tbycode_get_L(c),
 			(unsigned)tbycode_get_R(c));
 		break;
+	case OP_TYPEFWD:
+		sprintf(buf, "OP_TYPEFWD  ");
+		break;
+	case OP_TYPEDEFINE:
+		sprintf(buf,
+			"OP_TYPEDEFINE %u  %u",
+			(unsigned)tbycode_get_L(c),
+			(unsigned)tbycode_get_R(c));
+		break;
 	case OP_LOOPAS:
 		sprintf(buf,
 			"OP_LOOPAS   %u  %u",
-			(unsigned)tbycode_get_L(c),
-			(unsigned)tbycode_get_R(c));
-		break;
-	case OP_LOOPIAS:
-		sprintf(buf,
-			"OP_LOOPIAS  %u  %u",
-			(unsigned)tbycode_get_L(c),
-			(unsigned)tbycode_get_R(c));
-		break;
-	case OP_LOOPLAS:
-		sprintf(buf,
-			"OP_LOOPLS   %u  %u",
-			(unsigned)tbycode_get_L(c),
-			(unsigned)tbycode_get_R(c));
-		break;
-	case OP_LOOPGAS:
-		sprintf(buf,
-			"OP_LOOPGAS  %u  %u",
 			(unsigned)tbycode_get_L(c),
 			(unsigned)tbycode_get_R(c));
 		break;
@@ -539,6 +447,34 @@ void tvmcmd_vect_insert_vect(tvmcmd_vect *v, uint32_t pos, const tvmcmd_vect *sr
 	v->size += count;
 }
 
+void tvmcmd_vect_resolve_loop_control(tvmcmd_vect *v, uint32_t begin,
+				      uint32_t end, uint32_t continue_target,
+				      uint32_t break_target,
+				      uint8_t continue_marker,
+				      uint8_t break_marker)
+{
+	if (!v || begin > end || end > v->size || continue_target > v->size ||
+	    break_target > v->size)
+		twarn(ErrCompile_Other, "loop control", "invalid jump range");
+
+	for (uint32_t i = begin; i < end; i++) {
+		uint8_t instruction = (uint8_t)tbycode_ins(v->data[i]);
+		if (instruction == break_marker) {
+			if (break_target <= i)
+				twarn(ErrCompile_Other, "break", "invalid jump target");
+			v->data[i] = tbycode_make_u(
+				OP_JPF, break_target - i - 1);
+		} else if (instruction == continue_marker) {
+			if (continue_target <= i)
+				v->data[i] = tbycode_make_u(
+					OP_JPB, i - continue_target + 1);
+			else
+				v->data[i] = tbycode_make_u(
+					OP_JPF, continue_target - i - 1);
+		}
+	}
+}
+
 /*===========================================================================*
  * 3. Constant Vectors (using tstring instead of char*)
  *===========================================================================*/
@@ -559,11 +495,6 @@ void consts_str_vect_free(consts_str_vect *v)
 	v->data = NULL;
 	v->size = 0;
 	v->capacity = 0;
-}
-
-static uint_csts consts_str_vect_size32(consts_str_vect *v)
-{
-	return (uint_csts)v->size;
 }
 
 uint_csts consts_str_vect_add(consts_str_vect *v, const char *str)
@@ -598,11 +529,6 @@ void consts_long_vect_free(consts_long_vect *v)
 	v->capacity = 0;
 }
 
-static uint_csts consts_long_vect_size32(consts_long_vect *v)
-{
-	return (uint_csts)v->size;
-}
-
 uint_csts consts_long_vect_add(consts_long_vect *v, long val)
 {
 	uint32_t i;
@@ -633,11 +559,6 @@ void consts_float_vect_free(consts_float_vect *v)
 	v->data = NULL;
 	v->size = 0;
 	v->capacity = 0;
-}
-
-static uint_csts consts_float_vect_size32(consts_float_vect *v)
-{
-	return (uint_csts)v->size;
 }
 
 uint_csts consts_float_vect_add(consts_float_vect *v, double val)
@@ -709,6 +630,11 @@ void tconsts_copy(tconsts *dst, tconsts *src)
  */
 twrapper *tanalyser_wrap(tvmcmd_vect *tcmds, tconsts *consts, tcinfo *info)
 {
+	for (uint_cmds i = 0; i < tvmcmd_vect_size32(tcmds); i++) {
+		if (tbycode_ins(tcmds->data[i]) >= OP_COUNT)
+			twarn(ErrCompile_Other, "tanalyser_wrap",
+			      "unresolved compiler marker");
+	}
 	twrapper *wrapper = (twrapper *)calloc(1, sizeof(twrapper));
 	if (!wrapper)
 		return NULL;
@@ -784,7 +710,57 @@ wrap_err:
 	return NULL;
 }
 
+#define TAPC_FILE_MAGIC       ((uint64_t)0x5441504153424331ULL)
+#define TAPC_FORMAT_VERSION   ((uint32_t)1)
 #define TAPC_SOURCE_MAP_MAGIC ((uint64_t)0x5450415352433031ULL)
+
+static int tapc_write_header(FILE *f, const twrapper *wrapper)
+{
+	uint64_t magic = TAPC_FILE_MAGIC;
+	uint32_t version = TAPC_FORMAT_VERSION;
+	uint8_t reserved[3] = { 0, 0, 0 };
+	return fwrite(&magic, sizeof(magic), 1, f) == 1 &&
+	       fwrite(&version, sizeof(version), 1, f) == 1 &&
+	       fwrite(&wrapper->ncmds, sizeof(wrapper->ncmds), 1, f) == 1 &&
+	       fwrite(&wrapper->consts.ncints,
+		      sizeof(wrapper->consts.ncints), 1, f) == 1 &&
+	       fwrite(&wrapper->consts.ncstrs,
+		      sizeof(wrapper->consts.ncstrs), 1, f) == 1 &&
+	       fwrite(&wrapper->consts.ncflts,
+		      sizeof(wrapper->consts.ncflts), 1, f) == 1 &&
+	       fwrite(&wrapper->info.obj_max,
+		      sizeof(wrapper->info.obj_max), 1, f) == 1 &&
+	       fwrite(&wrapper->info.tmp_max,
+		      sizeof(wrapper->info.tmp_max), 1, f) == 1 &&
+	       fwrite(&wrapper->info.reg_max,
+		      sizeof(wrapper->info.reg_max), 1, f) == 1 &&
+	       fwrite(reserved, sizeof(reserved), 1, f) == 1;
+}
+
+static int tapc_read_header(FILE *f, twrapper *wrapper)
+{
+	uint64_t magic = 0;
+	uint32_t version = 0;
+	uint8_t reserved[3];
+	if (fread(&magic, sizeof(magic), 1, f) != 1 ||
+	    fread(&version, sizeof(version), 1, f) != 1 ||
+	    magic != TAPC_FILE_MAGIC || version != TAPC_FORMAT_VERSION)
+		return 0;
+	return fread(&wrapper->ncmds, sizeof(wrapper->ncmds), 1, f) == 1 &&
+	       fread(&wrapper->consts.ncints,
+		     sizeof(wrapper->consts.ncints), 1, f) == 1 &&
+	       fread(&wrapper->consts.ncstrs,
+		     sizeof(wrapper->consts.ncstrs), 1, f) == 1 &&
+	       fread(&wrapper->consts.ncflts,
+		     sizeof(wrapper->consts.ncflts), 1, f) == 1 &&
+	       fread(&wrapper->info.obj_max,
+		     sizeof(wrapper->info.obj_max), 1, f) == 1 &&
+	       fread(&wrapper->info.tmp_max,
+		     sizeof(wrapper->info.tmp_max), 1, f) == 1 &&
+	       fread(&wrapper->info.reg_max,
+		     sizeof(wrapper->info.reg_max), 1, f) == 1 &&
+	       fread(reserved, sizeof(reserved), 1, f) == 1;
+}
 
 static void tapc_write_tstring(FILE *f, const tstring *s)
 {
@@ -877,17 +853,17 @@ int tanalyser_save_bin_file(const twrapper *wrapper, const char *filename)
 {
 	FILE *f = fopen(filename, "wb");
 	uint_csts i;
-	twrapper header;
 
 	if (!f) {
 		twarn(ErrSession_IO, "tanalyser_save_bin_file", filename);
 		return -1;
 	}
 
-	/* Write wrapper header */
-	header = *wrapper;
-	header.source_locs = NULL;
-	fwrite(&header, sizeof(twrapper), 1, f);
+	if (!tapc_write_header(f, wrapper)) {
+		fclose(f);
+		twarn(ErrSession_IO, "tanalyser_save_bin_file", filename);
+		return -1;
+	}
 
 	/* Write cmdarr */
 	fwrite(wrapper->cmdarr, sizeof(tbycode), wrapper->ncmds, f);
@@ -941,9 +917,9 @@ twrapper *tanalyser_load_bin_file(const char *filename)
 		return NULL;
 	}
 
-	/* Read wrapper header */
-	if (1 != fread(wrapper, sizeof(twrapper), 1, f)) {
-		twarn(ErrSession_IO, "tanalyser_load_bin_file", "");
+	if (!tapc_read_header(f, wrapper)) {
+		twarn(ErrSession_IO, "tanalyser_load_bin_file",
+		      "unsupported or truncated bytecode file");
 		free(wrapper);
 		fclose(f);
 		return NULL;
@@ -962,6 +938,16 @@ twrapper *tanalyser_load_bin_file(const char *filename)
 			return NULL;
 		}
 		wrapper->cmdarr = cmdarr;
+		for (uint_cmds instruction = 0; instruction < cmdlen; instruction++) {
+			if (tbycode_ins(cmdarr[instruction]) >= OP_COUNT) {
+				free(cmdarr);
+				free(wrapper);
+				fclose(f);
+				twarn(ErrSession_IO, "tanalyser_load_bin_file",
+				      "invalid bytecode instruction");
+				return NULL;
+			}
+		}
 	}
 
 	/* Read cints */

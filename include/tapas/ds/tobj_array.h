@@ -1,5 +1,5 @@
-#ifndef T_OBJ_ARRAY_H
-#define T_OBJ_ARRAY_H
+#ifndef TAPAS_DS_TOBJ_ARRAY_H
+#define TAPAS_DS_TOBJ_ARRAY_H
 
 #include "tapas/tval.h"
 
@@ -29,4 +29,4 @@ uint_objs tobj_array_get_ref_obj_loc(tobj_array *arr, tcompo_v *compo);
 }
 #endif
 
-#endif /* T_OBJ_ARRAY_H */
+#endif /* TAPAS_DS_TOBJ_ARRAY_H */

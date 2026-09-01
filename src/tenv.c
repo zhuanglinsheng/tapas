@@ -1,4 +1,4 @@
-#include "Tapas/tenv.h"
+#include "tapas/tenv.h"
 
 #include "tapas/runtime/tdict.h"
 #include "tapas/runtime/tlist.h"
@@ -452,9 +452,14 @@ static tstring *tfunc_tostring_full(void *self)
 }
 
 tcompo_vtable tfunc_vtable = {
-	tfunc_get_type,	     tfunc_get_code,	 tfunc_len,
-	tfunc_copy,	     tfunc_free,	 tfunc_identical,
-	tfunc_tostring_abbr, tfunc_tostring_full
+	.get_type = tfunc_get_type,
+	.get_compo_type_code = tfunc_get_code,
+	.len = tfunc_len,
+	.copy = tfunc_copy,
+	.free = tfunc_free,
+	.identical = tfunc_identical,
+	.tostring_abbr = tfunc_tostring_abbr,
+	.tostring_full = tfunc_tostring_full
 };
 
 tfunc *tfunc_new(uint_objs nlocals,
@@ -582,14 +587,14 @@ static tstring *tlib_tostring_full(void *self)
 }
 
 tcompo_vtable tlib_vtable = {
-	tlib_get_type,
-	tlib_get_code,
-	tlib_len,
-	tlib_copy,
-	tlib_free,
-	tlib_identical,
-	tlib_tostring_abbr,
-	tlib_tostring_full
+	.get_type = tlib_get_type,
+	.get_compo_type_code = tlib_get_code,
+	.len = tlib_len,
+	.copy = tlib_copy,
+	.free = tlib_free,
+	.identical = tlib_identical,
+	.tostring_abbr = tlib_tostring_abbr,
+	.tostring_full = tlib_tostring_full
 };
 
 tlib *tlib_new(void)

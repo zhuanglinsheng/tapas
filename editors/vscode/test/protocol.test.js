@@ -8,6 +8,14 @@ const { pathToFileURL } = require('url');
 const { LspConnection } = require('../protocol');
 
 async function main() {
+  const grammar = JSON.parse(fs.readFileSync(
+    path.resolve(__dirname, '..', 'syntaxes', 'tapas.tmLanguage.json'), 'utf8'));
+  const namedFunction = new RegExp(grammar.repository.functions.patterns[0].match)
+    .exec('function add(left: Int) -> Int');
+  assert.strictEqual(namedFunction[3], 'add');
+  const operator = new RegExp(grammar.repository.operators.patterns[0].match);
+  assert.strictEqual(operator.exec('->')[0], '->');
+
   const executable = process.argv[2] || path.resolve(
     __dirname, '..', '..', '..', 'build', 'bin', 'tapas-language-server');
   let resolveExit;
@@ -19,7 +27,7 @@ async function main() {
   const modulePath = path.join(workspace, 'module.tap');
   const mainPath = path.join(workspace, 'main.tap');
   fs.writeFileSync(modulePath,
-    "let answer = 42\nlet double = (value){ return value + value }\nreturn {'answer': answer, 'double': double}\n");
+    "let answer = 42\nfunction double(value: Int) -> Int { return value + value }\nreturn {'answer': answer, 'double': double}\n");
   const workspaceUri = pathToFileURL(workspace).toString();
   const mainUri = pathToFileURL(mainPath).toString();
   const moduleUri = pathToFileURL(fs.realpathSync(modulePath)).toString();
@@ -58,6 +66,29 @@ async function main() {
     position: { line: 1, character: 13 },
   });
   assert.ok(completion.some((item) => item.label === 'value'));
+  connection.notify('textDocument/didChange', {
+    textDocument: { uri: 'file:///vscode.tap', version: 2 },
+    contentChanges: [{
+      text: 'function add(left: Int, right: List[Int]) -> Int {\n' +
+        '  return left + right[0]\n}\nlet answer = add(1, [2])\n',
+    }],
+  });
+  const parameterHover = await connection.request('textDocument/hover', {
+    textDocument: { uri: 'file:///vscode.tap' },
+    position: { line: 1, character: 10 },
+  });
+  assert.match(parameterHover.contents.value, /parameter left: Int/);
+  const functionHover = await connection.request('textDocument/hover', {
+    textDocument: { uri: 'file:///vscode.tap' },
+    position: { line: 3, character: 14 },
+  });
+  assert.match(functionHover.contents.value,
+    /add: Function\[Int, List\[Int\]\] -> Int/);
+  const callResultHover = await connection.request('textDocument/hover', {
+    textDocument: { uri: 'file:///vscode.tap' },
+    position: { line: 3, character: 5 },
+  });
+  assert.match(callResultHover.contents.value, /answer: Int/);
   connection.notify('textDocument/didOpen', {
     textDocument: {
       uri: mainUri, languageId: 'tapas', version: 1,

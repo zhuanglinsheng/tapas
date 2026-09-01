@@ -1,0 +1,26 @@
+let started = clock_ns()
+var state = 17
+var total = 0
+
+for(let index in 0 to 1000000){
+    if(index % 3 == 0 and state % 2 == 1){
+        state = (state * 5 + index) % 97
+        total = total + state
+    }
+    elif(index % 5 == 0 or state < 20){
+        state = (state + index % 11 + 7) % 97
+        total = total - state
+    }
+    else{
+        state = (state * 3 + 1) % 97
+        if(state > 60){
+            total = total + 3
+        }
+        else{
+            total = total - 2
+        }
+    }
+}
+
+print(total + state)
+print(clock_ns() - started)

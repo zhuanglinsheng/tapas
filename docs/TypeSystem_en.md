@@ -58,10 +58,10 @@ value. Users cannot construct an empty Type:
 types::make_type() // Compile error: a field Type must not be empty.
 ```
 
-Every definition path must eventually reach `types::AnyType`. The current type
-system does not support direct or indirect recursion. Self-reference, mutual
-references within a module, and cyclic references across modules are all
-compile errors.
+Every non-recursive definition path eventually reaches a predefined Type.
+Recursive Types form a finite graph through named definitions and back
+references. Direct recursion and mutual recursion in one lexical scope are
+supported. Runtime module-import cycles remain module errors.
 
 ### 1.2 Predefined Types
 
@@ -96,10 +96,15 @@ type annotation. The compiler recognizes only the following as static Type
 expressions:
 
 1. a predefined Type from the `types` package;
-2. an immutable static Type binding already established in the current scope;
+2. an established static Type binding that has not subsequently been
+   reassigned in the current scope;
 3. a static Type binding exported by a module interface;
 4. a direct call to `types::make_type`, `types::union`, `types::list`,
    `types::pair`, or `types::dictionary` that satisfies Section 2.
+
+A type annotation may additionally use the parameterized Type applications
+defined in Section 3.1. This syntax constructs a Type only in an annotation; it
+is not an ordinary indexing expression and executes no runtime code.
 
 Any number of aliases may be introduced for a static Type with `let`:
 
@@ -215,13 +220,20 @@ let Matrix = types::list(types::list(types::Float))
 ```
 
 Constructor arguments must be static Type expressions and may be nested to a
-finite depth. An annotation accepts only a Type reference, so a constructed
-Type should first be bound to a name. The current syntax does not provide forms
-such as `List[Int]`:
+finite depth. A constructed Type may be bound to a name or written directly in
+an annotation with a parameterized Type application:
 
 ```tapas
 let values: IntList = [1, 2, 3]
+let direct_values: List[Int] = [1, 2, 3]
+let matrix: List[List[Float]] = []
+let scores: Dictionary[String, Float] = {}
 ```
+
+`List[T]`, `Pair[A, B]`, and `Dictionary[K, V]` produce Types equivalent to
+`types::list(T)`, `types::pair(A, B)`, and `types::dictionary(K, V)`,
+respectively. The bracket form improves annotation syntax but does not add
+user-defined generic templates.
 
 A raw container Type checks only the runtime category and is not equivalent to
 a parameterized container using `types::AnyType`:
@@ -271,10 +283,48 @@ let canonical_identifier_b = types::union(types::String, types::Int)
 `types::union(T, T)` is valid and produces `T`. A source-level call with fewer
 than two arguments is a compile error.
 
-### 2.4 Canonical representation and construction order
+### 2.4 Recursive Types
 
-The canonical representation used for Type equivalence, ordering, hashing,
-and module interfaces is generated as follows:
+A recursive Type first declares an uninitialized `let` explicitly annotated
+as `Type`, then completes it with one static Type assignment:
+
+```text
+let Tree: Type
+
+Tree = types::make_type(
+    'value': types::Int,
+    'children': types::list(Tree),
+)
+```
+
+Before completion, the name may occur only as a static Type reference needed
+to complete a recursive definition; it cannot be read as an ordinary runtime
+value. Several names may be declared first to form mutual recursion:
+
+```text
+let Left: Type
+let Right: Type
+
+Left = types::make_type('rights': types::list(Right))
+Right = types::make_type('lefts': types::list(Left))
+```
+
+Every cycle must pass through a real Type constructor such as a field,
+container, union, or function. Pure alias cycles such as `A = A` or
+`A = B; B = A` are compile errors. A completed Type graph is immutable.
+Reassigning the variable later does not mutate the sealed graph or redirect
+existing back references.
+
+Recursive Types retain structural equivalence. Equality, assignability, and
+matching remember visited node pairs or value-Type pairs and do not expand a
+cycle indefinitely. Display uses a finite recursion marker rather than trying
+to print the whole graph. Module interfaces preserve the structured graph
+rather than depending on expanded display text.
+
+### 2.5 Canonical representation and construction order
+
+The canonical representation used for equivalence, ordering, and hashing of
+non-recursive Types is generated as follows:
 
 1. `types::AnyType` uses a fixed terminus marker;
 2. every other predefined Type uses a fixed numeric identifier;
@@ -287,9 +337,13 @@ and module interfaces is generated as follows:
 6. every segment includes its category and length; displayed text must not
    simply be concatenated.
 
-Type cycles are forbidden, so recursive computation of a canonical
-representation always terminates. The canonical representation is not a
-display format and is not returned by `types::definition`.
+A recursive Type is compared directly as a finite graph with back references;
+it does not produce an infinitely expanded canonical string. Node numbers used
+during comparison belong only to that traversal and do not depend on declaration
+names or object addresses. Recursive Types use a stable hash compatible with
+structural equivalence; equivalent Types must have the same hash, although
+different Types may share one. Neither the canonical representation nor graph
+comparison is a display format or returned by `types::definition`.
 
 A field Type also has a **construction order**: the order in which its Pairs
 appear in `make_type`. The compiler and module interface preserve this order
@@ -311,18 +365,51 @@ orders even though both Types describe the same structure.
 The annotation syntax in a declaration is:
 
 ```text
-declarator     = IDENTIFIER, [ ":", type-reference ], "=", expression ;
-type-reference = IDENTIFIER, { "::", IDENTIFIER } ;
+declarator       = IDENTIFIER, [ ":", type-expression ], [ "=", expression ] ;
+type-expression  = function-type | type-application | qualified-type-name ;
+function-type    = function-constructor, "[",
+                   [ type-arguments, [ "," ] | "..." ], "]",
+                   "->", type-expression ;
+function-constructor = "Function" | "types::Function" ;
+type-application = qualified-type-name,
+                   "[", [ type-arguments, [ "," ] ], "]" ;
+type-arguments   = type-expression, { ",", type-expression } ;
+qualified-type-name = IDENTIFIER, { "::", IDENTIFIER } ;
 ```
 
-An annotation may refer only to a static Type binding. It cannot invoke a
-constructor, perform indexing, or evaluate another expression:
+A parameterized Type application accepts only these built-in constructors:
+
+| Form | Arity | Equivalent construction form |
+|---|---:|---|
+| `List[T]` | 1 | `types::list(T)` |
+| `Pair[A, B]` | 2 | `types::pair(A, B)` |
+| `Dictionary[K, V]` | 2 | `types::dictionary(K, V)` |
+| `Union[A, B, ...]` | at least 2 | `types::union(A, B, ...)` |
+| `Function[A, B, ...] -> R` | zero or more parameters and one result | no runtime construction form |
+
+A constructor may also be qualified, as in `types::List[T]`. Each argument is
+recursively a `type-expression`, so applications may be nested to a finite
+depth. Names are case-sensitive. A wrong arity, an unsupported base Type, or
+an argument that is not a valid Type expression is a compile error. A trailing
+comma is allowed. An empty argument list is valid only in `Function[] -> R`.
+`Function[...] -> R` denotes a variadic function; variadic items cannot
+currently carry a separate Type annotation.
+
+An unqualified constructor name follows the normal shadowing rule. If the
+current scope contains a binding with that name, resolution does not fall back
+to the built-in constructor. User-defined parameterized Type constructors are
+not currently supported.
+
+An annotation cannot call a constructor or evaluate another ordinary
+expression:
 
 ```text
 let Identifier = types::union(types::Int, types::String)
 let value: Identifier = read()
+let direct: Union[Int, String] = read()
 
 let other: types::union(types::Int, types::String) = read() // Compile error
+let invalid: Int[String] = 1                                // Compile error
 ```
 
 The `types::` qualifier may be omitted for a predefined Type in an annotation:
@@ -363,7 +450,83 @@ let other: types::Int = 1
 A type annotation supplies a target Type to the compiler. It performs no
 implicit conversion and is not stored in the runtime variable slot.
 
-### 3.2 Dictionaries and structure literals
+### 3.2 Function signature annotations
+
+Function parameter and result annotations use the same `type-expression` as a
+declaration:
+
+```text
+parameter        = IDENTIFIER, [ ":", type-expression ] ;
+fixed-parameters = parameter, { ",", parameter }, [ "," ] ;
+return-annotation = "->", type-expression ;
+function-literal = parameter-list, [ return-annotation ], block ;
+```
+
+The named declaration
+`function name(parameters) -> Type { ... }` uses the same signature syntax. It
+is equivalent to binding the corresponding function literal to the read-only
+name `name`.
+
+Each fixed parameter may be annotated or left unannotated:
+
+```text
+let find = (values: List[Int], target: Int, start) -> Int {
+    // ...
+}
+```
+
+An exact function Type can annotate higher-order parameters, results, and
+ordinary bindings:
+
+```tapas
+function apply(
+        callback: Function[Int] -> String,
+        value: Int,
+) -> String {
+    return callback(value)
+}
+
+let formatter: Function[Int] -> String = (value: Int) -> String {
+    return str(value)
+}
+```
+
+`->` is right-associative, so `Function[] -> Function[Int] -> String` denotes
+a zero-argument function that returns a formatting function. Exact function
+Types require the same fixed arity. Parameter Types are contravariant and the
+result Type is covariant. Fixed and variadic signatures are not assignable to
+one another.
+
+Parameter annotations are resolved in the definition environment of the
+function literal, before parameter names can shadow Type names. The resolved
+Types belong to the function signature and provide the target Types of the
+parameter bindings while the body is analyzed. A statically known call target
+also checks each argument with the assignability relation in Section 4.1;
+`this` uses the same signature as the current function.
+
+`-> Type` annotates the function result. The compiler checks every reachable
+exit with the relation in Section 4.1: a `return` with an expression checks
+that expression, while a bare `return` and reaching the end of the body both
+produce `Nil`. If the compiler cannot prove that every path returns, the
+result therefore includes `Nil`. An explicit result Type makes the result of a
+recursive call known before the body is analyzed. Without a result annotation,
+the function result is `Unknown`; this design does not require automatic
+inference.
+
+Parameter annotations provide compile-time constraints only. Compilation is
+accepted when an argument or call target is `Unknown`, and the compiler does
+not insert an implicit check at function entry. Use `types::matches` or
+`assert(rule)` explicitly when a dynamic boundary must enforce a more specific
+condition. The variadic `...` form cannot carry a parameter annotation, but a
+result annotation may follow its parameter list.
+
+The compiler uses a precise function signature to check the body, statically
+known calls, and module interfaces. This signature is compile-time Type
+metadata and does not change the runtime function object;
+`types::of(function_value)` still returns raw `types::Function`. Exact function
+Types currently have no runtime construction or reflection interface.
+
+### 3.3 Dictionaries and structure literals
 
 A field Type still describes an ordinary Dictionary at runtime. The complete
 construction syntax is a Dictionary literal with a type annotation:
@@ -418,9 +581,8 @@ a distinct runtime identity.
 
 ### 4.1 Assignability
 
-Variable initialization, later assignment, and field writes all use the same
-assignability relation. Future annotations for function parameters and return
-values should use this relation as well.
+Variable initialization, later assignment, field writes, and function
+parameter and result annotations use the same assignability relation.
 
 A known expression Type `A` is assignable to target Type `B` if and only if one
 of these rules applies:
@@ -486,6 +648,13 @@ Type binding ceases to be usable as a static Type name after reassignment, even
 if its new runtime value is also a Type. Errors involving name resolution,
 argument counts, duplicate fields, or deletion of required fields are governed
 by their own rules and are not part of assignability.
+
+A first assignment after a declaration also participates in definite-
+initialization analysis: a later read is valid only if every continuing control-
+flow path has assigned the binding. A loop body alone cannot establish a
+post-loop initialization fact. Completion of a recursive Type definition must
+occur on the unconditional path of its declaring block, not in a conditional
+branch or loop.
 
 ### 4.2 Literal checking and inference
 
@@ -559,6 +728,11 @@ The compile-time Type construction forms are:
 | `types::list(Type) -> Type` | Construct a parameterized List Type |
 | `types::pair(Type, Type) -> Type` | Construct a parameterized Pair Type |
 | `types::dictionary(Type, Type) -> Type` | Construct a parameterized Dictionary Type |
+
+Annotations also provide `List[T]`, `Pair[A, B]`, `Dictionary[K, V]`, and
+`Union[A, B, ...]`. These forms construct the same Types as the functions in
+the table; they are not ordinary runtime indexing and do not define new Type
+templates.
 
 The runtime-checking interfaces are:
 
@@ -661,15 +835,17 @@ result may contain internal encodings, is not stable across versions, and
 cannot be passed back to `types::make_type`. A Type's printed representation is
 likewise intended only for diagnostics.
 
-Type `==` compares canonical representations; `!=` is its negation. Between a
+For non-recursive Types, `==` compares canonical representations; for recursive
+Types, it compares finite Type graphs. `!=` is its negation. Between a
 Type and a non-Type, `==` returns `false` and `!=` returns `true`.
 `identical(A, B)` tests only whether both values refer to the same Type object.
 Equivalent Types may or may not share an object, and programs must not depend
 on either behavior.
 
-When a Type is used as a Dictionary key, key equality follows `==` and its hash
-is derived from the canonical representation. Equivalent Types must have the
-same hash and address the same Dictionary entry.
+When a Type is used as a Dictionary key, key equality follows `==`. A
+non-recursive Type's hash is derived from its canonical representation; a
+recursive Type uses a stable hash compatible with graph equivalence. Equivalent
+Types must have the same hash and address the same Dictionary entry.
 
 `types::of` accepts any value. The second argument to `types::matches` must be
 a Type. The other reflection functions report a runtime argument-type error
@@ -702,12 +878,11 @@ let origin: geometry::Point = {
 }
 ```
 
-The module interface stores a Type's canonical representation. For a field
-Type, it also stores the construction order required by positional structure
-literals. The interface does not store object addresses, results from
-`types::definition`, or displayed text. An importing module reconstructs or
-reuses the runtime Type from its canonical representation; construction order
-is used only to expand structure literals at compile time.
+The module interface stores the static Type graph. For a field Type, it also
+stores the construction order required by positional structure literals. The
+interface does not depend on results from `types::definition` or displayed
+text. An importing module reuses or materializes that Type graph; construction
+order is used only to expand structure literals at compile time.
 
 A module may also export a binding whose runtime value is a Type but whose
 source is not a static Type expression. An importer can use that binding only
@@ -715,11 +890,12 @@ as an ordinary runtime value, not in an annotation. A module interface must
 distinguish a “static Type binding” from an “ordinary binding whose runtime
 type is Type.”
 
-The Language Server reads the same module interface to provide Type-name
-completion, go to definition, field completion, container-member inference,
-find references, and static diagnostics. The compiler and Language Server
-perform the prescribed static evaluation only for the five Type construction
-forms; they do not execute ordinary Tapas functions.
+The reusable front end stores node, symbol, and function-signature Types as
+immutable `TypeId` values in a Type arena. The compiler and Language Server
+consume the same static analysis result. Only the compiler materializes a
+`TypeId` as a runtime `ttypeval` while generating a program; the Language
+Server does not link or execute the VM. Both sides statically evaluate only
+the defined Type construction forms and never execute ordinary Tapas functions.
 
 
 
@@ -794,6 +970,11 @@ it contains. Runtime entry points should still defensively reject an empty
 definition, a non-String key, a non-Type value, an invalid reserved key, or an
 invalid internal shape.
 
+A completed recursive Type graph may contain reference cycles. The current
+runtime retains such immutable graphs for the lifetime of the process; this
+does not change observable semantics. A future graph owner or cycle collector
+must preserve the same public behavior.
+
 No public operation may expose an internally writable location:
 
 - ordinary indexing, `len`, `keys`, and iteration expose only user fields and
@@ -802,14 +983,14 @@ No public operation may expose an internally writable location:
   `types::definition` return copies or new containers;
 - `types::base` returns the raw container Type according to the internal
   category;
-- `==` and hashing use the canonical representation, independently of object
-  addresses and hash-table iteration order.
+- `==` and hashing use the canonical representation or recursive graph
+  semantics, independently of object addresses and hash-table iteration order.
 
 The `ttypeval` vtable provides the fixed type name `Type`, composite type code
 `compo_ttypeval`, release, read-only access, string representation, `==`, `!=`,
 and identity. When a Type is used as a Dictionary key, hashing and equivalence
-must use the canonical representation rather than the address comparison used
-by ordinary composite objects.
+must use canonical or recursive-graph semantics rather than the address
+comparison used by ordinary composite objects.
 
 Field construction order is not stored in `ttypeval`; the compiler and module
 interface maintain it separately. The current structure does not constrain a
@@ -823,14 +1004,12 @@ the `Dictionary[String, Type]` logical model remain unchanged.
 
 The current type system does not represent:
 
-- recursive Types;
 - optional fields;
 - Iterator element Types;
 - array shapes, dimensions, or other numeric parameters;
-- function parameter or return Types;
+- precise function-signature Types that can be constructed or reflected at
+  runtime;
 - intersections, nominal inheritance, or method Types.
 
-For now, a recursive position can use only `types::AnyType`, thereby giving up
-the static constraint at that position. Any future addition of the capabilities
-above requires a separate design and must not change the meaning of the Types
-defined here.
+Future additions of these capabilities must not change the meaning of the
+Types defined here.

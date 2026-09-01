@@ -1,14 +1,12 @@
 // Seven classic sorting algorithms.
 
-let IntList : Type = types::list(types::Int)
-
-var swap = (xs, i, j){
+var swap = (xs: List[Int], i: Int, j: Int) -> Nil {
     let temporary = xs[i]
     xs[i] = xs[j]
     xs[j] = temporary
 }
 
-var bubble_sort = (xs){
+var bubble_sort = (xs: List[Int]) -> List[Int] {
     // Stable, in place. Time: O(n^2); space: O(1).
     let n = xs.len()
     for(let i in 0 to n){
@@ -21,7 +19,7 @@ var bubble_sort = (xs){
     return xs
 }
 
-var selection_sort = (xs){
+var selection_sort = (xs: List[Int]) -> List[Int] {
     // Unstable, in place. Time: O(n^2); space: O(1).
     let n = xs.len()
     for(let i in 0 to n){
@@ -38,7 +36,7 @@ var selection_sort = (xs){
     return xs
 }
 
-var insertion_sort = (xs){
+var insertion_sort = (xs: List[Int]) -> List[Int] {
     // Stable, in place. Time: O(n^2), or O(n) when already sorted.
     let n = xs.len()
     for(let i in 1 to n){
@@ -53,7 +51,7 @@ var insertion_sort = (xs){
     return xs
 }
 
-var shell_sort = (xs){
+var shell_sort = (xs: List[Int]) -> List[Int] {
     // In-place gapped insertion sort using a simple halving gap sequence.
     let n = xs.len()
     let gap = n / 2
@@ -72,9 +70,8 @@ var shell_sort = (xs){
     return xs
 }
 
-var merge_sort = (xs){
+var merge_sort = (xs: List[Int]) -> List[Int] {
     // Stable. Time: O(n log n); temporary space: O(n).
-    let LocalIntList = types::list(types::Int)
     if(xs.len() <= 1){
         return xs.copy()
     }
@@ -82,7 +79,7 @@ var merge_sort = (xs){
     let middle = xs.len() / 2
     let left = this(xs[:middle])
     let right = this(xs[middle:])
-    let result: LocalIntList = []
+    let result: List[Int] = []
     let i = 0
     let j = 0
 
@@ -107,17 +104,16 @@ var merge_sort = (xs){
     return result.copy()
 }
 
-var quick_sort = (xs){
+var quick_sort = (xs: List[Int]) -> List[Int] {
     // Stable functional partition. Average time: O(n log n); extra space: O(n).
-    let LocalIntList = types::list(types::Int)
     if(xs.len() <= 1){
         return xs.copy()
     }
 
     let pivot = xs[0]
-    let left: LocalIntList = []
-    let equal: LocalIntList = []
-    let right: LocalIntList = []
+    let left: List[Int] = []
+    let equal: List[Int] = []
+    let right: List[Int] = []
 
     for(let value in xs){
         if(value < pivot){
@@ -133,7 +129,7 @@ var quick_sort = (xs){
     return this(left).union(equal).union(this(right))
 }
 
-var heapify = (xs, n, root){
+var heapify = (xs: List[Int], n: Int, root: Int) -> Nil {
     let current = root
     let finished = false
     while(finished == false){
@@ -157,7 +153,7 @@ var heapify = (xs, n, root){
     }
 }
 
-var heap_sort = (xs){
+var heap_sort = (xs: List[Int]) -> List[Int] {
     // Unstable, in place. Time: O(n log n); space: O(1).
     let n = xs.len()
     let i = n / 2 - 1
@@ -175,11 +171,10 @@ var heap_sort = (xs){
     return xs
 }
 
-var sample: IntList = [2, 7, 3, 4, 3, 1, 9, 1, 8, 4, 6, 9, 5]
+var sample: List[Int] = [2, 7, 3, 4, 3, 1, 9, 1, 8, 4, 6, 9, 5]
 
-var show_inplace_sort = (name, sorter){
-    let LocalIntList = types::list(types::Int)
-    let values: LocalIntList = sample.copy()
+var show_inplace_sort = (name: String, sorter: Function) -> Nil {
+    let values: List[Int] = sample.copy()
     let sorted = sorter(values)
     sprint(name, ': ', values)
 }

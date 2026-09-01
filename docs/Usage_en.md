@@ -301,7 +301,7 @@ library:
 __ls__().sprint()
 ```
 <pre class='Tapas-Return'>
-[print, sprint, len, type, copy, identical, clock, now, array, int, float, bool, str, list, push, append, insert, pop, delete, idx, keys, dkeys, dvalues, union, pair, iter, sort, dense, math, __ls__, __path__, __param__, __nparam__, __binary__]
+[print, sprint, len, type, copy, identical, clock, clock_ns, now, array, int, float, bool, str, list, push, append, insert, pop, delete, idx, keys, dkeys, dvalues, union, pair, iter, sort, dense, math, __ls__, __path__, __param__, __nparam__, __binary__]
 </pre>
 
 
@@ -352,6 +352,8 @@ build/bin/tapas -h
   before the file that needs the path.
 - `-e` and `-r` load `.tapc` bytecode. If a source filename is passed, Tapas
   replaces its suffix with `.tapc`.
-- `.tapc` files depend on the default objects registered by the runtime. If the
-  built-in object list changes, recompile old bytecode with `-c` or `-ce`.
+- A `.tapc` file is generated for a particular Tapas runtime and is not
+  guaranteed to be compatible across versions. After updating Tapas, rebuild it
+  from source with `-c` or `-ce`. The runtime rejects unsupported bytecode
+  format versions.
 - Tapas exits with an error when compilation or runtime errors are raised.

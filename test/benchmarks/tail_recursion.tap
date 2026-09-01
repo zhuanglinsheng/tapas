@@ -1,0 +1,12 @@
+let count_down = (remaining, count){
+    if(remaining == 0){
+        return count
+    }
+    return this(remaining - 1, count + 1)
+}
+
+let started = clock_ns()
+let result = count_down(50000, 0)
+
+print(result)
+print(clock_ns() - started)

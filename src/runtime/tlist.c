@@ -93,9 +93,14 @@ static tstring *tlist_tostring_full(void *self)
 }
 
 tcompo_vtable tlist_vtable = {
-	tlist_get_type,	     tlist_get_code,	 tlist_len,
-	tlist_copy,	     tlist_free,	 tlist_identical,
-	tlist_tostring_abbr, tlist_tostring_full
+	.get_type = tlist_get_type,
+	.get_compo_type_code = tlist_get_code,
+	.len = tlist_len,
+	.copy = tlist_copy,
+	.free = tlist_free,
+	.identical = tlist_identical,
+	.tostring_abbr = tlist_tostring_abbr,
+	.tostring_full = tlist_tostring_full
 };
 
 tlist *tlist_new(void)
@@ -167,9 +172,8 @@ tlist_idx(tlist *l, const tobj *params, uint_regs np, tobj *vre)
 	long start, end;
 	if (pair_to_range(&params[0], (long)tobj_vec_len(&l->items), &start, &end)) {
 		tlist *slice = tlist_new();
-		long i;
-		for (i = start; i < end; i++)
-			tlist_push(slice, tobj_vec_at(&l->items, (uint_objs)i));
+		tobj_vec_copy_range(&slice->items, &l->items,
+				    (uint_objs)start, (uint_objs)(end - start));
 		tobj_set_compo(vre, (tcompo_v *)slice);
 		return;
 	}

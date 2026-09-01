@@ -1,43 +1,38 @@
-# Tapas Language Server
+# Tapas 语言服务器
 
-[简体中文](README_zh.md) | English
+简体中文 | [English](README_en.md)
 
-`tapas-language-server` is a standalone stdio Language Server Protocol process.
-It links only the reusable compiler front end; it does not initialize the VM or
-execute user code.
+`tapas-language-server` 是一个通过标准输入输出通信的独立 Language Server Protocol 进程。
+它只链接可复用的编译器前端，不会初始化虚拟机，也不会执行用户代码。
 
-Implemented protocol features:
+目前支持以下协议功能：
 
-- full document synchronization (`didOpen`, `didChange`, `didClose`);
-- recoverable parser and semantic diagnostics;
-- UTF-16 LSP position conversion for UTF-8 Tapas source;
-- hover information with inferred or annotated local Types;
-- local and cross-module definition and reference lookup;
-- document and workspace symbols;
-- prefix-aware local and standard-environment completion;
-- default-package and imported-module member completion after `::`;
-- prepare-rename, local rename, and workspace edits for public module members;
-- recursive workspace indexing, document overlays, import diagnostics, and
-  watched-file refresh.
+- 全文档同步（`didOpen`、`didChange`、`didClose`）；
+- 可从语法错误中恢复的解析，以及语义诊断；
+- 在 UTF-8 Tapas 源码与 LSP UTF-16 位置之间转换；
+- 显示局部变量推断或标注 Type 的悬停信息；
+- 查找当前文件和跨模块的定义与引用；
+- 提供文档符号和工作区符号；
+- 根据已输入前缀补全局部名称和标准环境中的名称；
+- 在 `::` 后补全默认包和已导入模块的成员；
+- 支持重命名预检、局部重命名，以及公开模块成员的工作区编辑；
+- 递归建立工作区索引，维护打开文档的内存版本，诊断导入问题，并在受监视文件
+  变化后刷新分析结果。
 
-The server is started by an editor with:
+编辑器通过以下命令启动服务器：
 
 ```text
 tapas-language-server
 ```
 
-The repository includes a dependency-free VS Code client under
-`editors/vscode/`. It can locate the server in the repository build directory,
-through `PATH`, or through the `tapas.languageServer.path` setting.
+仓库在 `editors/vscode/` 中提供了一个不依赖第三方包的 VS Code 客户端。
+客户端可以从仓库的构建目录、`PATH` 或 `tapas.languageServer.path` 设置中找到语言服务器。
 
-## Layering
+## 分层结构
 
-`json.c` owns the small protocol JSON parser. `server.c` owns framing, requests,
-notifications, and LSP serialization. `src/compile/module.c` defines public
-module interfaces and the standard environment; `src/compile/workspace.c` owns
-document snapshots, disk indexing, imports, and cross-file identity. Protocol
-handlers translate those results into LSP positions and edits.
+`json.c` 实现协议所需的轻量 JSON 解析器。`server.c` 负责消息分帧、请求、通知和 LSP 数据序列化。
+`src/compile/module.c` 定义公开模块接口和标准环境；
+`src/compile/workspace.c` 管理文档快照、磁盘索引、导入关系和跨文件符号身份。
+协议处理程序负责将这些分析结果转换为 LSP 位置和工作区编辑。
 
-Remaining editor work includes signature help, semantic tokens, incremental
-text synchronization, and migration of the complete structural Type checker
-from compiler bindings into the reusable type-information model.
+后续编辑器支持还包括签名提示、语义标记、增量文本同步，以及把完整的结构 Type 检查从编译器绑定迁移到可复用的类型信息模型。

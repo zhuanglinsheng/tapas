@@ -1,10 +1,8 @@
 // Find all prime numbers up to a limit with the Sieve of Eratosthenes.
 // Time: O(n log log n); space: O(n).
 
-var primes_up_to = (limit){
-    let BoolList = types::list(types::Bool)
-    let IntList = types::list(types::Int)
-    let is_prime: BoolList = []
+var primes_up_to = (limit: Int) -> List[Int] {
+    let is_prime: List[Bool] = []
     for(let value in 0 to (limit + 1)){
         is_prime.append(value >= 2)
     }
@@ -22,7 +20,7 @@ var primes_up_to = (limit){
         candidate = candidate + 1
     }
 
-    let primes: IntList = []
+    let primes: List[Int] = []
     for(let value in 2 to (limit + 1)){
         if(is_prime[value]){
             primes.append(value)

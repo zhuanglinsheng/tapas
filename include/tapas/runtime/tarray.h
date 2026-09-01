@@ -1,5 +1,5 @@
-#ifndef T_RUNTIME_ARRAY_H
-#define T_RUNTIME_ARRAY_H
+#ifndef TAPAS_RUNTIME_TARRAY_H
+#define TAPAS_RUNTIME_TARRAY_H
 
 #include "tapas/tval.h"
 
@@ -52,4 +52,4 @@ tdarr *tdarr_neg(const tdarr *arr);
 }
 #endif
 
-#endif /* T_RUNTIME_ARRAY_H */
+#endif /* TAPAS_RUNTIME_TARRAY_H */

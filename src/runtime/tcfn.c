@@ -52,9 +52,14 @@ static tstring *tcppgenf_tostring_full(void *self)
 }
 
 tcompo_vtable tcppgenf_vtable = {
-	tcppgenf_get_type,       tcppgenf_get_code,      tcppgenf_len,
-	tcppgenf_copy,           tcppgenf_free,          tcppgenf_identical,
-	tcppgenf_tostring_abbr,  tcppgenf_tostring_full
+	.get_type = tcppgenf_get_type,
+	.get_compo_type_code = tcppgenf_get_code,
+	.len = tcppgenf_len,
+	.copy = tcppgenf_copy,
+	.free = tcppgenf_free,
+	.identical = tcppgenf_identical,
+	.tostring_abbr = tcppgenf_tostring_abbr,
+	.tostring_full = tcppgenf_tostring_full
 };
 
 tcppgenf *tcppgenf_new(genf_t f, const char *name, uint_regs nparams_sig)
@@ -128,9 +133,14 @@ static tstring *tcppsessf_tostring_full(void *self)
 }
 
 tcompo_vtable tcppsessf_vtable = {
-	tcppsessf_get_type,	 tcppsessf_get_code,	 tcppsessf_len,
-	tcppsessf_copy,		 tcppsessf_free,	 tcppsessf_identical,
-	tcppsessf_tostring_abbr, tcppsessf_tostring_full
+	.get_type = tcppsessf_get_type,
+	.get_compo_type_code = tcppsessf_get_code,
+	.len = tcppsessf_len,
+	.copy = tcppsessf_copy,
+	.free = tcppsessf_free,
+	.identical = tcppsessf_identical,
+	.tostring_abbr = tcppsessf_tostring_abbr,
+	.tostring_full = tcppsessf_tostring_full
 };
 
 tcppsessf *tcppsessf_new(sessf_t f, const char *name)

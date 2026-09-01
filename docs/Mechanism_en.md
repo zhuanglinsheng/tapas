@@ -98,7 +98,7 @@ Tapas bycode instructions are abstract VM instructions, not real CPU
 instructions.
 
 Like Lua VM instructions, Tapas bycodes are represented as unsigned integers.
-Tapas currently has 48 instructions.
+Tapas currently has 50 instructions.
 
 Each bycode is 32 bits long. The first 6 bits store the instruction code, which
 allows up to 64 instructions. The remaining 26 bits store instruction
@@ -125,8 +125,6 @@ details.
 - ``OP_PASS`` Do nothing.
 - ``OP_THIS`` Push the value representing the current environment onto the stack.
 - ``OP_BASE`` Push the value representing the parent environment onto the stack.
-- ``OP_BREAK`` Jump to the location after the next ``OP_JUMPB``.
-- ``OP_CONTI`` Jump to the location before the next ``OP_JUMPB``.
 - ``OP_RET`` Return the stack top, clear the stack, and jump to the end of the instruction list.
 - ``OP_IN`` Pop the top two stack values as parameters, call the ``in`` operator, and push the result.
 - ``OP_PAIR`` Pop the top two stack values as parameters, call the pair operator, and push the result.
@@ -162,6 +160,88 @@ details.
 - ``OP_IMPORT cloc`` Import a Tapas file whose path is stored as string constant ``cloc``.
 - ``OP_IDXR n`` Use the top ``n`` stack values as index arguments and the next value as the indexable object. Pop them and push the indexing result.
 - ``OP_EVAL n`` Use the top ``n`` stack values as call arguments and the next value as the callable object. Pop them and push the call result.
+- ``OP_EVALTF n`` Use the top ``n`` stack values as arguments and call the current function directly. Pop the arguments and push the result.
+
+The compiler still uses ``OP_PUSHINFO`` to store a binary operation's
+addressing mode. When a binary operation immediately follows it, the VM
+executes the pair as one fused operation without pushing that metadata.
+Arithmetic and numeric comparisons on integers and floats are completed
+directly in this fused path. Composite values with custom operators still use
+their vtable methods. This optimization neither changes the bytecode nor adds
+a runtime cache for binary operations.
+
+While executing an instruction, the VM records only the current instruction
+and its borrowed source location. The error system copies the file name and
+source text only when a runtime error occurs; normal execution does not rebuild
+the diagnostic context for every instruction.
+
+Inline bit operations decode opcodes and operands, and instruction execution is
+part of one interpreter loop. A Tapas call switches to an explicit call frame;
+it does not recursively enter another C interpreter function. Each frame owns
+its program counter, return location, local environment, operand storage,
+temporaries, and loop cursors. Returning clears retained values but keeps the
+allocated storage for another call at the same depth.
+
+Fixed-arity arguments are written into parameter slots reserved in the call
+environment. Only a dynamic argument list remains on the caller's operand
+stack for the duration of the call.
+
+When the same depth calls the same function again, the function object acts as
+a guard and the VM reuses the already validated frame layout directly. A call
+to another function still checks its parent environment, parameters, local
+slots, and operand-stack capacity.
+
+A direct tail call of the form ``return this(...)`` preserves its new arguments,
+clears the current frame, and resumes at the function entry without increasing
+the call depth. Environments retained by closures are copied into separate
+snapshots and do not depend on a reusable frame.
+
+Bytecode records the operation itself, not value types observed during one
+execution, and the VM does not rewrite instructions while running them. Each VM
+keeps a separate cache for the code it executes and accesses cache entries
+directly by instruction position. Loops, indexing operations, and calls use
+their generic path on the first execution. When the same position repeatedly
+sees the same types or function, later executions enter the corresponding implementation
+directly. Required guards remain in place; a position that sees different
+cases keeps its original instruction and falls back to generic dispatch.
+
+Caches are not written to `.tapc` files and do not belong to call frames. A
+list loop's current position does belong to its call frame and is accessed
+through a slot assigned by the cache. Different VMs can therefore execute the
+same bytecode safely, and recursive calls do not share loop positions.
+
+The compiler has already assigned slots to local names and temporary values.
+Instructions that address these slots access their arrays directly with a
+bounds check instead of entering a general array interface. An indexing
+instruction consumes its existing stack region and clears the container and
+arguments once after obtaining the result; it does not push the container
+again merely to clear that region.
+
+Creating and deleting local or temporary slots first reuses the array's
+existing capacity. Clearing a scalar slot only resets it; only composite values
+enter reference-counted release. Once an indexing cache has confirmed a stable
+container kind, one-integer List and String indexing and two-integer dense-array
+indexing use their concrete storage directly. Dense arrays compute
+`row * columns + column` while retaining negative-index, bounds, and assignment
+type checks. Slices or changing kinds return to the general path. `OP_IDXR` and
+`OP_IDXL` remain unchanged.
+
+Integers, floats, and booleans do not own composite values. Popping one of
+these values only moves the stack top because a later push overwrites the old
+slot. Arithmetic and comparisons whose operands are already known to be scalar
+also write their results directly instead of calling a generic setter that
+performs reference cleanup.
+
+Short character data is stored inside `tstring`; a separate buffer is allocated
+only after that capacity is exceeded. A runtime String embeds its `tstring`
+storage header, so a short String needs one allocation and remains an ordinary,
+independently mutable String. When the character length is already known, the
+runtime constructs the String directly from that length. Indexing avoids an
+end scan, and slicing no longer passes through a temporary `tstring`.
+
+A List slice has a known final length. The runtime allocates its element array
+once, copies the contiguous range, and increments reference counts only for
+composite elements instead of repeatedly appending and growing the result.
 
 
 
@@ -183,7 +263,7 @@ details.
 
 - ``OP_POPN nreg, interactive`` Pop ``nreg`` values from the top of the stack.
 - ``OP_POPCOV oloc, isenv`` Pop the stack top and assign it to the variable at ``oloc``.
-- ``OP_LOOPAS oloc, isenv`` Require an iterable value on top of the stack. Advance the iterator, assign the current item to the variable at ``oloc``, and push a boolean indicating whether iteration should continue.
+- ``OP_LOOPAS oloc, isenv`` Require an iterable value on top of the stack. Advance the iterator, assign the current item to the variable at ``oloc``, and push a boolean indicating whether iteration should continue. The runtime cache selects the implementation for integer ranges, lists, and Type values while the bytecode remains ``OP_LOOPAS``.
 - ``OP_PUSHX oloc, isenv`` Push the variable at ``oloc`` onto the stack.
 
 
@@ -334,7 +414,7 @@ __binary__(lib)
 [7]OP_PUSHI    1
 [8]OP_TO
 [9]OP_VCRT     1  0
-[10]OP_LOOPIAS  0  0
+[10]OP_LOOPAS   0  0
 [11]OP_CJPFPOP  27
 [12]OP_PUSHI    1
 [13]OP_PUSHI    2
@@ -389,7 +469,7 @@ __binary__(fn)
 [7]OP_PUSHI    1
 [8]OP_TO
 [9]OP_VCRT     1  0
-[10]OP_LOOPIAS  0  0
+[10]OP_LOOPAS   0  0
 [11]OP_CJPFPOP  27
 [12]OP_PUSHI    1
 [13]OP_PUSHI    2

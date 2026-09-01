@@ -1,7 +1,7 @@
-#ifndef T_VAL_H
-#define T_VAL_H
+#ifndef TAPAS_TVAL_H
+#define TAPAS_TVAL_H
 
-#include "Tapas/tbasis.h"
+#include "tapas/tbasis.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -107,4 +107,4 @@ const char *tobj_compo_type_name(const tobj *v);
 }
 #endif
 
-#endif /* T_VAL_H */
+#endif /* TAPAS_TVAL_H */

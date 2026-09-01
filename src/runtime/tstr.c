@@ -25,15 +25,22 @@ static void *tstr_copy(void *self)
 {
 	tstr *s = (tstr *)self;
 	tstr *n = (tstr *)calloc(1, sizeof(tstr));
+	if (!n)
+		return NULL;
 	n->base.vtable = s->base.vtable;
-	n->data = tstring_dup(s->data);
+	n->data = &n->storage;
+	if (!tstring_init_len(n->data, tstring_cstr(s->data),
+			      tstring_len(s->data))) {
+		free(n);
+		return NULL;
+	}
 	return n;
 }
 
 static void tstr_free(void *self)
 {
 	tstr *s = (tstr *)self;
-	tstring_free(s->data);
+	tstring_deinit(&s->storage);
 	free(s);
 }
 
@@ -56,17 +63,36 @@ static tstring *tstr_tostring_full(void *self)
 	return tstring_dup(s->data);
 }
 
-tcompo_vtable tstr_vtable = { tstr_get_type,	 tstr_get_code,
-				     tstr_len,		 tstr_copy,
-				     tstr_free,		 tstr_identical,
-				     tstr_tostring_abbr, tstr_tostring_full };
+tcompo_vtable tstr_vtable = {
+	.get_type = tstr_get_type,
+	.get_compo_type_code = tstr_get_code,
+	.len = tstr_len,
+	.copy = tstr_copy,
+	.free = tstr_free,
+	.identical = tstr_identical,
+	.tostring_abbr = tstr_tostring_abbr,
+	.tostring_full = tstr_tostring_full
+};
+
+tstr *tstr_new_len(const char *s, size_t len)
+{
+	tstr *st = (tstr *)calloc(1, sizeof(tstr));
+	if (!st)
+		return NULL;
+	st->base.vtable = &tstr_vtable;
+	st->data = &st->storage;
+	if (!tstring_init_len(st->data, s, len)) {
+		free(st);
+		return NULL;
+	}
+	return st;
+}
 
 tstr *tstr_new(const char *s)
 {
-	tstr *st = (tstr *)calloc(1, sizeof(tstr));
-	st->base.vtable = &tstr_vtable;
-	st->data = tstring_new(s ? s : "");
-	return st;
+	if (!s)
+		s = "";
+	return tstr_new_len(s, strlen(s));
 }
 
 static int pair_to_range(const tobj *param, long len, long *start, long *end)
@@ -116,10 +142,10 @@ tstr_idx(tstr *s, const tobj *params, uint_regs np, tobj *vre)
 			  (long)tstring_len(s->data),
 			  &start,
 			  &end)) {
-		tstring *slice = tstring_new_len(tstring_cstr(s->data) + start,
-						 (size_t)(end - start));
-		tobj_set_compo(vre, (tcompo_v *)tstr_new(tstring_cstr(slice)));
-		tstring_free(slice);
+		tobj_set_compo(
+			vre,
+			(tcompo_v *)tstr_new_len(tstring_cstr(s->data) + start,
+						 (size_t)(end - start)));
 		return;
 	}
 	if (params[0].type != tint)
@@ -130,8 +156,9 @@ tstr_idx(tstr *s, const tobj *params, uint_regs np, tobj *vre)
 		idx += (long)slen;
 	if (idx < 0 || (size_t)idx >= slen)
 		twarn(ErrRuntime_IdxOutRange, "tstr_idx", "");
-	char ch[2] = { tstring_cstr(s->data)[idx], '\0' };
-	tobj_set_compo(vre, (tcompo_v *)tstr_new(ch));
+	tobj_set_compo(
+		vre,
+		(tcompo_v *)tstr_new_len(tstring_cstr(s->data) + idx, 1));
 }
 
 void

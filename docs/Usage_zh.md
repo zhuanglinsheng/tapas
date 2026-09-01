@@ -262,7 +262,7 @@ __path__().sprint()
 __ls__().sprint()
 ```
 <pre class='Tapas-Return'>
-[print, sprint, len, type, copy, identical, clock, now, array, int, float, bool, str, list, push, append, insert, pop, delete, idx, keys, dkeys, dvalues, union, pair, iter, sort, dense, math, __ls__, __path__, __param__, __nparam__, __binary__]
+[print, sprint, len, type, copy, identical, clock, clock_ns, now, array, int, float, bool, str, list, push, append, insert, pop, delete, idx, keys, dkeys, dvalues, union, pair, iter, sort, dense, math, __ls__, __path__, __param__, __nparam__, __binary__]
 </pre>
 
 ## 常用示例
@@ -302,6 +302,7 @@ build/bin/tapas -h
 - `-p PATH` 只影响同一命令中位于它之后的参数，应把它放在需要该路径的文件前。
 - `-e` 和 `-r` 加载 `.tapc` 字节码；传入源文件名时，Tapas 会将后缀替换为
   `.tapc`。
-- `.tapc` 文件依赖运行时注册的默认对象。内置对象列表变化后，应使用 `-c`
-  或 `-ce` 重新编译旧字节码。
+- `.tapc` 是与当前 Tapas 运行时配套的生成文件，不保证跨版本兼容。更新
+  Tapas 后，应使用 `-c` 或 `-ce` 从源文件重新编译。运行时会拒绝格式版本
+  不匹配的字节码。
 - 发生编译错误或运行时错误时，Tapas 会以错误状态退出。

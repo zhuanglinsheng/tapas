@@ -105,9 +105,14 @@ static tstring *tdict_tostring_full(void *self)
 }
 
 tcompo_vtable tdict_vtable = {
-	tdict_get_type,	     tdict_get_code,	 tdict_len,
-	tdict_copy,	     tdict_free,	 tdict_identical,
-	tdict_tostring_abbr, tdict_tostring_full
+	.get_type = tdict_get_type,
+	.get_compo_type_code = tdict_get_code,
+	.len = tdict_len,
+	.copy = tdict_copy,
+	.free = tdict_free,
+	.identical = tdict_identical,
+	.tostring_abbr = tdict_tostring_abbr,
+	.tostring_full = tdict_tostring_full
 };
 
 tdict *tdict_new(void)

@@ -86,53 +86,5 @@ const tcompile_export *tcompile_module_export(
 
 int compile_type_assignable(const ttypeval *actual, const ttypeval *target)
 {
-	if (!actual || !target)
-		return 1;
-	if (ttypeval_equal(actual, target) ||
-	    target == ttypeval_builtin(ttype_builtin_any))
-		return 1;
-	if (actual->kind == ttype_kind_union) {
-		for (uint_objs i = 0; i < ttypeval_member_count(actual); i++)
-			if (!compile_type_assignable(
-				ttypeval_member_at(actual, i), target))
-				return 0;
-		return 1;
-	}
-	if (target->kind == ttype_kind_union) {
-		for (uint_objs i = 0; i < ttypeval_member_count(target); i++)
-			if (compile_type_assignable(
-				actual, ttypeval_member_at(target, i)))
-				return 1;
-		return 0;
-	}
-	if ((actual->kind == ttype_kind_list ||
-	     actual->kind == ttype_kind_pair ||
-	     actual->kind == ttype_kind_dictionary) &&
-	    ttypeval_base(actual) == target)
-		return 1;
-	if (actual->kind == ttype_kind_fields &&
-	    target == ttypeval_builtin(ttype_builtin_dictionary))
-		return 1;
-	if (actual->kind == ttype_kind_fields &&
-	    target->kind == ttype_kind_fields) {
-		for (uint_objs ti = 0; ti < ttypeval_field_count(target); ti++) {
-			const tobj *target_name;
-			ttypeval *target_type;
-			ttypeval_field_at(target, ti, &target_name, &target_type);
-			int found = 0;
-			for (uint_objs ai = 0; ai < ttypeval_field_count(actual); ai++) {
-				const tobj *actual_name;
-				ttypeval *actual_type;
-				ttypeval_field_at(actual, ai, &actual_name, &actual_type);
-				if (tobj_identical(actual_name, target_name)) {
-					found = ttypeval_equal(actual_type, target_type);
-					break;
-				}
-			}
-			if (!found)
-				return 0;
-		}
-		return 1;
-	}
-	return 0;
+	return compile_runtime_types_assignable(actual, target);
 }

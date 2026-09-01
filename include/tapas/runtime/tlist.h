@@ -1,5 +1,5 @@
-#ifndef T_RUNTIME_LIST_H
-#define T_RUNTIME_LIST_H
+#ifndef TAPAS_RUNTIME_TLIST_H
+#define TAPAS_RUNTIME_TLIST_H
 
 #include "tapas/ds/tobj_vec.h"
 #include "tapas/tval.h"
@@ -33,4 +33,4 @@ int tlist_next_at(tlist *l, long *iter_pos, tobj *vre);
 }
 #endif
 
-#endif /* T_RUNTIME_LIST_H */
+#endif /* TAPAS_RUNTIME_TLIST_H */

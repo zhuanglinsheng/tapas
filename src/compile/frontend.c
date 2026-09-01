@@ -1,7 +1,9 @@
 #include "tapas/compile/frontend.h"
 
-void tfrontend_init(tfrontend *frontend, const char *name,
-		    const char *source, tfrontend_mode mode)
+void tfrontend_init_with_resolver(
+	tfrontend *frontend, const char *name, const char *source,
+	tfrontend_mode mode, ttype_info_external_resolver resolver,
+	void *resolver_context)
 {
 	*frontend = (tfrontend){ .root = TAST_INVALID_ID, .mode = mode };
 	tsource_document_init(&frontend->document, name, source);
@@ -30,8 +32,16 @@ void tfrontend_init(tfrontend *frontend, const char *name,
 	 * information that can still be recovered after a parser diagnostic. */
 	tsemantic_analyze(&frontend->document, &frontend->arena,
 		frontend->root, &frontend->semantic, &frontend->diagnostics);
-	ttype_info_analyze(&frontend->document, &frontend->arena,
-		&frontend->semantic, &frontend->types);
+	ttype_info_analyze_with_resolver(
+		&frontend->document, &frontend->arena, &frontend->semantic,
+		&frontend->types, resolver, resolver_context);
+}
+
+void tfrontend_init(tfrontend *frontend, const char *name,
+		    const char *source, tfrontend_mode mode)
+{
+	tfrontend_init_with_resolver(
+		frontend, name, source, mode, NULL, NULL);
 }
 
 void tfrontend_free(tfrontend *frontend)

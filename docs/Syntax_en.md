@@ -127,23 +127,37 @@ other integer starts with `1` through `9`. Thus `10` is valid, while `00`,
 `010`, `0x10`, `0b10`, and `0o10` are compile errors. Floating literals include
 forms such as `.5`, `5.`, `1e3`, and `1.5e-3`.
 
-Declarations in the current normative grammar do not include type annotations.
+Declarations may include type annotations. Type construction, parameterized
+applications, and static checking are defined by `TypeSystem_en.md`.
 
 ### 4. Variables, scope, and assignment
 
-Every declaration has an initializer. Multiple declarations may share one
+A declaration may omit its initializer. Multiple declarations may share one
 statement:
 
 ```tapas
 var tutorial_origin = 0, tutorial_step = 1
 let tutorial_message = 'hello'
 tutorial_message = 42
+
+let tutorial_count: Int
+tutorial_count = 3
 ```
 
-An identifier must be declared before it is read or assigned. Two declarations
+An identifier must be declared and initialized before it is read. Its first
+assignment may complete initialization. Two declarations
 must not introduce the same name in the same scope, including one `var` and one
 `let` declaration. A nested function may shadow a name from an outer function.
 Built-ins in the root environment cannot be reassigned.
+
+Initialization follows control flow. A variable is definitely initialized only
+when it has been assigned on every continuing path reaching a read. A complete
+`if`/`elif`/`else` chain may establish initialization; without `else`, the path
+on which every condition is false remains. A `while` or `for` body may execute
+zero times, so assignments in it do not establish initialization after the
+loop. When an existing variable is a `for` target, it is initialized at each
+body entry, but its post-loop definite-initialization state remains the state
+from before the loop.
 
 `var` creates an **environment variable**. Its scope begins after its
 declarator and extends to the end of the current module or function body.
@@ -153,7 +167,13 @@ the surrounding function or module instead.
 
 `let` creates a **temporary variable**. Its scope begins after its declarator
 and extends to the end of the innermost current block. It is removed when that
-block exits and cannot be captured by a nested function.
+block exits and cannot be captured by a nested function. Lexical scope and
+closure capture are distinct here: a nested function definition may occur in
+the lexical scope of a `let`, but the resulting closure may outlive that block.
+A `let` uses temporary storage owned by the block and does not enter the closure
+environment. Prohibiting capture lets that storage be released deterministically
+when the block exits, without implicitly extending its lifetime. State shared
+with a closure should be declared with `var`.
 
 Function parameters behave like environment variables belonging to the
 function call and may be captured by a nested function.
@@ -381,12 +401,37 @@ print(tutorial_hypotenuse(3, 4))
 5
 </pre>
 
-Calling it with a different number of arguments is a runtime error. A variadic
-function uses `...` as its entire parameter list. It reads arguments with
-`__nparam__()` and `__param__(index)`.
+An arity mismatch is a compile error when the function signature is statically
+known; a dynamic call can check it only at runtime. A variadic function uses
+`...` as its entire parameter list. It reads arguments with `__nparam__()` and
+`__param__(index)`.
 
-Functions are anonymous. Inside a function, `this` evaluates to a callable copy
-of the current function and is the standard recursion mechanism. `base`
+Function parameter annotations use `name: Type`, and a function result
+annotation uses `-> Type`. Annotated and unannotated parameters may be mixed:
+
+```tapas
+let convert = (value: Union[Int, String], strict: Bool, context) -> String {
+    if(strict){
+        return str(value)
+    }
+    return 'value'
+}
+```
+
+Signature annotations use the `type-expression` and assignability relation
+defined by `TypeSystem_en.md`. They participate only in compile-time analysis
+and do not insert an implicit runtime check. The `...` form cannot carry a
+parameter annotation, but `(...) -> Type { ... }` is valid. Without a result
+annotation, the function result Type is `Unknown`.
+
+An exact function Type is written as `Function[parameter Types...] -> result
+Type` and may annotate higher-order parameters, results, and ordinary bindings.
+`Function[] -> T` is a zero-argument function, `Function[...] -> T` is
+variadic, and `->` is right-associative.
+
+Function literals are anonymous; a named `function` declaration creates a
+read-only binding. Inside a function, `this` evaluates to a callable
+copy of the current function and is the standard recursion mechanism. `base`
 evaluates to a copy of the parent function environment. `this` and `base` are
 only valid where the corresponding environment exists.
 
@@ -505,9 +550,7 @@ as deprecated or as legacy syntax.
 
 | Form | Current compatibility behavior | Possible future direction |
 |---|---|---|
-| `var name: Type = value` and `let name: Type = value` | The declaration is accepted, but `Type` is not checked and has no runtime effect. | Type annotations may become part of the type system. |
-| `function(parameters){ body }` | The declaration is accepted with the same behavior as `(parameters){ body }`. | The `function` keyword may become a formal function-literal spelling. |
-| `#{ expression }` | Creates an anonymous function that accepts any number of arguments and returns the result of `expression` when called. It approximates `(...){ return expression }`, but its body is limited to one expression. | This shorthand may become normative syntax or be deprecated. |
+| `function name(parameters) [-> Type] { body }` | Creates a read-only name with the same behavior as `let name = (parameters) [-> Type] { body }`. | It may become a formal named-function declaration. |
 
 Compilers and language servers should parse these forms without an error. A
 tool may show a non-error informational hint explaining that the syntax is a
@@ -612,7 +655,7 @@ delimiter quote. Source generators should choose the other quote style.
 The lexer uses longest-match tokenization:
 
 ```text
-Multi-character:  ==  !=  >=  <=  ::  ...  //
+Multi-character:  ==  !=  >=  <=  ::  ...  ->  //
 Single-character: + - * / % @ ^ & | > < = : . , ; ( ) [ ] { }
 Word operators:   and or in to
 ```
@@ -692,7 +735,15 @@ inside a block separate that block's statements.
 
 ```ebnf
 declaration       = ("var" | "let"), declarator, { ",", declarator } ;
-declarator        = IDENTIFIER, "=", expression ;
+declarator        = IDENTIFIER, [ ":", type-expression ], [ "=", expression ] ;
+type-expression   = function-type | type-application | qualified-type-name ;
+function-type     = ( "Function" | "types::Function" ), "[",
+                    [ type-arguments, [ "," ] | "..." ], "]",
+                    "->", type-expression ;
+type-application  = qualified-type-name,
+                    "[", [ type-arguments, [ "," ] ], "]" ;
+type-arguments    = type-expression, { ",", type-expression } ;
+qualified-type-name = IDENTIFIER, { "::", IDENTIFIER } ;
 assignment        = assignment-target, "=", expression ;
 assignment-target = IDENTIFIER, [ index-suffix ] ;
 ```
@@ -803,10 +854,16 @@ dictionary-literal = "{", [ dictionary-entry,
                             { ",", dictionary-entry }, [ "," ] ], "}" ;
 dictionary-entry   = or-expression, ":", expression ;
 
-function-literal = parameter-list, block ;
-parameter-list   = "(", [ fixed-parameters | "..." ], ")" ;
-fixed-parameters = IDENTIFIER, { ",", IDENTIFIER }, [ "," ] ;
+function-literal  = parameter-list, [ return-annotation ], block ;
+parameter-list    = "(", [ fixed-parameters | "..." ], ")" ;
+fixed-parameters  = parameter, { ",", parameter }, [ "," ] ;
+parameter         = IDENTIFIER, [ ":", type-expression ] ;
+return-annotation = "->", type-expression ;
 ```
+
+The named `function` declaration is a compatibility form defined in Section
+13.2, so it is not part of the normative EBNF. Its parameter and result
+annotations use the same rules as `function-literal`.
 
 `nil` is intentionally absent. `{}` in expression position is an empty
 dictionary; a block occurs only where a compound statement or function expects
@@ -822,7 +879,7 @@ Plain EBNF cannot express these required constraints:
 4. `break` and `continue` occur inside a loop in the same function;
 5. `return` occurs inside a function or at module top level;
 6. `elif` and `else` occur only in their `if-statement`;
-7. an assignment target resolves to a declared, mutable name;
+7. an assignment target resolves to a declared, writable name;
 8. a root built-in name cannot be assigned;
 9. `this` and `base` are used only where their environments exist;
 10. an import alias is valid and non-reserved;
@@ -853,6 +910,7 @@ the receiver. For example, `append(items, value)` and
 | `copy(value: Any)` | same category | Scalar copy or shallow composite copy. |
 | `identical(a: Any, b: Any)` | `bool` | Runtime identity/value identity. |
 | `clock()` | `float` | Process CPU time in seconds. |
+| `clock_ns()` | `int` | Process CPU time in nanoseconds, suitable for measuring short code. |
 | `now()` | `Time` | Absolute instant at the time of the call. Default display uses local time. |
 
 ### 3. Conversion and construction

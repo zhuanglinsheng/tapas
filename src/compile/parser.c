@@ -106,7 +106,8 @@ static int lparen_begins_function(const tparser *parser)
 				depth--;
 			else {
 				at = next_significant(parser, at + 1);
-				return raw_token(parser, at)->kind == tsyntax_lbrace;
+				return raw_token(parser, at)->kind == tsyntax_lbrace ||
+				       raw_token(parser, at)->kind == tsyntax_arrow;
 			}
 		}
 		if (kind == tsyntax_eof)
@@ -132,6 +133,42 @@ static tast_id parse_function(tparser *parser, tsource_span start)
 				break;
 			}
 			advance(parser);
+			tsource_span annotation = { name->span.end, name->span.end };
+			int has_annotation = consume(parser, tsyntax_colon, NULL);
+			if (has_annotation) {
+				uint32_t annotation_start = next_significant(
+					parser, parser->cursor);
+				uint32_t at = annotation_start;
+				uint32_t brackets = 0;
+				while (at < parser->tokens->count) {
+					tsyntax_kind kind = parser->tokens->items[at].kind;
+					if (kind == tsyntax_lbracket)
+						brackets++;
+					else if (kind == tsyntax_rbracket && brackets)
+						brackets--;
+					else if (brackets == 0 &&
+						 (kind == tsyntax_comma ||
+						  kind == tsyntax_rparen ||
+						  kind == tsyntax_eof))
+						break;
+					at++;
+				}
+				uint32_t annotation_end = at;
+				while (annotation_end > annotation_start &&
+				       tsyntax_kind_is_trivia(parser->tokens->items[
+					       annotation_end - 1].kind))
+					annotation_end--;
+				if (annotation_end == annotation_start)
+					tdiagnostics_add(parser->diagnostics,
+						tdiagnostic_error, peek(parser)->span,
+						"parameter type annotation expected");
+				else
+					annotation = (tsource_span){
+						parser->tokens->items[annotation_start].span.start,
+						parser->tokens->items[annotation_end - 1].span.end
+					};
+				parser->cursor = at;
+			}
 			if (count >= capacity) {
 				capacity = capacity ? capacity * 2 : 4;
 				parameters = (tast_id *)realloc(
@@ -140,7 +177,12 @@ static tast_id parse_function(tparser *parser, tsource_span start)
 					abort();
 			}
 			parameters[count++] = tast_arena_add(parser->arena,
-				(tast_node){ .kind = tast_parameter, .span = name->span });
+				(tast_node){
+					.kind = tast_parameter,
+					.span = name->span,
+					.parameter = { name->span, annotation,
+						       has_annotation }
+				});
 			if (!consume(parser, tsyntax_comma, NULL))
 				break;
 			if (peek(parser)->kind == tsyntax_rparen)
@@ -154,6 +196,40 @@ static tast_id parse_function(tparser *parser, tsource_span start)
 		tdiagnostics_add(parser->diagnostics, tdiagnostic_error,
 				 start, "'...' must be the entire parameter list");
 
+	tsource_span return_annotation = { start.end, start.end };
+	int has_return_annotation = consume(parser, tsyntax_arrow, NULL);
+	if (has_return_annotation) {
+		uint32_t annotation_start = next_significant(parser, parser->cursor);
+		uint32_t at = annotation_start;
+		uint32_t brackets = 0;
+		while (at < parser->tokens->count) {
+			tsyntax_kind kind = parser->tokens->items[at].kind;
+			if (kind == tsyntax_lbracket)
+				brackets++;
+			else if (kind == tsyntax_rbracket && brackets)
+				brackets--;
+			else if (brackets == 0 &&
+				 (kind == tsyntax_lbrace || kind == tsyntax_eof))
+				break;
+			at++;
+		}
+		uint32_t annotation_end = at;
+		while (annotation_end > annotation_start &&
+		       tsyntax_kind_is_trivia(
+			       parser->tokens->items[annotation_end - 1].kind))
+			annotation_end--;
+		if (annotation_end == annotation_start)
+			tdiagnostics_add(parser->diagnostics, tdiagnostic_error,
+				peek(parser)->span,
+				"function result type annotation expected");
+		else
+			return_annotation = (tsource_span){
+				parser->tokens->items[annotation_start].span.start,
+				parser->tokens->items[annotation_end - 1].span.end
+			};
+		parser->cursor = at;
+	}
+
 	uint32_t children = tast_arena_add_children(parser->arena, parameters, count);
 	free(parameters);
 	tast_id body = parse_block(parser);
@@ -161,7 +237,14 @@ static tast_id parse_function(tparser *parser, tsource_span start)
 	return tast_arena_add(parser->arena, (tast_node){
 		.kind = tast_function,
 		.span = { start.start, block ? block->span.end : start.end },
-		.function = { children, count, body, variadic }
+		.function = {
+			.parameters = children,
+			.parameter_count = count,
+			.body = body,
+			.return_annotation = return_annotation,
+			.variadic = variadic,
+			.has_return_annotation = has_return_annotation
+		}
 	});
 }
 
@@ -382,39 +465,8 @@ static tast_id parse_primary(tparser *parser)
 	case tsyntax_lbrace:
 		return parse_dictionary(parser, token->span);
 	case tsyntax_kw_function:
-		if (!consume(parser, tsyntax_lparen, NULL))
-			return error_node(parser, peek(parser)->span,
-					  "'(' expected after 'function'");
-		return parse_function(parser, token->span);
-	case tsyntax_hash: {
-		if (!consume(parser, tsyntax_lbrace, NULL))
-			return error_node(parser, peek(parser)->span,
-				"'{' expected after '#'");
-		tast_id value = parse_bp(parser, 0);
-		const tsyntax_token *close = NULL;
-		if (!consume(parser, tsyntax_rbrace, &close))
-			tdiagnostics_add(parser->diagnostics, tdiagnostic_error,
-				peek(parser)->span, "missing '}' after kappa expression");
-		const tast_node *value_node = tast_get(parser->arena, value);
-		tast_id returned = tast_arena_add(parser->arena, (tast_node){
-			.kind = tast_return_statement,
-			.span = value_node->span,
-			.return_statement = { value }
-		});
-		uint32_t statements = tast_arena_add_children(
-			parser->arena, &returned, 1);
-		tast_id body = tast_arena_add(parser->arena, (tast_node){
-			.kind = tast_block,
-			.span = { token->span.start,
-				  close ? close->span.end : value_node->span.end },
-			.aggregate = { TAST_INVALID_ID, statements, 1 }
-		});
-		return tast_arena_add(parser->arena, (tast_node){
-			.kind = tast_function,
-			.span = tast_get(parser->arena, body)->span,
-			.function = { 0, 0, body, 1 }
-		});
-	}
+		return error_node(parser, token->span,
+			"'function' begins a named declaration, not an expression");
 	case tsyntax_invalid:
 		return error_node(parser, token->span, "invalid token");
 	default:
@@ -549,7 +601,8 @@ static tast_id parse_declaration_statement(tparser *parser,
 				 kind == tsyntax_rbrace) {
 				if (depth)
 					depth--;
-			} else if (kind == tsyntax_assign && depth == 0)
+			} else if ((kind == tsyntax_assign || kind == tsyntax_comma) &&
+				   depth == 0)
 				break;
 			if (kind == tsyntax_eof)
 				break;
@@ -573,20 +626,20 @@ static tast_id parse_declaration_statement(tparser *parser,
 		parser->cursor = at;
 	}
 
-	if (!consume(parser, tsyntax_assign, NULL))
-		return error_node(parser, peek(parser)->span,
-				  "declaration requires '='");
-	tast_id initializer = parse_bp(parser, 0);
+	int has_initializer = consume(parser, tsyntax_assign, NULL);
+	tast_id initializer = has_initializer ? parse_bp(parser, 0) : TAST_INVALID_ID;
 	const tast_node *value = tast_get(parser->arena, initializer);
 	return tast_arena_add(parser->arena, (tast_node){
 		.kind = tast_declaration_statement,
-		.span = { keyword->span.start, value ? value->span.end : name->span.end },
+		.span = { keyword->span.start, value ? value->span.end :
+			(has_annotation ? annotation.end : name->span.end) },
 		.declaration_statement = {
 			.name = name->span,
 			.annotation = annotation,
 			.initializer = initializer,
 			.is_mutable = keyword->kind == tsyntax_kw_var,
-			.has_annotation = has_annotation
+			.has_annotation = has_annotation,
+			.has_initializer = has_initializer
 		}
 	});
 }
@@ -879,6 +932,43 @@ tast_id tparser_parse_statement(tparser *parser)
 				tast_break_statement : tast_continue_statement,
 			.span = first->span
 		});
+	} else if (first->kind == tsyntax_kw_function) {
+		advance(parser);
+		const tsyntax_token *name = peek(parser);
+		if (name->kind != tsyntax_identifier)
+			statement = error_node(parser, name->span,
+				"function name expected");
+		else {
+			advance(parser);
+			if (!consume(parser, tsyntax_lparen, NULL))
+				statement = error_node(parser, peek(parser)->span,
+					"'(' expected after function name");
+			else {
+				tast_id function = parse_function(parser, first->span);
+				const tast_node *function_node = tast_get(
+					parser->arena, function);
+				statement = tast_arena_add(parser->arena,
+					(tast_node){
+						.kind = tast_declaration_statement,
+						.span = {
+							first->span.start,
+							function_node ? function_node->span.end :
+								name->span.end
+						},
+						.declaration_statement = {
+							.name = name->span,
+							.annotation = {
+								name->span.end,
+								name->span.end
+							},
+							.initializer = function,
+							.is_mutable = 0,
+							.has_annotation = 0,
+							.has_initializer = 1
+						}
+					});
+			}
+		}
 	} else if (first->kind == tsyntax_kw_let || first->kind == tsyntax_kw_var) {
 		advance(parser);
 		statement = parse_declaration_statement(parser, first);

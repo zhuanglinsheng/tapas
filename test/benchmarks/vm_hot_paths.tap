@@ -1,0 +1,15 @@
+let started = clock_ns()
+var total = 0
+
+for(let index in 0 to 2000000){
+    if(index % 2 == 0){
+        continue
+    }
+    total = total + index % 7
+    total = total + index % 5
+    total = total - index % 3
+    total = total + index % 11
+}
+
+print(total)
+print(clock_ns() - started)

@@ -27,7 +27,7 @@ void tsemantic_model_free(tsemantic_model *model)
 }
 
 static uint32_t add_scope(semantic_analyzer *analyzer, uint32_t parent,
-			  tsource_span span)
+			  tsource_span span, int function_boundary)
 {
 	tsemantic_model *model = analyzer->model;
 	if (model->scope_count == model->scope_capacity) {
@@ -40,7 +40,9 @@ static uint32_t add_scope(semantic_analyzer *analyzer, uint32_t parent,
 		model->scope_capacity = capacity;
 	}
 	uint32_t id = model->scope_count++;
-	model->scopes[id] = (tsemantic_scope){ parent, span };
+	model->scopes[id] = (tsemantic_scope){
+		parent, span, function_boundary ? 1 : 0
+	};
 	return id;
 }
 
@@ -104,8 +106,25 @@ static void resolve_name(semantic_analyzer *analyzer, tast_id id,
 			 const tast_node *node, uint32_t scope)
 {
 	tstring *name = tsource_document_slice(analyzer->document, node->span);
-	analyzer->model->resolutions[id] = find_in_scope(
+	uint32_t symbol_id = find_in_scope(
 		analyzer, scope, name, 1);
+	analyzer->model->resolutions[id] = symbol_id;
+	if (symbol_id < analyzer->model->symbol_count &&
+	    analyzer->model->symbols[symbol_id].kind == tsemantic_symbol_let) {
+		uint32_t declaration_scope =
+			analyzer->model->symbols[symbol_id].scope;
+		uint32_t current = scope;
+		int crosses_function = 0;
+		while (current < analyzer->model->scope_count &&
+		       current != declaration_scope) {
+			crosses_function |=
+				analyzer->model->scopes[current].function_boundary;
+			current = analyzer->model->scopes[current].parent;
+		}
+		if (crosses_function)
+			tdiagnostics_add(analyzer->diagnostics, tdiagnostic_error,
+				node->span, "let binding cannot be captured");
+	}
 	tstring_free(name);
 }
 
@@ -153,7 +172,7 @@ static void analyze_node(semantic_analyzer *analyzer, tast_id id,
 		break;
 	case tast_function: {
 		uint32_t function_scope = add_scope(
-			analyzer, scope, node->span);
+			analyzer, scope, node->span, 1);
 		const tast_id *parameters = tast_get_children(analyzer->arena,
 			node->function.parameters, node->function.parameter_count);
 		for (uint32_t i = 0; i < node->function.parameter_count; i++) {
@@ -167,14 +186,16 @@ static void analyze_node(semantic_analyzer *analyzer, tast_id id,
 	case tast_module:
 	case tast_block: {
 		uint32_t block_scope = node->kind == tast_module ? scope :
-			add_scope(analyzer, scope, node->span);
+			add_scope(analyzer, scope, node->span, 0);
 		analyze_children(analyzer, node, block_scope);
 	} break;
 	case tast_expression_statement:
 		analyze_node(analyzer, node->expression_statement.value, scope);
 		break;
 	case tast_declaration_statement:
-		analyze_node(analyzer, node->declaration_statement.initializer, scope);
+		if (node->declaration_statement.has_initializer)
+			analyze_node(analyzer,
+				node->declaration_statement.initializer, scope);
 		declare_symbol(analyzer, scope,
 			node->declaration_statement.name, id,
 			node->declaration_statement.is_mutable ?
@@ -207,7 +228,7 @@ static void analyze_node(semantic_analyzer *analyzer, tast_id id,
 		break;
 	case tast_for_statement: {
 		analyze_node(analyzer, node->for_statement.iterable, scope);
-		uint32_t loop_scope = add_scope(analyzer, scope, node->span);
+		uint32_t loop_scope = add_scope(analyzer, scope, node->span, 0);
 		if (node->for_statement.declares_binding)
 			declare_symbol(analyzer, loop_scope, node->for_statement.name,
 				id, tsemantic_symbol_iteration);
@@ -233,7 +254,7 @@ void tsemantic_analyze(const tsource_document *document,
 	semantic_analyzer analyzer = { document, arena, model, diagnostics };
 	const tast_node *root_node = tast_get(arena, root);
 	uint32_t root_scope = add_scope(&analyzer, TSEMANTIC_INVALID_ID,
-		root_node ? root_node->span : (tsource_span){ 0, 0 });
+		root_node ? root_node->span : (tsource_span){ 0, 0 }, 0);
 	analyze_node(&analyzer, root, root_scope);
 }
 

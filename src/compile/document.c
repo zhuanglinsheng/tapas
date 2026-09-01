@@ -2,8 +2,7 @@
 
 #include <stdlib.h>
 
-static uint32_t utf8_decode(const unsigned char *text, uint32_t remaining,
-			    uint32_t *width)
+static uint32_t utf8_decode(const unsigned char *text, uint32_t remaining, uint32_t *width)
 {
 	unsigned char first = text[0];
 	if (first < 0x80) {
@@ -147,7 +146,7 @@ void tsource_document_lsp_position(const tsource_document *document,
 }
 
 uint32_t tsource_document_lsp_offset(const tsource_document *document,
-				    uint32_t line, uint32_t character)
+				     uint32_t line, uint32_t character)
 {
 	if (!document || !document->line_count)
 		return 0;

@@ -1,4 +1,4 @@
-#include "Tapas/tbasis.h"
+#include "tapas/tbasis.h"
 
 /*===========================================================================*
  * Error System
@@ -17,6 +17,8 @@ static uint64_t tapas_error_column_ctx = 0;
 static int tapas_error_has_file_ctx = 0;
 static uint_cmds tapas_error_instruction_ctx = 0;
 static int tapas_error_has_instruction_ctx = 0;
+static terror_runtime_context_resolver tapas_runtime_context_resolver = NULL;
+static void *tapas_runtime_context_data = NULL;
 
 static void terror_reset(terror *err)
 {
@@ -235,6 +237,25 @@ void terror_clear_instruction_context(void)
 	tapas_error_has_instruction_ctx = 0;
 }
 
+terror_runtime_context_state terror_set_runtime_context_resolver(
+	terror_runtime_context_resolver resolver, void *context)
+{
+	terror_runtime_context_state previous = {
+		.resolver = tapas_runtime_context_resolver,
+		.context = tapas_runtime_context_data
+	};
+	tapas_runtime_context_resolver = resolver;
+	tapas_runtime_context_data = context;
+	return previous;
+}
+
+void terror_restore_runtime_context_resolver(
+	terror_runtime_context_state state)
+{
+	tapas_runtime_context_resolver = state.resolver;
+	tapas_runtime_context_data = state.context;
+}
+
 static void terror_capture(terror_type type, const char *fname, const char *info)
 {
 	terror_reset(&tapas_last_error);
@@ -243,17 +264,44 @@ static void terror_capture(terror_type type, const char *fname, const char *info
 	tapas_last_error.reason = terror_reason(type);
 	tapas_last_error.where = tstring_new(fname ? fname : "");
 	tapas_last_error.detail = tstring_new(info ? info : "");
-	const char *source_ctx = terror_current_source_context();
-	const char *file_ctx = terror_current_file_context();
+	const char *runtime_source = NULL;
+	const char *runtime_file = NULL;
+	uint64_t runtime_line = 0;
+	uint64_t runtime_column = 0;
+	uint_cmds runtime_instruction = 0;
+	terror_runtime_context_resolver resolver =
+		tapas_runtime_context_resolver;
+	void *resolver_context = tapas_runtime_context_data;
+	if (resolver) {
+		/* An error may leave through longjmp, so do not retain a pointer to
+		 * the resolver's stack-allocated context after resolving it. */
+		tapas_runtime_context_resolver = NULL;
+		tapas_runtime_context_data = NULL;
+		resolver(resolver_context, &runtime_source, &runtime_file,
+			 &runtime_line, &runtime_column, &runtime_instruction);
+	}
+	const char *source_ctx = runtime_source ? runtime_source :
+		terror_current_source_context();
+	const char *file_ctx = runtime_file ? runtime_file :
+		terror_current_file_context();
 	if (source_ctx)
 		tapas_last_error.source = tstring_new(source_ctx);
 	if (file_ctx)
 		tapas_last_error.file = tstring_new(file_ctx);
-	tapas_last_error.line = tapas_error_line_ctx;
-	tapas_last_error.column = tapas_error_column_ctx;
-	tapas_last_error.has_location = tapas_error_has_file_ctx;
-	tapas_last_error.instruction = tapas_error_instruction_ctx;
-	tapas_last_error.has_instruction = tapas_error_has_instruction_ctx;
+	if (resolver) {
+		tapas_last_error.line = runtime_line;
+		tapas_last_error.column = runtime_column;
+		tapas_last_error.has_location = file_ctx != NULL ||
+			runtime_line != 0 || runtime_column != 0;
+		tapas_last_error.instruction = runtime_instruction;
+		tapas_last_error.has_instruction = 1;
+	} else {
+		tapas_last_error.line = tapas_error_line_ctx;
+		tapas_last_error.column = tapas_error_column_ctx;
+		tapas_last_error.has_location = tapas_error_has_file_ctx;
+		tapas_last_error.instruction = tapas_error_instruction_ctx;
+		tapas_last_error.has_instruction = tapas_error_has_instruction_ctx;
+	}
 }
 
 static void terror_print(const terror *err)

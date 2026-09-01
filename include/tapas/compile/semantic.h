@@ -29,6 +29,7 @@ typedef struct {
 typedef struct {
 	uint32_t parent;
 	tsource_span span;
+	uint8_t function_boundary;
 } tsemantic_scope;
 
 typedef struct {

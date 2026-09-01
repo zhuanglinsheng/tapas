@@ -1,5 +1,5 @@
-#ifndef T_RUNTIME_STR_H
-#define T_RUNTIME_STR_H
+#ifndef TAPAS_RUNTIME_TSTR_H
+#define TAPAS_RUNTIME_TSTR_H
 
 #include "tapas/tval.h"
 
@@ -9,12 +9,14 @@ extern "C" {
 
 struct tstr {
 	tcompo_v base;
+	tstring storage;
 	tstring *data;
 };
 
 extern tcompo_vtable tstr_vtable;
 
 tstr *tstr_new(const char *s);
+tstr *tstr_new_len(const char *s, size_t len);
 void tstr_idx(tstr *s, const tobj *params, uint_regs np, tobj *vre);
 void tstr_iset(tstr *s, const tobj *params, uint_regs np,
 	       const tobj *vright);
@@ -23,4 +25,4 @@ void tstr_iset(tstr *s, const tobj *params, uint_regs np,
 }
 #endif
 
-#endif /* T_RUNTIME_STR_H */
+#endif /* TAPAS_RUNTIME_TSTR_H */

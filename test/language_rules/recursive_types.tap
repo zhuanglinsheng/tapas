@@ -1,0 +1,45 @@
+let Tree: Type
+
+Tree = types::make_type(
+    'value': types::Int,
+    'children': types::list(Tree),
+)
+
+let leaf = {
+    'value': 1,
+    'children': [],
+}
+let root = {
+    'value': 2,
+    'children': [leaf],
+}
+let typed_root: Tree = {
+    'value': 2,
+    'children': [{
+        'value': 1,
+        'children': [],
+    }],
+}
+
+print(types::matches(typed_root, Tree))
+print(types::matches({'value': 'bad', 'children': []}, Tree))
+
+let Left: Type
+let Right: Type
+
+Left = types::make_type(
+    'rights': types::list(Right),
+)
+Right = types::make_type(
+    'lefts': types::list(Left),
+)
+
+let left = {'rights': [{'lefts': []}]}
+print(types::matches(left, Left))
+
+let OtherTree: Type
+OtherTree = types::make_type(
+    'value': types::Int,
+    'children': types::list(OtherTree),
+)
+print(Tree == OtherTree)

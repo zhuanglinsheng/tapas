@@ -1,6 +1,6 @@
 #include "tapas/tblas.h"
 
-#include "Tapas/tbasis.h"
+#include "tapas/tbasis.h"
 
 #include <limits.h>
 #include <stdatomic.h>

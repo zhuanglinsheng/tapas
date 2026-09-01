@@ -1,0 +1,37 @@
+let multiply_checksum = (left, right, size){
+    let result = array(size, size, 0)
+    for(let row in 0 to size){
+        for(let column in 0 to size){
+            let total = 0
+            for(let inner in 0 to size){
+                total = total + left[row, inner] * right[inner, column]
+            }
+            result[row, column] = total
+        }
+    }
+
+    let checksum = 0
+    for(let row in 0 to size){
+        for(let column in 0 to size){
+            checksum = checksum + result[row, column] * (row + column + 1)
+        }
+    }
+    return int(checksum)
+}
+
+let size = 48
+let left = array(size, size, 0)
+let right = array(size, size, 0)
+for(let row in 0 to size){
+    for(let column in 0 to size){
+        left[row, column] = (row * 17 + column * 11 + 3) % 23
+        right[row, column] = (row * 7 + column * 19 + 5) % 29
+    }
+}
+
+let started = clock_ns()
+let result = multiply_checksum(left, right, size)
+let elapsed = clock_ns() - started
+
+print(result)
+print(elapsed)

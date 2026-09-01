@@ -1,5 +1,5 @@
-#ifndef T_RUNTIME_DICT_H
-#define T_RUNTIME_DICT_H
+#ifndef TAPAS_RUNTIME_TDICT_H
+#define TAPAS_RUNTIME_TDICT_H
 
 #include "tapas/ds/thashtbl.h"
 #include "tapas/tval.h"
@@ -31,4 +31,4 @@ tlist *tdict_values(tdict *d);
 }
 #endif
 
-#endif /* T_RUNTIME_DICT_H */
+#endif /* TAPAS_RUNTIME_TDICT_H */

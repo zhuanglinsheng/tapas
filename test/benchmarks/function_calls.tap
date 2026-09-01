@@ -1,0 +1,13 @@
+let add = (left, right){
+    return left + right
+}
+
+let started = clock_ns()
+var total = 0
+
+for(let index in 0 to 200000){
+    total = add(total, index % 7)
+}
+
+print(total)
+print(clock_ns() - started)

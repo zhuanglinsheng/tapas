@@ -1,0 +1,30 @@
+let Number = types::union(types::Int, types::Float)
+
+function accepts_any(
+        value: AnyType,
+) -> Int {
+    return 7
+}
+
+function apply_number(
+        callback: Function[Int] -> Number,
+        value: Int,
+) -> Number {
+    return callback(value)
+}
+
+function stringify(
+        value: Int,
+) -> String {
+    return 'value'
+}
+
+function keep_formatter(
+        callback: Function[Int] -> String,
+) -> Function[Int] -> String {
+    return callback
+}
+
+let formatter: Function[Int] -> String = keep_formatter(stringify)
+print(apply_number(accepts_any, 3))
+print(formatter(1))

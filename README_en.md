@@ -19,7 +19,7 @@ Declarations should express domain intent directly, allowing readers to
 understand a program without first learning its underlying execution,
 generation, or solving mechanisms.
 
-The proposed `declare` construct, typed declaration IR, evaluator interfaces,
+The proposed `rule` and `require` constructs, Rule IR, evaluator interfaces,
 and test-generation facilities are still being designed and implemented; they
 are not part of the current language specification. See the
 [verifiable agent environment design](docs/paper_or/AgentEnvironment_zh.md)
@@ -110,7 +110,7 @@ editors/vscode/install.sh
 ```
 
 Run **Developer: Reload Window** in VS Code after installation. See the
-[VS Code extension documentation](editors/vscode/README.md) for capabilities
+[VS Code extension documentation](editors/vscode/README_en.md) for capabilities
 and configuration.
 
 ## Using Tapas From C
@@ -141,9 +141,10 @@ See [C Interaction](docs/Foreign_en.md) for API, linking, and extension details.
   functions, modules, arrays, and built-ins.
 - [Type System Design](docs/TypeSystem_en.md) — compile-time annotations,
   runtime Type values, structural Types, and the `types` package.
-- [`declare` and Declaration IR Design](docs/Declare_zh.md) (in Chinese) —
-  first-class declarations, typed IR, dynamic construction, `eval()`, and
-  `compile()`.
+- [`rule` and `require` Design](docs/Rules_zh.md) (in Chinese) — Rule literals,
+  rule composition, standard checks, and Rule IR.
+- [`optimizers` Package Design](docs/Optimizers_zh.md) (in Chinese) — Variable
+  Terms, propagation, feasibility search, objective optimization, and backends.
 - [C Interaction](docs/Foreign_en.md) — embedding sessions, registering C
   functions, working with values, and extending composite types.
 - [Runtime Mechanism](docs/Mechanism_en.md) — compiler, bytecode, virtual machine,

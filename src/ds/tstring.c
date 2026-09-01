@@ -9,6 +9,34 @@
 
 #define TSTRING_MIN_CAP 16
 
+static bool tstring_uses_inline_storage(const tstring *s)
+{
+	return s->data == s->inline_data;
+}
+
+static bool tstring_init_storage(tstring *s, const char *data, size_t len,
+				 size_t requested_cap)
+{
+	s->len = len;
+	size_t needed = len + 1;
+	size_t cap = requested_cap > needed ? requested_cap : needed;
+	if (cap < TSTRING_MIN_CAP)
+		cap = TSTRING_MIN_CAP;
+	if (cap <= TSTRING_INLINE_CAP) {
+		s->data = s->inline_data;
+		s->cap = TSTRING_INLINE_CAP;
+	} else {
+		s->data = (char *)malloc(cap);
+		if (!s->data)
+			return false;
+		s->cap = cap;
+	}
+	if (data && len > 0)
+		memcpy(s->data, data, len);
+	s->data[len] = '\0';
+	return true;
+}
+
 static void tstring_grow(tstring *s, size_t needed)
 {
 	if (needed <= s->cap)
@@ -23,7 +51,14 @@ static void tstring_grow(tstring *s, size_t needed)
 		}
 		newcap *= 2;
 	}
-	char *newdata = (char *)realloc(s->data, newcap);
+	char *newdata;
+	if (tstring_uses_inline_storage(s)) {
+		newdata = (char *)malloc(newcap);
+		if (newdata)
+			memcpy(newdata, s->data, s->len + 1);
+	} else {
+		newdata = (char *)realloc(s->data, newcap);
+	}
 	if (!newdata)
 		return; /* allocation failure — keep old data */
 	s->data = newdata;
@@ -48,6 +83,32 @@ static bool tstring_points_into(const tstring *s, const char *p, size_t len)
 
 /* ---- Constructors & Destructor ---- */
 
+bool tstring_init_len(tstring *s, const char *data, size_t len)
+{
+	if (!s || len == SIZE_MAX)
+		return false;
+	memset(s, 0, sizeof(*s));
+	return tstring_init_storage(s, data, len, len + 1);
+}
+
+bool tstring_init(tstring *s, const char *data)
+{
+	if (!data)
+		data = "";
+	return tstring_init_len(s, data, strlen(data));
+}
+
+void tstring_deinit(tstring *s)
+{
+	if (!s)
+		return;
+	if (s->data && !tstring_uses_inline_storage(s))
+		free(s->data);
+	s->data = NULL;
+	s->len = 0;
+	s->cap = 0;
+}
+
 tstring *tstring_new(const char *s)
 {
 	if (!s)
@@ -58,17 +119,10 @@ tstring *tstring_new(const char *s)
 	tstring *ts = (tstring *)calloc(1, sizeof(tstring));
 	if (!ts)
 		return NULL;
-	ts->len = len;
-	ts->cap = len + 1;
-	if (ts->cap < TSTRING_MIN_CAP)
-		ts->cap = TSTRING_MIN_CAP;
-	ts->data = (char *)malloc(ts->cap);
-	if (!ts->data) {
+	if (!tstring_init_len(ts, s, len)) {
 		free(ts);
 		return NULL;
 	}
-	memcpy(ts->data, s, len);
-	ts->data[len] = '\0';
 	return ts;
 }
 
@@ -79,18 +133,10 @@ tstring *tstring_new_len(const char *s, size_t len)
 	tstring *ts = (tstring *)calloc(1, sizeof(tstring));
 	if (!ts)
 		return NULL;
-	ts->len = len;
-	ts->cap = len + 1;
-	if (ts->cap < TSTRING_MIN_CAP)
-		ts->cap = TSTRING_MIN_CAP;
-	ts->data = (char *)malloc(ts->cap);
-	if (!ts->data) {
+	if (!tstring_init_len(ts, s, len)) {
 		free(ts);
 		return NULL;
 	}
-	if (s && len > 0)
-		memcpy(ts->data, s, len);
-	ts->data[len] = '\0';
 	return ts;
 }
 
@@ -99,14 +145,10 @@ tstring *tstring_new_cap(size_t cap)
 	tstring *ts = (tstring *)calloc(1, sizeof(tstring));
 	if (!ts)
 		return NULL;
-	ts->len = 0;
-	ts->cap = cap > TSTRING_MIN_CAP ? cap : TSTRING_MIN_CAP;
-	ts->data = (char *)malloc(ts->cap);
-	if (!ts->data) {
+	if (!tstring_init_storage(ts, NULL, 0, cap)) {
 		free(ts);
 		return NULL;
 	}
-	ts->data[0] = '\0';
 	return ts;
 }
 
@@ -126,7 +168,7 @@ void tstring_free(tstring *s)
 {
 	if (!s)
 		return;
-	free(s->data);
+	tstring_deinit(s);
 	free(s);
 }
 
@@ -472,7 +514,14 @@ void tstring_reserve(tstring *s, size_t cap)
 {
 	if (!s || cap <= s->cap)
 		return;
-	char *newdata = (char *)realloc(s->data, cap);
+	char *newdata;
+	if (tstring_uses_inline_storage(s)) {
+		newdata = (char *)malloc(cap);
+		if (newdata)
+			memcpy(newdata, s->data, s->len + 1);
+	} else {
+		newdata = (char *)realloc(s->data, cap);
+	}
 	if (!newdata)
 		return;
 	s->data = newdata;
@@ -483,6 +532,16 @@ void tstring_shrink_to_fit(tstring *s)
 {
 	if (!s || s->len + 1 >= s->cap)
 		return;
+	if (s->len + 1 <= TSTRING_INLINE_CAP) {
+		if (!tstring_uses_inline_storage(s)) {
+			char *heap_data = s->data;
+			memcpy(s->inline_data, heap_data, s->len + 1);
+			s->data = s->inline_data;
+			s->cap = TSTRING_INLINE_CAP;
+			free(heap_data);
+		}
+		return;
+	}
 	char *newdata = (char *)realloc(s->data, s->len + 1);
 	if (!newdata)
 		return;

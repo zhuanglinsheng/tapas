@@ -1,5 +1,5 @@
-#ifndef T_RUNTIME_PAIR_H
-#define T_RUNTIME_PAIR_H
+#ifndef TAPAS_RUNTIME_TPAIR_H
+#define TAPAS_RUNTIME_TPAIR_H
 
 #include "tapas/tval.h"
 
@@ -24,4 +24,4 @@ void tpair_iset(tpair *p, const tobj *params, uint_regs np,
 }
 #endif
 
-#endif /* T_RUNTIME_PAIR_H */
+#endif /* TAPAS_RUNTIME_TPAIR_H */

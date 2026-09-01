@@ -1,7 +1,10 @@
 // Newton method for square roots and roots of general functions.
 // Each iteration roughly doubles the number of correct digits near the root.
 
-var square_root = (value, tolerance){
+var square_root = (
+        value: Union[Int, Float],
+        tolerance: Float,
+) -> Float {
     if(value < 0){
         return -1.0
     }
@@ -17,7 +20,7 @@ var square_root = (value, tolerance){
 }
 
 // Solve x^3 - x - 2 = 0.
-var cubic_root = (initial, tolerance){
+var cubic_root = (initial: Float, tolerance: Float) -> Float {
     let x: Float = initial
     let step: Float = 1.0
     while(math::abs(step) > tolerance){

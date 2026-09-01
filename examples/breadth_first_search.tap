@@ -1,15 +1,13 @@
 // Breadth-first traversal of a graph represented by an adjacency dictionary.
 // Time: O(V + E); auxiliary space: O(V).
 
-let StringList = types::list(types::String)
-let Graph = types::dictionary(types::String, StringList)
-
-var breadth_first_search = (graph, start){
-    // Type aliases used inside a function belong in that function scope.
-    let VertexList = types::list(types::String)
-    let queue: VertexList = [start]
-    let visited: VertexList = [start]
-    let order: VertexList = []
+var breadth_first_search = (
+        graph: Dictionary[String, List[String]],
+        start: String,
+) -> List[String] {
+    let queue: List[String] = [start]
+    let visited: List[String] = [start]
+    let order: List[String] = []
 
     while(queue.len() > 0){
         let vertex = queue[0]
@@ -27,7 +25,7 @@ var breadth_first_search = (graph, start){
     return order.copy()
 }
 
-let graph: Graph = {
+let graph: Dictionary[String, List[String]] = {
     'A' : ['B', 'C'],
     'B' : ['A', 'D', 'E'],
     'C' : ['A', 'F'],

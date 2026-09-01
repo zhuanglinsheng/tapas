@@ -31,69 +31,6 @@ static int binary_instruction(tsyntax_kind op)
 	}
 }
 
-int tast_expression_supported(const tast_arena *arena, tast_id id)
-{
-	const tast_node *node = tast_get(arena, id);
-	if (!node)
-		return 0;
-	switch (node->kind) {
-	case tast_name:
-	case tast_bool:
-	case tast_integer:
-	case tast_float:
-	case tast_string:
-		return 1;
-	case tast_group:
-		return tast_expression_supported(arena, node->group.value);
-	case tast_slice:
-		return (!node->slice.has_start ||
-			tast_expression_supported(arena, node->slice.start)) &&
-		       (!node->slice.has_end ||
-			tast_expression_supported(arena, node->slice.end));
-	case tast_unary:
-		return (node->unary.op == tsyntax_plus ||
-			node->unary.op == tsyntax_minus) &&
-		       tast_expression_supported(arena, node->unary.operand);
-	case tast_binary:
-		return binary_instruction(node->binary.op) >= 0 &&
-		       tast_expression_supported(arena, node->binary.left) &&
-		       tast_expression_supported(arena, node->binary.right);
-	case tast_member:
-		return tast_expression_supported(arena, node->member.receiver);
-	case tast_call:
-	case tast_index:
-	case tast_list: {
-		if (node->kind != tast_list &&
-		    !tast_expression_supported(arena, node->aggregate.receiver))
-			return 0;
-		const tast_id *children = tast_get_children(
-			arena, node->aggregate.children, node->aggregate.count);
-		if (!children && node->aggregate.count)
-			return 0;
-		for (uint32_t i = 0; i < node->aggregate.count; i++)
-			if (!tast_expression_supported(arena, children[i]))
-				return 0;
-		return 1;
-	}
-	case tast_dictionary: {
-		if (node->aggregate.count % 2 != 0)
-			return 0;
-		const tast_id *children = tast_get_children(
-			arena, node->aggregate.children, node->aggregate.count);
-		if (!children && node->aggregate.count)
-			return 0;
-		for (uint32_t i = 0; i < node->aggregate.count; i++)
-			if (!tast_expression_supported(arena, children[i]))
-				return 0;
-		return 1;
-	}
-	case tast_function:
-		return tast_statement_supported(arena, node->function.body);
-	default:
-		return 0;
-	}
-}
-
 static tstring *node_text(const tast_emitter *emitter, tsource_span span)
 {
 	return tsource_document_slice(emitter->document, span);
@@ -119,6 +56,19 @@ static void emit_name(tast_emitter *emitter, const tast_node *node)
 		tvmcmd_vect_append(emitter->instructions, tbycode_make(OP_BASE));
 		treg_ctr_add(&emitter->cp->regctr);
 	} else {
+		tobj_ctr *owner = NULL;
+		uint_objs slot = 0;
+		int found = tcompile_find_binding(
+			&emitter->cp->tmpctr, name, &owner, &slot);
+		if (!found)
+			found = tcompile_find_binding(
+				&emitter->cp->objctr, name, &owner, &slot);
+		if (found && !owner->bindings[slot].initialized &&
+		    !(emitter->allow_pending_type_references &&
+		      ttypeval_is_recursive(owner->bindings[slot].type_value)))
+			twarn(ErrCompile_Other,
+			      "variable is read before initialization",
+			      tstring_cstr(name));
 		compile_emit_reference(emitter->cp, name, emitter->instructions,
 				       emitter->constants);
 	}
@@ -185,17 +135,10 @@ static void emit_short_circuit(tast_emitter *emitter,
 	uint_cmds right_length = tvmcmd_vect_size32(&right);
 	outer->data[condition] = tbycode_make_u(
 		instruction == OP_AND ? OP_CJPFPOP : OP_CJPBPOP,
-		right_length + 4);
+		right_length + 1);
 	tvmcmd_vect_insert_vect(outer, tvmcmd_vect_size32(outer), &right);
 	tvmcmd_vect_free(&right);
 
-	tvmcmd_vect_append(outer,
-		tbycode_make_u(OP_PUSHB, instruction == OP_AND ? 1 : 0));
-	treg_ctr_add(&emitter->cp->regctr);
-	tvmcmd_vect_append(outer, tbycode_make_u(OP_PUSHINFO, 0));
-	treg_ctr_add(&emitter->cp->regctr);
-	tvmcmd_vect_append(outer, tbycode_make_lr((uint8_t)instruction, 0, 1));
-	treg_ctr_ddt_n(&emitter->cp->regctr, 2);
 	tvmcmd_vect_append(outer, tbycode_make_u(OP_JPF, 1));
 	tvmcmd_vect_append(outer,
 		tbycode_make_u(OP_PUSHB, instruction == OP_AND ? 0 : 1));
@@ -260,6 +203,20 @@ static void emit_call(tast_emitter *emitter, const tast_node *node)
 	const tast_node *callee = tast_get(emitter->arena,
 					  node->aggregate.receiver);
 	uint32_t arguments = node->aggregate.count;
+	if (callee->kind == tast_name) {
+		tstring *name = node_text(emitter, callee->span);
+		int calls_current_function = strcmp(tstring_cstr(name), "this") == 0;
+		tstring_free(name);
+		if (calls_current_function) {
+			emit_arguments(emitter, node);
+			tvmcmd_vect_append(emitter->instructions,
+					   tbycode_make_u(OP_EVALTF, arguments));
+			treg_ctr_ddt_n(&emitter->cp->regctr,
+					  (uint_regs)arguments);
+			treg_ctr_add(&emitter->cp->regctr);
+			return;
+		}
+	}
 	if (callee->kind == tast_member && callee->member.op == tsyntax_dot) {
 		/* receiver.method(args) is the language's tunnel-call form. */
 		tast_emit_expression(emitter, callee->member.receiver);
@@ -355,6 +312,46 @@ static void emit_dictionary(tast_emitter *emitter, const tast_node *node)
 	treg_ctr_add(&emitter->cp->regctr);
 }
 
+int tast_block_definitely_returns(const tast_arena *arena,
+				  const tast_node *block)
+{
+	if (!block || (block->kind != tast_block && block->kind != tast_module))
+		return 0;
+	const tast_id *statements = tast_get_children(
+		arena, block->aggregate.children, block->aggregate.count);
+	for (uint32_t i = 0; i < block->aggregate.count; i++) {
+		const tast_node *statement = tast_get(arena, statements[i]);
+		if (!statement)
+			continue;
+		if (statement->kind == tast_return_statement)
+			return 1;
+		if (statement->kind != tast_if_statement)
+			continue;
+		int all_return = tast_block_definitely_returns(
+			arena, tast_get(arena, statement->control_statement.body));
+		int has_else = 0;
+		uint32_t j = i + 1;
+		for (; j < block->aggregate.count; j++) {
+			const tast_node *branch = tast_get(arena, statements[j]);
+			if (!branch || (branch->kind != tast_elif_statement &&
+					branch->kind != tast_else_statement))
+				break;
+			all_return = all_return && tast_block_definitely_returns(
+				arena, tast_get(arena, branch->control_statement.body));
+			if (branch->kind == tast_else_statement) {
+				has_else = 1;
+				j++;
+				break;
+			}
+		}
+		if (has_else && all_return)
+			return 1;
+		if (j > i + 1)
+			i = j - 1;
+	}
+	return 0;
+}
+
 static void emit_function(tast_emitter *emitter, const tast_node *node)
 {
 	const tast_id *parameter_ids = tast_get_children(
@@ -367,19 +364,43 @@ static void emit_function(tast_emitter *emitter, const tast_node *node)
 		if (!parameters)
 			abort();
 		for (uint32_t i = 0; i < node->function.parameter_count; i++)
-			parameters[i] = node_text(
-				emitter, tast_get(emitter->arena, parameter_ids[i])->span);
+			parameters[i] = node_text(emitter,
+				tast_get(emitter->arena, parameter_ids[i])->parameter.name);
 	}
+	ttypeval *signature;
+	if (emitter->pending_function_type) {
+		signature = (ttypeval *)emitter->pending_function_type;
+		ttypeval_retain(signature);
+	} else
+		signature = tast_function_signature(emitter, node);
+	ttypeval *result_type = ttypeval_function_result(signature);
+	if (result_type &&
+	    !tast_block_definitely_returns(
+		emitter->arena, tast_get(emitter->arena, node->function.body)) &&
+	    !compile_type_assignable(
+		ttypeval_builtin(ttype_builtin_nil), result_type))
+		twarn(ErrCompile_Other, "function result",
+		      "not every path returns the annotated Type");
 
 	tcp function_cp;
 	tcp_init_preload(&function_cp, parameters,
 		(uint_objs)node->function.parameter_count,
 		&emitter->cp->objctr, emitter->cp->interactive);
+	for (uint32_t i = 0; i < node->function.parameter_count; i++) {
+		ttypeval *parameter_type =
+			ttypeval_function_parameter_at(signature, i);
+		if (parameter_type)
+			tcompile_set_metadata(&function_cp.objctr, i,
+				parameter_type, NULL, 1);
+	}
 	tvmcmd_vect body;
 	tvmcmd_vect_init(&body);
 	tast_emitter function_emitter = *emitter;
 	function_emitter.cp = &function_cp;
 	function_emitter.instructions = &body;
+	function_emitter.current_function_type = signature;
+	function_emitter.expected_return_type = result_type;
+	function_emitter.pending_function_type = NULL;
 	tast_emit_block(&function_emitter,
 		tast_get(emitter->arena, node->function.body),
 		emitter->paths, emitter->npaths, 0);
@@ -409,6 +430,7 @@ static void emit_function(tast_emitter *emitter, const tast_node *node)
 	free(parameters);
 	tvmcmd_vect_free(&body);
 	tcp_free(&function_cp);
+	ttypeval_release(signature);
 }
 
 void tast_emit_expression(tast_emitter *emitter, tast_id id)
@@ -463,6 +485,7 @@ void tast_emit_expression(tast_emitter *emitter, tast_id id)
 		emit_function(emitter, node);
 		break;
 	default:
-		break;
+		twarn(ErrCompile_Other, "AST expression",
+		      "unsupported expression node");
 	}
 }

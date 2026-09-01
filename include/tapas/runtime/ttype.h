@@ -1,5 +1,5 @@
-#ifndef T_RUNTIME_TYPE_H
-#define T_RUNTIME_TYPE_H
+#ifndef TAPAS_RUNTIME_TTYPE_H
+#define TAPAS_RUNTIME_TTYPE_H
 
 #include "tapas/ds/thashtbl.h"
 #include "tapas/tval.h"
@@ -15,7 +15,9 @@ typedef enum {
 	ttype_kind_list,
 	ttype_kind_pair,
 	ttype_kind_dictionary,
-	ttype_kind_union
+	ttype_kind_function,
+	ttype_kind_union,
+	ttype_kind_recursive
 } ttype_kind;
 
 typedef enum {
@@ -50,6 +52,12 @@ struct ttypeval {
 	thashtbl *definition;
 	tstring *canonical;
 	uint64_t canonical_hash;
+	uint_objs function_parameter_count;
+	uint8_t function_variadic;
+	uint8_t contains_recursive;
+	uint8_t recursive_defined;
+	uint32_t recursive_id;
+	ttypeval *recursive_body;
 };
 
 extern tcompo_vtable ttypeval_vtable;
@@ -61,7 +69,14 @@ ttypeval *ttypeval_new_fields(const ttype_field *fields, uint_objs count);
 ttypeval *ttypeval_new_list(ttypeval *item);
 ttypeval *ttypeval_new_pair(ttypeval *first, ttypeval *second);
 ttypeval *ttypeval_new_dictionary(ttypeval *key, ttypeval *value);
+ttypeval *ttypeval_new_function(ttypeval *const *parameters,
+				uint_objs parameter_count,
+				ttypeval *result,
+				int variadic);
 ttypeval *ttypeval_new_union(ttypeval *const *members, uint_objs count);
+ttypeval *ttypeval_new_recursive(void);
+int ttypeval_define_recursive(ttypeval *type, ttypeval *body);
+int ttypeval_is_recursive(const ttypeval *type);
 int ttypeval_equal(const ttypeval *left, const ttypeval *right);
 uint64_t ttypeval_hash(const ttypeval *type);
 int ttypeval_matches(const tobj *value, const ttypeval *expected);
@@ -76,10 +91,15 @@ uint_objs ttypeval_member_count(const ttypeval *type);
 ttypeval *ttypeval_member_at(const ttypeval *type, uint_objs index);
 ttypeval *ttypeval_base(const ttypeval *type);
 ttypeval *ttypeval_parameter(const ttypeval *type, const char *name);
+uint_objs ttypeval_function_parameter_count(const ttypeval *type);
+ttypeval *ttypeval_function_parameter_at(const ttypeval *type,
+					  uint_objs index);
+ttypeval *ttypeval_function_result(const ttypeval *type);
+int ttypeval_function_variadic(const ttypeval *type);
 const thashtbl *ttypeval_definition(const ttypeval *type);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* T_RUNTIME_TYPE_H */
+#endif /* TAPAS_RUNTIME_TTYPE_H */

@@ -489,15 +489,38 @@ static void tbarr_and(void *s, const tobj *v, int r, tobj *o) { tbarr_logic(s, v
 static void tbarr_or(void *s, const tobj *v, int r, tobj *o) { tbarr_logic(s, v, r, o, 0); }
 
 tcompo_vtable tdarr_vtable = {
-	tdarr_type, tdarr_code, tdarr_len, tdarr_copy_impl, array_free,
-	tdarr_identical, array_abbr, tdarr_string,
-	tdarr_add, tdarr_sub, tdarr_mul, tdarr_div, tdarr_mod, tdarr_pow, tdarr_mmul,
-	tdarr_eq, tdarr_ne, tdarr_gt, tdarr_lt, tdarr_ge, tdarr_le, NULL, NULL
+	.get_type = tdarr_type,
+	.get_compo_type_code = tdarr_code,
+	.len = tdarr_len,
+	.copy = tdarr_copy_impl,
+	.free = array_free,
+	.identical = tdarr_identical,
+	.tostring_abbr = array_abbr,
+	.tostring_full = tdarr_string,
+	.op_add = tdarr_add,
+	.op_sub = tdarr_sub,
+	.op_mul = tdarr_mul,
+	.op_div = tdarr_div,
+	.op_mod = tdarr_mod,
+	.op_pow = tdarr_pow,
+	.op_mmul = tdarr_mmul,
+	.op_eq = tdarr_eq,
+	.op_ne = tdarr_ne,
+	.op_sg = tdarr_gt,
+	.op_sl = tdarr_lt,
+	.op_ge = tdarr_ge,
+	.op_le = tdarr_le
 };
 
 tcompo_vtable tbarr_vtable = {
-	tbarr_type, tbarr_code, tbarr_len, tbarr_copy_impl, array_free,
-	tbarr_identical, array_abbr, tbarr_string,
-	NULL, NULL, NULL, NULL, NULL, NULL, NULL,
-	NULL, NULL, NULL, NULL, NULL, NULL, tbarr_and, tbarr_or
+	.get_type = tbarr_type,
+	.get_compo_type_code = tbarr_code,
+	.len = tbarr_len,
+	.copy = tbarr_copy_impl,
+	.free = array_free,
+	.identical = tbarr_identical,
+	.tostring_abbr = array_abbr,
+	.tostring_full = tbarr_string,
+	.op_and = tbarr_and,
+	.op_or = tbarr_or
 };

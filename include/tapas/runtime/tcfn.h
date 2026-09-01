@@ -1,5 +1,5 @@
-#ifndef T_RUNTIME_CFN_H
-#define T_RUNTIME_CFN_H
+#ifndef TAPAS_RUNTIME_TCFN_H
+#define TAPAS_RUNTIME_TCFN_H
 
 #include "tapas/tval.h"
 
@@ -41,4 +41,4 @@ sessf_t tcppsessf_get_f(tcppsessf *s);
 }
 #endif
 
-#endif /* T_RUNTIME_CFN_H */
+#endif /* TAPAS_RUNTIME_TCFN_H */

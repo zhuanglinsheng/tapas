@@ -9,100 +9,84 @@ static tstring *span_text(const tast_emitter *emitter, tsource_span span)
 	return tsource_document_slice(emitter->document, span);
 }
 
-static int assignment_target_supported(const tast_arena *arena, tast_id id)
-{
-	const tast_node *target = tast_get(arena, id);
-	if (!target)
-		return 0;
-	if (target->kind == tast_name)
-		return 1;
-	if (target->kind != tast_index || target->aggregate.count == 0)
-		return 0;
-	const tast_node *receiver = tast_get(arena, target->aggregate.receiver);
-	if (!receiver || receiver->kind != tast_name)
-		return 0;
-	const tast_id *children = tast_get_children(
-		arena, target->aggregate.children, target->aggregate.count);
-	for (uint32_t i = 0; i < target->aggregate.count; i++)
-		if (!tast_expression_supported(arena, children[i]) ||
-		    tast_get(arena, children[i])->kind == tast_slice)
-			return 0;
-	return 1;
-}
-
-int tast_statement_supported(const tast_arena *arena, tast_id id)
-{
-	const tast_node *statement = tast_get(arena, id);
-	if (!statement)
-		return 0;
-	switch (statement->kind) {
-	case tast_expression_statement:
-		return tast_expression_supported(
-			arena, statement->expression_statement.value);
-	case tast_declaration_statement:
-		return tast_expression_supported(
-			arena, statement->declaration_statement.initializer) ||
-		       (statement->declaration_statement.has_annotation &&
-			tast_get(arena,
-			 statement->declaration_statement.initializer)->kind ==
-			 tast_structure);
-	case tast_declaration_group: {
-		const tast_id *children = tast_get_children(
-			arena, statement->aggregate.children,
-			statement->aggregate.count);
-		for (uint32_t i = 0; i < statement->aggregate.count; i++)
-			if (!tast_statement_supported(arena, children[i]))
-				return 0;
-		return 1;
-	}
-	case tast_assignment_statement:
-		return assignment_target_supported(
-			arena, statement->assignment_statement.target) &&
-		       (tast_expression_supported(
-			arena, statement->assignment_statement.value) ||
-			tast_get(arena,
-			 statement->assignment_statement.value)->kind == tast_structure);
-	case tast_return_statement:
-		return statement->return_statement.value == TAST_INVALID_ID ||
-		       tast_expression_supported(
-			arena, statement->return_statement.value);
-	case tast_import_statement:
-		return 1;
-	case tast_block:
-	case tast_module: {
-		const tast_id *children = tast_get_children(
-			arena, statement->aggregate.children,
-			statement->aggregate.count);
-		for (uint32_t i = 0; i < statement->aggregate.count; i++)
-			if (!tast_statement_supported(arena, children[i]))
-				return 0;
-		return 1;
-	}
-	case tast_if_statement:
-	case tast_elif_statement:
-	case tast_while_statement:
-		return tast_expression_supported(
-			arena, statement->control_statement.condition) &&
-		       tast_statement_supported(
-			arena, statement->control_statement.body);
-	case tast_else_statement:
-		return tast_statement_supported(
-			arena, statement->control_statement.body);
-	case tast_for_statement:
-		return tast_expression_supported(
-			arena, statement->for_statement.iterable) &&
-		       tast_statement_supported(arena, statement->for_statement.body);
-	case tast_break_statement:
-	case tast_continue_statement:
-		return 1;
-	default:
-		return 0;
-	}
-}
-
 static void emit_statement(tast_emitter *emitter, tast_id id,
 			   tstring **paths, uint_lexs npaths,
 			   int cleanstk, int inblk);
+
+typedef struct {
+	tobj_ctr *bindings;
+	uint_objs count;
+	uint8_t *initialized;
+} initialization_scope;
+
+typedef struct {
+	initialization_scope *scopes;
+	uint32_t count;
+} initialization_state;
+
+static initialization_state capture_initialization(tcp *cp)
+{
+	uint32_t count = 1;
+	for (tobj_ctr *scope = &cp->objctr; scope; scope = scope->father)
+		count++;
+	initialization_state state = {
+		.scopes = (initialization_scope *)calloc(count, sizeof(*state.scopes)),
+		.count = count
+	};
+	if (!state.scopes) abort();
+	state.scopes[0].bindings = &cp->tmpctr;
+	state.scopes[0].count = cp->tmpctr.len;
+	uint32_t at = 1;
+	for (tobj_ctr *scope = &cp->objctr; scope; scope = scope->father, at++) {
+		state.scopes[at].bindings = scope;
+		state.scopes[at].count = scope->len;
+	}
+	for (uint32_t i = 0; i < state.count; i++) {
+		initialization_scope *scope = &state.scopes[i];
+		if (!scope->count) continue;
+		scope->initialized = (uint8_t *)malloc(scope->count);
+		if (!scope->initialized) abort();
+		for (uint_objs j = 0; j < scope->count; j++)
+			scope->initialized[j] =
+				scope->bindings->bindings[j].initialized;
+	}
+	return state;
+}
+
+static void restore_initialization(const initialization_state *state)
+{
+	for (uint32_t i = 0; i < state->count; i++) {
+		const initialization_scope *scope = &state->scopes[i];
+		uint_objs count = scope->count < scope->bindings->len ?
+			scope->count : scope->bindings->len;
+		for (uint_objs j = 0; j < count; j++)
+			scope->bindings->bindings[j].initialized =
+				scope->initialized[j];
+	}
+}
+
+static void intersect_initialization(initialization_state *state,
+				     const initialization_state *branch)
+{
+	for (uint32_t i = 0; i < state->count && i < branch->count; i++) {
+		initialization_scope *target = &state->scopes[i];
+		const initialization_scope *source = &branch->scopes[i];
+		uint_objs count = target->count < source->count ?
+			target->count : source->count;
+		for (uint_objs j = 0; j < count; j++)
+			target->initialized[j] =
+				target->initialized[j] && source->initialized[j];
+	}
+}
+
+static void free_initialization(initialization_state *state)
+{
+	if (!state) return;
+	for (uint32_t i = 0; i < state->count; i++)
+		free(state->scopes[i].initialized);
+	free(state->scopes);
+	*state = (initialization_state){ 0 };
+}
 
 static uint_objs field_order_index(tstring *const *order, uint_objs count,
 				   const tstring *name)
@@ -184,10 +168,71 @@ void tast_emit_block(tast_emitter *emitter, const tast_node *block,
 	const tast_id *statements = tast_get_children(
 		emitter->arena, block->aggregate.children, block->aggregate.count);
 	for (uint32_t i = 0; i < block->aggregate.count; i++) {
+		const tast_node *statement = tast_get(emitter->arena, statements[i]);
+		if (statement && statement->kind == tast_if_statement) {
+			initialization_state entry = capture_initialization(emitter->cp);
+			initialization_state merged = { 0 };
+			int has_else = 0;
+			uint32_t branch = i;
+			for (; branch < block->aggregate.count; branch++) {
+				const tast_node *current = tast_get(
+					emitter->arena, statements[branch]);
+				if (!current || (branch != i &&
+				    current->kind != tast_elif_statement &&
+				    current->kind != tast_else_statement))
+					break;
+				restore_initialization(&entry);
+				uint_regs original_registers =
+					treg_ctr_get(&emitter->cp->regctr);
+				emit_statement(emitter, statements[branch], paths,
+					npaths, 1, inblk);
+				clean_stk(emitter->cp, emitter->instructions, 1,
+					  original_registers);
+				initialization_state result =
+					capture_initialization(emitter->cp);
+				const tast_node *branch_body = tast_get(
+					emitter->arena, current->control_statement.body);
+				if (!tast_block_definitely_returns(
+				    emitter->arena, branch_body)) {
+					if (!merged.count)
+						merged = result;
+					else {
+						intersect_initialization(&merged, &result);
+						free_initialization(&result);
+					}
+				} else
+					free_initialization(&result);
+				if (current->kind == tast_else_statement) {
+					has_else = 1;
+					branch++;
+					break;
+				}
+			}
+			if (!has_else) {
+				if (!merged.count)
+					merged = capture_initialization(emitter->cp);
+				intersect_initialization(&merged, &entry);
+			}
+			restore_initialization(merged.count ? &merged : &entry);
+			free_initialization(&merged);
+			free_initialization(&entry);
+			i = branch - 1;
+			continue;
+		}
+		initialization_state loop_entry = { 0 };
+		int is_loop = statement &&
+			(statement->kind == tast_while_statement ||
+			 statement->kind == tast_for_statement);
+		if (is_loop)
+			loop_entry = capture_initialization(emitter->cp);
 		uint_regs original_registers = treg_ctr_get(&emitter->cp->regctr);
 		emit_statement(emitter, statements[i], paths, npaths, 1, inblk);
 		clean_stk(emitter->cp, emitter->instructions, 1,
 			  original_registers);
+		if (is_loop) {
+			restore_initialization(&loop_entry);
+			free_initialization(&loop_entry);
+		}
 	}
 	if (block->kind == tast_module) {
 		tcompile_module_interface_free(emitter->cp->module_interface);
@@ -307,9 +352,14 @@ static void emit_while(tast_emitter *emitter, const tast_node *statement,
 
 	tvmcmd_vect_append(outer, tbycode_make_u(
 		OP_CJPFPOP, tvmcmd_vect_size32(&body) + 1));
+	uint_cmds body_start = tvmcmd_vect_size32(outer);
 	tvmcmd_vect_insert_vect(outer, tvmcmd_vect_size32(outer), &body);
 	uint_cmds back = 1 + tvmcmd_vect_size32(outer) - loop_start;
 	tvmcmd_vect_append(outer, tbycode_make_u(OP_JPB, back));
+	tvmcmd_vect_resolve_loop_control(
+		outer, body_start, body_start + tvmcmd_vect_size32(&body),
+		loop_start, tvmcmd_vect_size32(outer),
+		TCOMPILE_CONTINUE_MARK, TCOMPILE_BREAK_MARK);
 	tvmcmd_vect_free(&body);
 }
 
@@ -322,6 +372,9 @@ static void emit_for(tast_emitter *emitter, const tast_node *statement,
 	tstring *name = span_text(emitter, statement->for_statement.name);
 	uint_objs location = 0;
 	int is_environment = 0;
+	tobj_ctr *iteration_owner = NULL;
+	uint_objs iteration_owner_slot = 0;
+	uint8_t iteration_was_initialized = 0;
 	if (statement->for_statement.declares_binding) {
 		uint_objs object_location =
 			tobj_ctr_obj_loc(&emitter->cp->objctr, name);
@@ -337,10 +390,13 @@ static void emit_for(tast_emitter *emitter, const tast_node *statement,
 		location = tobj_ctr_obj_create(
 			&emitter->cp->tmpctr, name, 0,
 			emitter->constants, &name_location);
+		emitter->cp->tmpctr.bindings[location].initialized = 1;
 		tvmcmd_vect_append(
 			emitter->instructions,
 			tbycode_make_lr(OP_VCRT, (uint16_t)name_location, 0));
 	} else {
+		tobj_ctr *owner = NULL;
+		uint_objs owner_slot = 0;
 		uint_objs temporary_location =
 			tobj_ctr_obj_loc(&emitter->cp->tmpctr, name);
 		uint_objs object_location =
@@ -354,9 +410,21 @@ static void emit_for(tast_emitter *emitter, const tast_node *statement,
 			is_environment = 1;
 		} else
 			twarn(ErrCompile_ObjUnfound, "AST for", tstring_cstr(name));
+		if (tcompile_find_binding(
+			&emitter->cp->tmpctr, name, &owner, &owner_slot) ||
+		    tcompile_find_binding(
+			&emitter->cp->objctr, name, &owner, &owner_slot)) {
+			iteration_owner = owner;
+			iteration_owner_slot = owner_slot;
+			iteration_was_initialized =
+				owner->bindings[owner_slot].initialized;
+			/* OP_LOOPAS initializes the target before every body entry. */
+			owner->bindings[owner_slot].initialized = 1;
+		}
 	}
 	tstring_free(name);
 
+	uint_cmds loop_start = tvmcmd_vect_size32(emitter->instructions);
 	tvmcmd_vect_append(
 		emitter->instructions,
 		tbycode_make_lr(OP_LOOPAS, (uint16_t)location,
@@ -377,9 +445,14 @@ static void emit_for(tast_emitter *emitter, const tast_node *statement,
 
 	tvmcmd_vect_append(outer, tbycode_make_u(
 		OP_CJPFPOP, 1 + tvmcmd_vect_size32(&body)));
+	uint_cmds body_start = tvmcmd_vect_size32(outer);
 	tvmcmd_vect_insert_vect(outer, tvmcmd_vect_size32(outer), &body);
 	tvmcmd_vect_append(outer,
 		tbycode_make_u(OP_JPB, 3 + tvmcmd_vect_size32(&body)));
+	tvmcmd_vect_resolve_loop_control(
+		outer, body_start, body_start + tvmcmd_vect_size32(&body),
+		loop_start, tvmcmd_vect_size32(outer),
+		TCOMPILE_CONTINUE_MARK, TCOMPILE_BREAK_MARK);
 	tvmcmd_vect_append(outer, tbycode_make_lr(OP_POPN, 1, 0));
 	treg_ctr_ddt(&emitter->cp->regctr);
 
@@ -390,6 +463,9 @@ static void emit_for(tast_emitter *emitter, const tast_node *statement,
 		tvmcmd_vect_append(
 			outer, tbycode_make_u(OP_TMPDEL, (uint32_t)new_temporaries));
 	}
+	if (iteration_owner && iteration_owner_slot < iteration_owner->len)
+		iteration_owner->bindings[iteration_owner_slot].initialized =
+			iteration_was_initialized;
 	tvmcmd_vect_free(&body);
 }
 
@@ -405,11 +481,12 @@ static void emit_declaration(tast_emitter *emitter,
 	ttypeval *annotation = declaration->declaration_statement.has_annotation ?
 		tast_resolve_annotation(
 			emitter, declaration->declaration_statement.annotation) : NULL;
+	int has_initializer = declaration->declaration_statement.has_initializer;
 	ttypeval *static_value = NULL;
-	ttypeval *inferred = tast_infer_expression_type(
+	ttypeval *inferred = has_initializer ? tast_infer_expression_type(
 		emitter, declaration->declaration_statement.initializer,
-		&static_value);
-	if (annotation &&
+		&static_value) : NULL;
+	if (has_initializer && annotation &&
 	    !tast_expression_assignable_to(
 		emitter, declaration->declaration_statement.initializer,
 		annotation))
@@ -419,9 +496,14 @@ static void emit_declaration(tast_emitter *emitter,
 		ttypeval_release(static_value);
 		static_value = NULL;
 	}
+	if (!has_initializer && !is_mutable && annotation &&
+	    ttypeval_equal(annotation,
+		ttypeval_builtin(ttype_builtin_type)))
+		static_value = ttypeval_new_recursive();
 	tstring **field_order = NULL;
 	uint_objs field_order_count = 0;
-	if (static_value || (inferred && inferred->kind == ttype_kind_fields))
+	if (has_initializer &&
+	    (static_value || (inferred && inferred->kind == ttype_kind_fields)))
 		tast_static_type_field_order(
 			emitter, declaration->declaration_statement.initializer,
 			&field_order, &field_order_count);
@@ -446,7 +528,8 @@ static void emit_declaration(tast_emitter *emitter,
 	tcompile_set_metadata(bindings, location,
 		annotation ? annotation : inferred,
 		static_value, annotation != NULL);
-	bindings->bindings[location].is_types_package =
+	bindings->bindings[location].initialized = has_initializer;
+	bindings->bindings[location].is_types_package = has_initializer &&
 		tast_is_types_package_expression(
 			emitter, declaration->declaration_statement.initializer);
 	tcompile_set_field_order(bindings, location, field_order,
@@ -454,14 +537,37 @@ static void emit_declaration(tast_emitter *emitter,
 	tvmcmd_vect_append(emitter->instructions,
 		tbycode_make_lr(OP_VCRT, (uint16_t)name_location,
 				(uint16_t)is_mutable));
+	if (!has_initializer) {
+		if (static_value) {
+			tvmcmd_vect_append(emitter->instructions,
+				tbycode_make(OP_TYPEFWD));
+			treg_ctr_add(&emitter->cp->regctr);
+			tvmcmd_vect_append(emitter->instructions,
+				tbycode_make_lr(OP_POPCOV, (uint16_t)location,
+					(uint16_t)is_mutable));
+			treg_ctr_ddt(&emitter->cp->regctr);
+		}
+		tstring_free(name);
+		ttypeval_release(annotation);
+		ttypeval_release(inferred);
+		ttypeval_release(static_value);
+		tast_free_field_order(field_order, field_order_count);
+		return;
+	}
 	const tast_node *initializer = tast_get(emitter->arena,
 		declaration->declaration_statement.initializer);
 	if (initializer->kind == tast_structure)
 		emit_structure(emitter, initializer, annotation,
 			       field_order, field_order_count);
-	else
+	else {
+		const ttypeval *saved_pending = emitter->pending_function_type;
+		if (initializer->kind == tast_function && inferred &&
+		    inferred->kind == ttype_kind_function)
+			emitter->pending_function_type = inferred;
 		tast_emit_expression(
 			emitter, declaration->declaration_statement.initializer);
+		emitter->pending_function_type = saved_pending;
+	}
 	tvmcmd_vect_append(emitter->instructions,
 		tbycode_make_lr(OP_POPCOV, (uint16_t)location,
 				(uint16_t)is_mutable));
@@ -481,6 +587,19 @@ static void emit_return(tast_emitter *emitter, const tast_node *statement,
 	(void)npaths;
 	(void)inblk;
 	tast_id value_id = statement->return_statement.value;
+	if (emitter->expected_return_type) {
+		if (value_id == TAST_INVALID_ID) {
+			if (!compile_type_assignable(
+				ttypeval_builtin(ttype_builtin_nil),
+				emitter->expected_return_type))
+				twarn(ErrCompile_Other, "return",
+				      "result Type mismatch");
+		} else if (!tast_expression_assignable_to(
+			emitter, value_id, emitter->expected_return_type)) {
+			twarn(ErrCompile_Other, "return",
+			      "result Type mismatch");
+		}
+	}
 	if (value_id != TAST_INVALID_ID) {
 		const tast_node *value = tast_get(emitter->arena, value_id);
 		if (value->kind == tast_name) {
@@ -500,18 +619,13 @@ static void emit_return(tast_emitter *emitter, const tast_node *statement,
 static void emit_import(tast_emitter *emitter, const tast_node *statement,
 			tstring **paths, uint_lexs npaths, int inblk)
 {
-	ttoken token = {
-		.type = token_import,
-		.nvals = statement->import_statement.has_alias ? 2 : 1,
-		.val1 = span_text(emitter, statement->import_statement.path),
-		.val2 = statement->import_statement.has_alias ?
-			span_text(emitter, statement->import_statement.alias) :
-			tstring_new_empty(),
-		.val3 = tstring_new_empty()
-	};
-	parse_import(emitter->cp, &token, emitter->instructions,
-		     emitter->constants, paths, npaths, inblk);
-	ttoken_free(&token);
+	tstring *path = span_text(emitter, statement->import_statement.path);
+	tstring *alias = statement->import_statement.has_alias ?
+		span_text(emitter, statement->import_statement.alias) : NULL;
+	tcompile_emit_import(emitter->cp, path, alias, emitter->instructions,
+			     emitter->constants, paths, npaths, inblk);
+	tstring_free(alias);
+	tstring_free(path);
 }
 
 static void emit_assignment(tast_emitter *emitter, const tast_node *statement,
@@ -521,9 +635,10 @@ static void emit_assignment(tast_emitter *emitter, const tast_node *statement,
 	(void)paths;
 	(void)npaths;
 	(void)cleanstk;
-	(void)inblk;
 	const tast_node *target = tast_get(
 		emitter->arena, statement->assignment_statement.target);
+	if (!target)
+		twarn(ErrCompile_Other, "assignment", "missing assignment target");
 	if (target->kind == tast_name) {
 		tstring *name = span_text(emitter, target->span);
 		uint_objs temporary_location =
@@ -550,9 +665,21 @@ static void emit_assignment(tast_emitter *emitter, const tast_node *statement,
 		}
 		const tast_node *value = tast_get(
 			emitter->arena, statement->assignment_statement.value);
+		ttypeval *assigned_static = NULL;
 		ttypeval *actual = value->kind == tast_structure ? NULL :
 			tast_infer_expression_type(
-				emitter, statement->assignment_statement.value, NULL);
+				emitter, statement->assignment_statement.value,
+				&assigned_static);
+		int defines_recursive = owner && !owner->bindings[owner_slot].initialized &&
+			ttypeval_is_recursive(owner->bindings[owner_slot].type_value);
+		if (defines_recursive && inblk)
+			twarn(ErrCompile_Other, "recursive Type",
+			      "definition must be unconditional in its declaring block");
+		if (defines_recursive && (!assigned_static ||
+		    !ttypeval_define_recursive(
+			owner->bindings[owner_slot].type_value, assigned_static)))
+			twarn(ErrCompile_Other, "recursive Type",
+			      "initial value must be a static Type definition");
 		if (owner && owner->bindings[owner_slot].has_annotation &&
 		    !tast_expression_assignable_to(
 			emitter, statement->assignment_statement.value,
@@ -574,8 +701,18 @@ static void emit_assignment(tast_emitter *emitter, const tast_node *statement,
 			owner->bindings[owner_slot].is_types_package =
 				tast_is_types_package_expression(
 					emitter, statement->assignment_statement.value);
+		} else if (owner && !defines_recursive &&
+			   owner->bindings[owner_slot].value_type &&
+			   ttypeval_equal(owner->bindings[owner_slot].value_type,
+				ttypeval_builtin(ttype_builtin_type))) {
+			tcompile_set_metadata(owner, owner_slot,
+				owner->bindings[owner_slot].value_type,
+				inblk ? NULL : assigned_static, 1);
 		}
+		if (owner)
+			owner->bindings[owner_slot].initialized = 1;
 		ttypeval_release(actual);
+		ttypeval_release(assigned_static);
 		if (value->kind == tast_structure) {
 			if (!owner)
 				twarn(ErrCompile_ObjUnfound, "assignment",
@@ -584,19 +721,41 @@ static void emit_assignment(tast_emitter *emitter, const tast_node *statement,
 				owner->bindings[owner_slot].value_type,
 				owner->bindings[owner_slot].field_order,
 				owner->bindings[owner_slot].field_order_count);
-		} else
+		} else {
+			uint8_t saved_pending = emitter->allow_pending_type_references;
+			if (defines_recursive)
+				emitter->allow_pending_type_references = 1;
 			tast_emit_expression(
 				emitter, statement->assignment_statement.value);
+			emitter->allow_pending_type_references = saved_pending;
+		}
 		tvmcmd_vect_append(emitter->instructions,
-			tbycode_make_lr(OP_POPCOV, (uint16_t)location,
+			defines_recursive ?
+				tbycode_make_lr(OP_TYPEDEFINE, (uint16_t)location,
+					(uint16_t)is_environment) :
+				tbycode_make_lr(OP_POPCOV, (uint16_t)location,
 					(uint16_t)is_environment));
 		treg_ctr_ddt(&emitter->cp->regctr);
 		tstring_free(name);
 		return;
 	}
+	if (target->kind != tast_index || target->aggregate.count == 0)
+		twarn(ErrCompile_Other, "assignment",
+		      "target must be a name or indexed name");
 
 	const tast_node *receiver = tast_get(emitter->arena,
 					    target->aggregate.receiver);
+	if (!receiver || receiver->kind != tast_name)
+		twarn(ErrCompile_Other, "assignment",
+		      "indexed target receiver must be a name");
+	const tast_id *target_indices = tast_get_children(emitter->arena,
+		target->aggregate.children, target->aggregate.count);
+	for (uint32_t i = 0; i < target->aggregate.count; i++) {
+		const tast_node *index = tast_get(emitter->arena, target_indices[i]);
+		if (!index || index->kind == tast_slice)
+			twarn(ErrCompile_Other, "assignment",
+			      "slice assignment is not supported");
+	}
 	tstring *name = span_text(emitter, receiver->span);
 	tobj_ctr *owner = NULL;
 	uint_objs owner_slot = 0;
@@ -713,86 +872,79 @@ static void emit_statement(tast_emitter *emitter, tast_id id,
 	case tast_break_statement:
 		if (emitter->cp->in_loop == 0)
 			twarn(ErrCompile_Other, "AST break", "break outside loop");
-		tvmcmd_vect_append(emitter->instructions, tbycode_make(OP_BREAK));
+		tvmcmd_vect_append(
+			emitter->instructions,
+			tbycode_make(TCOMPILE_BREAK_MARK));
 		break;
 	case tast_continue_statement:
 		if (emitter->cp->in_loop == 0)
 			twarn(ErrCompile_Other, "AST continue", "continue outside loop");
-		tvmcmd_vect_append(emitter->instructions, tbycode_make(OP_CONTI));
+		tvmcmd_vect_append(
+			emitter->instructions,
+			tbycode_make(TCOMPILE_CONTINUE_MARK));
 		break;
 	default:
-		break;
+		twarn(ErrCompile_Other, "AST statement",
+		      "unsupported statement node");
 	}
 }
 
-int tcompile_try_ast_statement(tcp *cp, const tstring *source,
+static void compile_ast_source(
+	tcp *cp, const tstring *source, tfrontend_mode mode,
+	tvmcmd_vect *tcmds, tconsts *consts,
+	tstring **paths, uint_lexs npaths, int cleanstk, int inblk)
+{
+	tfrontend frontend;
+	const char *name = mode == tfrontend_statement ?
+		"<statement>" : "<module>";
+	tcompile_frontend_init(
+		cp, &frontend, name, tstring_cstr(source), mode);
+	if (!tfrontend_valid(&frontend)) {
+		const char *message = frontend.diagnostics.count ?
+			tstring_cstr(frontend.diagnostics.items[0].message) :
+			"invalid source";
+		twarn(ErrCompile_Other, "AST frontend", message);
+	}
+	tast_emitter emitter = {
+		.cp = cp,
+		.document = &frontend.document,
+		.arena = &frontend.arena,
+		.frontend = &frontend,
+		.instructions = tcmds,
+		.constants = consts,
+		.paths = paths,
+		.npaths = npaths
+	};
+	if (mode == tfrontend_statement)
+		emit_statement(&emitter, frontend.root,
+			paths, npaths, cleanstk, inblk);
+	else
+		tast_emit_block(&emitter,
+			tast_get(&frontend.arena, frontend.root),
+			paths, npaths, inblk);
+	tfrontend_free(&frontend);
+}
+
+void tcompile_ast_statement(tcp *cp, const tstring *source,
 			       tvmcmd_vect *tcmds, tconsts *consts,
 			       tstring **paths, uint_lexs npaths,
 			       int cleanstk, int inblk)
 {
-	tfrontend frontend;
-	tfrontend_init(&frontend, "<statement>", tstring_cstr(source),
-		tfrontend_statement);
-	int supported = tfrontend_valid(&frontend) &&
-		tast_statement_supported(&frontend.arena, frontend.root);
-	if (supported) {
-		tast_emitter emitter = {
-			.cp = cp,
-			.document = &frontend.document,
-			.arena = &frontend.arena,
-			.frontend = &frontend,
-			.instructions = tcmds,
-			.constants = consts,
-			.paths = paths,
-			.npaths = npaths
-		};
-		emit_statement(&emitter, frontend.root,
-			paths, npaths, cleanstk, inblk);
-	}
-	tfrontend_free(&frontend);
-	return supported;
+	compile_ast_source(cp, source, tfrontend_statement,
+		tcmds, consts, paths, npaths, cleanstk, inblk);
 }
 
-int tcompile_try_ast_module(tcp *cp, const tstring *source,
+void tcompile_ast_module(tcp *cp, const tstring *source,
 			    tvmcmd_vect *tcmds, tconsts *consts,
 			    tstring **paths, uint_lexs npaths,
 			    int inblk)
 {
-	tfrontend frontend;
-	tfrontend_init(&frontend, "<module>", tstring_cstr(source),
-		tfrontend_module);
-	if (!tfrontend_valid(&frontend)) {
-		const char *message = frontend.diagnostics.count ?
-			tstring_cstr(frontend.diagnostics.items[0].message) :
-			"invalid source module";
-		twarn(ErrCompile_Other, "AST frontend", message);
-	}
-	int supported = tast_statement_supported(
-		&frontend.arena, frontend.root);
-	if (!supported)
-		twarn(ErrCompile_Other, "AST frontend",
-		      "source form is not supported by the production AST compiler");
-	if (supported) {
-		tast_emitter emitter = {
-			.cp = cp,
-			.document = &frontend.document,
-			.arena = &frontend.arena,
-			.frontend = &frontend,
-			.instructions = tcmds,
-			.constants = consts,
-			.paths = paths,
-			.npaths = npaths
-		};
-		tast_emit_block(&emitter,
-			tast_get(&frontend.arena, frontend.root),
-			paths, npaths, inblk);
-	}
-	tfrontend_free(&frontend);
-	return 1;
+	compile_ast_source(cp, source, tfrontend_module,
+		tcmds, consts, paths, npaths, 1, inblk);
 }
 
 tcompile_module_interface *tcompile_extract_module_interface(
-	tcp *cp, const tfrontend *frontend)
+		tcp *cp, const tfrontend *frontend)
 {
 	tcompile_module_interface *interface =
 		(tcompile_module_interface *)calloc(1, sizeof(*interface));

@@ -1,5 +1,5 @@
-#ifndef T_STRING_H
-#define T_STRING_H
+#ifndef TAPAS_DS_TSTRING_H
+#define TAPAS_DS_TSTRING_H
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -21,13 +21,25 @@ extern "C" {
  * a rich set of comparison, search, and manipulation primitives.
  *===========================================================================*/
 
+#define TSTRING_INLINE_CAP 16
+
 typedef struct tstring {
 	char *data;
 	size_t len;
 	size_t cap;
+	char inline_data[TSTRING_INLINE_CAP];
 } tstring;
 
 /* ---- Constructors & Destructor ---- */
+
+/** Initialize caller-owned tstring storage from a C string. */
+bool tstring_init(tstring *s, const char *data);
+
+/** Initialize caller-owned tstring storage from a length-delimited buffer. */
+bool tstring_init_len(tstring *s, const char *data, size_t len);
+
+/** Release a tstring's dynamic buffer without freeing the tstring itself. */
+void tstring_deinit(tstring *s);
 
 /** Create a tstring from a null-terminated C string. */
 tstring *tstring_new(const char *s);
@@ -215,4 +227,4 @@ uint64_t tstring_hash(const tstring *s);
 }
 #endif
 
-#endif /* T_STRING_H */
+#endif /* TAPAS_DS_TSTRING_H */

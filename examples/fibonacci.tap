@@ -1,16 +1,15 @@
 // Fibonacci numbers: recursive definition and iterative construction.
 // Recursive time: O(2^n). Iterative time: O(n); sequence space: O(n).
 
-var fibonacci_recursive = (n){
+var fibonacci_recursive = (n: Int) -> Int {
     if(n < 2){
         return n
     }
     return this(n - 1) + this(n - 2)
 }
 
-var fibonacci_sequence = (count){
-    let IntList = types::list(types::Int)
-    let sequence: IntList = []
+var fibonacci_sequence = (count: Int) -> List[Int] {
+    let sequence: List[Int] = []
     let previous = 0
     let current = 1
 

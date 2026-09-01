@@ -1,7 +1,7 @@
-#ifndef T_HASHTBL_H
-#define T_HASHTBL_H
+#ifndef TAPAS_DS_THASHTBL_H
+#define TAPAS_DS_THASHTBL_H
 
-#include "Tapas/tbycs.h"
+#include "tapas/tbycs.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -26,4 +26,4 @@ void thashtbl_each(const thashtbl *tbl, thashtbl_each_fn fn, void *ctx);
 }
 #endif
 
-#endif /* T_HASHTBL_H */
+#endif /* TAPAS_DS_THASHTBL_H */

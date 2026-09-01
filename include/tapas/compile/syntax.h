@@ -54,6 +54,7 @@ typedef enum {
 	tsyntax_dot,
 	tsyntax_scope,
 	tsyntax_ellipsis,
+	tsyntax_arrow,
 	tsyntax_assign,
 	tsyntax_eq,
 	tsyntax_ne,
@@ -69,8 +70,7 @@ typedef enum {
 	tsyntax_power,
 	tsyntax_matmul,
 	tsyntax_element_and,
-	tsyntax_element_or,
-	tsyntax_hash
+	tsyntax_element_or
 } tsyntax_kind;
 
 typedef struct {

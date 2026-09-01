@@ -1,7 +1,7 @@
-#ifndef T_OBJ_VEC_H
-#define T_OBJ_VEC_H
+#ifndef TAPAS_DS_TOBJ_VEC_H
+#define TAPAS_DS_TOBJ_VEC_H
 
-#include "Tapas/tbycs.h"
+#include "tapas/tbycs.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -29,9 +29,11 @@ void tobj_vec_set(tobj_vec *v, uint_objs idx, const tobj *obj);
 void tobj_vec_insert(tobj_vec *v, uint_objs idx, const tobj *obj);
 void tobj_vec_pop(tobj_vec *v, uint_objs idx);
 void tobj_vec_copy(tobj_vec *dst, const tobj_vec *src);
+void tobj_vec_copy_range(tobj_vec *dst, const tobj_vec *src,
+			 uint_objs start, uint_objs count);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* T_OBJ_VEC_H */
+#endif /* TAPAS_DS_TOBJ_VEC_H */

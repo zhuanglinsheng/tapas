@@ -1,5 +1,5 @@
-#ifndef T_RUNTIME_TIME_H
-#define T_RUNTIME_TIME_H
+#ifndef TAPAS_RUNTIME_TTIME_H
+#define TAPAS_RUNTIME_TTIME_H
 
 #include "tapas/tval.h"
 
@@ -28,4 +28,4 @@ tstring *ttime_format(const ttime *value, const char *pattern);
 }
 #endif
 
-#endif /* T_RUNTIME_TIME_H */
+#endif /* TAPAS_RUNTIME_TTIME_H */

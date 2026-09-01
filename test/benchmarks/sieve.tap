@@ -1,0 +1,32 @@
+let primes_up_to = (limit){
+    let is_prime = []
+    for(let value in 0 to (limit + 1)){
+        is_prime.append(value >= 2)
+    }
+
+    let candidate = 2
+    while(candidate * candidate <= limit){
+        if(is_prime[candidate]){
+            let multiple = candidate * candidate
+            while(multiple <= limit){
+                is_prime[multiple] = false
+                multiple = multiple + candidate
+            }
+        }
+        candidate = candidate + 1
+    }
+
+    let count = 0
+    for(let value in 2 to (limit + 1)){
+        if(is_prime[value]){
+            count = count + 1
+        }
+    }
+    return count + 0
+}
+
+let started = clock_ns()
+let result = primes_up_to(20000)
+
+print(result)
+print(clock_ns() - started)

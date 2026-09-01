@@ -1,8 +1,7 @@
 // Dynamic programming for the longest common subsequence problem.
 // Time: O(m*n); table space: O(m*n).
 
-var longest_common_subsequence = (left, right){
-    let StringList = types::list(types::String)
+var longest_common_subsequence = (left: String, right: String) -> String {
     let rows = left.len() + 1
     let columns = right.len() + 1
     // lengths[i, j] stores the best length for both prefixes ending at i, j.
@@ -25,7 +24,7 @@ var longest_common_subsequence = (left, right){
     let i = left.len()
     let j = right.len()
     // Backtracking discovers characters from the end, so reverse once later.
-    let reversed: StringList = []
+    let reversed: List[String] = []
     while(i > 0 and j > 0){
         if(left[i - 1] == right[j - 1]){
             reversed.append(left[i - 1])

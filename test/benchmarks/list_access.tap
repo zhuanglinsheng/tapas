@@ -1,0 +1,10 @@
+let values = [3, 1, 4, 1, 5, 9, 2, 6]
+let started = clock_ns()
+var total = 0
+
+for(let index in 0 to 500000){
+    total = total + values[index % 8]
+}
+
+print(total)
+print(clock_ns() - started)

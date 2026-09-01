@@ -15,6 +15,7 @@ typedef struct {
 
 static ttypeval *builtin_types[ttype_builtin_count];
 static int builtins_initializing;
+static uint32_t next_recursive_id;
 static void ttypeval_free(void *self);
 
 static const char *const builtin_names[ttype_builtin_count] = {
@@ -117,6 +118,12 @@ static void ttype_append_canonical(tstring *out, const ttypeval *type)
 	tstring_append_ts(out, type->canonical);
 }
 
+static int ttype_contains_recursive(const ttypeval *type)
+{
+	return type && (type->kind == ttype_kind_recursive ||
+		type->contains_recursive);
+}
+
 static void ttype_finish_canonical(ttypeval *type, tstring *canonical)
 {
 	type->canonical = canonical;
@@ -213,6 +220,7 @@ ttypeval *ttypeval_new_fields(const ttype_field *fields, uint_objs count)
 			      "duplicate field name");
 		tobj_try_clear(&key);
 		ttype_set_definition(type, name, fields[i].type);
+		type->contains_recursive |= ttype_contains_recursive(fields[i].type);
 	}
 	ttype_build_fields_canonical(type);
 	return type;
@@ -231,6 +239,8 @@ static ttypeval *ttype_new_parameterized(ttype_kind kind,
 	ttype_set_definition(type, first_name, first);
 	if (second_name)
 		ttype_set_definition(type, second_name, second);
+	type->contains_recursive = ttype_contains_recursive(first) ||
+		ttype_contains_recursive(second);
 	tstring *canonical = tstring_new(tag);
 		ttype_append_canonical(canonical, first);
 	if (second)
@@ -256,6 +266,41 @@ ttypeval *ttypeval_new_dictionary(ttypeval *key, ttypeval *value)
 	return ttype_new_parameterized(ttype_kind_dictionary,
 				       ttype_builtin_dictionary,
 				       "@key", key, "@value", value, "D");
+}
+
+ttypeval *ttypeval_new_function(ttypeval *const *parameters,
+				uint_objs parameter_count,
+				ttypeval *result,
+				int variadic)
+{
+	ttypeval *type = ttype_new(ttype_kind_function);
+	type->function_parameter_count = parameter_count;
+	type->function_variadic = variadic ? 1 : 0;
+	ttype_set_definition(type, "@base",
+			     ttypeval_builtin(ttype_builtin_function));
+	tstring *canonical = tstring_new(variadic ? "FV" : "FF");
+	tstring_append_fmt(canonical, "%u:", (unsigned)parameter_count);
+	for (uint_objs i = 0; i < parameter_count; i++) {
+		if (parameters && parameters[i]) {
+			char key[32];
+			snprintf(key, sizeof(key), "@parameter/%u", (unsigned)i);
+			ttype_set_definition(type, key, parameters[i]);
+			type->contains_recursive |=
+				ttype_contains_recursive(parameters[i]);
+			tstring_append_c(canonical, 'T');
+			ttype_append_canonical(canonical, parameters[i]);
+		} else
+			tstring_append_c(canonical, '?');
+	}
+	if (result) {
+		ttype_set_definition(type, "@result", result);
+		tstring_append_c(canonical, 'R');
+		ttype_append_canonical(canonical, result);
+		type->contains_recursive |= ttype_contains_recursive(result);
+	} else
+		tstring_append_c(canonical, '?');
+	ttype_finish_canonical(type, canonical);
+	return type;
 }
 
 static int ttype_compare_member(const void *left, const void *right)
@@ -323,6 +368,7 @@ ttypeval *ttypeval_new_union(ttypeval *const *input, uint_objs input_count)
 		char key[32];
 		snprintf(key, sizeof(key), "@union/%u", (unsigned)i);
 		ttype_set_definition(type, key, members[i]);
+		type->contains_recursive |= ttype_contains_recursive(members[i]);
 		ttype_append_canonical(canonical, members[i]);
 	}
 	free(members);
@@ -330,19 +376,148 @@ ttypeval *ttypeval_new_union(ttypeval *const *input, uint_objs input_count)
 	return type;
 }
 
+ttypeval *ttypeval_new_recursive(void)
+{
+	ttypeval *type = ttype_new(ttype_kind_recursive);
+	type->recursive_id = next_recursive_id++;
+	type->contains_recursive = 1;
+	/* The initial reference owns the placeholder until it enters a binding. */
+	type->base.refctr = 1;
+	tstring *canonical = tstring_new("R");
+	tstring_append_fmt(canonical, "%u", (unsigned)type->recursive_id);
+	ttype_finish_canonical(type, canonical);
+	return type;
+}
+
+int ttypeval_define_recursive(ttypeval *type, ttypeval *body)
+{
+	if (!type || type->kind != ttype_kind_recursive ||
+	    type->recursive_defined || !body ||
+	    body->kind == ttype_kind_recursive)
+		return 0;
+	type->recursive_body = body;
+	ttypeval_retain(body);
+	type->recursive_defined = 1;
+	tstring_free(type->canonical);
+	type->canonical = tstring_new("M");
+	tstring_append_fmt(type->canonical, "%u:", (unsigned)type->recursive_id);
+	ttype_append_canonical(type->canonical, body);
+	type->canonical_hash = 0x7265637572736976ULL;
+	return 1;
+}
+
+int ttypeval_is_recursive(const ttypeval *type)
+{
+	return type && type->kind == ttype_kind_recursive;
+}
+
+typedef struct {
+	const ttypeval *left;
+	const ttypeval *right;
+} ttype_compare_pair;
+
+static const ttypeval *ttype_unwrap(const ttypeval *type)
+{
+	return type && type->kind == ttype_kind_recursive &&
+	       type->recursive_defined ? type->recursive_body : type;
+}
+
+static int ttype_equal_graph(const ttypeval *left, const ttypeval *right,
+			     ttype_compare_pair **seen, uint_objs *count,
+			     uint_objs *capacity)
+{
+	if (left == right) return left != NULL;
+	if (!left || !right) return 0;
+	for (uint_objs i = 0; i < *count; i++)
+		if ((*seen)[i].left == left && (*seen)[i].right == right)
+			return 1;
+	if (*count == *capacity) {
+		uint_objs grown = *capacity ? *capacity * 2 : 16;
+		ttype_compare_pair *items = (ttype_compare_pair *)realloc(
+			*seen, grown * sizeof(*items));
+		if (!items) abort();
+		*seen = items;
+		*capacity = grown;
+	}
+	(*seen)[(*count)++] = (ttype_compare_pair){ left, right };
+	left = ttype_unwrap(left);
+	right = ttype_unwrap(right);
+	if (left == right) return 1;
+	if (!left || !right || left->kind != right->kind) return 0;
+	if (left->kind == ttype_kind_any || left->kind == ttype_kind_builtin)
+		return left->builtin == right->builtin;
+	if (left->kind == ttype_kind_function &&
+	    (left->function_parameter_count != right->function_parameter_count ||
+	     left->function_variadic != right->function_variadic))
+		return 0;
+	if (left->kind == ttype_kind_fields) {
+		if (ttypeval_field_count(left) != ttypeval_field_count(right)) return 0;
+		for (uint_objs i = 0; i < ttypeval_field_count(left); i++) {
+			const tobj *name = NULL;
+			ttypeval *member = NULL;
+			ttypeval_field_at(left, i, &name, &member);
+			const tstr *key = (const tstr *)name->val.v_tcompo;
+			ttypeval *other = ttypeval_field_named(
+				right, tstring_cstr(key->data));
+			if (!other || !ttype_equal_graph(
+				member, other, seen, count, capacity)) return 0;
+		}
+		return 1;
+	}
+	if (left->kind == ttype_kind_union) {
+		uint_objs n = ttypeval_member_count(left);
+		if (n != ttypeval_member_count(right)) return 0;
+		for (uint_objs i = 0; i < n; i++) {
+			int found = 0;
+			for (uint_objs j = 0; j < n && !found; j++) {
+				uint_objs saved = *count;
+				found = ttype_equal_graph(ttypeval_member_at(left, i),
+					ttypeval_member_at(right, j), seen, count, capacity);
+				if (!found) *count = saved;
+			}
+			if (!found) return 0;
+		}
+		return 1;
+	}
+	uint_objs entries = thashtbl_len(left->definition);
+	if (entries != thashtbl_len(right->definition)) return 0;
+	uint_objs count_left = 0;
+	ttype_entry *items = ttype_sorted_entries(left, &count_left);
+	for (uint_objs i = 0; i < count_left; i++) {
+		const tstr *key = (const tstr *)items[i].key->val.v_tcompo;
+		ttypeval *a = (ttypeval *)items[i].value->val.v_tcompo;
+		ttypeval *b = ttype_definition_get_type(right, tstring_cstr(key->data));
+		if (!b || !ttype_equal_graph(a, b, seen, count, capacity)) {
+			free(items);
+			return 0;
+		}
+	}
+	free(items);
+	return 1;
+}
+
 int ttypeval_equal(const ttypeval *left, const ttypeval *right)
 {
-	return left == right ||
-	       (left && right && tstring_cmp(left->canonical, right->canonical) == 0);
+	if (left == right) return left != NULL;
+	if (!left || !right) return 0;
+	if (!ttype_contains_recursive(left) && !ttype_contains_recursive(right))
+		return tstring_cmp(left->canonical, right->canonical) == 0;
+	ttype_compare_pair *seen = NULL;
+	uint_objs count = 0, capacity = 0;
+	int equal = ttype_equal_graph(left, right, &seen, &count, &capacity);
+	free(seen);
+	return equal;
 }
 
 uint64_t ttypeval_hash(const ttypeval *type)
 {
-	return type ? type->canonical_hash : 0;
+	return type ? (ttype_contains_recursive(type) ?
+		0x7265637572736976ULL : type->canonical_hash) : 0;
 }
 
 uint_objs ttypeval_field_count(const ttypeval *type)
 {
+	type = ttype_unwrap(type);
 	return type && type->kind == ttype_kind_fields ?
 		       thashtbl_len(type->definition) : 0;
 }
@@ -350,6 +525,7 @@ uint_objs ttypeval_field_count(const ttypeval *type)
 int ttypeval_field_at(const ttypeval *type, uint_objs index,
 		      const tobj **name, ttypeval **field_type)
 {
+	type = ttype_unwrap(type);
 	if (!type || type->kind != ttype_kind_fields)
 		return 0;
 	uint_objs count;
@@ -368,6 +544,7 @@ int ttypeval_field_at(const ttypeval *type, uint_objs index,
 
 ttypeval *ttypeval_field_named(const ttypeval *type, const char *name)
 {
+	type = ttype_unwrap(type);
 	if (!type || type->kind != ttype_kind_fields || !name || name[0] == '@')
 		return NULL;
 	return ttype_definition_get_type(type, name);
@@ -375,12 +552,14 @@ ttypeval *ttypeval_field_named(const ttypeval *type, const char *name)
 
 uint_objs ttypeval_member_count(const ttypeval *type)
 {
+	type = ttype_unwrap(type);
 	return type && type->kind == ttype_kind_union ?
 		       thashtbl_len(type->definition) : 0;
 }
 
 ttypeval *ttypeval_member_at(const ttypeval *type, uint_objs index)
 {
+	type = ttype_unwrap(type);
 	if (!type || type->kind != ttype_kind_union)
 		return NULL;
 	char key[32];
@@ -390,16 +569,19 @@ ttypeval *ttypeval_member_at(const ttypeval *type, uint_objs index)
 
 ttypeval *ttypeval_base(const ttypeval *type)
 {
+	type = ttype_unwrap(type);
 	if (!type)
 		return NULL;
 	if (type->kind != ttype_kind_list && type->kind != ttype_kind_pair &&
-	    type->kind != ttype_kind_dictionary)
+	    type->kind != ttype_kind_dictionary &&
+	    type->kind != ttype_kind_function)
 		return (ttypeval *)type;
 	return ttype_definition_get_type(type, "@base");
 }
 
 ttypeval *ttypeval_parameter(const ttypeval *type, const char *name)
 {
+	type = ttype_unwrap(type);
 	if (!type || !name)
 		return NULL;
 	char key[32];
@@ -407,14 +589,49 @@ ttypeval *ttypeval_parameter(const ttypeval *type, const char *name)
 	return ttype_definition_get_type(type, key);
 }
 
+uint_objs ttypeval_function_parameter_count(const ttypeval *type)
+{
+	type = ttype_unwrap(type);
+	return type && type->kind == ttype_kind_function ?
+		type->function_parameter_count : 0;
+}
+
+ttypeval *ttypeval_function_parameter_at(const ttypeval *type,
+					  uint_objs index)
+{
+	type = ttype_unwrap(type);
+	if (!type || type->kind != ttype_kind_function ||
+	    index >= type->function_parameter_count)
+		return NULL;
+	char key[32];
+	snprintf(key, sizeof(key), "@parameter/%u", (unsigned)index);
+	return ttype_definition_get_type(type, key);
+}
+
+ttypeval *ttypeval_function_result(const ttypeval *type)
+{
+	type = ttype_unwrap(type);
+	return type && type->kind == ttype_kind_function ?
+		ttype_definition_get_type(type, "@result") : NULL;
+}
+
+int ttypeval_function_variadic(const ttypeval *type)
+{
+	type = ttype_unwrap(type);
+	return type && type->kind == ttype_kind_function &&
+	       type->function_variadic;
+}
+
 const thashtbl *ttypeval_definition(const ttypeval *type)
 {
+	type = ttype_unwrap(type);
 	return type ? type->definition : NULL;
 }
 
 void ttypeval_idx(ttypeval *type, const tobj *params, uint_regs np,
 		  tobj *result)
 {
+	type = (ttypeval *)ttype_unwrap(type);
 	if (np != 1)
 		twarn(ErrRuntime_ParamsCtr, "Type index", "one key is required");
 	if (!type || type->kind != ttype_kind_fields ||
@@ -497,7 +714,23 @@ typedef struct {
 	const ttypeval *key;
 	const ttypeval *value;
 	int matches;
+	struct ttype_match_state *state;
 } ttype_dictionary_match_ctx;
+
+typedef struct {
+	const tcompo_v *value;
+	const ttypeval *type;
+} ttype_match_pair;
+
+typedef struct ttype_match_state {
+	ttype_match_pair *seen;
+	uint_objs count;
+	uint_objs capacity;
+} ttype_match_state;
+
+static int ttype_matches_internal(const tobj *value,
+				  const ttypeval *expected,
+				  ttype_match_state *state);
 
 static void ttype_match_dictionary_entry(const tobj *key,
 					 const tobj *value,
@@ -506,23 +739,51 @@ static void ttype_match_dictionary_entry(const tobj *key,
 	ttype_dictionary_match_ctx *ctx =
 		(ttype_dictionary_match_ctx *)context;
 	if (ctx->matches &&
-	    (!ttypeval_matches(key, ctx->key) ||
-	     !ttypeval_matches(value, ctx->value)))
+	    (!ttype_matches_internal(key, ctx->key, ctx->state) ||
+	     !ttype_matches_internal(value, ctx->value, ctx->state)))
 		ctx->matches = 0;
 }
 
-int ttypeval_matches(const tobj *value, const ttypeval *expected)
+static int ttype_matches_internal(const tobj *value,
+				  const ttypeval *expected,
+				  ttype_match_state *state)
 {
 	if (!expected)
 		return 0;
+	if (expected->kind == ttype_kind_recursive) {
+		if (!expected->recursive_defined) return 0;
+		const tcompo_v *identity = value && value->type == tcompo ?
+			value->val.v_tcompo : NULL;
+		if (identity) {
+			for (uint_objs i = 0; i < state->count; i++)
+				if (state->seen[i].value == identity &&
+				    state->seen[i].type == expected)
+					return 1;
+			if (state->count == state->capacity) {
+				uint_objs grown = state->capacity ? state->capacity * 2 : 16;
+				ttype_match_pair *items = (ttype_match_pair *)realloc(
+					state->seen, grown * sizeof(*items));
+				if (!items) abort();
+				state->seen = items;
+				state->capacity = grown;
+			}
+			state->seen[state->count++] =
+				(ttype_match_pair){ identity, expected };
+		}
+		return ttype_matches_internal(
+			value, expected->recursive_body, state);
+	}
 	if (expected->kind == ttype_kind_any)
 		return 1;
 	if (expected->kind == ttype_kind_builtin)
 		return ttype_builtin_matches(value, expected->builtin);
+	if (expected->kind == ttype_kind_function)
+		return ttype_builtin_matches(value, ttype_builtin_function);
 	if (expected->kind == ttype_kind_union) {
 		uint_objs count = ttypeval_member_count(expected);
 		for (uint_objs i = 0; i < count; i++) {
-			if (ttypeval_matches(value, ttypeval_member_at(expected, i)))
+			if (ttype_matches_internal(
+				value, ttypeval_member_at(expected, i), state))
 				return 1;
 		}
 		return 0;
@@ -536,7 +797,7 @@ int ttypeval_matches(const tobj *value, const ttypeval *expected)
 		tlist *list = (tlist *)value->val.v_tcompo;
 		ttypeval *item = ttypeval_parameter(expected, "item");
 		for (uint_objs i = 0; i < tlist_size(list); i++) {
-			if (!ttypeval_matches(tlist_at(list, i), item))
+			if (!ttype_matches_internal(tlist_at(list, i), item, state))
 				return 0;
 		}
 		return 1;
@@ -545,10 +806,10 @@ int ttypeval_matches(const tobj *value, const ttypeval *expected)
 		if (tobj_compo_type(value) != compo_tpair)
 			return 0;
 		tpair *pair = (tpair *)value->val.v_tcompo;
-		return ttypeval_matches(
-			       &pair->first, ttypeval_parameter(expected, "first")) &&
-		       ttypeval_matches(
-			       &pair->second, ttypeval_parameter(expected, "second"));
+		return ttype_matches_internal(
+			       &pair->first, ttypeval_parameter(expected, "first"), state) &&
+		       ttype_matches_internal(
+			       &pair->second, ttypeval_parameter(expected, "second"), state);
 	}
 	if (expected->kind == ttype_kind_dictionary) {
 		if (tobj_compo_type(value) != compo_tdict)
@@ -556,7 +817,7 @@ int ttypeval_matches(const tobj *value, const ttypeval *expected)
 		ttype_dictionary_match_ctx ctx = {
 			ttypeval_parameter(expected, "key"),
 			ttypeval_parameter(expected, "value"),
-			1
+			1, state
 		};
 		thashtbl_each(((tdict *)value->val.v_tcompo)->items,
 			       ttype_match_dictionary_entry, &ctx);
@@ -572,12 +833,21 @@ int ttypeval_matches(const tobj *value, const ttypeval *expected)
 			ttypeval *field_type;
 			ttypeval_field_at(expected, i, &name, &field_type);
 			const tobj *field = thashtbl_get(dictionary->items, name);
-			if (!field || !ttypeval_matches(field, field_type))
+			if (!field || !ttype_matches_internal(
+				field, field_type, state))
 				return 0;
 		}
 		return 1;
 	}
 	return 0;
+}
+
+int ttypeval_matches(const tobj *value, const ttypeval *expected)
+{
+	ttype_match_state state = { 0 };
+	int matches = ttype_matches_internal(value, expected, &state);
+	free(state.seen);
+	return matches;
 }
 
 static const char *ttypeval_get_type(void)
@@ -598,12 +868,18 @@ static long ttypeval_len(void *self)
 static void *ttypeval_copy(void *self)
 {
 	ttypeval *source = (ttypeval *)self;
+	if (source->kind == ttype_kind_recursive) {
+		ttypeval_retain(source);
+		return source;
+	}
 	ttypeval *copy = ttype_new(source->kind);
 	copy->builtin = source->builtin;
 	thashtbl_free(copy->definition);
 	copy->definition = thashtbl_copy(source->definition);
 	copy->canonical = tstring_dup(source->canonical);
 	copy->canonical_hash = source->canonical_hash;
+	copy->function_parameter_count = source->function_parameter_count;
+	copy->function_variadic = source->function_variadic;
 	return copy;
 }
 
@@ -623,6 +899,12 @@ static int ttypeval_identical(void *self, void *other)
 static tstring *ttypeval_tostring(void *self)
 {
 	ttypeval *type = (ttypeval *)self;
+	if (type->kind == ttype_kind_recursive) {
+		tstring *out = tstring_new("RecursiveType(");
+		tstring_append_fmt(out, "%u", (unsigned)type->recursive_id);
+		tstring_append_c(out, ')');
+		return out;
+	}
 	if (type->kind == ttype_kind_any || type->kind == ttype_kind_builtin) {
 		tstring *out = tstring_new("types::");
 		tstring_append(out, builtin_names[type->builtin]);

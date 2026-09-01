@@ -5,6 +5,16 @@
 #include "tapas/compile/frontend.h"
 #include "tapas/runtime/ttype.h"
 
+int str_to_long_int(const tstring *literal, long *value);
+int str_to_float(const tstring *literal, double *value);
+
+/* These values exist only while a loop body is being emitted. The resolver
+ * replaces every marker with a jump before a bytecode wrapper is created. */
+enum {
+	TCOMPILE_BREAK_MARK = 62,
+	TCOMPILE_CONTINUE_MARK = 63
+};
+
 /* Symbol and static-analysis metadata shared by compiler phases. */
 int tcompile_find_binding(tobj_ctr *c, const tstring *name,
 			  tobj_ctr **owner, uint_objs *slot);
@@ -19,89 +29,30 @@ const tcompile_export *tcompile_module_export(
 tcompile_module_interface *tcompile_extract_module_interface(
 	tcp *cp, const tfrontend *frontend);
 ttypeval *compile_resolve_annotation(tcp *cp, const tstring *annotation);
-ttypeval *compile_infer_expr_type(tcp *cp, const tstring *expr,
-				  ttypeval **static_value);
+ttypeval *compile_type_from_static(const tstatic_type_arena *arena,
+				   tstatic_type_id id);
 int compile_type_assignable(const ttypeval *actual, const ttypeval *target);
+int compile_runtime_types_assignable(const ttypeval *actual,
+				     const ttypeval *target);
+void tcompile_frontend_init(tcp *cp, tfrontend *frontend,
+			    const char *name, const char *source,
+			    tfrontend_mode mode);
 
-/* The statement entry point is a compatibility probe used only by parse_unit:
- * it returns zero without modifying compiler state when legacy syntax is not
- * represented by the AST. The module entry point is the authoritative
- * production path for source files and blocks. */
-int tcompile_try_ast_statement(tcp *cp, const tstring *source,
+void tcompile_ast_statement(tcp *cp, const tstring *source,
 			       tvmcmd_vect *tcmds, tconsts *consts,
 			       tstring **paths, uint_lexs npaths,
 			       int cleanstk, int inblk);
-int tcompile_try_ast_module(tcp *cp, const tstring *source,
+void tcompile_ast_module(tcp *cp, const tstring *source,
 			    tvmcmd_vect *tcmds, tconsts *consts,
 			    tstring **paths, uint_lexs npaths,
 			    int inblk);
 
-/* Expression bytecode generation. */
+/* Bytecode helpers shared by AST emitters. */
 void compile_emit_reference(tcp *cp, const tstring *name,
 			    tvmcmd_vect *tcmds, tconsts *consts);
-void parse_v(tcp *cp, const ttoken *tok,
-	     tvmcmd_vect *tcmds, tconsts *consts);
-void parse_binop_split(tcp *cp, int ins, const tbin_expr *expr,
-		       tvmcmd_vect *tcmds, tconsts *consts,
-		       tstring **paths, uint_lexs npaths, int inblk);
-void parse_binop_opt(tcp *cp, int ins, const ttoken *tok,
-		     tvmcmd_vect *tcmds, tconsts *consts,
-		     tstring **paths, uint_lexs npaths, int inblk);
-void parse_binop_short_circuit(tcp *cp, int ins, const ttoken *tok,
-			       tvmcmd_vect *tcmds, tconsts *consts,
-			       tstring **paths, uint_lexs npaths, int inblk);
-void parse_binop_simple(tcp *cp, int ins, const ttoken *tok,
-			tvmcmd_vect *tcmds, tconsts *consts,
-			tstring **paths, uint_lexs npaths, int inblk);
-void parse_eval(tcp *cp, const ttoken *tok,
-		tvmcmd_vect *tcmds, tconsts *consts,
-		tstring **paths, uint_lexs npaths, int inblk);
-void parse_idx(tcp *cp, const ttoken *tok,
-	       tvmcmd_vect *tcmds, tconsts *consts,
-	       tstring **paths, uint_lexs npaths, int cleanstk, int inblk);
-void parse_idx2(tcp *cp, const ttoken *tok,
-		tvmcmd_vect *tcmds, tconsts *consts,
-		tstring **paths, uint_lexs npaths, int inblk);
-void parse_dict(tcp *cp, const ttoken *tok,
-		tvmcmd_vect *tcmds, tconsts *consts,
-		tstring **paths, uint_lexs npaths, int inblk);
-
-/* Statement bytecode generation. */
-#define TAPAS_PARSE_STATEMENT_DECL(name)                                      \
-	void name(tcp *cp, const ttoken *tok, tvmcmd_vect *tcmds,              \
-		  tconsts *consts, tstring **paths, uint_lexs npaths, int inblk)
-
-TAPAS_PARSE_STATEMENT_DECL(parse_return);
-TAPAS_PARSE_STATEMENT_DECL(parse_var);
-TAPAS_PARSE_STATEMENT_DECL(parse_let);
-TAPAS_PARSE_STATEMENT_DECL(parse_asg);
-TAPAS_PARSE_STATEMENT_DECL(parse_if);
-
-#undef TAPAS_PARSE_STATEMENT_DECL
-
-#define TAPAS_PARSE_CONTROL_DECL(name)                                        \
-	void name(tcp *cp, const ttoken *tok, tvmcmd_vect *tcmds,              \
-		  tconsts *consts, tstring **paths, uint_lexs npaths)
-
-TAPAS_PARSE_CONTROL_DECL(parse_elif);
-TAPAS_PARSE_CONTROL_DECL(parse_else);
-TAPAS_PARSE_CONTROL_DECL(parse_while);
-TAPAS_PARSE_CONTROL_DECL(parse_func);
-TAPAS_PARSE_CONTROL_DECL(parse_kappa);
-
-#undef TAPAS_PARSE_CONTROL_DECL
-
-void parse_for(tcp *cp, const ttoken *tok,
-	       tvmcmd_vect *tcmds, tconsts *consts,
-	       tstring **paths, uint_lexs npaths, int cleanstk, int inblk);
-void parse_import(tcp *cp, const ttoken *tok,
-		  tvmcmd_vect *tcmds, tconsts *consts,
-		  tstring **paths, uint_lexs npaths, int inblk);
-
-/* Token dispatch and source orchestration. */
-void parse_token(tcp *cp, const ttoken *tok,
-		 tvmcmd_vect *tcmds, tconsts *consts,
-		 tstring **paths, uint_lexs npaths, int cleanstk, int inblk);
+void tcompile_emit_import(tcp *cp, const tstring *path, const tstring *alias,
+			  tvmcmd_vect *tcmds, tconsts *consts,
+			  tstring **paths, uint_lexs npaths, int inblk);
 void clean_stk(tcp *cp, tvmcmd_vect *tcmds, int isroot, uint_regs regs_ori);
 
 #endif /* TAPAS_COMPILE_INTERNAL_H */

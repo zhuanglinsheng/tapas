@@ -1,7 +1,7 @@
-#include "Tapas/tapas.h"
+#include "tapas/tapas.h"
 #include "tapas/runtime/tdict.h"
 #include "tapas/runtime/tlist.h"
-#include "Tapas/tvm.h"
+#include "tapas/tvm.h"
 
 #include <setjmp.h>
 #include <stdio.h>

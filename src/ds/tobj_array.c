@@ -21,7 +21,8 @@ void tobj_array_free(tobj_array *arr)
 	if (arr->data) {
 		uint_objs i;
 		for (i = 0; i < arr->len; i++)
-			tobj_ddc_ref_clear(&arr->data[i]);
+			if (arr->data[i].type == tcompo)
+				tobj_ddc_ref_clear(&arr->data[i]);
 		free(arr->data);
 	}
 	arr->data = NULL;
@@ -63,6 +64,10 @@ void tobj_array_set_obj(tobj_array *arr, uint_objs loc, const tobj *v)
 		twarn(ErrRuntime_ObjUnfound, "tobj_array_set_obj", "");
 		return;
 	}
+	if (arr->data[loc].type != tcompo && v->type != tcompo) {
+		arr->data[loc] = *v;
+		return;
+	}
 	/* Copy with ref counting */
 	if (arr->data[loc].type == tcompo && v->type == tcompo &&
 	    arr->data[loc].val.v_tcompo == v->val.v_tcompo)
@@ -92,7 +97,10 @@ void tobj_array_set_len(tobj_array *arr, uint_objs n)
 		tobj_array_try_expand(arr, n);
 	while (arr->len > n) {
 		arr->len--;
-		tobj_ddc_ref_clear(&arr->data[arr->len]);
+		if (arr->data[arr->len].type == tcompo)
+			tobj_ddc_ref_clear(&arr->data[arr->len]);
+		else
+			tobj_set_nil(&arr->data[arr->len]);
 	}
 	arr->len = n;
 }
@@ -101,7 +109,10 @@ void tobj_array_del_obj(tobj_array *arr, uint_objs n)
 {
 	while (n > 0 && arr->len > 0) {
 		arr->len--;
-		tobj_ddc_ref_clear(&arr->data[arr->len]);
+		if (arr->data[arr->len].type == tcompo)
+			tobj_ddc_ref_clear(&arr->data[arr->len]);
+		else
+			tobj_set_nil(&arr->data[arr->len]);
 		n--;
 	}
 }

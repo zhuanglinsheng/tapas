@@ -1,8 +1,8 @@
-#ifndef T_COMPILE_H
-#define T_COMPILE_H
+#ifndef TAPAS_COMPILE_COMPILER_H
+#define TAPAS_COMPILE_COMPILER_H
 
-#include "tapas/compile/lexer.h"
-#include "Tapas/tbycs.h"
+#include "tapas/tenv.h"
+#include "tapas/tbycs.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -53,6 +53,7 @@ typedef struct {
 	tcompile_module_interface *module_interface;
 	uint8_t has_annotation;
 	uint8_t is_types_package;
+	uint8_t initialized;
 } tcompile_binding;
 
 typedef struct tobj_ctr {
@@ -87,21 +88,7 @@ void tobj_ctr_first_n_objs_free(tstring **objs, uint_objs n);
 
 
 /*===========================================================================*
- * 3. Binary Expression — uses tstring
- *===========================================================================*/
-
-typedef struct {
-	tstring *left;
-	tstring *right;
-	tstring *optr;
-	uint8_t al_type;
-	uint_objs lloc;
-	uint_objs rloc;
-} tbin_expr;
-
-
-/*===========================================================================*
- * 4. Compiler Context (tcp)
+ * 3. Compiler Context (tcp)
  *===========================================================================*/
 
 typedef struct {
@@ -113,7 +100,6 @@ typedef struct {
 struct tcp {
 	tobj_ctr objctr;
 	tobj_ctr tmpctr;
-	tunit_ctr lexctr;
 	treg_ctr regctr;
 	uint_objs n_default_objs;
 	tvmcmd_vect *outer_instructions;
@@ -139,21 +125,15 @@ void tcp_free(tcp *cp);
 
 
 /*===========================================================================*
- * 5. Parsing Functions (public API)
+ * 4. Compilation entry points
  *===========================================================================*/
 
-int find_imported_file(tstring **file_ptr, tstring **paths, uint_lexs npaths);
-int str_to_long_int(const tstring *cmds, long *it);
-int str_to_float(const tstring *cmds, double *dt);
-
 tcinfo parse_unit(tcp *cp, const tstring *src, tvmcmd_vect *tcmds, tconsts *consts, tstring **paths, uint_lexs npaths, int cleanstk, int inblk);
-uint_regs parse_params(tcp *cp, const tstring *src, tvmcmd_vect *tcmds, tconsts *consts, tstring **paths, uint_lexs npaths, int inblk);
-tcinfo parse_file(tcp *cp, FILE *f, tvmcmd_vect *tcmds, tconsts *consts, tstring **paths, uint_lexs npaths);
 tcinfo parse_blk(tcp *cp, const tstring *src, tvmcmd_vect *tcmds, tconsts *consts, tstring **paths, uint_lexs npaths, int cleanstk, int inblk);
 
 
 /*===========================================================================*
- * 6. High-level Compile Functions
+ * 5. High-level Compile Functions
  *===========================================================================*/
 
 twrapper *compile_str(tcp *cp, const tstring *src, tstring **paths, uint_lexs npaths);
@@ -164,4 +144,4 @@ void compile_file_save(tcp *cp, const tstring *file, tstring **paths, uint_lexs 
 }
 #endif
 
-#endif /* T_COMPILE_H */
+#endif /* TAPAS_COMPILE_COMPILER_H */

@@ -172,6 +172,7 @@ void tsyntax_lex(const tsource_document *document, tsyntax_tokens *tokens)
 		TWO('!', '=', tsyntax_ne)
 		TWO('>', '=', tsyntax_ge)
 		TWO('<', '=', tsyntax_le)
+		TWO('-', '>', tsyntax_arrow)
 #undef TWO
 		if (c == '.' && at + 2 < length && text[at + 1] == '.' &&
 		    text[at + 2] == '.') {
@@ -204,7 +205,6 @@ void tsyntax_lex(const tsource_document *document, tsyntax_tokens *tokens)
 		case '@': kind = tsyntax_matmul; break;
 		case '&': kind = tsyntax_element_and; break;
 		case '|': kind = tsyntax_element_or; break;
-		case '#': kind = tsyntax_hash; break;
 		}
 		tokens_push(tokens, kind, start, at);
 	}
@@ -219,9 +219,9 @@ const char *tsyntax_kind_name(tsyntax_kind kind)
 		"base", "break", "continue", "elif", "else", "false", "for",
 		"function", "if", "import", "in", "let", "nil", "of", "or",
 		"return", "this", "to", "true", "var", "while", "(", ")",
-		"[", "]", "{", "}", ",", ":", ";", ".", "::", "...",
+		"[", "]", "{", "}", ",", ":", ";", ".", "::", "...", "->",
 		"=", "==", "!=", ">", ">=", "<", "<=", "+", "-", "*",
-		"/", "%", "^", "@", "&", "|", "#"
+		"/", "%", "^", "@", "&", "|"
 	};
 	return (unsigned)kind < sizeof(names) / sizeof(names[0]) ?
 		names[kind] : "unknown";

@@ -67,9 +67,14 @@ static tstring *tpair_tostring_full(void *self)
 }
 
 tcompo_vtable tpair_vtable = {
-	tpair_get_type,	     tpair_get_code,	 tpair_len,
-	tpair_copy,	     tpair_free,	 tpair_identical,
-	tpair_tostring_abbr, tpair_tostring_full
+	.get_type = tpair_get_type,
+	.get_compo_type_code = tpair_get_code,
+	.len = tpair_len,
+	.copy = tpair_copy,
+	.free = tpair_free,
+	.identical = tpair_identical,
+	.tostring_abbr = tpair_tostring_abbr,
+	.tostring_full = tpair_tostring_full
 };
 
 tpair *tpair_new(const tobj *f, const tobj *s)

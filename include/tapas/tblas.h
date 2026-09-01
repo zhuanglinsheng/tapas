@@ -1,5 +1,5 @@
-#ifndef T_BLAS_H
-#define T_BLAS_H
+#ifndef TAPAS_TBLAS_H
+#define TAPAS_TBLAS_H
 
 #include <stddef.h>
 
@@ -12,4 +12,4 @@ void tblas_scal(size_t n, double alpha, double *x);
 void tblas_gemm(size_t rows, size_t shared, size_t cols,
 		const double *left, const double *right, double *out);
 
-#endif
+#endif /* TAPAS_TBLAS_H */

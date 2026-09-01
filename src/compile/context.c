@@ -109,6 +109,7 @@ static void tcompile_binding_clear(tcompile_binding *binding)
 	binding->module_interface = NULL;
 	binding->has_annotation = 0;
 	binding->is_types_package = 0;
+	binding->initialized = 0;
 }
 
 uint_objs tobj_ctr_len_in_all(tobj_ctr *father)
@@ -127,6 +128,7 @@ void tobj_ctr_init_preload(
 	for (uint_objs i = 0; i < npre; i++) {
 		c->bindings[i] = (tcompile_binding){
 			.name = tstring_dup(precludes[i]),
+			.initialized = 1,
 		};
 	}
 	c->len = npre;
@@ -294,7 +296,6 @@ void tcp_init(tcp *cp, tobj_ctr *father_objctr, int interactive)
 {
 	tobj_ctr_init(&cp->objctr, father_objctr);
 	tobj_ctr_init(&cp->tmpctr, NULL);
-	tunit_ctr_init(&cp->lexctr);
 	treg_ctr_init(&cp->regctr);
 	cp->n_default_objs = 0;
 	cp->module_interface = NULL;
@@ -314,7 +315,6 @@ void tcp_init_preload(
 	tobj_ctr_init_preload(
 		&cp->objctr, default_objs, ndefault, father_objctr);
 	tobj_ctr_init(&cp->tmpctr, NULL);
-	tunit_ctr_init(&cp->lexctr);
 	treg_ctr_init(&cp->regctr);
 	cp->n_default_objs = ndefault;
 	cp->module_interface = NULL;

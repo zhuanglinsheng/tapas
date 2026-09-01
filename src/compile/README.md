@@ -1,64 +1,58 @@
-# Compiler architecture
+# 编译器结构
 
-The production compiler is split into a reusable front end, static analysis,
-and bytecode emission. Source files and Markdown code blocks use the AST path
-exclusively. The legacy token compiler remains only behind the old public
-single-unit compatibility API.
+[English](README_en.md)
 
-## Reusable front end
+正式编译器分为可复用前端、静态分析和字节码生成三层。Tapas 源文件与 Markdown
+代码块、单语句入口和 REPL 统一经过 AST 编译路径。
 
-The public interfaces live in `include/tapas/compile/` and do not depend on VM
-registers or bytecode state.
+## 可复用前端
 
-- `document.c` owns immutable UTF-8 source text and line starts. Locations are
-  half-open byte spans.
-- `syntax.c` produces lossless tokens, including whitespace, newlines, and
-  comments.
-- `diagnostic.c` collects recoverable, span-based diagnostics.
-- `ast.c` owns compact arena nodes referenced by stable integer IDs.
-- `parser.c` parses complete modules, statements, and Pratt expressions. It
-  builds AST nodes for functions, control flow, imports, collections,
-  structures, slices, and compatibility kappas.
-- `semantic.c` builds lexical scopes, declarations, and reference-to-symbol
-  resolutions independently of bytecode emission.
-- `type_info.c` records editor-facing expression and symbol Type facts without
-  VM state. It currently covers annotations, literals, functions, arithmetic,
-  pairs, lists, and dictionaries. Rich structural checking is being migrated
-  here incrementally from the bytecode compiler.
-- `frontend.c` owns the document, tokens, AST, diagnostics, and semantic model
-  as one lifecycle. This is the entry point intended for the compiler and a
-  future language server.
+公共接口位于 `include/tapas/compile/`，不依赖 VM 寄存器或字节码状态。
 
-Parser recursion represents grammar nesting and is capped by an explicit
-limit. It does not obstruct AST construction or later iterative analysis.
+- `document.c` 保存不可变 UTF-8 源码和各行起始位置，源码范围使用左闭右开字节区间。
+- `syntax.c` 生成包含空白、换行和注释的无损 Token。
+- `diagnostic.c` 收集可恢复且带源码范围的诊断。
+- `ast.c` 使用紧凑 Arena 保存节点，并以稳定整数 ID 引用节点。
+- `parser.c` 解析模块、语句和 Pratt 表达式，生成函数、控制流、导入、容器、结构、
+  切片等 AST。
+- `semantic.c` 建立词法作用域、名称声明和引用到符号的解析，不依赖字节码生成。
+- `type_info.c` 保存编译器和编辑器共享的表达式与符号 Type 信息，覆盖标注、字面量、
+  函数、算术、容器、字段、调用、Type 前置声明和递归 Type 图。
+- `frontend.c` 统一管理文档、Token、AST、诊断和语义模型的生命周期，是编译器和
+  语言服务器使用前端的入口。
 
-## Static Type analysis
+解析器递归只表示语法嵌套，并有明确的深度限制，不妨碍 AST 构造和后续迭代分析。
 
-- `ast_typecheck.c` evaluates the five recognized static Type constructors,
-  resolves local and imported Type names, infers expression and literal Types,
-  and applies contextual assignability checks.
-- Compiler bindings keep value Type, static Type value, annotation state, and
-  field construction order. Construction order is deliberately separate from
-  runtime `ttypeval` so structural equality and hashing remain order-free.
-- `binding.c` owns binding metadata, module-interface lifetime, and the shared
-  Type assignability relation. Token-oriented compatibility inference remains
-  isolated in `typecheck.c`.
-- Imported source modules expose a compiler-only interface containing exported
-  static Types and field construction order. Runtime imports still receive
-  ordinary library values.
+## 静态 Type 分析
 
-## Bytecode back end
+- `type_info.c` 是表达式、符号和静态 Type 值的唯一推断来源。
+- 独立前端只解析当前文档；嵌入编译器通过 TypeInfo 的外部解析器提供预载绑定和
+  导入模块的 Type。两条路径共享同一套推断规则。
+- 前端初始化时直接选择对应的外部解析器，每份源码只执行一次 TypeInfo 分析。
+- `type_emit.c` 消费 TypeInfo，并完成字节码生成所需的上下文检查与运行时 Type
+  物化；`type_bridge.c` 集中处理静态 Type IR 与运行时 Type 的双向转换。
+- 编译器绑定分别保存值 Type、静态 Type 值、标注状态和字段构造顺序。字段顺序
+  不放入运行时 `ttypeval`，因此结构相等与哈希不受声明顺序影响。
+- `binding.c` 管理绑定元数据和模块接口生命周期，并将编译期可赋值判断委托给
+  `static_type.c` 的共享 Type IR 规则。
+- 绑定分别记录初始化状态和值 Type。控制流分支按继续执行路径取初始化状态交集，
+  循环保持入口状态。`let` 使用临时槽且不能被闭包捕获；`var` 使用环境槽并可以
+  被捕获。两者初始化后都允许赋值。
+- 无初始值的 `let Name: Type` 建立递归 Type 占位定义，后续静态 Type 赋值通过
+  专用字节码封闭运行时 Type 图；普通变量在初始化前不可读取。
+- 导入的源码模块向编译器公开静态 Type 和字段构造顺序组成的内部接口；运行时导入
+  仍得到普通库值。
 
-- `ast_emit.c` emits expressions and function bodies.
-- `statement_ast_emit.c` emits declarations, assignments, control flow,
-  imports, modules, and structure literals. It also extracts static module
-  interfaces before local compiler bindings leave scope.
-- `context.c` owns register counters, runtime slots, compiler binding metadata,
-  and compiler lifetime.
-- `source.c` coordinates source files, Markdown extraction, imports, source
-  context, and public compile entry points.
+## 字节码后端
 
-`lexer.c`, `expression.c`, `statement.c`, `dispatch.c`, and the token-oriented
-part of `typecheck.c` are retained for ABI compatibility with `parse_unit` and
-older embedders. New compiler behavior must be implemented in the reusable
-front end or AST analysis and emission layers.
+- `ast_emit.c` 生成表达式和函数体字节码。
+- `statement_ast_emit.c` 生成声明、赋值、控制流、导入、模块和结构字面量，并在局部
+  编译器绑定退出作用域前提取静态模块接口。
+- 后端直接遍历 AST；不再先执行“是否支持”的整树预扫描。不支持的节点由对应生成器
+  在访问时报告。
+- `context.c` 管理寄存器计数、运行时槽位、编译器绑定元数据和编译生命周期。
+- `source.c` 统筹源文件、Markdown 提取、导入、源码上下文和公共编译入口。
+  顶层文件和导入模块共用同一份 Tapas/Markdown 源码读取逻辑。
+
+`parse_unit`、文件编译、Markdown 和 REPL 均使用同一个 AST 前端。旧 Token
+lexer、即时表达式/语句编译器和 Token 类型推断已经移除。

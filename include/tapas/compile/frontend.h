@@ -28,6 +28,10 @@ typedef struct {
 
 void tfrontend_init(tfrontend *frontend, const char *name,
 		    const char *source, tfrontend_mode mode);
+void tfrontend_init_with_resolver(
+	tfrontend *frontend, const char *name, const char *source,
+	tfrontend_mode mode, ttype_info_external_resolver resolver,
+	void *resolver_context);
 void tfrontend_free(tfrontend *frontend);
 int tfrontend_valid(const tfrontend *frontend);
 

@@ -13,7 +13,7 @@ Tapas 的目标是让领域规则成为第一类、可组合、可解释的声�
 首要应用方向是复杂有状态系统和 AI Agent 业务环境的测试。
 声明应当直接表达领域意图，使读者无需理解底层的执行、生成或求解机制，也能快速理解程序。
 
-用于构造带类型声明中间语言的 `declare`、多解释器接口和测试生成能力目前仍在设计和开发中，不属于当前语言规范。
+用于构造 Rule IR 的 `rule` 与 `require`、多解释器接口和测试生成能力目前仍在设计和开发中，不属于当前语言规范。
 相关方向见[可验证 Agent 环境设计](docs/paper_or/AgentEnvironment_zh.md)。
 
 ## 当前语言实现
@@ -96,7 +96,7 @@ editors/vscode/install.sh
 ```
 
 安装完成后，在 VS Code 中执行 **Developer: Reload Window**。功能与配置说明详见
-[VS Code 扩展说明](editors/vscode/README_zh.md)。
+[VS Code 扩展说明](editors/vscode/README.md)。
 
 ## 在 C 程序中嵌入 Tapas
 
@@ -125,14 +125,18 @@ int main(void)
   语句、函数、模块、数组和内置接口。
 - [类型系统设计](docs/TypeSystem_zh.md)：编译期标注、Type 值、结构 Type
   和 `types` 包。
-- [`declare` 与声明中间语言设计](docs/Declare_zh.md)：第一类声明、带类型 IR、
-  动态构造、`eval()` 和 `compile()`。
+- [`rule` 与 `require` 设计](docs/Rules_zh.md)：Rule 字面量、规则组合、
+  标准检查和 Rule IR。
+- [`optimizers` 包设计](docs/Optimizers_zh.md)：Variable Term、传播、
+  可行性搜索、目标优化和后端扩展。
 - [可验证 Agent 环境设计](docs/paper_or/AgentEnvironment_zh.md)：实体、状态转换、业务政策、
   场景生成、结果判定和确定性回放。
 - [C 交互](docs/Foreign_zh.md)：嵌入会话、注册 C 函数、
   值操作和复合类型扩展。
 - [运行机制](docs/Mechanism_zh.md)：编译器、字节码、虚拟机、
   环境和引用计数。
+- [性能基准](test/benchmarks/Results_zh.md)：Tapas 与 Python 在 VM 热路径、
+  函数调用、递归、列表访问和埃氏筛等负载上的逐项比较。
 - 示例：[递归斐波那契](docs/examples/Fibonacci_zh.md) 和
   [排序算法](docs/examples/Sort_zh.md)。
 

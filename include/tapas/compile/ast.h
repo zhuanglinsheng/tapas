@@ -59,6 +59,11 @@ typedef struct {
 		struct { tast_id receiver; tsyntax_kind op; tsource_span name; } member;
 		struct { tsource_span name; tast_id value; } named_field;
 		struct {
+			tsource_span name;
+			tsource_span annotation;
+			uint8_t has_annotation;
+		} parameter;
+		struct {
 			tast_id start;
 			tast_id end;
 			uint8_t has_start;
@@ -68,7 +73,9 @@ typedef struct {
 			uint32_t parameters;
 			uint32_t parameter_count;
 			tast_id body;
+			tsource_span return_annotation;
 			uint8_t variadic;
+			uint8_t has_return_annotation;
 		} function;
 		struct {
 			tsource_span path;
@@ -82,6 +89,7 @@ typedef struct {
 			tast_id initializer;
 			uint8_t is_mutable;
 			uint8_t has_annotation;
+			uint8_t has_initializer;
 		} declaration_statement;
 		struct { tast_id target; tast_id value; } assignment_statement;
 		struct { tast_id value; } return_statement;

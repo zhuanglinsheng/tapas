@@ -123,30 +123,44 @@ true
 `9` 开头。因此 `10` 合法，而 `00`、`010`、`0x10`、`0b10` 和 `0o10` 都是
 编译错误。浮点数字面量可以写成 `.5`、`5.`、`1e3` 或 `1.5e-3`。
 
-当前正式语法中的变量声明不包含类型标注。
+变量声明可以包含类型标注。Type 的构造、参数化应用和静态检查由
+`TypeSystem_zh.md` 定义。
 
 ### 4. 变量、作用域与赋值
 
-声明变量时必须同时给出初始值。一条语句可以声明多个变量：
+声明可以省略初始值。一条语句可以声明多个变量：
 
 ```tapas
 var tutorial_origin = 0, tutorial_step = 1
 let tutorial_message = 'hello'
 tutorial_message = 42
+
+let tutorial_count: Int
+tutorial_count = 3
 ```
 
-变量必须先声明，之后才能读取或赋值。同一作用域内不能重复声明同名变量，
+变量必须先声明并初始化，之后才能读取；第一次赋值可以完成初始化。同一作用域内
+不能重复声明同名变量，
 `var` 与 `let` 之间也不能重名。嵌套函数可以声明与外层同名的变量，此时内层
 名称会暂时遮住外层名称。程序最外层的内置名称不能重新赋值。
 
-`var` 声明的变量从声明位置开始生效，一直存在到当前模块或函数结束。内层函数
-可以引用并修改同一个变量。不能在 `if`、`elif`、`else`、`for` 或 `while`
+初始化按实际控制流判断。变量只有在到达读取位置的每条继续执行路径上都已赋值，
+才视为已初始化。完整的 `if`／`elif`／`else` 可以共同完成初始化；缺少 `else`
+时还存在所有条件均不成立的路径。`while` 和 `for` 可能一次也不执行，因此循环体
+中的赋值不能证明循环后的变量已初始化。已有变量作为 `for` 目标时，在每次循环体
+入口处已初始化，但循环结束后仍恢复循环前的确定初始化状态。
+
+`var` 是环境变量，从声明位置开始存在到当前模块或函数结束。嵌套函数可以按引用
+捕获并修改同一个变量。不能在 `if`、`elif`、`else`、`for` 或 `while`
 的 `{ ... }` 内声明 `var`；需要这样的变量时，应在当前函数或模块的最外层
 提前声明。
 
-`let` 声明的变量只在它所在的最小 `{ ... }` 范围内有效。程序离开这个代码块
-后，变量随即消失，内层函数也不能继续引用它。函数参数则在本次函数调用期间
-一直存在，并且可以被内层函数引用。
+`let` 是临时变量，只在它所在的最小 `{ ... }` 范围内有效。程序离开这个代码块
+后，变量随即消失，嵌套函数不能捕获它。这里需要区分词法作用域与闭包捕获：嵌套
+函数的定义可能位于 `let` 的词法作用域内，但它形成的闭包可能在当前代码块结束后
+继续存在。`let` 使用代码块所属的临时存储，不进入闭包环境；禁止捕获使其能够在
+离开代码块时确定地释放，而不需要自动延长生命周期。需要闭包共享的状态应声明为
+`var`。函数参数属于本次函数调用的环境，可以被嵌套函数捕获。
 
 赋值目标只能是变量，或对变量进行一次直接索引：
 
@@ -321,12 +335,34 @@ print(tutorial_hypotenuse(3, 4))
 5
 </pre>
 
-参数数量不匹配是运行时错误。变参函数以 `...` 作为完整参数列表，并通过
-`__nparam__()` 和 `__param__(index)` 读取参数。
+静态已知函数签名的参数数量不匹配是编译错误；动态调用只能在运行时检查。
+变参函数以 `...` 作为完整参数列表，并通过 `__nparam__()` 和
+`__param__(index)` 读取参数。
 
-函数本身没有固定名称。函数内部可以用 `this` 再次调用当前函数，因此递归不
-依赖外部变量名。`base` 指向创建当前函数的上一层函数环境。只有确实存在当前
-函数或父函数环境时，才能分别使用 `this` 或 `base`。
+函数参数类型标注写成 `name: Type`，返回值类型标注写成 `-> Type`。参数允许
+混合标注与未标注形式：
+
+```tapas
+let convert = (value: Union[Int, String], strict: Bool, context) -> String {
+    if(strict){
+        return str(value)
+    }
+    return 'value'
+}
+```
+
+签名标注使用 `TypeSystem_zh.md` 定义的 `type-expression` 和可赋值关系，只参与
+编译期分析，不自动插入运行时检查。`...` 不能携带参数标注，但可以写成
+`(...) -> Type { ... }`。没有返回值标注时，函数结果 Type 为 `Unknown`。
+
+精确函数 Type 写成 `Function[参数 Type...] -> 结果 Type`，可以用于高阶函数
+参数、返回值和普通绑定。`Function[] -> T` 表示无参数函数，
+`Function[...] -> T` 表示变参函数；`->` 右结合。
+
+函数字面量本身没有固定名称；具名 `function` 声明建立一个只读绑定。函数内部可以用
+`this` 再次调用当前函数，因此递归不依赖外部变量名。`base` 指向创建当前函数的
+上一层函数环境。只有确实存在当前函数或父函数环境时，才能分别使用 `this` 或
+`base`。
 
 ```tapas
 let tutorial_factorial = (n){
@@ -412,9 +448,7 @@ import 'path with spaces/module.tap' as module_name
 
 | 写法 | 当前版本的兼容行为 | 未来可能的发展方向 |
 |---|---|---|
-| `var name: Type = value` 和 `let name: Type = value` | 声明可以通过编译，但 `Type` 不参与类型检查，也不会影响运行结果。 | 类型标注将来可能成为类型系统的一部分。 |
-| `function(parameters){ body }` | 可以通过编译，行为与 `(parameters){ body }` 相同。 | `function` 关键字将来可能成为正式的函数字面量写法。 |
-| `#{ expression }` | 生成一个可以接收任意数量参数的匿名函数；调用该函数时会计算并返回 `expression`。它近似于 `(...){ return expression }`，但函数体只能包含一个表达式。 | 这种简写将来可能成为正式语法，也可能被废弃。 |
+| `function name(parameters) [-> Type] { body }` | 建立只读名称，行为与 `let name = (parameters) [-> Type] { body }` 相同。 | 可能成为正式的具名函数声明。 |
 
 编译器和语言服务器应当正常解析这些写法，不应把它们报告为错误。工具可以
 给出非错误性质的提示，说明这些语法在当前版本中只作为兼容写法。格式化工具应当
@@ -497,7 +531,7 @@ double-string = '"', { code-point-except-double-quote }, '"' ;
 当多个符号拥有相同前缀时，编译器总是优先识别最长的那个：
 
 ```text
-多字符： ==  !=  >=  <=  ::  ...  //
+多字符： ==  !=  >=  <=  ::  ...  ->  //
 单字符： + - * / % @ ^ & | > < = : . , ; ( ) [ ] { }
 单词运算符：and or in to
 ```
@@ -575,7 +609,15 @@ expression-statement = expression ;
 
 ```ebnf
 declaration       = ("var" | "let"), declarator, { ",", declarator } ;
-declarator        = IDENTIFIER, "=", expression ;
+declarator        = IDENTIFIER, [ ":", type-expression ], [ "=", expression ] ;
+type-expression   = function-type | type-application | qualified-type-name ;
+function-type     = ( "Function" | "types::Function" ), "[",
+                    [ type-arguments, [ "," ] | "..." ], "]",
+                    "->", type-expression ;
+type-application  = qualified-type-name,
+                    "[", [ type-arguments, [ "," ] ], "]" ;
+type-arguments    = type-expression, { ",", type-expression } ;
+qualified-type-name = IDENTIFIER, { "::", IDENTIFIER } ;
 assignment        = assignment-target, "=", expression ;
 assignment-target = IDENTIFIER, [ index-suffix ] ;
 ```
@@ -656,10 +698,15 @@ list-literal = "[", [ argument-list ], "]" ;
 dictionary-literal = "{", [ dictionary-entry,
                             { ",", dictionary-entry }, [ "," ] ], "}" ;
 dictionary-entry = or-expression, ":", expression ;
-function-literal = parameter-list, block ;
-parameter-list   = "(", [ fixed-parameters | "..." ], ")" ;
-fixed-parameters = IDENTIFIER, { ",", IDENTIFIER }, [ "," ] ;
+function-literal  = parameter-list, [ return-annotation ], block ;
+parameter-list    = "(", [ fixed-parameters | "..." ], ")" ;
+fixed-parameters  = parameter, { ",", parameter }, [ "," ] ;
+parameter         = IDENTIFIER, [ ":", type-expression ] ;
+return-annotation = "->", type-expression ;
 ```
+
+具名 `function` 声明属于第 13.2 节定义的兼容写法，因此不进入正式 EBNF。
+其参数和返回值标注使用与 `function-literal` 相同的规则。
 
 语法中有意不包含 `nil`。表达式位置的 `{}` 是空字典；代码块只出现在复合语句
 或函数要求的位置。
@@ -700,6 +747,7 @@ EBNF 只能描述代码的结构，下面这些规则还需要编译器单独检
 | `copy(value: Any)` | 同类别 | 复制标量或浅复制复合值。 |
 | `identical(a, b)` | `bool` | 检查运行时同一性。 |
 | `clock()` | `float` | 进程 CPU 时间（秒）。 |
+| `clock_ns()` | `int` | 进程 CPU 时间（纳秒），适合测量较短的代码。 |
 | `now()` | `Time` | 返回调用时刻对应的绝对时间点。默认显示使用本地时区。 |
 
 ### 3. 转换与构造
