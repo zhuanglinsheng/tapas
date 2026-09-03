@@ -9,7 +9,7 @@ Test date: 2026-09-02
 - System: `macOS-26.5.2-arm64-arm-64bit-Mach-O`
 - Architecture: `arm64`
 - Python: `3.13.3`
-- Tapas: `Tapas 0.1.0 Copyright (C) 2020-2026 Zhuang Linsheng <zhuanglinsheng@outlook.com>.`
+- Tapas: `Tapas 0.1.0 Copyright (C) 2020-2026`
 - Tapas executable: `build-release/bin/tapas`
 - Measured runs: 11 per benchmark, after 1 warm-up run
 

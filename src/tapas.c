@@ -179,8 +179,8 @@ static void print_usage(void)
 
 static void cope_with_stdin(tsession *sess)
 {
-	printf("Tapas %s Copyright (C) %s %s.\n",
-	       TAPAS_VERSION, TAPAS_COPYRIGHT_YEARS, TAPAS_AUTHOR);
+	printf("Tapas %s Copyright (C) %s\n",
+	       TAPAS_VERSION, TAPAS_COPYRIGHT_YEARS);
 	printf("MIT License: <https://opensource.org/licenses/MIT>\n");
 
 	/* Tap lexer */
@@ -266,8 +266,8 @@ static void cope_with_stdin(tsession *sess)
 static void cope_with_1_input(tsession *sess, const char *p)
 {
 	if (strcmp(p, "-v") == 0 || strcmp(p, "--version") == 0) {
-		printf("Tapas %s Copyright (C) %s %s.\n",
-		       TAPAS_VERSION, TAPAS_COPYRIGHT_YEARS, TAPAS_AUTHOR);
+		printf("Tapas %s Copyright (C) %s\n",
+		       TAPAS_VERSION, TAPAS_COPYRIGHT_YEARS);
 		printf("MIT License: <https://opensource.org/licenses/MIT>\n");
 	} else if (strcmp(p, "-h") == 0 || strcmp(p, "--help") == 0) {
 		print_usage();
