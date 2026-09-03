@@ -9,7 +9,7 @@
 - 系统：`macOS-26.5.2-arm64-arm-64bit-Mach-O`
 - 处理器架构：`arm64`
 - Python：`3.13.3`
-- Tapas：`Tapas 0.1.0 Copyright (C) 2020-2026 Zhuang Linsheng <zhuanglinsheng@outlook.com>.`
+- Tapas：`Tapas 0.1.0 Copyright (C) 2020-2026`
 - Tapas 可执行文件：`build-release/bin/tapas`
 - 有效运行次数：每项 11 次，另预热 1 次
 
