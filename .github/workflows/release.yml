@@ -50,10 +50,13 @@ jobs:
         include:
           - runner: ubuntu-24.04
             asset_suffix: linux-x64
+            c_compiler: clang-18
           - runner: macos-15-intel
             asset_suffix: macos-x64
+            c_compiler: clang
           - runner: macos-15
             asset_suffix: macos-arm64
+            c_compiler: clang
     runs-on: ${{ matrix.runner }}
     env:
       VERSION: ${{ needs.validate.outputs.version }}
@@ -76,7 +79,10 @@ jobs:
 
       - name: Configure
         shell: bash
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+        run: |
+          cmake -S . -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER=${{ matrix.c_compiler }}
 
       - name: Build
         shell: bash
