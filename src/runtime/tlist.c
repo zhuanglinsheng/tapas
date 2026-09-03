@@ -4,26 +4,32 @@
 
 #include <stdlib.h>
 
-static int pair_to_range(const tobj *param, long len, long *start, long *end)
+tlist *tlist_new(void)
 {
-	if (param->type != tcompo || tobj_compo_type(param) != compo_tpair)
-		return 0;
-	tpair *p = (tpair *)param->val.v_tcompo;
-	if (p->first.type != tint || p->second.type != tint)
-		twarn(ErrRuntime_ParamsType, "pair_to_range", "");
-
-	long sidx = p->first.val.v_tint;
-	long eidx = p->second.val.v_tint;
-	if (sidx < 0)
-		sidx += len;
-	if (eidx < 0)
-		eidx += len;
-	if (sidx < 0 || eidx < sidx || eidx > len)
-		twarn(ErrRuntime_IdxOutRange, "pair_to_range", "");
-	*start = sidx;
-	*end = eidx;
-	return 1;
+	tlist *list = (tlist *)calloc(1, sizeof(tlist));
+	list->base.vtable = &tlist_vtable;
+	tobj_vec_init(&list->items);
+	return list;
 }
+
+uint_objs tlist_size(const tlist *list)
+{
+	return tobj_vec_len(&list->items);
+}
+
+const tobj *tlist_at(const tlist *list, uint_objs index)
+{
+	return tobj_vec_at_const(&list->items, index);
+}
+
+void tlist_set_at(tlist *list, uint_objs index, const tobj *value)
+{
+	if (index >= tobj_vec_len(&list->items))
+		twarn(ErrRuntime_IdxOutRange, "tlist_set_at", "");
+	tobj_vec_set(&list->items, index, value);
+}
+
+/*----------------------- Required Vtable Operations -----------------------*/
 
 static const char *tlist_get_type(void)
 {
@@ -92,79 +98,75 @@ static tstring *tlist_tostring_full(void *self)
 	return out;
 }
 
-tcompo_vtable tlist_vtable = {
-	.get_type = tlist_get_type,
-	.get_compo_type_code = tlist_get_code,
-	.len = tlist_len,
-	.copy = tlist_copy,
-	.free = tlist_free,
-	.identical = tlist_identical,
-	.tostring_abbr = tlist_tostring_abbr,
-	.tostring_full = tlist_tostring_full
-};
+/*------------------------------ Capabilities ------------------------------*/
 
-tlist *tlist_new(void)
+/*
+ * List implements every object capability: indexed reads and writes,
+ * append, delete by index, membership testing, and iteration. List-only
+ * operations such as push_front, push_back, pop_front, pop_back, insert,
+ * concat and sort belong to stdlib.
+ */
+
+static int pair_to_range(const tobj *param, long len, long *start, long *end)
 {
-	tlist *l = (tlist *)calloc(1, sizeof(tlist));
-	l->base.vtable = &tlist_vtable;
-	tobj_vec_init(&l->items);
-	return l;
+	if (param->type != tcompo || tobj_compo_type(param) != compo_tpair)
+		return 0;
+	tpair *pair = (tpair *)param->val.v_tcompo;
+	if (pair->first.type != tint || pair->second.type != tint)
+		twarn(ErrRuntime_ParamsType, "pair_to_range", "");
+	long first = pair->first.val.v_tint;
+	long last = pair->second.val.v_tint;
+	if (first < 0)
+		first += len;
+	if (last < 0)
+		last += len;
+	if (first < 0 || last < first || last > len)
+		twarn(ErrRuntime_IdxOutRange, "pair_to_range", "");
+	*start = first;
+	*end = last;
+	return 1;
 }
 
-uint_objs tlist_size(const tlist *l)
+static int list_next(void *self, long *position, tobj *result)
 {
-	return tobj_vec_len(&l->items);
+	tlist *list = (tlist *)self;
+	if (*position >= (long)tobj_vec_len(&list->items))
+		return 0;
+	*result = *tobj_vec_at(&list->items, (uint_objs)*position);
+	if (result->type == tcompo && result->val.v_tcompo)
+		result->val.v_tcompo->refctr++;
+	(*position)++;
+	return 1;
 }
 
-const tobj *tlist_at(const tlist *l, uint_objs idx)
+static void list_append(void *self, const tobj *value)
 {
-	return tobj_vec_at_const(&l->items, idx);
+	tobj_vec_push(&((tlist *)self)->items, value);
 }
 
-void tlist_push(tlist *l, const tobj *v)
+static void list_delete(void *self, const tobj *key)
 {
-	tobj_vec_push(&l->items, v);
+	if (key->type != tint)
+		twarn(ErrRuntime_ParamsType, "delete", "integer index required");
+	tlist *list = (tlist *)self;
+	long index = key->val.v_tint;
+	if (index < 0)
+		index += (long)tobj_vec_len(&list->items);
+	if (index < 0 || (uint_objs)index >= tobj_vec_len(&list->items))
+		twarn(ErrRuntime_IdxOutRange, "delete", "");
+	tobj_vec_pop(&list->items, (uint_objs)index);
 }
 
-void tlist_insert(tlist *l, uint_objs idx, const tobj *v)
+static int list_contains(void *self, const tobj *value)
 {
-	if (idx > tobj_vec_len(&l->items))
-		twarn(ErrRuntime_IdxOutRange, "tlist_insert", "");
-	tobj_vec_insert(&l->items, idx, v);
-}
-
-void tlist_set_at(tlist *l, uint_objs idx, const tobj *v)
-{
-	if (idx >= tobj_vec_len(&l->items))
-		twarn(ErrRuntime_IdxOutRange, "tlist_set_at", "");
-	tobj_vec_set(&l->items, idx, v);
-}
-
-void tlist_pop(tlist *l, uint_objs idx)
-{
-	if (idx >= tobj_vec_len(&l->items))
-		twarn(ErrRuntime_IdxOutRange, "tlist_pop", "");
-	tobj_vec_pop(&l->items, idx);
-}
-
-void tlist_sort(tlist *l, int (*compar)(const void *, const void *))
-{
-	qsort(tobj_vec_data(&l->items),
-	      tobj_vec_len(&l->items),
-	      sizeof(tobj),
-	      compar);
-}
-
-int tlist_in(tlist *l, const tobj *v)
-{
-	for (uint_objs i = 0; i < tobj_vec_len(&l->items); i++) {
-		if (tobj_identical(tobj_vec_at(&l->items, i), v))
+	tlist *list = (tlist *)self;
+	for (uint_objs i = 0; i < tobj_vec_len(&list->items); i++)
+		if (tobj_identical(tobj_vec_at(&list->items, i), value))
 			return 1;
-	}
 	return 0;
 }
 
-void
+static void
 tlist_idx(tlist *l, const tobj *params, uint_regs np, tobj *vre)
 {
 	if (np != 1)
@@ -190,7 +192,7 @@ tlist_idx(tlist *l, const tobj *params, uint_regs np, tobj *vre)
 		vre->val.v_tcompo->refctr++;
 }
 
-void
+static void
 tlist_iset(tlist *l, const tobj *params, uint_regs np, const tobj *vright)
 {
 	if (np != 1)
@@ -206,16 +208,35 @@ tlist_iset(tlist *l, const tobj *params, uint_regs np, const tobj *vright)
 	tlist_set_at(l, (uint_objs)idx, vright);
 }
 
-/* Iteration support */
-int tlist_next_at(tlist *l, long *iter_pos, tobj *vre)
+static void list_index(void *self, const tobj *arguments,
+		       uint_regs argument_count, tobj *result)
 {
-	if (*iter_pos >= (long)tobj_vec_len(&l->items)) {
-		*iter_pos = 0;
-		return 0;
-	}
-	*vre = *tobj_vec_at(&l->items, (uint_objs)*iter_pos);
-	if (vre->type == tcompo && vre->val.v_tcompo)
-		vre->val.v_tcompo->refctr++;
-	(*iter_pos)++;
-	return 1;
+	tlist_idx((tlist *)self, arguments, argument_count, result);
 }
+
+static void list_index_set(void *self, const tobj *arguments,
+			   uint_regs argument_count, const tobj *value)
+{
+	tlist_iset((tlist *)self, arguments, argument_count, value);
+}
+
+static const tcompo_capabilities list_capabilities = {
+	.indexable = list_index,
+	.index_settable = list_index_set,
+	.appendable = list_append,
+	.deletable = list_delete,
+	.contains = list_contains,
+	.iterable = list_next
+};
+
+tcompo_vtable tlist_vtable = {
+	.get_type = tlist_get_type,
+	.get_compo_type_code = tlist_get_code,
+	.len = tlist_len,
+	.copy = tlist_copy,
+	.free = tlist_free,
+	.identical = tlist_identical,
+	.tostring_abbr = tlist_tostring_abbr,
+	.tostring_full = tlist_tostring_full,
+	.capabilities = &list_capabilities
+};

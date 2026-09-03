@@ -17,7 +17,7 @@ int env_self_not_in_tree_of(
 		const tcompo_env_abstract *self,
 		const tcompo_env_abstract *env)
 {
-	if (env == NULL)
+	if (env == nullptr)
 		return 1;
 	if (env == self)
 		return 0;
@@ -29,7 +29,7 @@ int env_self_tree_has_no(
 		const tcompo_env_abstract *self,
 		const tcompo_env_abstract *env)
 {
-	if (env == NULL)
+	if (env == nullptr)
 		return 1;
 	if (env == self)
 		return 0;
@@ -53,7 +53,7 @@ void tcompo_env_abstract_init(
 		twarn(ErrRuntime_LoopRef, "tcompo_env_abstract_init", "");
 
 	/* Find location in father env */
-	if (father == NULL)
+	if (father == nullptr)
 		return;
 
 	uint_objs i;
@@ -94,7 +94,7 @@ tobj *tcompo_env_abstract_get_obj(
 		uint_objs loc,
 		tcompo_env_abstract *from)
 {
-	if (from == NULL) {
+	if (from == nullptr) {
 		if (loc < tobj_array_get_len(&env->objs))
 			return tobj_array_get_obj(&env->objs, loc);
 		else {
@@ -128,7 +128,7 @@ void tcompo_env_abstract_set_obj(
 		tcompo_env_abstract *from,
 		const tobj *v)
 {
-	if (from == NULL) {
+	if (from == nullptr) {
 		if (loc < tobj_array_get_len(&env->objs)) {
 			tobj_array_set_obj(&env->objs, loc, v);
 			return;
@@ -175,13 +175,13 @@ void tcompo_env_init(
 {
 	tcompo_env_abstract_init(
 		&env->base, objlst_cap, (tcompo_env_abstract *)father);
-	env->vmstack = NULL;
-	env->params = NULL;
+	env->vmstack = nullptr;
+	env->params = nullptr;
 	env->tmpmax = 0;
 	env->regmax = 0;
 	env->dynamic_nparams = 0;
 	env->compo_type = compo_type;
-	env->owner_func = NULL;
+	env->owner_func = nullptr;
 
 	/* These set functions allocate vmstack */
 	tcompo_env_set_tmpmax(env, tmpmax);
@@ -253,7 +253,7 @@ void tcompo_env_set_regmax(tcompo_env *env, uint_regs n)
 {
 	env->regmax = n;
 	free(env->vmstack);
-	env->vmstack = NULL;
+	env->vmstack = nullptr;
 	if (n > 0) {
 		env->vmstack = (tobj *)calloc(n, sizeof(tobj));
 		uint_regs i;
@@ -275,12 +275,12 @@ uint_objs tcompo_env_get_objlst_len(tcompo_env *env)
 
 tobj *tcompo_env_get_obj(tcompo_env *env, uint_objs loc)
 {
-	return tcompo_env_abstract_get_obj(&env->base, loc, NULL);
+	return tcompo_env_abstract_get_obj(&env->base, loc, nullptr);
 }
 
 void tcompo_env_set_obj(tcompo_env *env, uint_objs loc, const tobj *v)
 {
-	tcompo_env_abstract_set_obj(&env->base, loc, NULL, v);
+	tcompo_env_abstract_set_obj(&env->base, loc, nullptr, v);
 }
 
 void tcompo_env_add_obj(tcompo_env *env, uint_csts nameloc)
@@ -324,7 +324,7 @@ tcompo_v *tcompo_env_as_compo(tcompo_env *env)
 		return &((tfunc *)((char *)env - offsetof(tfunc, env)))->compo_base;
 	default:
 		twarn(ErrRuntime_RefType, "tcompo_env_as_compo", "");
-		return NULL;
+		return nullptr;
 	}
 }
 
@@ -347,6 +347,8 @@ void tcompo_env_copy_to_obj(tcompo_env *env, tobj *vre)
 /*===========================================================================*
  * 3. Tap Function (tfunc)
  *===========================================================================*/
+
+/*----------------------- Required Vtable Operations -----------------------*/
 
 static const char *tfunc_get_type(void)
 {
@@ -451,6 +453,14 @@ static tstring *tfunc_tostring_full(void *self)
 	return tobj_tostring_pointer("Function", self);
 }
 
+/*------------------------------ Capabilities ------------------------------*/
+
+/*
+ * Tapas functions expose no object capabilities. Calls are controlled by the
+ * VM because they require frames, registers, captured environments and source
+ * commands; they are not ordinary value operations dispatched by a vtable.
+ */
+
 tcompo_vtable tfunc_vtable = {
 	.get_type = tfunc_get_type,
 	.get_compo_type_code = tfunc_get_code,
@@ -538,7 +548,7 @@ static void *tlib_copy(void *self)
 {
 	(void)self;
 	twarn(ErrRuntime_Other, "tlib_copy", "tlib can not be copied.");
-	return NULL;
+	return nullptr;
 }
 
 static void tlib_free(void *self)
@@ -586,6 +596,22 @@ static tstring *tlib_tostring_full(void *self)
 	return tstring_new("{}");
 }
 
+/*------------------------------ Capabilities ------------------------------*/
+
+/*
+ * Library exposes indexed reads for exported names. Package membership and
+ * installation are environment concerns, while mutation remains private to
+ * the loader; consequently Library exposes no write, collection, membership,
+ * or iteration capability.
+ */
+
+static void library_index(void *self, const tobj *arguments,
+			  uint_regs argument_count, tobj *result);
+
+static const tcompo_capabilities library_capabilities = {
+	.indexable = library_index
+};
+
 tcompo_vtable tlib_vtable = {
 	.get_type = tlib_get_type,
 	.get_compo_type_code = tlib_get_code,
@@ -594,22 +620,23 @@ tcompo_vtable tlib_vtable = {
 	.free = tlib_free,
 	.identical = tlib_identical,
 	.tostring_abbr = tlib_tostring_abbr,
-	.tostring_full = tlib_tostring_full
+	.tostring_full = tlib_tostring_full,
+	.capabilities = &library_capabilities
 };
 
 tlib *tlib_new(void)
 {
 	tlib *lb = (tlib *)calloc(1, sizeof(tlib));
 	lb->compo_base.vtable = &tlib_vtable;
-	tcompo_env_init(&lb->env, 0, NULL, 0, 0, 0, compo_tlib);
-	lb->default_v_names = NULL;
+	tcompo_env_init(&lb->env, 0, nullptr, 0, 0, 0, compo_tlib);
+	lb->default_v_names = nullptr;
 	lb->ndefault = 0;
 	lb->ndefault_cap = 0;
-	lb->paths = NULL;
+	lb->paths = nullptr;
 	lb->npaths = 0;
 	lb->npaths_cap = 0;
-	lb->wrapper = NULL;
-	lb->exposed = NULL;
+	lb->wrapper = nullptr;
+	lb->exposed = nullptr;
 	return lb;
 }
 
@@ -675,10 +702,151 @@ tdict *tlib_add_pkg(tlib *lb, const char *pkgname)
 
 void tlib_add_cppf(tlib *lb, const char *name, genf_t f, uint_regs nparams_sig)
 {
+	tcfn_descriptor descriptor = TCFN_DESCRIPTOR(name, f,
+		nparams_sig == UNDEF_NPARAMS ?
+		TCFN_VARIADIC(nullptr, 0) : TCFN_FIXED(nullptr, nparams_sig));
+	tlib_add_cfn(lb, &descriptor);
+}
+
+void tlib_add_cfn(tlib *lb, const tcfn_descriptor *descriptor)
+{
+	if (!lb || !tcfn_descriptor_valid(descriptor)) return;
 	tobj v;
 	tobj_set_nil(&v);
-	tobj_set_compo(&v, (tcompo_v *)tcppgenf_new(f, name, nparams_sig));
-	tlib_lib_add_obj(lb, name, &v);
+	tobj_set_compo(&v, descriptor->session_function ?
+		(tcompo_v *)tcppsessf_new_descriptor(descriptor) :
+		(tcompo_v *)tcppgenf_new_descriptor(descriptor));
+	tlib_lib_add_obj(lb, descriptor->name, &v);
+}
+
+void tlib_add_pkg_cfn(tdict *pkg, const tcfn_descriptor *descriptor)
+{
+	if (!pkg || !tcfn_descriptor_valid(descriptor)) return;
+	tobj key, value;
+	tobj_set_nil(&key);
+	tobj_set_nil(&value);
+	tobj_set_compo(&key, (tcompo_v *)tstr_new(descriptor->name));
+	tobj_set_compo(&value, descriptor->session_function ?
+		(tcompo_v *)tcppsessf_new_descriptor(descriptor) :
+		(tcompo_v *)tcppgenf_new_descriptor(descriptor));
+	tdict_set(pkg, &key, &value);
+	tobj_try_clear(&key);
+	tobj_try_clear(&value);
+}
+
+static tdict *tlib_extension_package(tlib *library, const char *name)
+{
+	const tobj *existing = tlib_find(library, name);
+	if (!existing)
+		return tlib_add_pkg(library, name);
+	if (existing->type != tcompo ||
+	    tobj_compo_type(existing) != compo_tdict)
+		return nullptr;
+	return (tdict *)existing->val.v_tcompo;
+}
+
+static int tlib_install_symbol(tlib *library, tdict *package,
+			       const textension_symbol *symbol)
+{
+	if (!package && tlib_find(library, symbol->name))
+		return 0;
+	if (package) {
+		tobj key;
+		tobj_set_nil(&key);
+		tobj_set_compo(&key, (tcompo_v *)tstr_new(symbol->name));
+		int duplicate = tdict_contains(package, &key);
+		tobj_try_clear(&key);
+		if (duplicate) return 0;
+	}
+	if (symbol->kind == textension_function) {
+		tcfn_descriptor function = {
+			.name = symbol->name,
+			.function = symbol->function,
+			.session_function = symbol->session_function,
+			.signature = {
+				.type = symbol->type,
+				.minimum_parameters = symbol->minimum_arguments,
+				.maximum_parameters = symbol->maximum_arguments
+			}
+		};
+		if (package)
+			tlib_add_pkg_cfn(package, &function);
+		else
+			tlib_add_cfn(library, &function);
+		return 1;
+	}
+	tobj value;
+	tobj_set_nil(&value);
+	symbol->value_factory(&value);
+	if (package) {
+		tobj key;
+		tobj_set_nil(&key);
+		tobj_set_compo(&key, (tcompo_v *)tstr_new(symbol->name));
+		tdict_set(package, &key, &value);
+		tobj_try_clear(&key);
+	} else
+		tlib_lib_add_obj(library, symbol->name, &value);
+	tobj_try_clear(&value);
+	return 1;
+}
+
+static int tlib_accepts_extension(const tlib *library,
+				  const textension_descriptor *extension)
+{
+	for (uint32_t i = 0; i < extension->module_count; i++) {
+		const textension_module *module = extension->modules[i];
+		const tobj *owner = module->scope == textension_package ?
+			tlib_find(library, module->name) : nullptr;
+		if (owner && (owner->type != tcompo ||
+		    tobj_compo_type(owner) != compo_tdict))
+			return 0;
+		for (uint32_t j = 0; j < module->symbol_count; j++) {
+			const textension_symbol *symbol = &module->symbols[j];
+			if (module->scope == textension_root) {
+				if (tlib_find(library, symbol->name)) return 0;
+				continue;
+			}
+			if (!owner) continue;
+			tobj key;
+			tobj_set_nil(&key);
+			tobj_set_compo(&key,
+				(tcompo_v *)tstr_new(symbol->name));
+			int duplicate = tdict_contains(
+				(tdict *)owner->val.v_tcompo, &key);
+			tobj_try_clear(&key);
+			if (duplicate) return 0;
+		}
+	}
+	return 1;
+}
+
+int tlib_install_extension(tlib *library,
+			   const textension_descriptor *extension)
+{
+	if (!library || !textension_validate(extension) ||
+	    !tlib_accepts_extension(library, extension))
+		return 0;
+	for (uint32_t i = 0; i < extension->module_count; i++) {
+		const textension_module *module = extension->modules[i];
+		tdict *package = module->scope == textension_package ?
+			tlib_extension_package(library, module->name) : nullptr;
+		if (module->scope == textension_package && !package)
+			return 0;
+		for (uint32_t j = 0; j < module->symbol_count; j++)
+			if (!tlib_install_symbol(library, package,
+				&module->symbols[j]))
+				return 0;
+	}
+	return 1;
+}
+
+const tobj *tlib_find(const tlib *lb, const char *name)
+{
+	if (!lb || !name) return nullptr;
+	for (uint_objs i = 0; i < lb->ndefault; i++)
+		if (tstring_eq_cstr(lb->default_v_names[i], name))
+			return &lb->env.base.objs.data[i];
+	return nullptr;
 }
 
 void tlib_add_path(tlib *lb, const char *paths_str)
@@ -785,9 +953,22 @@ tlib *tlib_recreate(tlib *lb)
 void tlib_idx(tlib *lb, const tobj *params, uint_regs np, tobj *vre)
 {
 	if (lb->exposed)
-		tdict_idx(lb->exposed, params, np, vre);
+		tcompo_index((tcompo_v *)lb->exposed, params, np, vre);
 	else
 		tobj_set_nil(vre);
+}
+
+static void library_index(void *self, const tobj *arguments,
+			  uint_regs argument_count, tobj *result)
+{
+	tlib_idx((tlib *)self, arguments, argument_count, result);
+}
+
+static void append_library_key(const tobj *key, const tobj *value,
+			       void *context)
+{
+	(void)value;
+	tobj_vec_push(&((tlist *)context)->items, key);
 }
 
 /** List object names */
@@ -797,12 +978,8 @@ tlist *tlib_listing_objects(tlib *lb)
 	uint_objs i;
 
 	/* Exposed dict keys */
-	if (lb->exposed) {
-		tlist *eks = tdict_keys(lb->exposed);
-		for (i = 0; i < tlist_size(eks); i++)
-			tlist_push(ls, tlist_at(eks, i));
-		eks->base.vtable->free(eks);
-	}
+	if (lb->exposed)
+		thashtbl_each(lb->exposed->items, append_library_key, ls);
 
 	/* Preload names */
 	for (i = 0; i < lb->ndefault; i++) {
@@ -810,7 +987,7 @@ tlist *tlib_listing_objects(tlib *lb)
 		tobj_set_nil(&v);
 		tobj_set_compo(&v,
 			       (tcompo_v *)tstr_new(tstring_cstr(lb->default_v_names[i])));
-		tlist_push(ls, &v);
+		tobj_vec_push(&ls->items, &v);
 		tobj_try_clear(&v);
 	}
 
@@ -826,7 +1003,7 @@ tlist *tlib_listing_objects(tlib *lb)
 				       (tcompo_v *)tstr_new(
 					       tstring_cstr(lb->wrapper->consts
 						       .cstrs[vi->name_loc])));
-			tlist_push(ls, &v);
+			tobj_vec_push(&ls->items, &v);
 			tobj_try_clear(&v);
 		}
 	}
@@ -863,7 +1040,7 @@ tlist *tlib_listing_paths(tlib *lb)
 		tobj v;
 		tobj_set_nil(&v);
 		tobj_set_compo(&v, (tcompo_v *)tstr_new(tstring_cstr(lb->paths[i])));
-		tlist_push(paths, &v);
+		tobj_vec_push(&paths->items, &v);
 		tobj_try_clear(&v);
 	}
 	return paths;

@@ -1,17 +1,39 @@
-if(NOT DEFINED TAPAS OR NOT DEFINED FIXTURE_DIR OR NOT DEFINED TEST_BLAS)
-    message(FATAL_ERROR "TAPAS, FIXTURE_DIR, and TEST_BLAS are required")
+if(NOT DEFINED TAPAS OR NOT DEFINED FIXTURE_DIR OR
+   NOT DEFINED DOC_EXAMPLE_DIR OR NOT DEFINED TEST_BLAS)
+    message(FATAL_ERROR
+        "TAPAS, FIXTURE_DIR, DOC_EXAMPLE_DIR, and TEST_BLAS are required")
 endif()
 
-set(loop_control_bytecode "${FIXTURE_DIR}/loop_control.tapc")
-set(imported_ast_bytecode "${FIXTURE_DIR}/imported_ast_module.tapc")
-set(recursive_types_bytecode "${FIXTURE_DIR}/recursive_types.tapc")
+function(run_documented_example fixture expected)
+    execute_process(
+        COMMAND "${TAPAS}" "${DOC_EXAMPLE_DIR}/${fixture}"
+        RESULT_VARIABLE result
+        OUTPUT_VARIABLE output
+        ERROR_VARIABLE error
+    )
+    if(NOT result EQUAL 0 OR NOT output STREQUAL expected)
+        message(FATAL_ERROR
+            "Documented example ${fixture} failed (${result}):\n"
+            "Expected:\n${expected}Actual:\n${output}${error}")
+    endif()
+endfunction()
+
+set(REGRESSION_DIR "${FIXTURE_DIR}/regression")
+set(SUPPORT_FIXTURE_DIR "${FIXTURE_DIR}/fixtures")
+set(COMPILE_INVALID_DIR "${FIXTURE_DIR}/invalid/compile")
+set(RUNTIME_INVALID_DIR "${FIXTURE_DIR}/invalid/runtime")
+set(ENVIRONMENT_INVALID_DIR "${FIXTURE_DIR}/invalid/environment")
+
+set(loop_control_bytecode "${REGRESSION_DIR}/loop_control.tapc")
+set(imported_ast_bytecode "${SUPPORT_FIXTURE_DIR}/imported_ast_module.tapc")
+set(recursive_types_bytecode "${REGRESSION_DIR}/recursive_types.tapc")
 file(REMOVE "${loop_control_bytecode}" "${imported_ast_bytecode}"
     "${recursive_types_bytecode}")
 
 execute_process(
     COMMAND "${CMAKE_COMMAND}" -E env
         "TAPAS_BLAS_LIBRARY=${TEST_BLAS}"
-        "${TAPAS}" "${FIXTURE_DIR}/valid.tap"
+        "${TAPAS}" "${REGRESSION_DIR}/valid.tap"
     RESULT_VARIABLE valid_result
     OUTPUT_VARIABLE valid_output
     ERROR_VARIABLE valid_error
@@ -75,6 +97,13 @@ true
 true
 true
 true
+[1, 2, 3, 4]
+1
+4
+[2, 3]
+[front]
+[back]
+[]
 ]=])
 if(NOT valid_output STREQUAL expected_output)
     message(FATAL_ERROR
@@ -82,8 +111,198 @@ if(NOT valid_output STREQUAL expected_output)
         "Expected:\n${expected_output}\nActual:\n${valid_output}")
 endif()
 
+set(values_example_expected [=[Tap
+[1, 2, 3, 4]
+Ada
+9.5
+language: Tapas
+[1, 2, 3, 4]
+[10, 2, 3, 4]
+]=])
+run_documented_example("values_and_collections.tap" "${values_example_expected}")
+
+set(operators_example_expected [=[14
+512
+-4
+3
+1
+true
+false
+]=])
+run_documented_example("operators.tap" "${operators_example_expected}")
+
+set(modules_example_expected "double(3) = 6\nHello, Tapas!\n")
+run_documented_example("../modules/main.tap" "${modules_example_expected}")
+
+set(control_flow_example_expected "-1\n0\n1\n8\n0\n")
+run_documented_example("control_flow.tap" "${control_flow_example_expected}")
+
 execute_process(
-    COMMAND "${TAPAS}" "${FIXTURE_DIR}/loop_control.tap"
+    COMMAND "${TAPAS}" "${REGRESSION_DIR}/rule_valid.tap"
+    RESULT_VARIABLE rule_result
+    OUTPUT_VARIABLE rule_output
+    ERROR_VARIABLE rule_error
+)
+set(rule_expected [=[false
+1
+value must be below ten
+rule (value: Int) {
+    "value must be positive": value > 0
+}
+true
+false
+true
+true
+Unsupported
+]=])
+if(NOT rule_result EQUAL 0 OR NOT rule_output STREQUAL rule_expected)
+    message(FATAL_ERROR
+        "Rule fixture failed (${rule_result}):\n"
+        "Expected:\n${rule_expected}\nActual:\n${rule_output}${rule_error}")
+endif()
+
+execute_process(
+    COMMAND "${TAPAS}" "${REGRESSION_DIR}/rule_dynamic.tap"
+    RESULT_VARIABLE rule_dynamic_result
+    OUTPUT_VARIABLE rule_dynamic_output
+    ERROR_VARIABLE rule_dynamic_error
+)
+set(rule_dynamic_expected [=[true
+false
+1
+5
+true
+true
+true
+7
+Unsupported
+1
+number
+true
+true
+true
+1
+4
+]=])
+if(NOT rule_dynamic_result EQUAL 0 OR
+   NOT rule_dynamic_output STREQUAL rule_dynamic_expected)
+    message(FATAL_ERROR
+        "Dynamic Rule fixture failed (${rule_dynamic_result}):\n"
+        "Expected:\n${rule_dynamic_expected}\n"
+        "Actual:\n${rule_dynamic_output}${rule_dynamic_error}")
+endif()
+
+execute_process(
+    COMMAND "${TAPAS}" "${REGRESSION_DIR}/rule_serialize.tap"
+    RESULT_VARIABLE rule_serialize_result
+    OUTPUT_VARIABLE rule_serialized
+    ERROR_VARIABLE rule_serialize_error
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+if(NOT rule_serialize_result EQUAL 0)
+    message(FATAL_ERROR
+        "Rule serialization failed (${rule_serialize_result}):\n"
+        "${rule_serialize_error}")
+endif()
+set(rule_restore_source "${CMAKE_CURRENT_BINARY_DIR}/rule_restore.tap")
+file(WRITE "${rule_restore_source}"
+    "let restored = rules::deserialize('${rule_serialized}')\n"
+    "print(rules::check(restored(5))['passed'])\n"
+    "print(rules::check(restored(-1))['passed'])\n")
+execute_process(
+    COMMAND "${TAPAS}" "${rule_restore_source}"
+    RESULT_VARIABLE rule_restore_result
+    OUTPUT_VARIABLE rule_restore_output
+    ERROR_VARIABLE rule_restore_error
+)
+file(REMOVE "${rule_restore_source}")
+if(NOT rule_restore_result EQUAL 0 OR
+   NOT rule_restore_output STREQUAL "true\nfalse\n")
+    message(FATAL_ERROR
+        "Rule deserialization failed (${rule_restore_result}):\n"
+        "${rule_restore_output}${rule_restore_error}")
+endif()
+
+execute_process(
+    COMMAND "${TAPAS}" "${RUNTIME_INVALID_DIR}/rule_failure.tap"
+    RESULT_VARIABLE rule_failure_result
+    OUTPUT_VARIABLE rule_failure_output
+    ERROR_VARIABLE rule_failure_error
+)
+if(rule_failure_result EQUAL 0 OR
+   NOT rule_failure_error MATCHES "value must be positive")
+    message(FATAL_ERROR
+        "Failing Rule did not produce its diagnostic (${rule_failure_result}):\n"
+        "${rule_failure_output}${rule_failure_error}")
+endif()
+
+execute_process(
+    COMMAND "${TAPAS}" "${RUNTIME_INVALID_DIR}/rule_cycle.tap"
+    RESULT_VARIABLE rule_cycle_result
+    OUTPUT_VARIABLE rule_cycle_output
+    ERROR_VARIABLE rule_cycle_error
+)
+if(rule_cycle_result EQUAL 0 OR
+   NOT rule_cycle_error MATCHES "cyclic requirement")
+    message(FATAL_ERROR
+        "Cyclic Rule dependency was not rejected (${rule_cycle_result}):\n"
+        "${rule_cycle_output}${rule_cycle_error}")
+endif()
+
+set(io_output "${CMAKE_CURRENT_BINARY_DIR}/tapas_io_roundtrip.txt")
+set(io_source "${CMAKE_CURRENT_BINARY_DIR}/tapas_io_roundtrip.tap")
+file(WRITE "${io_source}"
+    "print(input())\n"
+    "print(input('prompt: '))\n"
+    "print(input())\n"
+    "io::write_text('${io_output}', 'alpha')\n"
+    "io::append_text('${io_output}', 'beta')\n"
+    "print(io::read_text('${io_output}'))\n")
+execute_process(
+    COMMAND "${TAPAS}" "${io_source}"
+    INPUT_FILE "${SUPPORT_FIXTURE_DIR}/io_input.txt"
+    RESULT_VARIABLE io_result
+    OUTPUT_VARIABLE io_actual
+    ERROR_VARIABLE io_error
+)
+file(REMOVE "${io_source}" "${io_output}")
+set(io_expected "first line\nprompt: second line\nnil\nalphabeta\n")
+if(NOT io_result EQUAL 0 OR NOT io_actual STREQUAL io_expected)
+    message(FATAL_ERROR
+        "Console and text I/O fixture failed (${io_result}):\n"
+        "Expected:\n${io_expected}\nActual:\n${io_actual}${io_error}")
+endif()
+
+execute_process(
+    COMMAND "${CMAKE_COMMAND}" -E env
+        "TAPAS_BLAS_LIBRARY=${TEST_BLAS}"
+        "${TAPAS}" "${DOC_EXAMPLE_DIR}/dense_arrays.tap"
+    RESULT_VARIABLE dense_result
+    OUTPUT_VARIABLE dense_output
+    ERROR_VARIABLE dense_error
+)
+set(expected_dense_output [=[5
+30
+5
+[[0.6, 0.8]]
+[[3, 4],
+ [6, 8]]
+[[1, 0, 0],
+ [0, 1, 0],
+ [0, 0, 1]]
+[[1, 2]]
+[[39, 46],
+ [89, 104]]
+]=])
+if(NOT dense_result EQUAL 0 OR
+   NOT dense_output STREQUAL expected_dense_output)
+    message(FATAL_ERROR
+        "Dense linear-algebra fixture failed (${dense_result}):\n"
+        "Expected:\n${expected_dense_output}\nActual:\n${dense_output}${dense_error}")
+endif()
+
+execute_process(
+    COMMAND "${TAPAS}" "${REGRESSION_DIR}/loop_control.tap"
     RESULT_VARIABLE loop_control_result
     OUTPUT_VARIABLE loop_control_output
     ERROR_VARIABLE loop_control_error
@@ -99,7 +318,7 @@ if(NOT loop_control_output STREQUAL "106\n8\n")
 endif()
 
 execute_process(
-    COMMAND "${TAPAS}" -c "${FIXTURE_DIR}/loop_control.tap"
+    COMMAND "${TAPAS}" -c "${REGRESSION_DIR}/loop_control.tap"
     RESULT_VARIABLE loop_control_compile_result
     OUTPUT_VARIABLE loop_control_compile_output
     ERROR_VARIABLE loop_control_compile_error
@@ -127,7 +346,7 @@ if(NOT loop_control_bytecode_output STREQUAL "106\n8\n")
 endif()
 
 execute_process(
-    COMMAND "${TAPAS}" "${FIXTURE_DIR}/runtime_cache.tap"
+    COMMAND "${TAPAS}" "${REGRESSION_DIR}/runtime_cache.tap"
     RESULT_VARIABLE runtime_cache_result
     OUTPUT_VARIABLE runtime_cache_output
     ERROR_VARIABLE runtime_cache_error
@@ -143,7 +362,7 @@ if(NOT runtime_cache_output STREQUAL "6\n6\n9\n6\n7\na\n9\n5\n5\n8\n4\n9\nfalse\
 endif()
 
 execute_process(
-    COMMAND "${TAPAS}" "${FIXTURE_DIR}/runtime_cache_bytecode.tap"
+    COMMAND "${TAPAS}" "${REGRESSION_DIR}/runtime_cache_bytecode.tap"
     RESULT_VARIABLE runtime_cache_bytecode_result
     OUTPUT_VARIABLE runtime_cache_bytecode_output
     ERROR_VARIABLE runtime_cache_bytecode_error
@@ -160,7 +379,7 @@ if(loopas_position EQUAL -1)
 endif()
 
 execute_process(
-    COMMAND "${TAPAS}" "${FIXTURE_DIR}/clock_ns.tap"
+    COMMAND "${TAPAS}" "${REGRESSION_DIR}/clock_ns.tap"
     RESULT_VARIABLE clock_ns_result
     OUTPUT_VARIABLE clock_ns_output
     ERROR_VARIABLE clock_ns_error
@@ -176,7 +395,7 @@ if(NOT clock_ns_output STREQUAL "int\ntrue\n")
 endif()
 
 execute_process(
-    COMMAND "${TAPAS}" "${FIXTURE_DIR}/recursive_frames.tap"
+    COMMAND "${TAPAS}" "${REGRESSION_DIR}/recursive_frames.tap"
     RESULT_VARIABLE recursive_frames_result
     OUTPUT_VARIABLE recursive_frames_output
     ERROR_VARIABLE recursive_frames_error
@@ -192,7 +411,7 @@ if(NOT recursive_frames_output STREQUAL "24\n1\n2\n1\n50000\n10000\n")
 endif()
 
 execute_process(
-    COMMAND "${TAPAS}" "${FIXTURE_DIR}/runtime_types.tap"
+    COMMAND "${TAPAS}" "${REGRESSION_DIR}/runtime_types.tap"
     RESULT_VARIABLE runtime_types_result
     OUTPUT_VARIABLE runtime_types_output
     ERROR_VARIABLE runtime_types_error
@@ -242,58 +461,17 @@ if(NOT runtime_types_output STREQUAL expected_runtime_types_output)
         "Actual:\n${runtime_types_output}")
 endif()
 
-execute_process(
-    COMMAND "${TAPAS}" "${FIXTURE_DIR}/static_types.tap"
-    RESULT_VARIABLE static_types_result
-    OUTPUT_VARIABLE static_types_output
-    ERROR_VARIABLE static_types_error
-)
-if(NOT static_types_result EQUAL 0)
-    message(FATAL_ERROR
-        "Static Type fixture failed (${static_types_result}):\n"
-        "${static_types_output}${static_types_error}")
-endif()
-set(expected_static_types_output [=[2.5
-true
-true
+set(types_example_expected [=[2.5
 3
-6.5
-7
-10.5
-]=])
-if(NOT static_types_output STREQUAL expected_static_types_output)
-    message(FATAL_ERROR
-        "Unexpected static Type output.\n"
-        "Expected:\n${expected_static_types_output}\n"
-        "Actual:\n${static_types_output}")
-endif()
-
-execute_process(
-    COMMAND "${TAPAS}" "${FIXTURE_DIR}/type_applications.tap"
-    RESULT_VARIABLE type_applications_result
-    OUTPUT_VARIABLE type_applications_output
-    ERROR_VARIABLE type_applications_error
-)
-if(NOT type_applications_result EQUAL 0)
-    message(FATAL_ERROR
-        "Parameterized Type application fixture failed (${type_applications_result}):\n"
-        "${type_applications_output}${type_applications_error}")
-endif()
-set(expected_type_applications_output [=[true
 true
 true
 true
 true
 ]=])
-if(NOT type_applications_output STREQUAL expected_type_applications_output)
-    message(FATAL_ERROR
-        "Unexpected parameterized Type application output.\n"
-        "Expected:\n${expected_type_applications_output}\n"
-        "Actual:\n${type_applications_output}")
-endif()
+run_documented_example("types.tap" "${types_example_expected}")
 
 execute_process(
-    COMMAND "${TAPAS}" "${FIXTURE_DIR}/compatibility_forms.tap"
+    COMMAND "${TAPAS}" "${REGRESSION_DIR}/compatibility_forms.tap"
     RESULT_VARIABLE compatibility_result
     OUTPUT_VARIABLE compatibility_output
     ERROR_VARIABLE compatibility_error
@@ -313,47 +491,11 @@ if(NOT compatibility_output STREQUAL expected_compatibility_output)
         "Actual:\n${compatibility_output}")
 endif()
 
-execute_process(
-    COMMAND "${TAPAS}" "${FIXTURE_DIR}/ast_functions.tap"
-    RESULT_VARIABLE ast_functions_result
-    OUTPUT_VARIABLE ast_functions_output
-    ERROR_VARIABLE ast_functions_error
-)
-if(NOT ast_functions_result EQUAL 0)
-    message(FATAL_ERROR
-        "AST function fixture failed (${ast_functions_result}):\n"
-        "${ast_functions_output}${ast_functions_error}")
-endif()
-set(expected_ast_functions_output [=[11
-12
-3
-8
-]=])
-if(NOT ast_functions_output STREQUAL expected_ast_functions_output)
-    message(FATAL_ERROR
-        "Unexpected AST function output.\n"
-        "Expected:\n${expected_ast_functions_output}\n"
-        "Actual:\n${ast_functions_output}")
-endif()
+set(functions_example_expected "7\n120\n11\n12\n3\n")
+run_documented_example("functions.tap" "${functions_example_expected}")
 
 execute_process(
-    COMMAND "${TAPAS}" "${FIXTURE_DIR}/function_annotations.tap"
-    RESULT_VARIABLE function_annotations_result
-    OUTPUT_VARIABLE function_annotations_output
-    ERROR_VARIABLE function_annotations_error
-)
-if(NOT function_annotations_result EQUAL 0)
-    message(FATAL_ERROR
-        "Function annotation fixture failed (${function_annotations_result}):\n"
-        "${function_annotations_output}${function_annotations_error}")
-endif()
-if(NOT function_annotations_output STREQUAL "7\n120\n3\n9\n")
-    message(FATAL_ERROR
-        "Unexpected function annotation output: ${function_annotations_output}")
-endif()
-
-execute_process(
-    COMMAND "${TAPAS}" "${FIXTURE_DIR}/function_types.tap"
+    COMMAND "${TAPAS}" "${REGRESSION_DIR}/function_types.tap"
     RESULT_VARIABLE function_types_result
     OUTPUT_VARIABLE function_types_output
     ERROR_VARIABLE function_types_error
@@ -369,7 +511,7 @@ if(NOT function_types_output STREQUAL "7\nvalue\n")
 endif()
 
 execute_process(
-    COMMAND "${TAPAS}" "${FIXTURE_DIR}/deferred_declarations.tap"
+    COMMAND "${TAPAS}" "${REGRESSION_DIR}/deferred_declarations.tap"
     RESULT_VARIABLE deferred_declarations_result
     OUTPUT_VARIABLE deferred_declarations_output
     ERROR_VARIABLE deferred_declarations_error
@@ -382,7 +524,7 @@ if(NOT deferred_declarations_result EQUAL 0 OR
 endif()
 
 execute_process(
-    COMMAND "${TAPAS}" "${FIXTURE_DIR}/definite_initialization.tap"
+    COMMAND "${TAPAS}" "${REGRESSION_DIR}/definite_initialization.tap"
     RESULT_VARIABLE definite_initialization_result
     OUTPUT_VARIABLE definite_initialization_output
     ERROR_VARIABLE definite_initialization_error
@@ -395,7 +537,7 @@ if(NOT definite_initialization_result EQUAL 0 OR
 endif()
 
 execute_process(
-    COMMAND "${TAPAS}" "${FIXTURE_DIR}/recursive_types.tap"
+    COMMAND "${TAPAS}" "${REGRESSION_DIR}/recursive_types.tap"
     RESULT_VARIABLE recursive_types_result
     OUTPUT_VARIABLE recursive_types_output
     ERROR_VARIABLE recursive_types_error
@@ -408,7 +550,20 @@ if(NOT recursive_types_result EQUAL 0 OR
 endif()
 
 execute_process(
-    COMMAND "${TAPAS}" -c "${FIXTURE_DIR}/recursive_types.tap"
+    COMMAND "${TAPAS}" "${REGRESSION_DIR}/type_optional_iterator_narrowing.tap"
+    RESULT_VARIABLE optional_iterator_result
+    OUTPUT_VARIABLE optional_iterator_output
+    ERROR_VARIABLE optional_iterator_error
+)
+if(NOT optional_iterator_result EQUAL 0 OR
+   NOT optional_iterator_output STREQUAL "true\nage\ntrue\ntrue\n7\n3\n")
+    message(FATAL_ERROR
+        "Optional/Iterator/narrowing fixture failed:\n"
+        "${optional_iterator_output}${optional_iterator_error}")
+endif()
+
+execute_process(
+    COMMAND "${TAPAS}" -c "${REGRESSION_DIR}/recursive_types.tap"
     RESULT_VARIABLE recursive_types_compile_result
     OUTPUT_VARIABLE recursive_types_compile_output
     ERROR_VARIABLE recursive_types_compile_error
@@ -430,7 +585,7 @@ if(NOT recursive_types_compile_result EQUAL 0 OR
 endif()
 
 execute_process(
-    COMMAND "${TAPAS}" -c "${FIXTURE_DIR}/imported_ast_module.tap"
+    COMMAND "${TAPAS}" -c "${SUPPORT_FIXTURE_DIR}/imported_ast_module.tap"
     RESULT_VARIABLE ast_module_compile_result
     OUTPUT_VARIABLE ast_module_compile_output
     ERROR_VARIABLE ast_module_compile_error
@@ -442,7 +597,7 @@ if(NOT ast_module_compile_result EQUAL 0)
 endif()
 
 execute_process(
-    COMMAND "${TAPAS}" "${FIXTURE_DIR}/ast_import.tap"
+    COMMAND "${TAPAS}" "${REGRESSION_DIR}/ast_import.tap"
     RESULT_VARIABLE ast_import_result
     OUTPUT_VARIABLE ast_import_output
     ERROR_VARIABLE ast_import_error
@@ -462,6 +617,9 @@ set(invalid_fixtures
     chained_comparison.tap
     chained_range.tap
     chained_membership.tap
+    conditional_orphan_else.tap
+    conditional_branch_after_else.tap
+    conditional_semicolon_else.tap
     top_level_break.tap
     top_level_continue.tap
     nested_function_break.tap
@@ -496,16 +654,21 @@ set(invalid_fixtures
     type_cycle_a.tap
     type_constructor_indirect.tap
     type_constructor_package_alias.tap
-    type_push_mismatch.tap
+    type_push_back_mismatch.tap
     type_delete_required.tap
     type_append_unknown.tap
     type_append_dictionary_mismatch.tap
+    type_dictionary_key_write_mismatch.tap
+    type_dictionary_index_mismatch.tap
+    type_list_index_mismatch.tap
+    type_union_syntax_mismatch.tap
     removed_function_literal_keyword.tap
     removed_kappa.tap
     function_argument_mismatch.tap
     function_return_mismatch.tap
     function_missing_return.tap
     function_type_mismatch.tap
+    function_context_return_mismatch.tap
     uninitialized_read.tap
     uninitialized_after_if.tap
     uninitialized_after_while.tap
@@ -513,11 +676,12 @@ set(invalid_fixtures
     recursive_type_alias_cycle.tap
     conditional_recursive_type.tap
     let_capture.tap
+    time_from_unix_float.tap
 )
 
 foreach(fixture IN LISTS invalid_fixtures)
     execute_process(
-        COMMAND "${TAPAS}" "${FIXTURE_DIR}/${fixture}"
+        COMMAND "${TAPAS}" "${COMPILE_INVALID_DIR}/${fixture}"
         RESULT_VARIABLE invalid_result
         OUTPUT_VARIABLE invalid_output
         ERROR_VARIABLE invalid_error
@@ -539,15 +703,17 @@ set(runtime_error_fixtures
     boolean_logic_shape.tap
     boolean_array_short_circuit.tap
     time_float_offset.tap
-    time_from_unix_float.tap
     time_reversed_add.tap
+    dense_inner_shape.tap
+    dense_outer_matrix.tap
+    dense_normalize_zero.tap
 )
 
 foreach(fixture IN LISTS runtime_error_fixtures)
     execute_process(
         COMMAND "${CMAKE_COMMAND}" -E env
             "TAPAS_BLAS_LIBRARY=${TEST_BLAS}"
-            "${TAPAS}" "${FIXTURE_DIR}/${fixture}"
+            "${TAPAS}" "${RUNTIME_INVALID_DIR}/${fixture}"
         RESULT_VARIABLE runtime_result
         OUTPUT_VARIABLE runtime_output
         ERROR_VARIABLE runtime_error
@@ -569,17 +735,14 @@ endforeach()
 
 set(no_blas_fixtures
     blas_required.tap
-    blas_array_add.tap
-    blas_array_sub.tap
-    blas_scalar_mul.tap
-    blas_array_neg.tap
+    blas_dense.tap
 )
 
 foreach(fixture IN LISTS no_blas_fixtures)
     execute_process(
         COMMAND "${CMAKE_COMMAND}" -E env
-            "TAPAS_BLAS_LIBRARY=${FIXTURE_DIR}/missing-cblas-library"
-            "${TAPAS}" "${FIXTURE_DIR}/${fixture}"
+            "TAPAS_BLAS_LIBRARY=${ENVIRONMENT_INVALID_DIR}/missing-cblas-library"
+            "${TAPAS}" "${ENVIRONMENT_INVALID_DIR}/${fixture}"
         RESULT_VARIABLE no_blas_result
         OUTPUT_VARIABLE no_blas_output
         ERROR_VARIABLE no_blas_error
@@ -597,16 +760,26 @@ foreach(fixture IN LISTS no_blas_fixtures)
     endif()
 endforeach()
 
-execute_process(
-    COMMAND "${CMAKE_COMMAND}" -E env
-        "TAPAS_BLAS_LIBRARY=${FIXTURE_DIR}/missing-cblas-library"
-        "${TAPAS}" "${FIXTURE_DIR}/blas_independent.tap"
-    RESULT_VARIABLE independent_result
-    OUTPUT_VARIABLE independent_output
-    ERROR_VARIABLE independent_error
+set(blas_independent_fixtures
+    blas_independent.tap
+    blas_array_add.tap
+    blas_array_sub.tap
+    blas_scalar_mul.tap
+    blas_array_neg.tap
 )
-if(NOT independent_result EQUAL 0)
-    message(FATAL_ERROR
-        "BLAS-independent array operations required BLAS unexpectedly:\n"
-        "${independent_output}${independent_error}")
-endif()
+
+foreach(fixture IN LISTS blas_independent_fixtures)
+    execute_process(
+        COMMAND "${CMAKE_COMMAND}" -E env
+            "TAPAS_BLAS_LIBRARY=${ENVIRONMENT_INVALID_DIR}/missing-cblas-library"
+            "${TAPAS}" "${REGRESSION_DIR}/${fixture}"
+        RESULT_VARIABLE independent_result
+        OUTPUT_VARIABLE independent_output
+        ERROR_VARIABLE independent_error
+    )
+    if(NOT independent_result EQUAL 0)
+        message(FATAL_ERROR
+            "BLAS-independent fixture ${fixture} required BLAS unexpectedly:\n"
+            "${independent_output}${independent_error}")
+    endif()
+endforeach()

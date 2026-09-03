@@ -1,0 +1,36 @@
+// Conditional branches, for loops, while loops, break, and continue.
+
+function classify(value: Int) -> Int
+{
+    if (value < 0) {
+        return -1
+    } // A comment and newline do not end the if chain.
+
+    elif (value > 0) {
+        return 1
+    } else {
+        return 0
+    }
+}
+
+print(classify(-1))
+print(classify(0))
+print(classify(1))
+
+var total = 0
+for (let value in 0 to 6) {
+    if (value == 2) {
+        continue
+    }
+    if (value == 5) {
+        break
+    }
+    total = total + value
+}
+print(total)
+
+var remaining = 3
+while (remaining > 0) {
+    remaining = remaining - 1
+}
+print(remaining)

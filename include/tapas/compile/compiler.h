@@ -1,7 +1,6 @@
 #ifndef TAPAS_COMPILE_COMPILER_H
 #define TAPAS_COMPILE_COMPILER_H
 
-#include "tapas/tenv.h"
 #include "tapas/tbycs.h"
 
 #ifdef __cplusplus
@@ -9,139 +8,38 @@ extern "C" {
 #endif
 
 
-/*===========================================================================*
- * 1. Register Counter
- *===========================================================================*/
-
-typedef struct {
-	uint_regs reg_ctr;
-	uint_regs reg_max;
-} treg_ctr;
-
-void treg_ctr_init(treg_ctr *c);
-void treg_ctr_update_max(treg_ctr *c);
-void treg_ctr_add(treg_ctr *c);
-void treg_ctr_add_n(treg_ctr *c, uint_regs n);
-void treg_ctr_ddt(treg_ctr *c);
-void treg_ctr_ddt_n(treg_ctr *c, uint_regs n);
-uint_regs treg_ctr_get(const treg_ctr *c);
-uint_regs treg_ctr_get_max(const treg_ctr *c);
-
-
-/*===========================================================================*
- * 2. Object Counter — uses tstring
- *===========================================================================*/
-
-typedef struct {
-	tstring *name;
-	ttypeval *type;
-	tstring **field_order;
-	uint_objs field_order_count;
-} tcompile_export;
-
-typedef struct {
-	tcompile_export *exports;
-	uint_objs count;
-} tcompile_module_interface;
-
-typedef struct {
-	tstring *name;
-	ttypeval *value_type;
-	ttypeval *type_value;
-	tstring **field_order;
-	uint_objs field_order_count;
-	tcompile_module_interface *module_interface;
-	uint8_t has_annotation;
-	uint8_t is_types_package;
-	uint8_t initialized;
-} tcompile_binding;
-
-typedef struct tobj_ctr {
-	tcompile_binding  *bindings;
-	uint_objs         len;
-	uint_objs         capacity;
-	uint_objs         current_env_objmax;
-	struct tobj_ctr  *father;
-	uint_objs         npreload;
-} tobj_ctr;
-
-typedef struct {
-	uint_objs slot;
-	uint16_t depth;
-} tobj_ctr_addr;
-
-void tobj_ctr_init(tobj_ctr *c, tobj_ctr *father);
-void tobj_ctr_init_preload(tobj_ctr *c, tstring **precludes, uint_objs npre, tobj_ctr *father);
-void tobj_ctr_free(tobj_ctr *c);
-void tobj_ctr_update_obj_max(tobj_ctr *c);
-uint_objs tobj_ctr_len_in_all(tobj_ctr *father);
-uint_objs tobj_ctr_obj_len_all(tobj_ctr *c);
-uint_objs tobj_ctr_obj_len_cur(tobj_ctr *c);
-uint_objs tobj_ctr_obj_max_cur(const tobj_ctr *c);
-uint_objs tobj_ctr_obj_loc(tobj_ctr *c, const tstring *objname);
-int tobj_ctr_obj_addr(tobj_ctr *c, const tstring *objname, tobj_ctr_addr *addr);
-uint_objs tobj_ctr_obj_create(tobj_ctr *c, const tstring *left, int inblk, tconsts *consts, uint_csts *nl);
-void tobj_ctr_obj_del_last_n(tobj_ctr *c, uint_objs n);
-int tobj_ctr_is_preload(const tobj_ctr *c, uint_objs loc);
-tstring **tobj_ctr_first_n_objs(tobj_ctr *c, uint_objs n);
-void tobj_ctr_first_n_objs_free(tstring **objs, uint_objs n);
-
-
-/*===========================================================================*
- * 3. Compiler Context (tcp)
- *===========================================================================*/
-
-typedef struct {
-	tstring **files;
-	uint32_t count;
-	uint32_t capacity;
-} tcompile_import_stack;
-
-struct tcp {
-	tobj_ctr objctr;
-	tobj_ctr tmpctr;
-	treg_ctr regctr;
-	uint_objs n_default_objs;
-	tvmcmd_vect *outer_instructions;
-	tvmcmd_vect *cur_instructions;
-	tconsts *outer_consts;
-	tconsts *cur_consts;
-	tcompo_env *outer_env;
-	tcompo_env *cur_env;
-	tcompile_module_interface *module_interface;
-	tcompile_import_stack *imports;
-	uint8_t owns_imports;
-	int in_loop;
-	int interactive;
-};
-
 typedef struct tcp tcp;
-
-void tcp_init(tcp *cp, tobj_ctr *father_objctr, int interactive);
-void tcp_init_preload(tcp *cp, tstring **default_objs, uint_objs ndefault, tobj_ctr *father_objctr, int interactive);
-void tcp_share_import_stack(tcp *child, tcp *parent);
-tcinfo tcp_get_compile_info(tcp *cp);
-void tcp_free(tcp *cp);
+typedef struct tlib tlib;
 
 
-/*===========================================================================*
- * 4. Compilation entry points
- *===========================================================================*/
+tcp *tcp_new_preload(tstring **default_objects, uint_objs default_count,
+		     int interactive);
 
-tcinfo parse_unit(tcp *cp, const tstring *src, tvmcmd_vect *tcmds, tconsts *consts, tstring **paths, uint_lexs npaths, int cleanstk, int inblk);
-tcinfo parse_blk(tcp *cp, const tstring *src, tvmcmd_vect *tcmds, tconsts *consts, tstring **paths, uint_lexs npaths, int cleanstk, int inblk);
+tcp *tcp_new_library(const tlib *library, int interactive);
 
+void tcp_delete(tcp *cp);
 
-/*===========================================================================*
- * 5. High-level Compile Functions
- *===========================================================================*/
+tcinfo parse_unit(tcp *cp, const tstring *source,
+		  tvmcmd_vect *instructions, tconsts *constants,
+		  tstring **paths, uint_lexs path_count,
+		  int clean_stack, int in_block);
 
-twrapper *compile_str(tcp *cp, const tstring *src, tstring **paths, uint_lexs npaths);
-twrapper *compile_file(tcp *cp, const tstring *file, tstring **paths, uint_lexs npaths);
-void compile_file_save(tcp *cp, const tstring *file, tstring **paths, uint_lexs npaths);
+tcinfo parse_blk(tcp *cp, const tstring *source,
+		 tvmcmd_vect *instructions, tconsts *constants,
+		 tstring **paths, uint_lexs path_count,
+		 int clean_stack, int in_block);
+
+twrapper *compile_str(tcp *cp, const tstring *source,
+		      tstring **paths, uint_lexs path_count);
+
+twrapper *compile_file(tcp *cp, const tstring *file,
+		       tstring **paths, uint_lexs path_count);
+
+void compile_file_save(tcp *cp, const tstring *file,
+		       tstring **paths, uint_lexs path_count);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* TAPAS_COMPILE_COMPILER_H */
+#endif

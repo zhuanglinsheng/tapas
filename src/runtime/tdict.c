@@ -1,9 +1,38 @@
 #include "tapas/runtime/tdict.h"
 
-#include "tapas/runtime/tlist.h"
 #include "tapas/runtime/tpair.h"
 
 #include <stdlib.h>
+
+tdict *tdict_new(void)
+{
+	tdict *dictionary = (tdict *)calloc(1, sizeof(tdict));
+	dictionary->base.vtable = &tdict_vtable;
+	dictionary->items = thashtbl_new();
+	return dictionary;
+}
+
+void tdict_set(tdict *dictionary, const tobj *key, const tobj *value)
+{
+	thashtbl_set(dictionary->items, key, value);
+}
+
+void tdict_get(tdict *dictionary, const tobj *key, tobj *result)
+{
+	const tobj *value = thashtbl_get(dictionary->items, key);
+	if (!value)
+		twarn(ErrRuntime_ObjUnfound, "tdict_get", "");
+	*result = *value;
+	if (result->type == tcompo && result->val.v_tcompo)
+		result->val.v_tcompo->refctr++;
+}
+
+int tdict_contains(tdict *dictionary, const tobj *key)
+{
+	return thashtbl_contains(dictionary->items, key);
+}
+
+/*----------------------- Required Vtable Operations -----------------------*/
 
 static const char *tdict_get_type(void)
 {
@@ -72,18 +101,6 @@ static void tdict_string_append_pair(const tobj *key, const tobj *value, void *c
 	sctx->idx++;
 }
 
-static void tdict_keys_append(const tobj *key, const tobj *value, void *ctx)
-{
-	(void)value;
-	tlist_push((tlist *)ctx, key);
-}
-
-static void tdict_values_append(const tobj *key, const tobj *value, void *ctx)
-{
-	(void)key;
-	tlist_push((tlist *)ctx, value);
-}
-
 static tstring *tdict_tostring_abbr(void *self)
 {
 	return tobj_tostring_pointer("Dictionary", self);
@@ -104,6 +121,73 @@ static tstring *tdict_tostring_full(void *self)
 	return out;
 }
 
+/*------------------------------ Capabilities ------------------------------*/
+
+/*
+ * Dictionary supports indexed reads and writes, pair append, key deletion,
+ * and key membership. It is deliberately not Iterable: callers choose keys
+ * or values explicitly through stdlib, where those collection policies live.
+ */
+
+static void dictionary_append(void *self, const tobj *value)
+{
+	if (value->type != tcompo || tobj_compo_type(value) != compo_tpair)
+		twarn(ErrRuntime_ParamsType, "append", "Pair required");
+	tpair *pair = (tpair *)value->val.v_tcompo;
+	tdict_set((tdict *)self, &pair->first, &pair->second);
+}
+
+static int tdict_delete(tdict *dictionary, const tobj *key)
+{
+	return thashtbl_delete(dictionary->items, key);
+}
+
+static void dictionary_delete(void *self, const tobj *key)
+{
+	if (!tdict_delete((tdict *)self, key))
+		twarn(ErrRuntime_ObjUnfound, "delete", "");
+}
+
+static int dictionary_contains(void *self, const tobj *value)
+{
+	return tdict_contains((tdict *)self, value);
+}
+
+static void tdict_idx(tdict *d, const tobj *params, uint_regs np, tobj *vre)
+{
+	if (np != 1)
+		twarn(ErrRuntime_ParamsCtr, "tdict_idx", "");
+	tdict_get(d, &params[0], vre);
+}
+
+static void dictionary_index(void *self, const tobj *arguments,
+			     uint_regs argument_count, tobj *result)
+{
+	tdict_idx((tdict *)self, arguments, argument_count, result);
+}
+
+static void tdict_iset(tdict *d, const tobj *params, uint_regs np,
+		       const tobj *vright)
+{
+	if (np != 1)
+		twarn(ErrRuntime_ParamsCtr, "tdict_iset", "");
+	tdict_set(d, &params[0], vright);
+}
+
+static void dictionary_index_set(void *self, const tobj *arguments,
+				 uint_regs argument_count, const tobj *value)
+{
+	tdict_iset((tdict *)self, arguments, argument_count, value);
+}
+
+static const tcompo_capabilities dictionary_capabilities = {
+	.indexable = dictionary_index,
+	.index_settable = dictionary_index_set,
+	.appendable = dictionary_append,
+	.deletable = dictionary_delete,
+	.contains = dictionary_contains
+};
+
 tcompo_vtable tdict_vtable = {
 	.get_type = tdict_get_type,
 	.get_compo_type_code = tdict_get_code,
@@ -112,83 +196,6 @@ tcompo_vtable tdict_vtable = {
 	.free = tdict_free,
 	.identical = tdict_identical,
 	.tostring_abbr = tdict_tostring_abbr,
-	.tostring_full = tdict_tostring_full
+	.tostring_full = tdict_tostring_full,
+	.capabilities = &dictionary_capabilities
 };
-
-tdict *tdict_new(void)
-{
-	tdict *d = (tdict *)calloc(1, sizeof(tdict));
-	d->base.vtable = &tdict_vtable;
-	d->items = thashtbl_new();
-	return d;
-}
-
-void tdict_set(tdict *d, const tobj *key, const tobj *val)
-{
-	thashtbl_set(d->items, key, val);
-}
-
-void tdict_get(tdict *d, const tobj *key, tobj *vre)
-{
-	const tobj *value = thashtbl_get(d->items, key);
-	if (value) {
-		*vre = *value;
-		if (vre->type == tcompo && vre->val.v_tcompo)
-			vre->val.v_tcompo->refctr++;
-		return;
-	}
-	twarn(ErrRuntime_ObjUnfound, "tdict_get", "");
-}
-
-int tdict_contains(tdict *d, const tobj *key)
-{
-	return thashtbl_contains(d->items, key);
-}
-
-int tdict_delete(tdict *d, const tobj *key)
-{
-	return thashtbl_delete(d->items, key);
-}
-
-void
-tdict_idx(tdict *d, const tobj *params, uint_regs np, tobj *vre)
-{
-	if (np != 1)
-		twarn(ErrRuntime_ParamsCtr, "tdict_idx", "");
-	tdict_get(d, &params[0], vre);
-}
-
-void
-tdict_iset(tdict *d, const tobj *params, uint_regs np, const tobj *vright)
-{
-	if (np != 1)
-		twarn(ErrRuntime_ParamsCtr, "tdict_iset", "");
-	tdict_set(d, &params[0], vright);
-}
-
-/** Append pair-like values during PUSHDICT */
-void tdict_set_append(tdict *d, const tobj *pair_val)
-{
-	if (pair_val->type != tcompo)
-		return;
-	tcompo_v *c = pair_val->val.v_tcompo;
-	if (c->vtable->get_compo_type_code() != compo_tpair)
-		return;
-	tpair *p = (tpair *)c;
-	tdict_set(d, &p->first, &p->second);
-}
-
-/** Get keys as tlist */
-tlist *tdict_keys(tdict *d)
-{
-	tlist *l = tlist_new();
-	thashtbl_each(d->items, tdict_keys_append, l);
-	return l;
-}
-
-tlist *tdict_values(tdict *d)
-{
-	tlist *l = tlist_new();
-	thashtbl_each(d->items, tdict_values_append, l);
-	return l;
-}

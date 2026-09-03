@@ -28,6 +28,7 @@ void tobj_vec_push(tobj_vec *v, const tobj *obj);
 void tobj_vec_set(tobj_vec *v, uint_objs idx, const tobj *obj);
 void tobj_vec_insert(tobj_vec *v, uint_objs idx, const tobj *obj);
 void tobj_vec_pop(tobj_vec *v, uint_objs idx);
+void tobj_vec_take(tobj_vec *v, uint_objs idx, tobj *result);
 void tobj_vec_copy(tobj_vec *dst, const tobj_vec *src);
 void tobj_vec_copy_range(tobj_vec *dst, const tobj_vec *src,
 			 uint_objs start, uint_objs count);

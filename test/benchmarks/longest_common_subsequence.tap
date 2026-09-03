@@ -1,21 +1,20 @@
-let lcs_length = (left, right){
+function lcs_length(left, right)
+{
     let previous = []
     let current = []
-    for(let column in 0 to (right.len() + 1)){
+    for (let column in 0 to (right.len() + 1)) {
         previous.append(0)
         current.append(0)
     }
 
-    for(let i in 1 to (left.len() + 1)){
+    for (let i in 1 to (left.len() + 1)) {
         current[0] = 0
-        for(let j in 1 to (right.len() + 1)){
-            if(left[i - 1] == right[j - 1]){
+        for (let j in 1 to (right.len() + 1)) {
+            if (left[i - 1] == right[j - 1]) {
                 current[j] = previous[j - 1] + 1
-            }
-            elif(previous[j] >= current[j - 1]){
+            } elif (previous[j] >= current[j - 1]) {
                 current[j] = previous[j]
-            }
-            else{
+            } else {
                 current[j] = current[j - 1]
             }
         }
@@ -31,7 +30,7 @@ let right = 'ALGORITHMSFORDYNAMICLANGUAGESUSEPROGRAMSTRUCTUREANDRUNTIMEDATATOMEA
 
 let started = clock_ns()
 let result = 0
-for(let repetition in 0 to 40){
+for (let repetition in 0 to 40) {
     result = result + lcs_length(left, right)
 }
 let elapsed = clock_ns() - started

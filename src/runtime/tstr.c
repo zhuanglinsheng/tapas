@@ -5,6 +5,27 @@
 #include <stdlib.h>
 #include <string.h>
 
+tstr *tstr_new_len(const char *text, size_t length)
+{
+	tstr *string = (tstr *)calloc(1, sizeof(tstr));
+	if (!string)
+		return nullptr;
+	string->base.vtable = &tstr_vtable;
+	string->data = &string->storage;
+	if (!tstring_init_len(string->data, text, length)) {
+		free(string);
+		return nullptr;
+	}
+	return string;
+}
+
+tstr *tstr_new(const char *text)
+{
+	return tstr_new_len(text ? text : "", text ? strlen(text) : 0);
+}
+
+/*----------------------- Required Vtable Operations -----------------------*/
+
 static const char *tstr_get_type(void)
 {
 	return "String";
@@ -26,13 +47,13 @@ static void *tstr_copy(void *self)
 	tstr *s = (tstr *)self;
 	tstr *n = (tstr *)calloc(1, sizeof(tstr));
 	if (!n)
-		return NULL;
+		return nullptr;
 	n->base.vtable = s->base.vtable;
 	n->data = &n->storage;
 	if (!tstring_init_len(n->data, tstring_cstr(s->data),
 			      tstring_len(s->data))) {
 		free(n);
-		return NULL;
+		return nullptr;
 	}
 	return n;
 }
@@ -63,36 +84,24 @@ static tstring *tstr_tostring_full(void *self)
 	return tstring_dup(s->data);
 }
 
-tcompo_vtable tstr_vtable = {
-	.get_type = tstr_get_type,
-	.get_compo_type_code = tstr_get_code,
-	.len = tstr_len,
-	.copy = tstr_copy,
-	.free = tstr_free,
-	.identical = tstr_identical,
-	.tostring_abbr = tstr_tostring_abbr,
-	.tostring_full = tstr_tostring_full
-};
+/*------------------------------ Capabilities ------------------------------*/
 
-tstr *tstr_new_len(const char *s, size_t len)
+/*
+ * String supports indexed reads and writes, including Pair ranges, and
+ * append. It is not Iterable because Tapas has not defined byte, code-point,
+ * or grapheme iteration semantics.
+ */
+
+static void string_append(void *self, const tobj *value)
 {
-	tstr *st = (tstr *)calloc(1, sizeof(tstr));
-	if (!st)
-		return NULL;
-	st->base.vtable = &tstr_vtable;
-	st->data = &st->storage;
-	if (!tstring_init_len(st->data, s, len)) {
-		free(st);
-		return NULL;
+	tstr *string = (tstr *)self;
+	if (value->type == tcompo && tobj_compo_type(value) == compo_tstr) {
+		tstring_append_ts(string->data, ((tstr *)value->val.v_tcompo)->data);
+		return;
 	}
-	return st;
-}
-
-tstr *tstr_new(const char *s)
-{
-	if (!s)
-		s = "";
-	return tstr_new_len(s, strlen(s));
+	tstring *rendered = tobj_tostring_full(value);
+	tstring_append_ts(string->data, rendered);
+	tstring_free(rendered);
 }
 
 static int pair_to_range(const tobj *param, long len, long *start, long *end)
@@ -132,7 +141,7 @@ static void tstr_replace_range(tstr *s, long start, long end, const char *repl)
 }
 
 /* String indexing helper */
-void
+static void
 tstr_idx(tstr *s, const tobj *params, uint_regs np, tobj *vre)
 {
 	if (np != 1)
@@ -161,7 +170,7 @@ tstr_idx(tstr *s, const tobj *params, uint_regs np, tobj *vre)
 		(tcompo_v *)tstr_new_len(tstring_cstr(s->data) + idx, 1));
 }
 
-void
+static void
 tstr_iset(tstr *s, const tobj *params, uint_regs np, const tobj *vright)
 {
 	if (np != 1)
@@ -187,3 +196,33 @@ tstr_iset(tstr *s, const tobj *params, uint_regs np, const tobj *vright)
 		twarn(ErrRuntime_IdxOutRange, "tstr_iset", "");
 	tstr_replace_range(s, idx, idx + 1, repl);
 }
+
+static void string_index(void *self, const tobj *arguments,
+			 uint_regs argument_count, tobj *result)
+{
+	tstr_idx((tstr *)self, arguments, argument_count, result);
+}
+
+static void string_index_set(void *self, const tobj *arguments,
+			     uint_regs argument_count, const tobj *value)
+{
+	tstr_iset((tstr *)self, arguments, argument_count, value);
+}
+
+static const tcompo_capabilities string_capabilities = {
+	.indexable = string_index,
+	.index_settable = string_index_set,
+	.appendable = string_append
+};
+
+tcompo_vtable tstr_vtable = {
+	.get_type = tstr_get_type,
+	.get_compo_type_code = tstr_get_code,
+	.len = tstr_len,
+	.copy = tstr_copy,
+	.free = tstr_free,
+	.identical = tstr_identical,
+	.tostring_abbr = tstr_tostring_abbr,
+	.tostring_full = tstr_tostring_full,
+	.capabilities = &string_capabilities
+};

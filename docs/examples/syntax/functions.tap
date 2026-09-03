@@ -1,0 +1,36 @@
+// Typed functions, recursion, closures, and variadic arguments.
+
+function add(left: Int, right: Int) -> Int
+{
+    return left + right
+}
+
+function factorial(value: Int) -> Int
+{
+    if (value <= 1) {
+        return 1
+    }
+    return value * this (value - 1)
+}
+
+let make_counter = (start)
+{
+    var current = start
+    return ()
+    {
+        current = current + 1
+        return current
+    }
+}
+
+function argument_count(...) -> Int
+{
+    return __nparam__()
+}
+
+let counter = make_counter(10)
+print(add(3, 4))
+print(factorial(5))
+print(counter())
+print(counter())
+print(argument_count('a', true, 3))

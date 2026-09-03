@@ -1,0 +1,29 @@
+let positive = rule (value: Int) {
+    "value must be positive": value > 0
+}
+
+let bounded = rule (value: Int) {
+    require positive(value)
+    "value must be below ten": value < 10
+}
+
+assert(bounded(5))
+let failed = rules::check(bounded(12))
+print(failed["passed"])
+print(len(failed["violations"]))
+print(failed["violations"][0]["description"])
+print(rules::inspect(positive)["source"])
+print(types::matches(positive, types::rule(types::Int)))
+print(types::matches(positive, types::rule(types::Float)))
+print(types::matches(positive(1), types::rule_instance(types::Int)))
+let evaluator = evaluators::make("identity", 1, (context)
+{
+    return {
+        "status": "Success",
+        "value": context["instance"],
+        "violations": [],
+        "diagnostics": []
+    }
+})
+print(types::matches(evaluators::eval(positive(1), evaluator), evaluators::Result))
+print(evaluators::compile(positive, evaluator)["status"])

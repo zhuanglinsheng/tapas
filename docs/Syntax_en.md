@@ -6,13 +6,15 @@ This document is the normative language specification for Tapas. It defines
 the source language independently of the current compiler implementation. A
 conforming compiler, formatter, and language server must follow these rules.
 
-The document has five parts:
+The document has four parts:
 
 1. a tutorial introduction with the language semantics;
 2. lexical rules;
 3. a complete syntactic grammar in EBNF;
-4. the built-in function catalogue;
-5. default operator semantics for built-in types.
+4. default operator semantics for built-in types.
+
+See the [Standard Library](Stdlib_en.md) for root built-ins, native packages,
+and source-package APIs.
 
 The words **must**, **must not**, **should**, and **may** are normative. Every
 code block marked `tapas` is executable. The Tapas binary reads those blocks in
@@ -20,22 +22,24 @@ document order as one program, so a block may use declarations from an earlier
 `tapas` block in the same document. Code marked `text` is only a notation
 example and may intentionally be incomplete or invalid Tapas.
 
-## Part I — Tutorial and Language Semantics
+## Part I — Language Semantics Tutorial
 
 ### 1. A first program
 
-Tapas is a dynamically typed, expression-oriented scripting language. A source
-file contains statements separated by a newline or semicolon. Newlines inside
-parentheses, brackets, braces, or strings do not separate statements.
+Tapas is an expression-oriented scripting language with optional Type
+annotations and compile-time checking. A source file contains statements
+separated by a newline or semicolon. Newlines inside parentheses, brackets,
+braces, or strings do not separate statements.
 
 ```tapas
 var tutorial_limit = 5
 
-let tutorial_square = (x){
+function tutorial_square(x)
+{
     return x * x
 }
 
-for(let tutorial_i in 0 to tutorial_limit){
+for (let tutorial_i in 0 to tutorial_limit) {
     print(tutorial_i, ' -> ', tutorial_square(tutorial_i))
 }
 ```
@@ -48,8 +52,13 @@ for(let tutorial_i in 0 to tutorial_limit){
 </pre>
 
 `var` and `let` both declare variables, but they have different lifetime and
-capture rules. Function literals are written `(parameters){ body }`. `0 to 5`
-creates the half-open iterator `0, 1, 2, 3, 4`.
+capture rules. A named function begins with `function`, followed by its name,
+parameter list, and body. An anonymous function literal has no name and consists
+of a parameter list and body. `0 to 5` creates the half-open iterator
+`0, 1, 2, 3, 4`.
+
+For a runnable introductory program, see
+[A First Look at Tapas](examples/Basics_en.md).
 
 ### 2. Statements and separators
 
@@ -64,71 +73,67 @@ let a = 1; let b = 2
 ```
 
 A compound statement owns a braced block and does not need a semicolon after
-its closing brace. A separator may appear between the arms of an `if` chain.
+its closing brace. An `elif` or `else` may follow the previous `}` directly or
+after newlines, blank lines, and comments. A semicolon ends the entire
+conditional and is not allowed between its arms.
 
 Comments begin with `//` outside a string and continue through the end of the
 physical line. A comment ends the statement text on that line; an expression
 cannot continue after a line comment unless it is already inside delimiters.
 
-### 3. Values and dynamic types
+### 3. Value Types, Reference Types, and Type Annotations
 
-Every Tapas expression evaluates to one value. Variables do not have declared
-types, and a later assignment may store a value of a different type.
+Tapas distinguishes value Types from reference Types by their assignment and
+argument-passing behavior. `Bool`, `Int`, and `Float` are value Types:
+assignment and argument passing copy the value itself. All other built-in
+objects are reference Types. Assigning or passing one copies its reference, so
+several variables may refer to the same object. Section 5 covers copying and
+identity in more detail.
 
-Tapas has four directly stored value types:
+Type annotations are optional. Without one, a variable may hold values of
+different Types over time. When an annotation is present, the compiler checks
+the initializer and subsequent assignments against it.
+
+```tapas
+let tutorial_number: Int | Float = 1
+tutorial_number = 1.5
+```
+
+Here the annotation allows `tutorial_number` to hold either `Int` or `Float`,
+so both assignments pass compile-time checking.
+
+Tapas source provides these literals directly:
 
 | Type | Literal examples | Notes |
 |---|---|---|
-| `bool` | `true`, `false` | No implicit conversion in conditions. |
-| `int` | `0`, `-12`, `42` | Signed integer represented by runtime C `long`. |
-| `float` | `0.5`, `.5`, `5.`, `1e3` | Runtime C `double`. |
-| `nil` | none | Internal absence value; there is no `nil` literal. |
+| `Bool` | `true`, `false` | Conditions accept only `Bool`; there is no implicit truthiness conversion. |
+| `Int` | `0`, `12`, `42` | Strict decimal integers. |
+| `Float` | `0.5`, `.5`, `5.`, `1e3`, `1.5e-3` | Decimal or scientific notation. |
+| `String` | `'text'`, `"text"` | Single- and double-quoted forms have the same meaning. |
 
-Composite values are heap objects:
+Integers do not accept leading zeroes or radix prefixes, so `00`, `010`,
+`0x10`, `0b10`, and `0o10` are compile errors. A floating-point exponent begins
+with `e` or `E`, may have a sign, and must contain digits; examples include
+`1E+6`, `.5e2`, and `5.e-1`. A leading `+` or `-` is a unary operator rather
+than part of the literal.
 
-| Type | Construction |
-|---|---|
-| String | `'text'`, `"text"` |
-| List | `[1, 2, 3]`, `list(1, 2, 3)` |
-| Pair | `'key' : 1`, `pair('key', 1)` |
-| Dictionary | `{'key' : 1}` |
-| Iterator | `0 to 10`, `iter(0, 10)` |
-| Function | `(x){ return x }` |
-| Library | `import module.tap as module` |
-| Real array | `array(2, 2, 0.0)` |
-| Boolean array | `array(2, 2, false)` |
-| Time | `now()`, `time::from_unix(0)` |
+The built-in reference Types are `String`, `List`, `Pair`, `Dictionary`,
+`Iterator`, `Function`, `Library`, `RealArray`, `BoolArray`, `Time`, and `Type`.
+The Rule system adds reference Types such as `Rule`, `RuleInstance`, `RuleIR`,
+`RuleTerm`, `RuleItem`, and `Evaluator`. Native extensions may define further
+reference Types through the Tapas object interface.
 
-`Time` represents an absolute instant with whole-second precision. Its default
-text representation uses the local time zone of the running environment; the
-time zone is not stored in the `Time` value itself.
+`Nil` is the internal result of a function with no useful result and is neither
+a storable value Type nor a reference Type. It has no source literal and cannot
+be stored in a variable or collection; a bare `return` returns `Nil` to the
+caller.
 
-```tapas
-let tutorial_epoch_time = time::from_unix(100)
-let tutorial_later_time = tutorial_epoch_time + 20
-print(time::unix(tutorial_later_time))
-print(tutorial_later_time - tutorial_epoch_time)
-print(tutorial_epoch_time < tutorial_later_time)
-print(len(time::format(tutorial_epoch_time, '%Y')) > 0)
-```
-<pre class='Tapas-Return'>
-120
-20
-true
-true
-</pre>
-
-`nil` is used internally as the result of procedures such as `print`. A
-declaration or assignment must not store `nil`; attempting to do so is a
-runtime error. A bare `return` is allowed and returns `nil` to its caller.
-
-Integer literals use strict decimal spelling: `0` may stand alone, while every
-other integer starts with `1` through `9`. Thus `10` is valid, while `00`,
-`010`, `0x10`, `0b10`, and `0o10` are compile errors. Floating literals include
-forms such as `.5`, `5.`, `1e3`, and `1.5e-3`.
-
-Declarations may include type annotations. Type construction, parameterized
-applications, and static checking are defined by `TypeSystem_en.md`.
+See the [Type System](TypeSystem_en.md) for Type construction and static
+checking, [Rules](Rules_en.md) for Rule values, the
+[Standard Library](Stdlib_en.md) for collections, arrays, and time, and
+[C Interaction](Foreign_en.md) for extension values. The
+[Type example](examples/syntax/types.tap) combines union, structural, and
+parameterized container Types in one program.
 
 ### 4. Variables, scope, and assignment
 
@@ -178,6 +183,11 @@ with a closure should be declared with `var`.
 Function parameters behave like environment variables belonging to the
 function call and may be captured by a nested function.
 
+A named `function` declaration is a read-only environment binding. Later named
+functions and anonymous closures may capture it, but no scope may assign a new
+value to its name. It therefore supports stable references between module-level
+functions without changing the temporary-storage rules of ordinary `let`.
+
 Assignment targets are either a variable or one direct index into a variable:
 
 ```tapas
@@ -194,24 +204,24 @@ assignment target. Assignment through a computed or chained target such as
 
 ### 5. Copy and identity
 
-Assigning or passing an `int`, `float`, or `bool` copies the value. Assigning,
-passing, or inserting a composite value copies its reference. Mutating the
-object is therefore visible through all aliases.
+Assigning or passing a value Type copies the value itself. Assigning, passing,
+or inserting a reference value copies its reference, so mutations through one
+alias are visible through the others.
 
 ```tapas
 let tutorial_inner = [1, 2]
 let tutorial_outer = [tutorial_inner]
 tutorial_inner[0] = 9
-sprint(tutorial_outer)
+pprint(tutorial_outer)
 ```
 <pre class='Tapas-Return'>
 [[9, 2]]
 </pre>
 
-`copy(value)` creates an independent outer composite object, but elements held
-inside a copied list, pair, or dictionary are still copied shallowly. Use
-`identical(a, b)` to test runtime identity. The `==` operator follows the
-value-specific equality operation and is not a substitute for identity testing.
+For a reference Type, `copy(value)` creates an independent outer object, but
+elements held inside a copied list, pair, or dictionary are still copied
+shallowly. Use `identical(a, b)` to test runtime identity. The `==` operator
+uses the Type's equality operation and is not a substitute for identity testing.
 
 ### 6. Strings, lists, pairs, and dictionaries
 
@@ -229,8 +239,8 @@ the length.
 let tutorial_text = 'Tapas'
 let tutorial_numbers = [0, 1, 2, 3, 4]
 print(tutorial_text[1:4])
-sprint(tutorial_numbers[:3])
-sprint(tutorial_numbers[-2:])
+pprint(tutorial_numbers[:3])
+pprint(tutorial_numbers[-2:])
 ```
 <pre class='Tapas-Return'>
 apa
@@ -268,11 +278,15 @@ Tony
 `dictionary.name` has the same read-only lookup meaning when it is not followed
 by an argument list.
 
+For slices, list mutation, pairs, dictionaries, and shallow copying in one
+program, see the
+[values and collections example](examples/syntax/values_and_collections.tap).
+
 ### 7. Dense arrays
 
 Tapas arrays are row-major and two-dimensional. `array(rows, columns, fill)`
-creates a real array when `fill` is an `int` or `float`, and a boolean array
-when `fill` is a `bool`. A list fill must contain exactly
+creates a `RealArray` when `fill` is an `Int` or `Float`, and a `BoolArray`
+when `fill` is a `Bool`. A `List` fill must contain exactly
 `rows * columns` values of one appropriate scalar category.
 
 Arrays require two indices. Each index is an integer or slice. Two integer
@@ -281,7 +295,7 @@ indices return a scalar; if either index is a slice, the result is a new array.
 ```tapas
 let tutorial_matrix = array(2, 3, [1, 2, 3, 4, 5, 6])
 print(tutorial_matrix[1, 2])
-sprint(tutorial_matrix[0:2, 1:3])
+pprint(tutorial_matrix[0:2, 1:3])
 ```
 <pre class='Tapas-Return'>
 6
@@ -300,6 +314,9 @@ and subtraction, scalar multiplication, and array negation require CBLAS at
 runtime; Tapas implements the other element-wise operations directly. BLAS is
 not required when Tapas is installed. `and` and `or` operate on scalar
 booleans only.
+
+For matrix norms, outer products, in-place updates, and matrix multiplication,
+see the [dense-array example](examples/syntax/dense_arrays.tap).
 
 ### 8. Calls, indexing, members, and tunnel calls
 
@@ -380,19 +397,23 @@ toward zero. Integer division or remainder by zero is an error. Floating-point
 operations follow the host C runtime.
 
 `and` and `or` require booleans and short-circuit. They do not apply truthiness
-conversion. Conditions in `if` and `while` likewise require an actual `bool`.
+conversion. Conditions in `if` and `while` likewise require an actual `Bool`.
 
 `start to end` requires integers and creates a half-open iterator with step
 `1`; it is empty when `end <= start`. Use `iter(start, step, end)` for a
 descending range. `value in collection` supports iterators, lists, and
 dictionary keys; for another right operand it is `false`.
 
+For precedence, integer arithmetic, membership, and short-circuit evaluation
+in one program, see the [operator example](examples/syntax/operators.tap).
+
 ### 10. Functions and closures
 
 A fixed-arity function lists zero or more distinct parameter names:
 
 ```tapas
-let tutorial_hypotenuse = (x, y){
+function tutorial_hypotenuse(x, y)
+{
     return math::sqrt(x * x + y * y)
 }
 print(tutorial_hypotenuse(3, 4))
@@ -400,6 +421,17 @@ print(tutorial_hypotenuse(3, 4))
 <pre class='Tapas-Return'>
 5
 </pre>
+
+A statement that requires a block may place its opening brace at the end of
+the header or on a later line. Blank lines and comments may occur before `{`;
+a semicolon always terminates the current statement:
+
+```tapas
+function tutorial_add(left: Int, right: Int) -> Int
+{
+    return left + right
+}
+```
 
 An arity mismatch is a compile error when the function signature is statically
 known; a dynamic call can check it only at runtime. A variadic function uses
@@ -410,8 +442,9 @@ Function parameter annotations use `name: Type`, and a function result
 annotation uses `-> Type`. Annotated and unannotated parameters may be mixed:
 
 ```tapas
-let convert = (value: Union[Int, String], strict: Bool, context) -> String {
-    if(strict){
+function convert(value: Int | String, strict: Bool, context) -> String
+{
+    if (strict) {
         return str(value)
     }
     return 'value'
@@ -419,28 +452,31 @@ let convert = (value: Union[Int, String], strict: Bool, context) -> String {
 ```
 
 Signature annotations use the `type-expression` and assignability relation
-defined by `TypeSystem_en.md`. They participate only in compile-time analysis
-and do not insert an implicit runtime check. The `...` form cannot carry a
-parameter annotation, but `(...) -> Type { ... }` is valid. Without a result
-annotation, the function result Type is `Unknown`.
+defined by the [Type System](TypeSystem_en.md). They participate only in
+compile-time analysis and do not insert an implicit runtime check. The `...`
+form cannot carry a parameter annotation, but a variadic function literal may
+still place a `-> Type` result annotation after its parameter list. Without a
+result annotation, the function result Type is `Unknown`.
 
 An exact function Type is written as `Function[parameter Types...] -> result
 Type` and may annotate higher-order parameters, results, and ordinary bindings.
 `Function[] -> T` is a zero-argument function, `Function[...] -> T` is
 variadic, and `->` is right-associative.
 
-Function literals are anonymous; a named `function` declaration creates a
-read-only binding. Inside a function, `this` evaluates to a callable
+Named functions use `function` declarations by default and create read-only
+bindings. Function literals are anonymous and are reserved for function-value
+expressions, callbacks, and closures. Inside a function, `this` evaluates to a callable
 copy of the current function and is the standard recursion mechanism. `base`
 evaluates to a copy of the parent function environment. `this` and `base` are
 only valid where the corresponding environment exists.
 
 ```tapas
-let tutorial_factorial = (n){
-    if(n <= 1){
+function tutorial_factorial(n)
+{
+    if (n <= 1) {
         return 1
     }
-    return n * this(n - 1)
+    return n * this (n - 1)
 }
 print(tutorial_factorial(6))
 ```
@@ -448,19 +484,54 @@ print(tutorial_factorial(6))
 720
 </pre>
 
-### 11. Conditional execution and loops
+For typed functions, recursion, closures, and variadic arguments in one
+program, see the [function example](examples/syntax/functions.tap).
+
+### 11. Rules and `require`
+
+A Rule is a rule value that can be stored, passed, and composed. A parameterized
+Rule uses `rule (parameters) { ... }`; a zero-parameter Rule may omit the
+parameter list. Every Rule parameter requires a Type annotation. A Bool
+expression at the outermost level of a Rule body is a Condition that must hold:
+
+```tapas
+let tutorial_positive = rule (value: Int) {
+    'value must be positive' : value > 0
+}
+
+let tutorial_small_positive = rule (value: Int) {
+    require tutorial_positive(value)
+    'value must be below ten' : value < 10
+}
+
+assert(tutorial_small_positive(5))
+```
+
+Calling a Rule only binds its arguments and produces a RuleInstance; it does
+not check the Conditions immediately. Checking begins when `assert`,
+`rules::check`, or an evaluator consumes that RuleInstance.
+
+`require` is valid only at the outermost level of a Rule body and must be
+followed by a Rule call that produces a RuleInstance. A Rule body may also use
+local `let` declarations, and a String followed by `:` may describe one
+Condition or a block of Conditions. A Rule body does not accept `var`,
+assignment, control flow, imports, or direct IO.
+
+See [Rules](Rules_en.md) for exact Rule Types, capture semantics, checking APIs,
+the public IR, and evaluators.
+
+### 12. Conditional execution and loops
 
 An `if` chain evaluates conditions in order and executes at most one arm:
 
 ```tapas
-let tutorial_sign = (x){
-    if(x < 0){
+function tutorial_sign(x)
+{
+    if (x < 0) {
         return -1
-    }
-    elif(x > 0){
+    } elif (x > 0) {
         return 1
-    }
-    else{
+    } else {
         return 0
     }
 }
@@ -469,19 +540,19 @@ let tutorial_sign = (x){
 An `elif` or `else` must belong to the immediately preceding `if` chain.
 There may be any number of `elif` arms and at most one final `else` arm.
 
-`while(condition){ body }` repeats while its boolean condition is true.
+`while (condition) { body }` repeats while its boolean condition is true.
 
 A `for` loop accepts either a newly declared temporary loop variable or an
 existing assignable variable:
 
 ```text
-for(let item in iterable){ body }
-for(item in iterable){ body }
+for (let item in iterable) { body }
+for (item in iterable) { body }
 ```
 
 The iterable must be an iterator, list, or another extension value that
 explicitly supports iteration. Dictionaries are not directly iterable; use
-`keys(dictionary)` or `dvalues(dictionary)`. The `let` loop variable exists
+`keys(dictionary)` or `values(dictionary)`. The `let` loop variable exists
 only in the loop. An existing loop variable remains visible after the loop.
 
 `break` and `continue` are valid only inside the nearest lexically enclosing
@@ -489,11 +560,19 @@ loop and cannot cross a function boundary. `return` is valid only inside a
 function or at module top level. A return inside a nested control-flow block
 returns from its enclosing function or module.
 
-### 12. Modules and imports
+For branches, `for`, `while`, `break`, and `continue` in one program, see the
+[control-flow example](examples/syntax/control_flow.tap).
 
-Each `.tap` file is a module. A `.md` file is also a module whose Tapas source
-is the concatenation of fenced blocks tagged `tapas` or `tap`, with original
-line positions preserved for diagnostics.
+### 13. Modules and imports
+
+Each `.tap` file is a module and may also be run directly as a script. Running
+a script executes its top-level statements in order and does not require a
+`main` function. The example name `main.tap` merely identifies the principal
+script of that example; it has no special meaning in the language.
+
+A `.md` file may likewise be used as a module or script. Its Tapas source is
+the concatenation of fenced blocks tagged `tapas` or `tap`, with original line
+positions preserved for diagnostics.
 
 ```text
 import path/to/module.tap
@@ -506,7 +585,8 @@ A bare import executes the module for its effects. An aliased import binds a
 its top level:
 
 ```text
-var exported_function = (){ return 5 }
+function exported_function()
+{ return 5 }
 return {
     'get_five' : exported_function,
 }
@@ -529,34 +609,36 @@ The resolved file must end in `.tap` or `.md`. Circular imports are prohibited;
 a conforming implementation must diagnose a cycle rather than recurse
 indefinitely. Import aliases follow the ordinary identifier rules.
 
-### 13. Errors and compatibility forms
+An `__init__.tap` file is the entry point of its directory package. If it
+exports `main(arguments: List[String])`, the package can be executed as a
+program with `tapas -m package [arguments]`. Tapas calls `main` with the
+command-line arguments as a list of strings. An `Int` result becomes the
+process exit status, while `Nil` indicates success. Thus, `main` is the entry
+function of an executable directory package; an ordinary script enters through
+the file itself and its top-level statements.
+
+For both module forms, see the single-file module
+[library.tap](examples/modules/library.tap), the directory-package entry point
+[greeter/__init__.tap](examples/modules/greeter/__init__.tap), and the
+[main.tap](examples/modules/main.tap) executable script that imports both by
+relative path. See [Usage](Usage_en.md#execute-a-source-package) for package
+execution and the `main` convention.
+
+### 14. Errors and compatibility forms
 
 A language server should distinguish lexical, syntactic, name-resolution, and
 runtime errors. It should recover after a lexical or syntactic error and report
 as many independent diagnostics as practical.
 
-#### 13.1 Deprecated legacy forms
+#### 14.1 Deprecated legacy forms
 
 A deprecated legacy form is syntax that belonged to an earlier version of the
 language, remains recognizable only for migration, and is intended to be
 removed. This specification currently defines no forms in that category.
 
-#### 13.2 Provisional compatibility forms
+#### 14.2 Compatibility forms
 
-A provisional compatibility form is not part of the current normative grammar,
-but the current compiler accepts it without an error. It is kept because a
-future language version may give it formal semantics. It must not be described
-as deprecated or as legacy syntax.
-
-| Form | Current compatibility behavior | Possible future direction |
-|---|---|---|
-| `function name(parameters) [-> Type] { body }` | Creates a read-only name with the same behavior as `let name = (parameters) [-> Type] { body }`. | It may become a formal named-function declaration. |
-
-Compilers and language servers should parse these forms without an error. A
-tool may show a non-error informational hint explaining that the syntax is a
-compatibility form in the current version. Formatters should preserve it
-rather than silently rewrite it. The EBNF in Part III continues to describe
-only the current normative grammar.
+The current specification defines no additional compatibility forms.
 
 ## Part II — Lexical Rules
 
@@ -611,12 +693,13 @@ Reserved words are:
 
 ```text
 and as base break continue elif else false for function if import in
-let nil of or return this to true var while
+let nil of or require return rule this to true var while
 ```
 
-`function`, `nil`, and `of` are reserved although they do not begin a current
-expression. A keyword is recognized only when the following character is not
-an identifier continuation character.
+`function` begins a named declaration but not an expression; `rule` begins a
+Rule expression, and `require` composes another RuleInstance inside a Rule body;
+`nil` and `of` also do not begin expressions. A keyword is recognized only when the following
+character is not an identifier continuation character.
 
 ### 5. Numeric literals
 
@@ -699,7 +782,8 @@ INTEGER    = integer-literal ;
 FLOAT      = float-literal ;
 STRING     = single-string | double-string ;
 PATH       = unquoted-import-path ;
-SEP        = top-level newline | ";" ;
+LINE_SEP   = top-level newline ;
+SEP        = LINE_SEP | ";" ;
 ```
 
 Whitespace and comments may occur between tokens unless a lexical rule says
@@ -734,9 +818,14 @@ inside a block separate that block's statements.
 ### 3. Declarations and assignments
 
 ```ebnf
-declaration       = ("var" | "let"), declarator, { ",", declarator } ;
+declaration       = variable-declaration | function-declaration ;
+variable-declaration = ("var" | "let"), declarator, { ",", declarator } ;
 declarator        = IDENTIFIER, [ ":", type-expression ], [ "=", expression ] ;
-type-expression   = function-type | type-application | qualified-type-name ;
+function-declaration = "function", IDENTIFIER, parameter-list,
+                       [ return-annotation ], block ;
+type-expression   = union-type ;
+union-type        = primary-type, { "|", primary-type } ;
+primary-type      = function-type | type-application | qualified-type-name ;
 function-type     = ( "Function" | "types::Function" ), "[",
                     [ type-arguments, [ "," ] | "..." ], "]",
                     "->", type-expression ;
@@ -755,8 +844,8 @@ are semantic constraints from Part I.
 
 ```ebnf
 if-statement    = "if", "(", expression, ")", block,
-                  { separators, "elif", "(", expression, ")", block },
-                  [ separators, "else", block ] ;
+                  { { LINE_SEP }, "elif", "(", expression, ")", block },
+                  [ { LINE_SEP }, "else", block ] ;
 
 while-statement = "while", "(", expression, ")", block ;
 for-statement   = "for", "(", for-binding, "in", expression, ")", block ;
@@ -845,7 +934,8 @@ primary-expression = INTEGER
                    | parenthesized-expression
                    | list-literal
                    | dictionary-literal
-                   | function-literal ;
+                   | function-literal
+                   | rule-literal ;
 
 parenthesized-expression = "(", expression, ")" ;
 list-literal             = "[", [ argument-list ], "]" ;
@@ -859,11 +949,38 @@ parameter-list    = "(", [ fixed-parameters | "..." ], ")" ;
 fixed-parameters  = parameter, { ",", parameter }, [ "," ] ;
 parameter         = IDENTIFIER, [ ":", type-expression ] ;
 return-annotation = "->", type-expression ;
+
+rule-literal = "rule",
+               [ "(", [ rule-parameters ], ")" ],
+               rule-block ;
+rule-parameters = rule-parameter,
+                  { ",", rule-parameter }, [ "," ] ;
+rule-parameter = IDENTIFIER, ":", type-expression ;
+rule-block = "{", separators, [ rule-item-list ], separators, "}" ;
+rule-item-list = rule-item, { separator-run, rule-item } ;
+rule-item = rule-let-declaration
+          | condition-statement
+          | described-condition-statement
+          | require-statement ;
+rule-let-declaration = "let", declarator, { ",", declarator } ;
+condition-statement = expression ;
+described-condition-statement = STRING, ":", separators,
+                                ( expression | condition-block ) ;
+condition-block = "{", separators, condition-statement,
+                  { separator-run, condition-statement },
+                  separators, "}" ;
+require-statement = "require", expression ;
 ```
 
-The named `function` declaration is a compatibility form defined in Section
-13.2, so it is not part of the normative EBNF. Its parameter and result
-annotations use the same rules as `function-literal`.
+Named declarations and function literals share parameter, result-annotation,
+and body rules. A named declaration creates a read-only binding; a function
+literal remains an ordinary expression. A Rule literal is also an ordinary
+expression, but it uses a specialized body containing only Rule items;
+`require` is not an ordinary statement. Within a Rule body, an item beginning
+with a String literal immediately followed by `:` is parsed as a described
+Condition rather than as an ordinary Pair expression. While a block-requiring header is
+waiting for `{`, the newline after that header is not a `SEP`; a newline after
+an otherwise complete expression still separates statements.
 
 `nil` is intentionally absent. `{}` in expression position is an empty
 dictionary; a block occurs only where a compound statement or function expects
@@ -885,163 +1002,25 @@ Plain EBNF cannot express these required constraints:
 10. an import alias is valid and non-reserved;
 11. comparison, range, and membership expressions contain at most one
     respective operator;
-12. a value stored in a variable or collection must not be `nil`.
+12. a value stored in a variable or collection must not be `nil`;
+13. every Rule parameter requires a Type annotation, and parameter names are
+    distinct;
+14. the outermost level of a Rule body accepts only local `let` declarations,
+    Conditions, described Conditions, and `require`;
+15. a Condition produces Bool, and a description is written directly as a
+    String literal;
+16. `require` occurs only at the outermost level of a Rule body, and its
+    expression produces a RuleInstance.
 
-## Part IV — Built-in Functions
-
-### 1. Reading the signatures
-
-`A | B` means either runtime type. `Any` means any Tapas value.
-`...Any` means zero or more arguments. A `nil` return denotes a procedure
-whose result cannot be stored.
-
-Every root function can be used as a tunnel call when its first parameter is
-the receiver. For example, `append(items, value)` and
-`items.append(value)` are equivalent.
-
-### 2. Output, inspection, and time
-
-| Signature | Returns | Behavior |
-|---|---|---|
-| `print(...Any)` | `nil` | Prints abbreviated representations, then LF. |
-| `sprint(...Any)` | `nil` | Prints full representations, then LF. |
-| `len(value: Any)` | `int` | Composite length; 0 for `nil`; 1 for other scalars. |
-| `type(value: Any)` | `String` | Runtime type name. |
-| `copy(value: Any)` | same category | Scalar copy or shallow composite copy. |
-| `identical(a: Any, b: Any)` | `bool` | Runtime identity/value identity. |
-| `clock()` | `float` | Process CPU time in seconds. |
-| `clock_ns()` | `int` | Process CPU time in nanoseconds, suitable for measuring short code. |
-| `now()` | `Time` | Absolute instant at the time of the call. Default display uses local time. |
-
-### 3. Conversion and construction
-
-| Signature | Returns | Behavior |
-|---|---|---|
-| `int(value: bool | int | float | String)` | `int` | Numeric conversion; string is complete base-10 input. |
-| `float(value: bool | int | float | String)` | `float` | Numeric conversion. |
-| `bool(value: Any)` | `bool` | Explicit truth conversion. |
-| `str(value: Any)` | `String` | Full textual representation. |
-| `list(...Any)` | `List` | New list containing the arguments. |
-| `pair(first: Any, second: Any)` | `Pair` | New pair. |
-| `iter(start: int, end: int)` | `Iterator` | Half-open range with inferred step. |
-| `iter(start: int, step: int, end: int)` | `Iterator` | Half-open range with explicit nonzero step. |
-| `array(rows: int, cols: int, fill: bool | int | float | List)` | `Array` | New dense array. |
-
-Array dimensions are non-negative. An explicit iterator step of zero is an
-error.
-
-### 4. Collection operations
-
-| Signature | Returns | Mutation and result |
-|---|---|---|
-| `push(list: List, value: Any)` | `nil` | Appends `value`. |
-| `append(target: String | List | Dictionary, value: Any)` | `nil` | Appends text, an item, or a pair. |
-| `insert(list: List, value: Any, index: int)` | `nil` | Inserts before `index`. |
-| `pop(list: List)` | `nil` | Removes the last item. |
-| `pop(list: List, index: int)` | `nil` | Removes the indexed item. |
-| `delete(target: List | Dictionary, index_or_key: Any)` | `nil` | Deletes an item. |
-| `idx(target: String | List | Pair | Dictionary, index: Any)` | `Any` | One-argument indexing. |
-| `keys(dict: Dictionary)` | `List` | Keys in unspecified order. |
-| `dkeys(dict: Dictionary)` | `List` | Alias of `keys`. |
-| `dvalues(dict: Dictionary)` | `List` | Values in corresponding order. |
-| `union(left: List, right: List)` | `List` | New shallow concatenation. |
-| `sort(list: List)` | `nil` | Sorts in place using the runtime total order. |
-
-`append(dictionary, value)` requires a `Pair`. Negative list indices count
-from the end where an operation accepts them. Collections cannot own `nil`.
-
-### 5. Session functions
-
-| Signature | Returns | Context |
-|---|---|---|
-| `__ls__()` | `List` | Names in the current root library. |
-| `__ls__(library: Library)` | `List` | Names in `library`. |
-| `__path__()` | `List` | Current library search paths. |
-| `__path__(library: Library)` | `List` | Search paths of `library`. |
-| `__param__(index: int)` | `Any` | Argument of the current variadic call. |
-| `__nparam__()` | `int` | Argument count of the current variadic call. |
-| `__binary__()` | `nil` | Prints current bytecode. |
-| `__binary__(value: Library | Function)` | `nil` | Prints bytecode for `value`. |
-
-Names beginning with `__` are implementation-reserved.
-
-
-### 6. Time package `time`
-
-| Signature | Returns | Behavior |
-|---|---|---|
-| `time::from_unix(seconds: int)` | `Time` | Creates an instant from whole seconds since the Unix epoch. |
-| `time::unix(value: Time)` | `int` | Returns whole Unix seconds for an instant. |
-| `time::format(value: Time, pattern: String)` | `String` | Formats in local time using the host C `strftime` pattern. |
-
-Timestamps and offsets must fit both the host `time_t` range and the Tapas
-`int` range. Supported formatting conversions are defined by the host C
-library. This version stores no time-zone information and provides neither UTC
-formatting nor date parsing.
-
-### 7. Scalar mathematics package `math`
-
-Unless stated otherwise, `number` means `int | float`; functions accept
-numbers and return `float`. Domain, overflow, infinity, and NaN behavior
-follows the host C math library.
-
-| Group | Signatures |
-|---|---|
-| Absolute and roots | `abs(number) -> int | float`, `fabs(number) -> float`, `sqrt(number) -> float`, `rsqrt(number) -> float`, `cbrt(number) -> float` |
-| Power and geometry | `pow(number, number) -> float`, `hypot(number, number) -> float` |
-| Trigonometric | `sin`, `cos`, `tan`, `asin`, `acos`, `atan`: `(number) -> float`; `atan2(number, number) -> float` |
-| Hyperbolic | `sinh`, `cosh`, `tanh`, `asinh`, `acosh`, `atanh`: `(number) -> float` |
-| Exponential | `exp`, `exp2`, `expm1`: `(number) -> float` |
-| Logarithmic | `log`, `log2`, `log10`, `log1p`, `logb`: `(number) -> float`; `ilogb(number) -> int` |
-| Decomposition | `frexp(number) -> Pair(float, int)`, `modf(number) -> Pair(float, float)` |
-| Scaling | `ldexp(number, number) -> float`, `scalbn(number, number) -> float`, `scalbln(number, number) -> float` |
-| Error and gamma | `erf`, `erfc`, `lgamma`, `tgamma`: `(number) -> float` |
-| Rounding to float | `ceil`, `floor`, `nearbyint`, `rint`, `round`, `trunc`: `(number) -> float` |
-| Rounding to int | `lrint`, `llrint`, `lround`, `llround`: `(number) -> int` |
-| Remainder | `fmod(number, number) -> float`, `remainder(number, number) -> float`, `remquo(number, number) -> Pair(float, int)` |
-| Floating manipulation | `copysign`, `nextafter`, `fdim`, `fmax`, `fmin`: `(number, number) -> float`; `fma(number, number, number) -> float` |
-| Reciprocal and NaN | `eleinv(number) -> float`, `make_nan() -> float` |
-| Classification | `isfinite`, `isinf`, `isnan`, `isnormal`, `signbit`: `(number) -> bool`; `fpclassify(number) -> int` |
-| Ordered predicates | `isgreater`, `isgreaterequal`, `isless`, `islessequal`, `islessgreater`, `isunordered`: `(number, number) -> bool` |
-
-Every name in this table is accessed through `math::`, for example
-`math::sqrt(2)`. Scaling-function integer arguments convert floats toward
-zero.
-
-### 8. Dense-array package `dense`
-
-| Signature                        | Returns | Behavior              |
-| -------------------------------- | ------- | --------------------- |
-| `dense::new(rows, cols, fill)`   | `Array` | Alias of `array`.     |
-| `dense::rows(array: Array)`      | `int`   | Row count.            |
-| `dense::cols(array: Array)`      | `int`   | Column count.         |
-| `dense::transpose(array: Array)` | `Array` | New transposed array. |
-
-```tapas
-let builtin_dense_matrix = dense::new(2, 3, [1, 2, 3, 4, 5, 6])
-print(dense::rows(builtin_dense_matrix), ' x ', dense::cols(builtin_dense_matrix))
-sprint(dense::transpose(builtin_dense_matrix))
-```
-
-<pre class='Tapas-Return'>
-2 x 3
-[[1, 4],
- [2, 5],
- [3, 6]]
-</pre>
-
-
-###
-
-## Part V — Default Operator Semantics for Built-in Types
+## Part IV — Default Operator Semantics for Built-in Types
 
 ### 1. General rules
 
 This part is the reference for the default behavior of operators on Tapas
 built-in types. Compilers, language servers, and other tools may use these
-tables directly. `number` means `int | float`; a real array is an `Array` whose
-elements are numeric, and a boolean array is an `Array` whose elements are
-booleans. Equal-shaped arrays have the same row and column counts.
+tables directly. The numeric Types are `Int | Float`; real arrays use
+`RealArray`, and boolean arrays use `BoolArray`. Equal-shaped arrays have the
+same row and column counts.
 
 An operand combination not explicitly listed here is a runtime type error.
 Tapas does not perform implicit truth conversion or broadcast between arrays of
@@ -1058,23 +1037,23 @@ handwritten fallback for it.
 
 | Operator | Valid operands | Result and behavior | Implementation requirement |
 |---|---|---|---|
-| unary `+`, `-` | `number` | Preserves the numeric type and produces the original or negated value. | Tapas built-in |
-| unary `-` | real array | Negates each element and produces an equal-shaped real array. Real arrays do not support unary `+`. | CBLAS `dcopy`, `dscal` |
-| `+`, `-`, `*`, `/` | `number`, `number` | Two integers produce an integer; otherwise the result is a float. Integer division truncates toward zero. | Tapas built-in |
-| `+` | `Time`, `int` | Moves an instant forward by whole seconds and produces a new `Time`. `int + Time` is unsupported. | Tapas built-in and host C time type |
-| `-` | `Time`, `int` | Moves an instant backward by whole seconds and produces a new `Time`. | Tapas built-in and host C time type |
-| `-` | `Time`, `Time` | Produces left minus right in seconds as a `float`. | host C `difftime` |
-| `+`, `-`, `/` | real array and `number`, in either order | Element-wise operation producing an equal-shaped real array. Subtraction and division preserve operand order. | Tapas loop |
-| `*` | real array and `number`, in either order | Scalar multiplication producing an equal-shaped real array. | CBLAS `dcopy`, `dscal` |
-| `+`, `-` | two equal-shaped real arrays | Adds or subtracts corresponding elements and produces an equal-shaped real array. | CBLAS `dcopy`, `daxpy` |
-| `*`, `/` | two equal-shaped real arrays | Multiplies or divides corresponding elements and produces an equal-shaped real array. | Tapas loop |
-| `%` | `number`, `number` | Two integers produce an integer remainder; other numeric combinations produce a floating remainder. | Tapas built-in |
-| `%` | real array and `number`, in either order | Computes an element-wise floating remainder, preserves operand order, and produces an equal-shaped real array. | Tapas loop and host C `fmod` |
-| `%` | two equal-shaped real arrays | Computes the floating remainder of corresponding elements and produces an equal-shaped real array. | Tapas loop and host C `fmod` |
-| `^` | `number`, `number` | Exponentiation producing a float. | host C math library |
-| `^` | real array and `number`, in either order | Element-wise exponentiation producing an equal-shaped real array. | Tapas loop |
-| `^` | two equal-shaped real arrays | Exponentiates corresponding elements and produces an equal-shaped real array. | Tapas loop |
-| `@` | two real arrays | Matrix multiplication. The left column count must equal the right row count. | CBLAS `dgemm` |
+| unary `+`, `-` | `Int \| Float` | Preserves the numeric Type and produces the original or negated value. | Tapas built-in |
+| unary `-` | `RealArray` | Negates each element and produces an equal-shaped `RealArray`. `RealArray` does not support unary `+`. | One fused pass |
+| `+`, `-`, `*`, `/` | `Int \| Float`, `Int \| Float` | Two `Int` values produce `Int`; otherwise the result is `Float`. `Int` division truncates toward zero. | Tapas built-in |
+| `+` | `Time`, `Int` | Moves an instant forward by whole seconds and produces a new `Time`. `Int + Time` is unsupported. | Tapas built-in and host C time type |
+| `-` | `Time`, `Int` | Moves an instant backward by whole seconds and produces a new `Time`. | Tapas built-in and host C time type |
+| `-` | `Time`, `Time` | Produces left minus right in seconds as `Float`. | host C `difftime` |
+| `+`, `-`, `/` | `RealArray` and `Int \| Float`, in either order | Element-wise operation producing an equal-shaped `RealArray`. Subtraction and division preserve operand order. | Tapas loop |
+| `*` | `RealArray` and `Int \| Float`, in either order | Scalar multiplication producing an equal-shaped `RealArray`. | One fused pass |
+| `+`, `-` | two equal-shaped `RealArray` values | Adds or subtracts corresponding elements and produces an equal-shaped `RealArray`. | One fused pass |
+| `*`, `/` | two equal-shaped `RealArray` values | Multiplies or divides corresponding elements and produces an equal-shaped `RealArray`. | Tapas loop |
+| `%` | `Int \| Float`, `Int \| Float` | Two `Int` values produce an `Int` remainder; other combinations produce `Float`. | Tapas built-in |
+| `%` | `RealArray` and `Int \| Float`, in either order | Computes an element-wise floating remainder, preserves operand order, and produces an equal-shaped `RealArray`. | Tapas loop and host C `fmod` |
+| `%` | two equal-shaped `RealArray` values | Computes the floating remainder of corresponding elements and produces an equal-shaped `RealArray`. | Tapas loop and host C `fmod` |
+| `^` | `Int \| Float`, `Int \| Float` | Exponentiation producing `Float`. | host C math library |
+| `^` | `RealArray` and `Int \| Float`, in either order | Element-wise exponentiation producing an equal-shaped `RealArray`. | Tapas loop |
+| `^` | two equal-shaped `RealArray` values | Exponentiates corresponding elements and produces an equal-shaped `RealArray`. | Tapas loop |
+| `@` | two `RealArray` values | Matrix multiplication. The left column count must equal the right row count. | CBLAS `dgemm` |
 
 Zero is an error as the divisor of integer division or integer remainder. When
 either `%` operand is a real array, every element uses `fmod`: the result sign
@@ -1085,29 +1064,31 @@ follow the host C math library.
 
 | Operator | Valid operands | Result and behavior |
 |---|---|---|
-| `==`, `!=` | two numbers | Numeric comparison, including mixed integer and float operands, producing `bool`. |
-| `==`, `!=` | real array and number, in either order | Element-wise comparison producing an equal-shaped boolean array. |
-| `==`, `!=` | two equal-shaped real arrays | Element-wise comparison producing an equal-shaped boolean array. |
-| `==`, `!=` | two values of the same type among booleans, strings, lists, pairs, iterators, boolean arrays, and times | Content comparison producing one `bool`. Lists and pairs compare their contents recursively. |
-| `==`, `!=` | two dictionaries, functions, or libraries | Object-identity comparison producing `bool`. |
+| `==`, `!=` | two `Int \| Float` values | Numeric comparison, including mixed `Int` and `Float` operands, producing `Bool`. |
+| `==`, `!=` | `RealArray` and `Int \| Float`, in either order | Element-wise comparison producing an equal-shaped `BoolArray`. |
+| `==`, `!=` | two equal-shaped `RealArray` values | Element-wise comparison producing an equal-shaped `BoolArray`. |
+| `==`, `!=` | two values of the same Type among `Bool`, `String`, `List`, `Pair`, `Iterator`, `BoolArray`, and `Time` | Content comparison producing one `Bool`. `List` and `Pair` compare their contents recursively. |
+| `==`, `!=` | two `Dictionary`, `Function`, or `Library` values | Object-identity comparison producing `Bool`. |
 | `==`, `!=` | other values of different types | Produces `false` or `true`, respectively. |
-| `>`, `<`, `>=`, `<=` | two numbers | Numeric comparison producing `bool`. |
-| `>`, `<`, `>=`, `<=` | two times | Chronological comparison producing `bool`. |
-| `>`, `<`, `>=`, `<=` | real array and number, in either order | Element-wise comparison producing an equal-shaped boolean array. |
-| `>`, `<`, `>=`, `<=` | two equal-shaped real arrays | Element-wise comparison producing an equal-shaped boolean array. |
+| `>`, `<`, `>=`, `<=` | two `Int \| Float` values | Numeric comparison producing `Bool`. |
+| `>`, `<`, `>=`, `<=` | two `Time` values | Chronological comparison producing `Bool`. |
+| `>`, `<`, `>=`, `<=` | `RealArray` and `Int \| Float`, in either order | Element-wise comparison producing an equal-shaped `BoolArray`. |
+| `>`, `<`, `>=`, `<=` | two equal-shaped `RealArray` values | Element-wise comparison producing an equal-shaped `BoolArray`. |
 
 Boolean arrays do not support ordering comparisons. Use `==` or `!=`, which
 returns a scalar result, to test whether two boolean arrays have equal contents.
+Rule and RuleInstance do not define content equality; use `identical` to test
+whether two values refer to the same runtime object.
 
 ### 4. Logical, range, membership, and pair operators
 
 | Operator | Valid operands | Result and behavior |
 |---|---|---|
-| `and`, `or` | `bool`, `bool` | Produces `bool` and uses short-circuit evaluation for the right operand. |
-| `&`, `\|` | `bool`, `bool` | Produces `bool`. Both operands are evaluated; these operators do not short-circuit. |
-| `&`, `\|` | boolean array and `bool`, in either order | Combines the boolean with every array element and produces an equal-shaped boolean array. |
-| `&`, `\|` | two equal-shaped boolean arrays | Computes logical AND or OR for corresponding elements and produces an equal-shaped boolean array. |
-| `to` | `int`, `int` | Creates a step-`1` half-open iterator that excludes its end. |
+| `and`, `or` | `Bool`, `Bool` | Produces `Bool` and uses short-circuit evaluation for the right operand. |
+| `&`, `\|` | `Bool`, `Bool` | Produces `Bool`. Both operands are evaluated; these operators do not short-circuit. |
+| `&`, `\|` | `BoolArray` and `Bool`, in either order | Combines the `Bool` with every array element and produces an equal-shaped `BoolArray`. |
+| `&`, `\|` | two equal-shaped `BoolArray` values | Computes logical AND or OR for corresponding elements and produces an equal-shaped `BoolArray`. |
+| `to` | `Int`, `Int` | Creates a step-`1` half-open `Iterator` that excludes its end. |
 | `in` | any value and an iterator | Tests iterator membership. |
 | `in` | any value and a list | Searches using built-in content-equality rules. |
 | `in` | any value and a dictionary | Searches dictionary keys. |
@@ -1122,7 +1103,7 @@ semantics.
 
 | Form | Default behavior |
 |---|---|
-| `value(arguments)` | Calls a user or built-in function; other values are not callable. |
+| `value(arguments)` | Calls a user or built-in function; calling a Rule binds its arguments and produces a RuleInstance. Other values are not callable. |
 | `value[index]` | Indexes a string, list, pair, or dictionary using the index types defined in Part I. |
 | `array[row, column]` | Indexes an array with two integers or slices; two integers produce a scalar, while any slice produces an array. |
 | `value::name` | Reads the string key `name` as a read-only dictionary or library member. |
@@ -1136,8 +1117,9 @@ error.
 ### 6. BLAS runtime contract
 
 Tapas accepts an LP64 CBLAS dynamic library that provides `cblas_dcopy`,
-`cblas_daxpy`, `cblas_dscal`, and `cblas_dgemm`. Calls use row-major array
-layout. ILP64 interfaces and libraries that expose only Fortran BLAS symbols
+`cblas_daxpy`, `cblas_dscal`, `cblas_ddot`, `cblas_dnrm2`, and
+`cblas_dgemm`. Calls use row-major array layout. ILP64 interfaces and libraries
+that expose only Fortran BLAS symbols
 are outside the current contract.
 
 When `TAPAS_BLAS_LIBRARY` is set, Tapas tries only the dynamic library path or
@@ -1161,9 +1143,9 @@ BLAS-required operation actually executes.
 | `*` with a number | scalar multiplication; requires CBLAS | unsupported |
 | other `+`, `-`, `*`, `/`, `%`, `^` forms | element-wise with a number or equal-shaped real array | unsupported |
 | `@` | matrix multiplication for compatible dimensions; requires CBLAS | unsupported |
-| `==`, `!=` | element-wise, producing a boolean array | compares complete contents, producing `bool` |
+| `==`, `!=` | element-wise, producing `BoolArray` | compares complete contents, producing `Bool` |
 | `>`, `<`, `>=`, `<=` | element-wise with a number or equal-shaped real array | unsupported |
-| `&`, `\|` | unsupported | element-wise with `bool` or an equal-shaped boolean array |
+| `&`, `\|` | unsupported | element-wise with `Bool` or an equal-shaped `BoolArray` |
 | `and`, `or`, `in` | unsupported | unsupported |
 
 An invalid shape or unsupported operand type is a runtime error. The following
@@ -1171,16 +1153,16 @@ program checks the default real-array operator behavior:
 
 ```tapas
 let operator_demo_matrix = array(2, 3, [1, 2, 3, 4, 5, 6])
-sprint(-operator_demo_matrix)
-sprint(operator_demo_matrix + 10)
-sprint(10 - operator_demo_matrix)
-sprint(operator_demo_matrix * 2)
-sprint(operator_demo_matrix * operator_demo_matrix)
-sprint(operator_demo_matrix % 4)
-sprint(10 % operator_demo_matrix)
-sprint(operator_demo_matrix % array(2, 3, [2, 2, 2, 3, 3, 3]))
-sprint(operator_demo_matrix > 2)
-sprint(operator_demo_matrix @ dense::transpose(operator_demo_matrix))
+pprint(-operator_demo_matrix)
+pprint(operator_demo_matrix + 10)
+pprint(10 - operator_demo_matrix)
+pprint(operator_demo_matrix * 2)
+pprint(operator_demo_matrix * operator_demo_matrix)
+pprint(operator_demo_matrix % 4)
+pprint(10 % operator_demo_matrix)
+pprint(operator_demo_matrix % array(2, 3, [2, 2, 2, 3, 3, 3]))
+pprint(operator_demo_matrix > 2)
+pprint(operator_demo_matrix @ dense::transpose(operator_demo_matrix))
 ```
 <pre class='Tapas-Return'>
 [[-1, -2, -3],
@@ -1212,10 +1194,10 @@ let operator_demo_flags = array(1, 3, [true, false, true])
 let operator_demo_mask = array(1, 3, [false, true, true])
 print(true | false & false)
 print(true | false and false)
-sprint(operator_demo_flags & true)
-sprint(false | operator_demo_flags)
-sprint(operator_demo_flags & operator_demo_mask)
-sprint(operator_demo_flags | operator_demo_mask)
+pprint(operator_demo_flags & true)
+pprint(false | operator_demo_flags)
+pprint(operator_demo_flags & operator_demo_mask)
+pprint(operator_demo_flags | operator_demo_mask)
 ```
 <pre class='Tapas-Return'>
 true

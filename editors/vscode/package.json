@@ -1,10 +1,29 @@
 {
   "name": "tapas-language",
   "displayName": "Tapas Language Support",
-  "description": "Language support backed by the Tapas Language Server",
+  "description": "Tapas language support, formatting, diagnostics, navigation, and refactoring",
   "version": "0.1.0",
   "publisher": "tapas-language",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zhuanglinsheng/tapas.git"
+  },
+  "homepage": "https://github.com/zhuanglinsheng/tapas#readme",
+  "bugs": {
+    "url": "https://github.com/zhuanglinsheng/tapas/issues"
+  },
+  "keywords": [
+    "tapas",
+    "programming language",
+    "language server",
+    "lsp",
+    "formatter"
+  ],
+  "pricing": "Free",
+  "extensionKind": [
+    "workspace"
+  ],
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -13,7 +32,8 @@
   ],
   "activationEvents": [
     "onLanguage:tapas",
-    "onCommand:tapas.runFile"
+    "onCommand:tapas.runFile",
+    "onCommand:tapas.formatDocument"
   ],
   "main": "./extension.js",
   "contributes": {
@@ -37,6 +57,10 @@
         "command": "tapas.runFile",
         "title": "Tapas: Run Current File",
         "icon": "$(play)"
+      },
+      {
+        "command": "tapas.formatDocument",
+        "title": "Tapas: Format Document"
       }
     ],
     "menus": {
@@ -52,6 +76,11 @@
           "command": "tapas.runFile",
           "when": "editorLangId == tapas",
           "group": "navigation"
+        },
+        {
+          "command": "tapas.formatDocument",
+          "when": "editorLangId == tapas",
+          "group": "modification"
         }
       ]
     },
@@ -68,12 +97,14 @@
           "type": "string",
           "default": "",
           "scope": "machine",
-          "description": "Path to the tapas executable. Empty uses the bundled runtime, a workspace build, or tapas on PATH."
+          "description": "Path to the tapas executable. Empty searches workspace builds and PATH."
         }
       }
     }
   },
   "scripts": {
-    "test": "node test/protocol.test.js"
+    "test": "node test/protocol.test.js",
+    "test:package": "node test/package.test.js",
+    "vscode:prepublish": "node test/package.test.js"
   }
 }

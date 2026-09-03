@@ -31,6 +31,9 @@ typedef enum {
 	tast_named_field,
 	tast_parameter,
 	tast_function,
+	tast_rule,
+	tast_rule_condition,
+	tast_rule_requirement,
 	tast_module,
 	tast_import_statement,
 	tast_expression_statement,
@@ -40,8 +43,7 @@ typedef enum {
 	tast_return_statement,
 	tast_block,
 	tast_if_statement,
-	tast_elif_statement,
-	tast_else_statement,
+	tast_conditional_branch,
 	tast_while_statement,
 	tast_for_statement,
 	tast_break_statement,
@@ -78,6 +80,11 @@ typedef struct {
 			uint8_t has_return_annotation;
 		} function;
 		struct {
+			tast_id value;
+			tsource_span description;
+			uint8_t has_description;
+		} rule_condition;
+		struct {
 			tsource_span path;
 			tsource_span alias;
 			uint8_t has_alias;
@@ -88,11 +95,21 @@ typedef struct {
 			tsource_span annotation;
 			tast_id initializer;
 			uint8_t is_mutable;
+			uint8_t is_function_declaration;
 			uint8_t has_annotation;
 			uint8_t has_initializer;
 		} declaration_statement;
 		struct { tast_id target; tast_id value; } assignment_statement;
 		struct { tast_id value; } return_statement;
+		struct {
+			uint32_t branches;
+			uint32_t branch_count;
+		} conditional_statement;
+		struct {
+			tast_id condition;
+			tast_id body;
+			uint8_t has_condition;
+		} conditional_branch;
 		struct { tast_id condition; tast_id body; } control_statement;
 		struct {
 			tsource_span name;
@@ -113,17 +130,26 @@ typedef struct {
 } tast_arena;
 
 void tast_arena_init(tast_arena *arena);
+
 void tast_arena_free(tast_arena *arena);
+
 tast_id tast_arena_add(tast_arena *arena, tast_node node);
+
 uint32_t tast_arena_add_children(tast_arena *arena,
 				 const tast_id *children, uint32_t count);
+
 const tast_node *tast_get(const tast_arena *arena, tast_id id);
+
 const tast_id *tast_get_children(const tast_arena *arena,
 				 uint32_t start, uint32_t count);
-/* Return the smallest AST node containing offset. At a token boundary, the
- * node ending at the offset is preferred only when no node starts there. */
-tast_id tast_find_node_at(const tast_arena *arena, tast_id root,
-			 uint32_t offset);
+
+tstring *tast_string_value(const tsource_document *document,
+			   const tast_node *node);
+
+tstring *tast_scoped_member_name(const tsource_document *document,
+				 const tast_arena *arena,
+				 const tast_node *member,
+				 const char *scope);
 
 #ifdef __cplusplus
 }

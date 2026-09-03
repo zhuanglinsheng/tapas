@@ -1,25 +1,26 @@
-let count_queens = (positions, row, size){
-    if(row == size){
+function count_queens(positions, row, size)
+{
+    if (row == size) {
         return 1
     }
 
     let count = 0
-    for(let column in 0 to size){
+    for (let column in 0 to size) {
         let valid = true
-        for(let previous in 0 to row){
+        for (let previous in 0 to row) {
             let placed = positions[previous]
             let distance = row - previous
-            if(placed == column){
+            if (placed == column) {
                 valid = false
             }
-            if(placed == column - distance){
+            if (placed == column - distance) {
                 valid = false
             }
-            if(placed == column + distance){
+            if (placed == column + distance) {
                 valid = false
             }
         }
-        if(valid){
+        if (valid) {
             positions[row] = column
             count = count + this(positions, row + 1, size)
         }
@@ -29,7 +30,7 @@ let count_queens = (positions, row, size){
 
 let size = 10
 let positions = []
-for(let row in 0 to size){
+for (let row in 0 to size) {
     positions.append(-1)
 }
 

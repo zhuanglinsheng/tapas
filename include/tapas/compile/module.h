@@ -1,7 +1,9 @@
 #ifndef TAPAS_COMPILE_MODULE_H
 #define TAPAS_COMPILE_MODULE_H
 
-#include "tapas/compile/frontend.h"
+#include "tapas/compile/source.h"
+
+typedef struct tfrontend tfrontend;
 
 #ifdef __cplusplus
 extern "C" {
@@ -37,19 +39,31 @@ typedef struct {
 typedef struct {
 	const char *package;
 	const char *name;
+	const char *type;
 	const char *detail;
 	tmodule_symbol_kind kind;
+	uint32_t result_argument;
+	uint8_t result_from_argument;
 } tstandard_symbol;
 
 void tmodule_interface_init(tmodule_interface *interface, const char *uri);
+
 void tmodule_interface_free(tmodule_interface *interface);
+
 void tmodule_interface_extract(const tfrontend *frontend, const char *uri,
 			       uint64_t version,
 			       tmodule_interface *interface);
+
 const tmodule_export *tmodule_interface_find(
 	const tmodule_interface *interface, const char *name);
+
 uint32_t tstandard_symbol_count(void);
+
 const tstandard_symbol *tstandard_symbol_at(uint32_t index);
+
+const tstandard_symbol *tstandard_symbol_find(const char *package,
+					       const char *name);
+
 const tstandard_symbol *tstandard_package(const char *name);
 
 #ifdef __cplusplus

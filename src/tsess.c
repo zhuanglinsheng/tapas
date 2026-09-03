@@ -1,196 +1,17 @@
 #include "tapas/tapas.h"
+#include "tapas/tstdlib.h"
 #include "tapas/runtime/tdict.h"
-#include "tapas/runtime/tlist.h"
 #include "tapas/tvm.h"
+#include "tapas/compile/compiler.h"
+#include "tapas/compile/workspace.h"
+#include "tapas/runtime/tlist.h"
+#include "tapas/runtime/tstr.h"
 
 #include <setjmp.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-
-/*===========================================================================*
- * 1. Session-Level Functions
- *===========================================================================*/
-
-/** ls(lib): list library variables */
-void lib_ls(tobj *params, uint_regs len, tobj *vre, tcompo_env *env)
-{
-	if (len != 1 && len != 0)
-		twarn(ErrRuntime_ParamsCtr, "lib_ls", "");
-
-	if (len == 1) {
-		if (params->type != tcompo)
-			twarn(ErrRuntime_ParamsType, "lib_ls", "");
-		if (params->val.v_tcompo->vtable->get_compo_type_code() !=
-		    compo_tlib)
-			twarn(ErrRuntime_ParamsType, "lib_ls", "");
-		tlib *lib = (tlib *)params->val.v_tcompo;
-		tlist *ls = tlib_listing_objects(lib);
-		tobj_set_compo(vre, (tcompo_v *)ls);
-	}
-	if (len == 0) {
-		if (env->base.father_env != NULL)
-			twarn(ErrRuntime_RefType,
-			      "lib_ls",
-			      "tlib supported only");
-		tlib *lib = tlib_from_env(env);
-		tlist *ls = tlib_listing_objects(lib);
-		tobj_set_compo(vre, (tcompo_v *)ls);
-	}
-}
-
-/** path([lib]): list library paths */
-void lib_path(tobj *params, uint_regs len, tobj *vre, tcompo_env *env)
-{
-	if (len != 0 && len != 1)
-		twarn(ErrRuntime_ParamsCtr, "lib_ls", "");
-	if (len == 1) {
-		if (params->type != tcompo)
-			twarn(ErrRuntime_ParamsType, "lib_ls", "");
-		if (params->val.v_tcompo->vtable->get_compo_type_code() != compo_tlib)
-			twarn(ErrRuntime_ParamsType, "lib_ls", "");
-		tlib *lib = (tlib *)params->val.v_tcompo;
-		tlist *paths = tlib_listing_paths(lib);
-		tobj_set_compo(vre, (tcompo_v *)paths);
-	}
-	if (len == 0) {
-		if (env->base.father_env != NULL)
-			twarn(ErrRuntime_EnvInconsis, "lib_path", "");
-		tlib *lib = tlib_from_env(env);
-		tlist *paths = tlib_listing_paths(lib);
-		tobj_set_compo(vre, (tcompo_v *)paths);
-	}
-}
-
-/** __param__(idx): used in tap functions, return the value of the idx-th
- * param */
-void tf_param(tobj *params, uint_regs len, tobj *vre, tcompo_env *env)
-{
-	if (env->base.father_env == NULL)
-		twarn(ErrRuntime_EnvInconsis, "tf_param", "");
-	if (len != 1)
-		twarn(ErrRuntime_ParamsCtr, "tf_param", "1 parameter");
-	if (params->type != tint)
-		twarn(ErrRuntime_ParamsType,
-		      "tf_param",
-		      "integer as parameter");
-	long idx = params->val.v_tint;
-	if (idx < 0 || idx >= (long)tcompo_env_get_dynamic_nparams(env))
-		twarn(ErrRuntime_IdxOutRange, "tf_param", "");
-	tobj_copy(vre, &tcompo_env_get_params(env)[idx]);
-}
-
-/** __nparam__(): used in tap functions, return the number of params */
-void tf_nparam(tobj *params, uint_regs len, tobj *vre, tcompo_env *env)
-{
-	(void)params;
-	if (env->base.father_env == NULL)
-		twarn(ErrRuntime_EnvInconsis, "tf_nparam", "");
-	if (len != 0 || params->type != tcompo)
-		twarn(ErrRuntime_ParamsCtr, "tf_nparam", "0 parameter");
-	tobj_set_int(vre, (long)tcompo_env_get_dynamic_nparams(env));
-}
-
-static void display_wrapper_range(const twrapper *wrapper, uint_cmds from, uint_cmds ncmds)
-{
-	uint_cmds i;
-	char buf[128];
-	if (!wrapper)
-		twarn(ErrRuntime_Other, "display_wrapper_range", "bytecode wrapper unavailable");
-	if (from > wrapper->ncmds || ncmds > wrapper->ncmds - from)
-		twarn(ErrRuntime_Other, "display_wrapper_range", "invalid bytecode range");
-	for (i = from; i < from + ncmds; i++) {
-		tbycode_tostring(wrapper->cmdarr[i], buf);
-		printf("[%u]%s\n", (unsigned)i, buf);
-	}
-	printf("Max Obj. Number: %u\n", (unsigned)wrapper->info.obj_max);
-	printf("Max Tmp. Number: %u\n", (unsigned)wrapper->info.tmp_max);
-	printf("Max Reg. Number: %u\n", (unsigned)wrapper->info.reg_max);
-	printf("Const Value List (Integers): ");
-	for (i = 0; i < wrapper->consts.ncints; i++) {
-		printf("%li", wrapper->consts.cints[i]);
-		if (i < wrapper->consts.ncints - 1)
-			printf(", ");
-	}
-	printf("\n");
-	printf("Const Value List (Double Floats): ");
-	for (i = 0; i < wrapper->consts.ncflts; i++) {
-		printf("%f", wrapper->consts.cflts[i]);
-		if (i < wrapper->consts.ncflts - 1)
-			printf(", ");
-	}
-	printf("\n");
-	printf("Const Value List (Character Strings): ");
-	for (i = 0; i < wrapper->consts.ncstrs; i++) {
-		printf("%s", tstring_cstr(wrapper->consts.cstrs[i]));
-		if (i < wrapper->consts.ncstrs - 1)
-			printf(", ");
-	}
-	printf("\n");
-}
-
-static void display_wrapper_full(const twrapper *wrapper)
-{
-	if (!wrapper)
-		twarn(ErrRuntime_Other, "display_wrapper_full", "bytecode wrapper unavailable");
-	display_wrapper_range(wrapper, 0, wrapper->ncmds);
-}
-
-/** __binary__([lib_or_function]): display bytecode for an environment value */
-void tf_binary(tobj *params, uint_regs len, tobj *vre, tcompo_env *env)
-{
-	twrapper *wrapper;
-	if (len > 1)
-		twarn(ErrRuntime_ParamsCtr, "tf_binary", "0 or 1 parameter");
-	if (len == 0) {
-		wrapper = tfunc_get_wrapper_from_env(env);
-		display_wrapper_full(wrapper);
-		tobj_set_nil(vre);
-		return;
-	}
-	if (params[0].type != tcompo)
-		twarn(ErrRuntime_ParamsType, "tf_binary", "Library or Function");
-	tcompo_v *compo = params[0].val.v_tcompo;
-	switch (compo->vtable->get_compo_type_code()) {
-	case compo_tlib: {
-		tlib *lib = (tlib *)compo;
-		wrapper = tlib_get_wrapper(lib);
-		display_wrapper_full(wrapper);
-	} break;
-	case compo_tfunc: {
-		tfunc *func = (tfunc *)compo;
-		wrapper = tfunc_get_wrapper_from_env(tfunc_get_env(func));
-		display_wrapper_range(wrapper, tfunc_get_cmdloc(func), tfunc_get_ncmds(func));
-	} break;
-	default:
-		twarn(ErrRuntime_ParamsType, "tf_binary", "Library or Function");
-	}
-	tobj_set_nil(vre);
-}
-
-/** Register session-level functions to a library */
-void register_os_sessf(tlib *lib)
-{
-	tobj v;
-	tobj_set_nil(&v);
-#define TAPAS_ROOT(name, implementation, arity, signature)
-#define TAPAS_SESSION(name, implementation, signature) do { \
-		tobj_set_compo(&v, (tcompo_v *)tcppsessf_new(implementation, #name)); \
-		tlib_lib_add_obj(lib, #name, &v); \
-	} while (0);
-#define TAPAS_PACKAGE(name)
-#define TAPAS_MEMBER(package, name, implementation, arity, signature)
-#define TAPAS_TYPE(name, builtin, signature)
-#include "stdlib.def"
-#undef TAPAS_ROOT
-#undef TAPAS_SESSION
-#undef TAPAS_PACKAGE
-#undef TAPAS_MEMBER
-#undef TAPAS_TYPE
-	tobj_try_clear(&v);
-}
-
 
 /*===========================================================================*
  * 2. Session Management
@@ -201,8 +22,15 @@ tsession *tsession_new(void)
 {
 	tsession *sess = (tsession *)malloc(sizeof(tsession));
 	sess->lib = tlib_new();
-	register_cppfuncs(sess->lib);
-	register_os_sessf(sess->lib);
+	if (!tlib_install_extension(sess->lib, tstdlib_descriptor()))
+		twarn(ErrRuntime_Other, "tsession_new",
+		      "cannot install the standard library");
+#ifdef TAPAS_SOURCE_STDLIB_DIR
+	tlib_add_path(sess->lib, TAPAS_SOURCE_STDLIB_DIR);
+#endif
+#ifdef TAPAS_INSTALL_STDLIB_DIR
+	tlib_add_path(sess->lib, TAPAS_INSTALL_STDLIB_DIR);
+#endif
 	return sess;
 }
 
@@ -224,16 +52,13 @@ tlib *tsession_get_lib(tsession *sess)
 void tsession_compile_file(tsession *sess, const char *file, int interactive)
 {
 	terror_set_file_context(file, 0, 0);
-	tcp cp;
-	tstring **default_names = tlib_get_default_v_names(sess->lib);
-	uint_objs ndef = tlib_get_ndefault(sess->lib);
-	tcp_init_preload(&cp, default_names, ndef, NULL, interactive);
+	tcp *cp = tcp_new_library(sess->lib, interactive);
 	tstring **paths = tlib_get_paths(sess->lib);
 	uint_lexs npaths = tlib_get_npaths(sess->lib);
 	tstring *file_ts = tstring_new(file);
-	compile_file_save(&cp, file_ts, paths, npaths);
+	compile_file_save(cp, file_ts, paths, npaths);
 	tstring_free(file_ts);
-	tcp_free(&cp);
+	tcp_delete(cp);
 	(void)interactive;
 }
 
@@ -260,27 +85,24 @@ void tsession_eval_bycodes(tsession *sess, const char *file)
 				w->info.reg_max);
 	eval_bycodes(&vm, 0, sess->lib);
 	tvm_clean(&vm);
-	tvm_set_vmstack(&vm, NULL, 0);
+	tvm_set_vmstack(&vm, nullptr, 0);
 }
 
 /** Compile & execute a .tap file without saving .tapc */
 void tsession_execute_file(tsession *sess, const char *file, int interactive)
 {
 	terror_set_file_context(file, 0, 0);
-	tcp cp;
-	tstring **default_names = tlib_get_default_v_names(sess->lib);
-	uint_objs ndef = tlib_get_ndefault(sess->lib);
-	tcp_init_preload(&cp, default_names, ndef, NULL, interactive);
+	tcp *cp = tcp_new_library(sess->lib, interactive);
 	(void)interactive;
 
 	tstring **paths = tlib_get_paths(sess->lib);
 	uint_lexs npaths = tlib_get_npaths(sess->lib);
 
 	tstring *file_ts = tstring_new(file);
-	twrapper *wrapper = compile_file(&cp, file_ts, paths, npaths);
+	twrapper *wrapper = compile_file(cp, file_ts, paths, npaths);
 	tstring_free(file_ts);
 	if (!wrapper) {
-		tcp_free(&cp);
+		tcp_delete(cp);
 		return;
 	}
 
@@ -292,18 +114,103 @@ void tsession_execute_file(tsession *sess, const char *file, int interactive)
 				wrapper->info.reg_max);
 	eval_bycodes(&vm, 0, sess->lib);
 	tvm_clean(&vm);
-	tvm_set_vmstack(&vm, NULL, 0);
-	tcp_free(&cp);
+	tvm_set_vmstack(&vm, nullptr, 0);
+	tcp_delete(cp);
+}
+
+static tstring *resolve_module(tlib *library, const char *module)
+{
+	tstring **paths = tlib_get_paths(library);
+	uint_lexs count = tlib_get_npaths(library);
+	const char **roots = count ?
+		(const char **)calloc(count, sizeof(*roots)) : nullptr;
+	if (count && !roots)
+		twarn(ErrRuntime_Other, "module", "out of memory");
+	for (uint_lexs i = 0; i < count; i++)
+		roots[i] = tstring_cstr(paths[i]);
+	tstring *resolved = tworkspace_resolve_module_file(module, roots, count);
+	free(roots);
+	return resolved;
+}
+
+static tlist *module_arguments(int count, const char *const *arguments)
+{
+	tlist *values = tlist_new();
+	for (int i = 0; i < count; i++) {
+		tobj value;
+		tobj_set_nil(&value);
+		tobj_set_compo(&value, (tcompo_v *)tstr_new(arguments[i]));
+		tobj_vec_push(&values->items, &value);
+		tobj_try_clear(&value);
+	}
+	return values;
+}
+
+int tsession_execute_module(tsession *session, const char *name,
+			    int argument_count, const char *const *arguments)
+{
+	tstring *file = resolve_module(session->lib, name);
+	if (!file)
+		twarn(ErrCompile_UnfoundFile, "module", name);
+	tlib *module = tlib_recreate(session->lib);
+	tcp *compiler = tcp_new_library(module, 0);
+	twrapper *wrapper = compile_file(
+		compiler, file, tlib_get_paths(module), tlib_get_npaths(module));
+	tcp_delete(compiler);
+	tstring_free(file);
+	tlib_set_wrapper(module, wrapper);
+
+	tvm vm;
+	tvm_init(&vm, wrapper->info.tmp_max);
+	tvm_set_vmstack(&vm, tcompo_env_get_vmstack(&module->env),
+			wrapper->info.reg_max);
+	exec_tins(&vm, 0, wrapper->ncmds, &module->env);
+	tobj returned = *tvm_get_vre(&vm);
+	tvm_get_vre(&vm)->type = tnil;
+	if (returned.type != tcompo ||
+	    tobj_compo_type(&returned) != compo_tdict)
+		twarn(ErrRuntime_RefType, "module",
+		      "module must export a Dictionary");
+	tlib_set_exposed(module, (tdict *)returned.val.v_tcompo);
+
+	tobj key;
+	tobj main_function;
+	tobj_set_nil(&key);
+	tobj_set_nil(&main_function);
+	tobj_set_compo(&key, (tcompo_v *)tstr_new("main"));
+	if (!tdict_contains(tlib_get_exposed(module), &key))
+		twarn(ErrRuntime_ObjUnfound, "module", "main export required");
+	tdict_get(tlib_get_exposed(module), &key, &main_function);
+	tobj_try_clear(&key);
+
+	tobj argument_list;
+	tobj call_result;
+	tobj_set_nil(&argument_list);
+	tobj_set_nil(&call_result);
+	tobj_set_compo(&argument_list,
+		      (tcompo_v *)module_arguments(argument_count, arguments));
+	tvm_call(&vm, &main_function, &argument_list, 1,
+		 &module->env, &call_result);
+	int exit_code = 0;
+	if (call_result.type == tint)
+		exit_code = (int)call_result.val.v_tint;
+	else if (call_result.type != tnil)
+		twarn(ErrRuntime_ParamsType, "module",
+		      "main must return Int or Nil");
+
+	tobj_try_clear(&call_result);
+	tobj_try_clear(&argument_list);
+	tobj_try_clear(&main_function);
+	tvm_clean(&vm);
+	tvm_set_vmstack(&vm, nullptr, 0);
+	module->compo_base.vtable->free(module);
+	return exit_code;
 }
 
 /** Compile & evaluate a string */
 void tsession_execute_str(tsession *sess, const char *str, int interactive)
 {
-	tcp cp;
-	tstring **default_names = tlib_get_default_v_names(sess->lib);
-	uint_objs ndef = tlib_get_ndefault(sess->lib);
-
-	tcp_init_preload(&cp, default_names, ndef, NULL, interactive);
+	tcp *cp = tcp_new_library(sess->lib, interactive);
 
 	tconsts consts;
 	tconsts_init(&consts);
@@ -314,7 +221,7 @@ void tsession_execute_str(tsession *sess, const char *str, int interactive)
 	uint_lexs npaths = tlib_get_npaths(sess->lib);
 
 	tstring *src = tstring_new(str);
-	tcinfo info = parse_blk(&cp, src, &tcmds, &consts, paths, npaths, 1, 0);
+	tcinfo info = parse_blk(cp, src, &tcmds, &consts, paths, npaths, 1, 0);
 	tstring_free(src);
 	twrapper *wrapper = tanalyser_wrap(&tcmds, &consts, &info);
 
@@ -326,11 +233,11 @@ void tsession_execute_str(tsession *sess, const char *str, int interactive)
 				info.reg_max);
 	eval_bycodes(&vm, 0, sess->lib);
 	tvm_clean(&vm);
-	tvm_set_vmstack(&vm, NULL, 0);
+	tvm_set_vmstack(&vm, nullptr, 0);
 
 	tvmcmd_vect_free(&tcmds);
 	tconsts_free(&consts);
-	tcp_free(&cp);
+	tcp_delete(cp);
 }
 
 static int md_line_is_fence(const tstring *line, const char **lang)
@@ -422,7 +329,7 @@ static int execute_block_capture(
 	if (setjmp(tapas_error_jmpbuf) != 0) {
 		failed = 1;
 		tvm_clean(vm);
-		tvm_set_vmstack(vm, NULL, 0);
+		tvm_set_vmstack(vm, nullptr, 0);
 	} else {
 		tapas_error_recover_enabled = 1;
 		tstring **paths = tlib_get_paths(sess->lib);
@@ -440,7 +347,7 @@ static int execute_block_capture(
 					info->reg_max);
 			eval_bycodes(vm, ncmd_old, sess->lib);
 			tvm_clean(vm);
-			tvm_set_vmstack(vm, NULL, 0);
+			tvm_set_vmstack(vm, nullptr, 0);
 		}
 	}
 	tapas_error_recover_enabled = 0;
@@ -489,7 +396,7 @@ void tsession_execute_markdown_update(tsession *sess, const char *file, int inte
 	if (!f)
 		twarn(ErrCompile_UnfoundFile, "tsession_execute_markdown_update", file);
 
-	tstring **lines = NULL;
+	tstring **lines = nullptr;
 	uint32_t nlines = 0;
 	uint32_t cap = 0;
 	tstring *line = tstring_new_empty();
@@ -514,10 +421,7 @@ void tsession_execute_markdown_update(tsession *sess, const char *file, int inte
 
 	tstring *updated = tstring_new_empty();
 	int failed = 0;
-	tcp syner;
-	tstring **default_names = tlib_get_default_v_names(sess->lib);
-	uint_objs ndef = tlib_get_ndefault(sess->lib);
-	tcp_init_preload(&syner, default_names, ndef, NULL, 1);
+	tcp *syner = tcp_new_library(sess->lib, 1);
 	tvmcmd_vect tcmds;
 	tvmcmd_vect_init(&tcmds);
 	tconsts consts;
@@ -529,7 +433,7 @@ void tsession_execute_markdown_update(tsession *sess, const char *file, int inte
 	tvm *vm = &vm_storage;
 
 	for (uint32_t i = 0; i < nlines;) {
-		const char *lang = NULL;
+		const char *lang = nullptr;
 		if (!md_line_is_fence(lines[i], &lang) || !md_lang_is_tapas(lang)) {
 			tstring_append_ts(updated, lines[i++]);
 			continue;
@@ -540,7 +444,7 @@ void tsession_execute_markdown_update(tsession *sess, const char *file, int inte
 		tstring *code = tstring_new_empty();
 		tstring_append_ts(updated, lines[i++]);
 		while (i < nlines) {
-			const char *end_lang = NULL;
+			const char *end_lang = nullptr;
 			tstring_append_ts(updated, lines[i]);
 			if (md_line_is_fence(lines[i], &end_lang)) {
 				i++;
@@ -562,10 +466,10 @@ void tsession_execute_markdown_update(tsession *sess, const char *file, int inte
 				i++;
 		}
 
-		tstring *captured_out = NULL;
-		tstring *captured_err = NULL;
+		tstring *captured_out = nullptr;
+		tstring *captured_err = nullptr;
 		if (!execute_block_capture(sess,
-					   &syner,
+					   syner,
 					   vm,
 					   &tcmds,
 					   &consts,
@@ -603,7 +507,7 @@ void tsession_execute_markdown_update(tsession *sess, const char *file, int inte
 	tstring_free(updated);
 	tvmcmd_vect_free(&tcmds);
 	tconsts_free(&consts);
-	tcp_free(&syner);
+	tcp_delete(syner);
 	tvm_clean(&vm_storage);
 }
 

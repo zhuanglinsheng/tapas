@@ -1,6 +1,6 @@
 # Tapas for Visual Studio Code
 
-[简体中文](README.md) | English
+[简体中文](README.md) | English | [Project Home](../../README_en.md)
 
 This extension connects Visual Studio Code directly to the C implementation of
 `tapas-language-server`. It recognizes `.tap` files and has no npm runtime
@@ -12,6 +12,9 @@ dependencies.
 
 - Tapas syntax highlighting for comments, strings, numbers, keywords, built-in
   Types, constants, and operators.
+- Semantic distinction for namespaces, Types, functions, parameters, and
+  variables using compiler-front-end symbol resolution, with immediate static
+  TextMate highlighting while the server is unavailable or starting.
 - Line comments with `//`.
 - Bracket matching, automatic bracket and quote closing, surrounding pairs,
   and brace-based indentation.
@@ -23,7 +26,8 @@ dependencies.
 - Live syntax diagnostics after a document is opened or changed.
 - Recoverable semantic diagnostics and symbol information while source is
   temporarily incomplete.
-- Hover information for explicit annotations and locally inferred Types.
+- Hover information for explicit annotations, locally inferred Types, root
+  built-in signatures, default packages, and package members.
 - Local inference currently covers literals, functions, arithmetic, pairs,
   lists, dictionaries, imports, and annotated bindings.
 
@@ -73,6 +77,19 @@ dependencies.
 - Running is independent from the Language Server, so programs can still run
   when analysis is unavailable.
 
+### Formatting
+
+- Supports VS Code **Format Document**, format on save, and the
+  **Tapas: Format Document** command.
+- The provider sends the current editor text through the `format` source
+  package shipped with Tapas and returns one VS Code text edit. Unsaved changes
+  are not written to the original file first.
+- The extension maintains no second set of layout rules. Single-line function
+  signatures, multiline parameter lists, and compact control flow behave
+  exactly like `tapas -m format`.
+- Formatting depends only on the Tapas runtime and `format` package, so it still
+  works when the Language Server is unavailable.
+
 The parser and semantic model are independent from the Tapas VM. Editing a
 document never executes user code.
 
@@ -81,8 +98,9 @@ document never executes user code.
 Public module interfaces come from the dictionary returned by the module's
 final statement. Cross-module queries currently target public members accessed
 with `::`; ordinary local symbols remain file- and lexical-scope based.
-Signature help, semantic tokens, incremental text synchronization, and complete
-structural Type hover information remain planned work.
+Signature help, semantic-token delta responses, incremental text
+synchronization, and complete structural Type hover information remain planned
+work.
 The run command does not provide breakpoints, stepping, variable inspection, or
 call stacks; those features require a separate Tapas Debug Adapter.
 
@@ -102,24 +120,29 @@ Development Host and finds `build/bin/tapas-language-server` automatically.
 
 ## Install locally
 
+The extension is a thin client and contains no native binaries. Install Tapas
+Core separately so that `tapas`, `tapas-language-server`, and the standard
+library are available, or configure both executable paths explicitly in VS
+Code settings.
+
 Run:
 
 ```sh
 editors/vscode/install.sh
 ```
 
-The script installs the extension under the local VS Code extensions directory
-and bundles the current `build/bin/tapas-language-server` and `build/bin/tapas`
-binaries. Run
+The script installs only the extension client under the local VS Code
+extensions directory. It does not copy the runtime, Language Server, or
+standard library. Run
 **Developer: Reload Window** in VS Code, then open a `.tap` file.
 
 The extension searches for the Language Server in this order:
 
 1. the `tapas.languageServer.path` setting;
-2. the binary bundled by `install.sh`;
-3. `build/bin/tapas-language-server` in the extension repository or current
+2. `build/bin/tapas-language-server` in the extension repository while
+   debugging the extension, or in the current
    workspace;
-4. `tapas-language-server` on `PATH`.
+3. `tapas-language-server` on `PATH`.
 
 Set `tapas.languageServer.path` to an absolute path when automatic discovery is
 not suitable.
@@ -127,9 +150,9 @@ not suitable.
 The extension searches for the Tapas runtime in this order:
 
 1. the `tapas.runtime.path` setting;
-2. the executable bundled by `install.sh`;
-3. `build/bin/tapas` in the extension repository or current workspace;
-4. `tapas` on `PATH`.
+2. `build/bin/tapas` in the extension repository while debugging the
+   extension, or in the current workspace;
+3. `tapas` on `PATH`.
 
 Running the current file is equivalent to:
 
@@ -137,15 +160,26 @@ Running the current file is equivalent to:
 tapas -p WORKSPACE_ROOT CURRENT_FILE
 ```
 
-## Tests
-
-The protocol test starts the real C Language Server and exercises initialize,
-document synchronization, diagnostics, default-package completion, user-module
-member completion, cross-file hover, and definition lookup through the same Node
-protocol client used by the extension:
+For formatting, the extension runs an equivalent command in an isolated
+temporary directory and returns the result as an editor change:
 
 ```sh
-node editors/vscode/test/protocol.test.js build/bin/tapas-language-server
+tapas -m format TEMPORARY_FILE
+```
+
+## Tests
+
+The protocol test first exercises formatting through the real Tapas runtime,
+then starts the real C Language Server and exercises initialize, document
+synchronization, diagnostics, semantic tokens, default-package completion,
+user-module member completion, cross-file hover, and definition lookup through
+the same Node protocol client used by the extension. It also
+compares the compiler's keyword, built-in Type, and default-package catalogs
+against the TextMate fallback grammar to prevent version drift:
+
+```sh
+node editors/vscode/test/protocol.test.js \
+  build/bin/tapas-language-server build/bin/tapas
 ```
 
 It is also registered in CTest as `vscode_protocol` when Node.js is available.
@@ -154,13 +188,24 @@ It is also registered in CTest as `vscode_protocol` when Node.js is available.
 
 - `extension.js` maps Language Server responses to VS Code providers and owns
   document and diagnostic lifecycles.
+- `formatter.js` isolates temporary files and invokes the standard `format`
+  package through the installed Tapas Core.
 - `protocol.js` implements Content-Length framing and JSON-RPC request,
   response, and notification handling.
 - `language-configuration.json` defines comments, brackets, closing pairs, and
   indentation.
-- `syntaxes/tapas.tmLanguage.json` defines TextMate syntax highlighting.
+- `syntaxes/tapas.tmLanguage.json` defines the server-independent TextMate
+  fallback highlighting.
 - `../../src/lsp/` contains the C Language Server.
-- `../../src/compile/module.c` extracts VM-independent public module interfaces
+- `../../src/compile/frontend/module.c` extracts VM-independent public module interfaces
   and exposes the standard-environment catalog.
-- `../../src/compile/workspace.c` owns document overlays, disk indexing, the
+- `../../src/compile/frontend/workspace.c` owns document overlays, disk indexing, the
   import graph, and cross-module resolution.
+
+The extension reads the semantic-token legend from the LSP `initialize`
+response instead of duplicating token categories. The server reuses each
+document's existing lexical tokens, AST, and semantic model, and builds a
+read-only standard-name index from compiler and standard-library signatures at
+startup. `tapas/syntaxCatalog` is read only by the protocol consistency test;
+the extension does not generate grammars or issue catalog requests while users
+edit.

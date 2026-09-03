@@ -36,6 +36,8 @@ typedef enum {
 	tsyntax_kw_of,
 	tsyntax_kw_or,
 	tsyntax_kw_return,
+	tsyntax_kw_rule,
+	tsyntax_kw_require,
 	tsyntax_kw_this,
 	tsyntax_kw_to,
 	tsyntax_kw_true,
@@ -85,6 +87,8 @@ typedef struct {
 } tsyntax_tokens;
 
 const char *tsyntax_kind_name(tsyntax_kind kind);
+uint32_t tsyntax_keyword_count(void);
+const char *tsyntax_keyword_at(uint32_t index);
 int tsyntax_kind_is_trivia(tsyntax_kind kind);
 void tsyntax_tokens_init(tsyntax_tokens *tokens);
 void tsyntax_tokens_free(tsyntax_tokens *tokens);

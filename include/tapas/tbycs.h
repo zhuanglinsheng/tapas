@@ -49,7 +49,7 @@ static inline uint8_t tbycode_get_i(tbycode c)
 {
 	return (uint8_t)(c >> 27);
 }
-void tbycode_tostring(tbycode c, char *buf);
+void tbycode_tostring(tbycode c, char *buf, size_t buf_size);
 
 /*===========================================================================*
  * 2. Dynamic Bytecode Vector (tvmcmd_vect)

@@ -34,11 +34,11 @@ void tsession_execute_str(tsession *sess, const char *str, int interactive);
 For example, suppose `test_calling.tap` contains:
 
 ```tapas
-var abs = (x){
-    if(x >= 0){
+function abs(x)
+{
+    if (x >= 0) {
         return x
-    }
-    else{
+    } else {
         return -x
     }
 }
@@ -118,14 +118,21 @@ The parameters are:
 - `len`: the number of arguments.
 - `vre`: the output value that receives the function result.
 
-Register the function with:
+Use a native extension descriptor so the implementation, name, Tapas Type,
+and argument range stay together:
 
 ```c
-void tlib_add_cppf(tlib *lb, const char *name, genf_t f, uint_regs nparams_sig);
+static const textension_symbol functions[] = {
+    TAPAS_NATIVE_FUNCTION_DETAIL(
+        "int_sum", c_int_sum, 0, UNDEF_NPARAMS,
+        "Function[...] -> Int", "int_sum(...values: Int) -> Int")
+};
 ```
 
-The last argument, `nparams_sig`, is the expected parameter count. Use
-`UNDEF_NPARAMS` when the function accepts a variable number of arguments.
+The third and fourth count arguments are the minimum and maximum.
+`UNDEF_NPARAMS` means that no upper bound exists. The runtime and front end
+consume the same descriptor. `tlib_add_cfn` and `tlib_add_cppf` remain as
+compatibility interfaces.
 
 Here is a C implementation of an integer sum function:
 
@@ -136,8 +143,8 @@ static void c_int_sum(tobj *params, uint_regs len, tobj *vre)
 {
     long sum = 0;
 
-    for(uint_regs i = 0; i < len; i++){
-        if(tobj_get_type(&params[i]) != tint){
+    for (uint_regs i = 0; i < len; i++) {
+        if (tobj_get_type(&params[i]) != tint) {
             tobj_set_nil(vre);
             return;
         }
@@ -148,7 +155,8 @@ static void c_int_sum(tobj *params, uint_regs len, tobj *vre)
 }
 ```
 
-Then register it before running the Tapas script:
+Before running Tapas code, place the method table in a root module and install
+the extension once:
 
 ```c
 #include "tapas/tapas.h"
@@ -157,8 +165,8 @@ static void c_int_sum(tobj *params, uint_regs len, tobj *vre)
 {
     long sum = 0;
 
-    for(uint_regs i = 0; i < len; i++){
-        if(tobj_get_type(&params[i]) != tint){
+    for (uint_regs i = 0; i < len; i++) {
+        if (tobj_get_type(&params[i]) != tint) {
             tobj_set_nil(vre);
             return;
         }
@@ -172,7 +180,17 @@ int main(void)
 {
     tsession *sess = tsession_new();
 
-    tlib_add_cppf(tsession_get_lib(sess), "int_sum", c_int_sum, UNDEF_NPARAMS);
+    static const textension_symbol functions[] = {
+        TAPAS_NATIVE_FUNCTION_DETAIL(
+            "int_sum", c_int_sum, 0, UNDEF_NPARAMS,
+            "Function[...] -> Int", "int_sum(...values: Int) -> Int")
+    };
+    static const textension_module root = TAPAS_ROOT_MODULE(functions);
+    static const textension_module *const modules[] = { &root };
+    static const textension_descriptor extension =
+        TAPAS_EXTENSION("example", "1.0", modules);
+
+    tlib_install_extension(tsession_get_lib(sess), &extension);
     tsession_execute_file(sess, "test_extension.tap", 1);
 
     tsession_free(sess);
@@ -190,6 +208,189 @@ print(s)
 ```
 
 The output should be 15.
+
+For a package function, replace the root module with a named package:
+
+```c
+static const textension_module statistics =
+    TAPAS_PACKAGE_MODULE("statistics", functions);
+```
+
+### Unified Extension Descriptors
+
+Native standard-library functions and user extensions share one public model,
+declared in `include/tapas/textension.h`:
+
+```text
+textension_descriptor
+└── textension_module[]
+    └── textension_symbol[]
+```
+
+A symbol is defined once in its descriptor. The runtime materializes functions
+and values from it, the compiler reads the same Tapas Type, and the Language
+Server uses the same names, signatures, and details for completion and hover.
+An extension does not maintain separate runtime, front-end, and editor tables.
+
+`textension_descriptor` stores the ABI version, structure size, extension name,
+extension version, and module array. A `textension_module` selects either the
+root namespace or a named package through `scope`. Several modules may
+contribute distinct names to one package, allowing a large package to be split
+across C files by implementation responsibility.
+
+`textension_symbol` describes functions, values, and Types. Its main fields are:
+
+- `name`: the Tapas-visible name;
+- `type`: the Tapas Type parsed by the front end and the only static Type source;
+- `detail`: the complete human-readable declaration, such as
+  `sample::add(left: Int, right: Int) -> Int`;
+- `kind`: `textension_function`, `textension_value`, or `textension_type`;
+- `function`, `session_function`, and `value_factory`: the one entry matching
+  `kind`;
+- `minimum_arguments` and `maximum_arguments`: the runtime argument range;
+- `intrinsic`: one of the few semantics intrinsic to standard Type construction;
+- `result_relation` and `result_argument`: an optional dependent-result
+  relation. `tnative_result_declared` uses the result in `type`, while
+  `tnative_result_argument` preserves the static Type of one argument.
+
+The argument range remains separate because the current Type syntax cannot
+fully express optional and variadic arguments. Ordinary extensions must use
+`tnative_intrinsic_none`; they cannot impersonate a standard Type constructor.
+A dependent result suits Type-preserving functions such as
+`copy(value: T) -> T`. A tunnel call treats its receiver as argument zero, so
+one descriptor covers both `copy(value)` and `value.copy()` without separate
+front-end or LSP special cases.
+
+Ordinary functions use `tnative_function`. Session functions that need the
+current execution environment use `tnative_session_function`. A function symbol
+must set exactly one of these entries. Values and Types are materialized at
+extension installation through `tnative_value_factory`.
+
+Macros are convenient for short user method tables. A designated initializer
+can expose every field directly when readability is more important:
+
+```c
+static const textension_symbol functions[] = {
+    {
+        .name = "add",
+        .type = "Function[Int, Int] -> Int",
+        .detail = "sample::add(left: Int, right: Int) -> Int",
+        .kind = textension_function,
+        .function = add,
+        .minimum_arguments = 2,
+        .maximum_arguments = 2
+    }
+};
+
+static const textension_module sample = {
+    .scope = textension_package,
+    .name = "sample",
+    .detail = "Sample functions",
+    .symbols = functions,
+    .symbol_count = sizeof(functions) / sizeof(functions[0])
+};
+
+static const textension_module *const modules[] = { &sample };
+
+static const textension_descriptor extension =
+    TAPAS_EXTENSION("sample", "1.0", modules);
+```
+
+The standard library uses full initializers so that each name, Type, detail,
+and call entry remains directly readable. Highly repetitive mathematical
+wrappers may use a local macro within one `.c` file, but no cross-file `.def`
+protocol is used.
+
+### Validation, Installation, and Ownership
+
+`textension_validate` checks the ABI, structure size, module scope, symbol
+entry, argument range, and name conflicts. `tlib_install_extension` installs
+only when the complete descriptor is accepted by the current library.
+Qualified names cannot be duplicated, root symbols cannot collide with package
+names, and existing objects are never replaced implicitly.
+
+The extension owns its descriptors, names, and Type strings. They must remain
+unchanged until every Session using them has been destroyed. Consumers may
+build read-only indexes but cannot modify the descriptor. The current public
+mechanism validates and installs statically linked extensions. Dynamic-library
+discovery, handle lifetime, and safe unloading are not implemented. A future
+loader should only obtain the common entry point, validate the ABI, and retain
+the handle; it should not introduce another module-definition model.
+The proposed dynamic-library entry still returns the same descriptor:
+
+```c
+const textension_descriptor *tapas_extension(void);
+```
+
+Extensions support ordered enumeration and package/name lookup:
+
+```c
+uint32_t textension_symbol_count(const textension_descriptor *extension);
+int textension_symbol_at(const textension_descriptor *extension,
+                         uint32_t index,
+                         textension_symbol_ref *result);
+int textension_find(const textension_descriptor *extension,
+                    const char *package,
+                    const char *name,
+                    textension_symbol_ref *result);
+```
+
+### How the Standard Library Uses the Model
+
+`include/tapas/tstdlib.h` exposes only the standard extension descriptor:
+
+```c
+const textension_descriptor *tstdlib_descriptor(void);
+```
+
+`src/stdlib/tstdlib.c` collects modules, while `src/stdlib/modules.h` only
+declares them and does not hold another signature table. The current layout is
+organized by Tapas-visible responsibility:
+
+```text
+src/stdlib/
+  tstdlib.c
+  modules.h
+  arguments.h
+  builtins/
+    console.c
+    conversion.c
+    list.c
+    array.c
+    pair.c
+    capability.c
+    iterator.c
+    dict.c
+    sort.c
+    objects.c
+    time.c
+    session.c
+    rules.c
+  dense/dense.c
+  evaluators/evaluators.c
+  io/io.c
+  math/math.c
+  rules/rules.c
+  syntax/syntax.c
+  time/time.c
+  types/types.c
+  format/
+    __init__.tap
+    format.tap
+```
+
+Modules under `builtins/` export root functions. Native modules under named
+directories export the corresponding Tapas packages. `format` is a source
+standard package implemented in ordinary Tapas and is not part of the native
+extension descriptor. Native and source packages form one standard library,
+but only facilities requiring the C runtime or a host boundary use
+`textension_descriptor`.
+
+A native object's lifetime, operators, and generic capabilities belong to its
+`tcompo_vtable` and `tcompo_capabilities`, rather than being repeated on every
+constructor symbol. Extension descriptors reuse the Tapas Type language.
+The few standard Type constructors that cannot be described declaratively use
+`intrinsic`; ordinary functions cannot attach private Type checkers.
 
 
 
@@ -256,14 +457,12 @@ titer *titer_new(long start, long end);
 tdarr *tdarr_new(size_t rows, size_t cols, double value);
 tbarr *tbarr_new(size_t rows, size_t cols, int value);
 ttime *ttime_new(void);
-ttime *ttime_from_unix(long seconds);
-long ttime_unix(const ttime *value);
-ttime *ttime_shift(const ttime *value, long seconds);
-tstring *ttime_format(const ttime *value, const char *pattern);
+ttime *ttime_from_time(time_t value);
+time_t ttime_get(const ttime *value);
 ```
 
-`ttime_from_unix`, `ttime_unix`, and `ttime_shift` use whole seconds.
-`ttime_format` uses local time and accepts a host C `strftime` pattern.
+Unix conversion and arbitrary formatting belong to the stdlib `time` package;
+the runtime API only exposes the representation boundary through `time_t`.
 
 Lists and dictionaries retain composite values inserted into them. Dense arrays
 own contiguous row-major storage and expose checked accessors:
@@ -274,15 +473,15 @@ void tdarr_set(tdarr *arr, size_t row, size_t col, double value);
 int tbarr_at(const tbarr *arr, size_t row, size_t col);
 void tbarr_set(tbarr *arr, size_t row, size_t col, int value);
 
-tdarr *tdarr_transpose(const tdarr *arr);
-tbarr *tbarr_transpose(const tbarr *arr);
-tdarr *tdarr_neg(const tdarr *arr);
 tdarr *tdarr_matmul(const tdarr *left, const tdarr *right);
 ```
 
-`tdarr_neg` and `tdarr_matmul` load a compatible LP64 CBLAS dynamic library at
-runtime. Tapas itself does not link BLAS while building or installing. Set
-`TAPAS_BLAS_LIBRARY` to select the library explicitly. These functions report
+Transpose is a `dense` standard-library operation rather than a runtime object
+primitive. RealArray negation is dispatched through `tcompo_vtable.op_neg`;
+`tdarr_matmul` implements matrix multiplication and loads
+a compatible LP64 CBLAS dynamic library at runtime. Tapas itself does not link
+BLAS while building or installing. Set
+`TAPAS_BLAS_LIBRARY` to select the library explicitly. Matrix multiplication reports
 a Tapas runtime error when no compatible backend can be loaded.
 
 Use `tobj_set_compo` when returning a newly constructed composite value from a
@@ -292,7 +491,7 @@ C function:
 static void make_identity(tobj *params, uint_regs len, tobj *vre)
 {
     (void)params;
-    if(len != 0){
+    if (len != 0) {
         tobj_set_nil(vre);
         return;
     }
@@ -348,9 +547,32 @@ typedef struct {
     compo_op_bin_fn op_le;
     compo_op_bin_fn op_and;
     compo_op_bin_fn op_or;
+    const tcompo_capabilities *capabilities;
 } tcompo_vtable;
 ```
 
+Optional object protocols are grouped separately from operators:
+
+```c
+typedef struct {
+    tcompo_index_fn indexable;
+    tcompo_index_set_fn index_settable;
+    tcompo_append_fn appendable;
+    tcompo_delete_fn deletable;
+    tcompo_contains_fn contains;
+    tcompo_next_fn iterable;
+} tcompo_capabilities;
+```
+
+Leave unsupported entries null. Index reads, index writes, `append`, `delete`,
+`in`, and `for` dispatch through these slots without testing a concrete object
+type. An iterable callback receives caller-owned cursor storage; it increments
+the position and returns 1 when it produces a value, and returns 0 when
+exhausted. It must not keep a shared cursor in the object itself.
+
 After creating the C type, expose a C function that constructs an instance and
-returns it with `tobj_set_compo`. Register that constructor with
-`tlib_add_cppf`, and Tapas code can create values of the custom type.
+returns it with `tobj_set_compo`, then install the constructor as a
+`textension_symbol`. Tapas code can create custom values and the front end reads
+the call signature from the same extension descriptor. `tcfn_descriptor` and
+`tlib_add_cfn` remain compatibility APIs for old direct-registration code; new
+extensions should not use them to create a separate signature source.

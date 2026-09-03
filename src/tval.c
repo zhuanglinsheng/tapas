@@ -1,6 +1,6 @@
 #include "tapas/tval.h"
 
-/* ---- tobj constructors ---- */
+/*----------------------- Value Lifetime and Assignment --------------------*/
 
 static void tobj_release_compo(tcompo_v *compo)
 {
@@ -67,7 +67,7 @@ void tobj_set_compo(tobj *v, tcompo_v *compo)
 	v->val.v_tcompo = compo;
 }
 
-/** DDC (Direct Decrease Count) ref clear */
+/* Release one owned composite reference and clear the value. */
 void tobj_ddc_ref_clear(tobj *v)
 {
 	tobj_clear_impl(v, 1);
@@ -78,7 +78,6 @@ void tobj_try_clear(tobj *v)
 	tobj_clear_impl(v, 0);
 }
 
-/** Copy assignment */
 void tobj_copy(tobj *dst, const tobj *src)
 {
 	if (dst == src)
@@ -94,7 +93,6 @@ void tobj_copy(tobj *dst, const tobj *src)
 	dst->val = src->val;
 }
 
-/** Identity comparison */
 int tobj_identical(const tobj *a, const tobj *b)
 {
 	if (a->type != b->type)
@@ -122,7 +120,7 @@ int tobj_identical(const tobj *a, const tobj *b)
 	return 0;
 }
 
-/* ---- tobj tostring ---- */
+/*---------------------------- String Conversion ---------------------------*/
 
 tstring *tobj_tostring_pointer(const char *type, const void *ptr)
 {
@@ -131,55 +129,45 @@ tstring *tobj_tostring_pointer(const char *type, const void *ptr)
 	return out;
 }
 
-tstring *tobj_tostring_abbr(const tobj *v)
+static tstring *tobj_tostring(const tobj *value, int full)
 {
 	tstring *out;
-	switch (v->type) {
+	switch (value->type) {
 	case tnil:
 		return tstring_new("nil");
 	case tbool:
-		return tstring_new(v->val.v_tbool ? "true" : "false");
+		return tstring_new(value->val.v_tbool ? "true" : "false");
 	case tint:
 		out = tstring_new_empty();
-		tstring_append_fmt(out, "%ld", v->val.v_tint);
+		tstring_append_fmt(out, "%ld", value->val.v_tint);
 		return out;
 	case tfloat:
 		out = tstring_new_empty();
-		tstring_append_fmt(out, "%g", v->val.v_tfloat);
+		tstring_append_fmt(out, "%g", value->val.v_tfloat);
 		return out;
 	case tcompo:
-		if (v->val.v_tcompo && v->val.v_tcompo->vtable)
-			return v->val.v_tcompo->vtable->tostring_abbr(v->val.v_tcompo);
+		if (value->val.v_tcompo && value->val.v_tcompo->vtable)
+			return full
+				? value->val.v_tcompo->vtable->tostring_full(
+					value->val.v_tcompo)
+				: value->val.v_tcompo->vtable->tostring_abbr(
+					value->val.v_tcompo);
 		return tstring_new("<null>");
 	}
 	return tstring_new("<unknown>");
 }
 
-tstring *tobj_tostring_full(const tobj *v)
+tstring *tobj_tostring_abbr(const tobj *value)
 {
-	tstring *out;
-	switch (v->type) {
-	case tnil:
-		return tstring_new("nil");
-	case tbool:
-		return tstring_new(v->val.v_tbool ? "true" : "false");
-	case tint:
-		out = tstring_new_empty();
-		tstring_append_fmt(out, "%ld", v->val.v_tint);
-		return out;
-	case tfloat:
-		out = tstring_new_empty();
-		tstring_append_fmt(out, "%g", v->val.v_tfloat);
-		return out;
-	case tcompo:
-		if (v->val.v_tcompo && v->val.v_tcompo->vtable)
-			return v->val.v_tcompo->vtable->tostring_full(v->val.v_tcompo);
-		return tstring_new("<null>");
-	}
-	return tstring_new("<unknown>");
+	return tobj_tostring(value, 0);
 }
 
-/* ---- tobj accessors ---- */
+tstring *tobj_tostring_full(const tobj *value)
+{
+	return tobj_tostring(value, 1);
+}
+
+/*------------------------------- Accessors --------------------------------*/
 
 ttypes tobj_get_type(const tobj *v)
 {

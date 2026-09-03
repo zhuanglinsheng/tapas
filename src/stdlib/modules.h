@@ -1,0 +1,29 @@
+#ifndef TAPAS_STDLIB_MODULES_H
+#define TAPAS_STDLIB_MODULES_H
+
+#include "tapas/textension.h"
+
+extern const textension_module tstdlib_console_functions;
+extern const textension_module tstdlib_conversion_functions;
+extern const textension_module tstdlib_list_functions;
+extern const textension_module tstdlib_array_functions;
+extern const textension_module tstdlib_pair_functions;
+extern const textension_module tstdlib_capability_functions;
+extern const textension_module tstdlib_iterator_functions;
+extern const textension_module tstdlib_dict_functions;
+extern const textension_module tstdlib_sort_functions;
+extern const textension_module tstdlib_object_functions;
+extern const textension_module tstdlib_time_functions;
+extern const textension_module tstdlib_session_functions;
+extern const textension_module tstdlib_rule_functions;
+
+extern const textension_module tstdlib_dense_module;
+extern const textension_module tstdlib_io_module;
+extern const textension_module tstdlib_syntax_module;
+extern const textension_module tstdlib_time_module;
+extern const textension_module tstdlib_math_module;
+extern const textension_module tstdlib_types_module;
+extern const textension_module tstdlib_rules_module;
+extern const textension_module tstdlib_evaluators_module;
+
+#endif

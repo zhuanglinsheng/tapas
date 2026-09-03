@@ -8,17 +8,17 @@ jmp_buf tapas_error_jmpbuf;
 int tapas_error_recover_enabled = 0;
 
 static terror tapas_last_error;
-static tstring *tapas_error_source_ctx = NULL;
-static tstring *tapas_error_file_ctx = NULL;
-static const char *tapas_error_source_view = NULL;
-static const char *tapas_error_file_view = NULL;
+static tstring *tapas_error_source_ctx = nullptr;
+static tstring *tapas_error_file_ctx = nullptr;
+static const char *tapas_error_source_view = nullptr;
+static const char *tapas_error_file_view = nullptr;
 static uint64_t tapas_error_line_ctx = 0;
 static uint64_t tapas_error_column_ctx = 0;
 static int tapas_error_has_file_ctx = 0;
 static uint_cmds tapas_error_instruction_ctx = 0;
 static int tapas_error_has_instruction_ctx = 0;
-static terror_runtime_context_resolver tapas_runtime_context_resolver = NULL;
-static void *tapas_runtime_context_data = NULL;
+static terror_runtime_context_resolver tapas_runtime_context_resolver = nullptr;
+static void *tapas_runtime_context_data = nullptr;
 
 static void terror_reset(terror *err)
 {
@@ -155,22 +155,22 @@ void terror_clear_last(void)
 void terror_set_source_context(const char *source)
 {
 	tstring_free(tapas_error_source_ctx);
-	tapas_error_source_ctx = source ? tstring_new(source) : NULL;
-	tapas_error_source_view = NULL;
+	tapas_error_source_ctx = source ? tstring_new(source) : nullptr;
+	tapas_error_source_view = nullptr;
 }
 
 void terror_set_source_context_borrowed(const char *source)
 {
 	tstring_free(tapas_error_source_ctx);
-	tapas_error_source_ctx = NULL;
+	tapas_error_source_ctx = nullptr;
 	tapas_error_source_view = source;
 }
 
 void terror_clear_source_context(void)
 {
 	tstring_free(tapas_error_source_ctx);
-	tapas_error_source_ctx = NULL;
-	tapas_error_source_view = NULL;
+	tapas_error_source_ctx = nullptr;
+	tapas_error_source_view = nullptr;
 }
 
 const char *terror_current_source_context(void)
@@ -182,28 +182,28 @@ const char *terror_current_source_context(void)
 void terror_set_file_context(const char *file, uint64_t line, uint64_t column)
 {
 	tstring_free(tapas_error_file_ctx);
-	tapas_error_file_ctx = file ? tstring_new(file) : NULL;
-	tapas_error_file_view = NULL;
+	tapas_error_file_ctx = file ? tstring_new(file) : nullptr;
+	tapas_error_file_view = nullptr;
 	tapas_error_line_ctx = line;
 	tapas_error_column_ctx = column;
-	tapas_error_has_file_ctx = file != NULL || line != 0 || column != 0;
+	tapas_error_has_file_ctx = file != nullptr || line != 0 || column != 0;
 }
 
 void terror_set_file_context_borrowed(const char *file, uint64_t line, uint64_t column)
 {
 	tstring_free(tapas_error_file_ctx);
-	tapas_error_file_ctx = NULL;
+	tapas_error_file_ctx = nullptr;
 	tapas_error_file_view = file;
 	tapas_error_line_ctx = line;
 	tapas_error_column_ctx = column;
-	tapas_error_has_file_ctx = file != NULL || line != 0 || column != 0;
+	tapas_error_has_file_ctx = file != nullptr || line != 0 || column != 0;
 }
 
 void terror_clear_file_context(void)
 {
 	tstring_free(tapas_error_file_ctx);
-	tapas_error_file_ctx = NULL;
-	tapas_error_file_view = NULL;
+	tapas_error_file_ctx = nullptr;
+	tapas_error_file_view = nullptr;
 	tapas_error_line_ctx = 0;
 	tapas_error_column_ctx = 0;
 	tapas_error_has_file_ctx = 0;
@@ -264,8 +264,8 @@ static void terror_capture(terror_type type, const char *fname, const char *info
 	tapas_last_error.reason = terror_reason(type);
 	tapas_last_error.where = tstring_new(fname ? fname : "");
 	tapas_last_error.detail = tstring_new(info ? info : "");
-	const char *runtime_source = NULL;
-	const char *runtime_file = NULL;
+	const char *runtime_source = nullptr;
+	const char *runtime_file = nullptr;
 	uint64_t runtime_line = 0;
 	uint64_t runtime_column = 0;
 	uint_cmds runtime_instruction = 0;
@@ -275,8 +275,8 @@ static void terror_capture(terror_type type, const char *fname, const char *info
 	if (resolver) {
 		/* An error may leave through longjmp, so do not retain a pointer to
 		 * the resolver's stack-allocated context after resolving it. */
-		tapas_runtime_context_resolver = NULL;
-		tapas_runtime_context_data = NULL;
+		tapas_runtime_context_resolver = nullptr;
+		tapas_runtime_context_data = nullptr;
 		resolver(resolver_context, &runtime_source, &runtime_file,
 			 &runtime_line, &runtime_column, &runtime_instruction);
 	}
@@ -291,7 +291,7 @@ static void terror_capture(terror_type type, const char *fname, const char *info
 	if (resolver) {
 		tapas_last_error.line = runtime_line;
 		tapas_last_error.column = runtime_column;
-		tapas_last_error.has_location = file_ctx != NULL ||
+		tapas_last_error.has_location = file_ctx != nullptr ||
 			runtime_line != 0 || runtime_column != 0;
 		tapas_last_error.instruction = runtime_instruction;
 		tapas_last_error.has_instruction = 1;
@@ -322,7 +322,7 @@ static void terror_print(const terror *err)
 		const char *src = tstring_cstr(err->source);
 		size_t src_line_len = strcspn(src, "\r\n");
 		const char *detail = err->detail ? tstring_cstr(err->detail) : "";
-		const char *hit = detail[0] ? strstr(src, detail) : NULL;
+		const char *hit = detail[0] ? strstr(src, detail) : nullptr;
 		fprintf(stderr, "  code:\n");
 		fprintf(stderr, "    %.*s\n", (int)src_line_len, src);
 		if (hit) {

@@ -61,246 +61,257 @@ tbycode tbycode_make_lbi(uint8_t ins, uint16_t L, uint8_t b, uint8_t i)
 
 /**
  * Convert bytecode to debug string representation.
- * Writes to caller-provided buffer of at least 128 bytes.
+ * Writes at most buf_size bytes, including the terminating null character.
  */
-void tbycode_tostring(tbycode c, char *buf)
+void tbycode_tostring(tbycode c, char *buf, size_t buf_size)
 {
+	if (!buf || buf_size == 0)
+		return;
 	tins ins = tbycode_ins(c);
 	switch (ins) {
 	case OP_PASS:
-		sprintf(buf, "OP_PASS     ");
+		snprintf(buf, buf_size, "OP_PASS     ");
 		break;
 	case OP_VCRT:
-		sprintf(buf,
+		snprintf(buf, buf_size,
 			"OP_VCRT     %u  %u",
 			(unsigned)tbycode_get_L(c),
 			(unsigned)tbycode_get_R(c));
 		break;
 	case OP_TMPDEL:
-		sprintf(buf, "OP_TMPDEL   %u", (unsigned)tbycode_get_U(c));
+		snprintf(buf, buf_size, "OP_TMPDEL   %u", (unsigned)tbycode_get_U(c));
 		break;
 	case OP_THIS:
-		sprintf(buf, "OP_THIS     ");
+		snprintf(buf, buf_size, "OP_THIS     ");
 		break;
 	case OP_BASE:
-		sprintf(buf, "OP_BASE     ");
+		snprintf(buf, buf_size, "OP_BASE     ");
 		break;
 	case OP_RET:
-		sprintf(buf, "OP_RET      ");
+		snprintf(buf, buf_size, "OP_RET      ");
 		break;
 	case OP_IN:
-		sprintf(buf, "OP_IN       ");
+		snprintf(buf, buf_size, "OP_IN       ");
 		break;
 	case OP_PAIR:
-		sprintf(buf, "OP_PAIR     ");
+		snprintf(buf, buf_size, "OP_PAIR     ");
 		break;
 	case OP_TO:
-		sprintf(buf, "OP_TO       ");
+		snprintf(buf, buf_size, "OP_TO       ");
 		break;
 	case OP_POPN:
-		sprintf(buf,
+		snprintf(buf, buf_size,
 			"OP_POPN     %u  %u",
 			(unsigned)tbycode_get_L(c),
 			(unsigned)tbycode_get_R(c));
 		break;
 	case OP_POPCOV:
-		sprintf(buf,
+		snprintf(buf, buf_size,
 			"OP_POPCOV   %u  %u",
 			(unsigned)tbycode_get_L(c),
 			(unsigned)tbycode_get_R(c));
 		break;
 	case OP_TYPEFWD:
-		sprintf(buf, "OP_TYPEFWD  ");
+		snprintf(buf, buf_size, "OP_TYPEFWD  ");
 		break;
 	case OP_TYPEDEFINE:
-		sprintf(buf,
+		snprintf(buf, buf_size,
 			"OP_TYPEDEFINE %u  %u",
 			(unsigned)tbycode_get_L(c),
 			(unsigned)tbycode_get_R(c));
 		break;
 	case OP_LOOPAS:
-		sprintf(buf,
+		snprintf(buf, buf_size,
 			"OP_LOOPAS   %u  %u",
 			(unsigned)tbycode_get_L(c),
 			(unsigned)tbycode_get_R(c));
 		break;
 	case OP_JPF:
-		sprintf(buf, "OP_JPF      %u", (unsigned)tbycode_get_U(c));
+		snprintf(buf, buf_size, "OP_JPF      %u", (unsigned)tbycode_get_U(c));
 		break;
 	case OP_JPB:
-		sprintf(buf, "OP_JPB      %u", (unsigned)tbycode_get_U(c));
+		snprintf(buf, buf_size, "OP_JPB      %u", (unsigned)tbycode_get_U(c));
 		break;
 	case OP_CJPFPOP:
-		sprintf(buf, "OP_CJPFPOP  %u", (unsigned)tbycode_get_U(c));
+		snprintf(buf, buf_size, "OP_CJPFPOP  %u", (unsigned)tbycode_get_U(c));
 		break;
 	case OP_CJPBPOP:
-		sprintf(buf, "OP_CJPBPOP  %u", (unsigned)tbycode_get_U(c));
+		snprintf(buf, buf_size, "OP_CJPBPOP  %u", (unsigned)tbycode_get_U(c));
 		break;
 	case OP_PUSHX:
 		if (!tpushx_isenv(tbycode_get_R(c)))
-			sprintf(buf,
+			snprintf(buf, buf_size,
 				"OP_PUSHX    %u  tmp",
 				(unsigned)tbycode_get_L(c));
 		else if (!tpushx_is_upval(tbycode_get_R(c)))
-			sprintf(buf,
+			snprintf(buf, buf_size,
 				"OP_PUSHX    %u  local",
 				(unsigned)tbycode_get_L(c));
 		else
-			sprintf(buf,
+			snprintf(buf, buf_size,
 				"OP_PUSHX    %u  upval %u",
 				(unsigned)tbycode_get_L(c),
 				(unsigned)tpushx_depth(tbycode_get_R(c)));
 		break;
 	case OP_PUSHI:
-		sprintf(buf, "OP_PUSHI    %u", (unsigned)tbycode_get_U(c));
+		snprintf(buf, buf_size, "OP_PUSHI    %u", (unsigned)tbycode_get_U(c));
 		break;
 	case OP_PUSHFLT:
-		sprintf(buf, "OP_PUSHFLT  %u", (unsigned)tbycode_get_U(c));
+		snprintf(buf, buf_size, "OP_PUSHFLT  %u", (unsigned)tbycode_get_U(c));
 		break;
 	case OP_PUSHB:
-		sprintf(buf, "OP_PUSHB    %u", (unsigned)tbycode_get_U(c));
+		snprintf(buf, buf_size, "OP_PUSHB    %u", (unsigned)tbycode_get_U(c));
 		break;
 	case OP_PUSHS:
-		sprintf(buf, "OP_PUSHS    %u", (unsigned)tbycode_get_U(c));
+		snprintf(buf, buf_size, "OP_PUSHS    %u", (unsigned)tbycode_get_U(c));
 		break;
 	case OP_PUSHDICT:
-		sprintf(buf, "OP_PUSHDICT %u", (unsigned)tbycode_get_U(c));
+		snprintf(buf, buf_size, "OP_PUSHDICT %u", (unsigned)tbycode_get_U(c));
 		break;
 	case OP_PUSHINFO:
-		sprintf(buf, "OP_PUSHINFO %u", (unsigned)tbycode_get_U(c));
+		snprintf(buf, buf_size, "OP_PUSHINFO %u", (unsigned)tbycode_get_U(c));
 		break;
 	case OP_IMPORT:
-		sprintf(buf, "OP_IMPORT   %u", (unsigned)tbycode_get_U(c));
+		snprintf(buf, buf_size, "OP_IMPORT   %u", (unsigned)tbycode_get_U(c));
 		break;
 	case OP_IDXR:
-		sprintf(buf, "OP_IDXR     %u", (unsigned)tbycode_get_U(c));
+		snprintf(buf, buf_size, "OP_IDXR     %u", (unsigned)tbycode_get_U(c));
 		break;
 	case OP_EVAL:
-		sprintf(buf, "OP_EVAL     %u", (unsigned)tbycode_get_U(c));
+		snprintf(buf, buf_size, "OP_EVAL     %u", (unsigned)tbycode_get_U(c));
 		break;
 	case OP_EVALSF:
-		sprintf(buf, "OP_EVALSF   %u", (unsigned)tbycode_get_U(c));
+		snprintf(buf, buf_size, "OP_EVALSF   %u", (unsigned)tbycode_get_U(c));
 		break;
 	case OP_EVALCF:
-		sprintf(buf, "OP_EVALCF   %u", (unsigned)tbycode_get_U(c));
+		snprintf(buf, buf_size, "OP_EVALCF   %u", (unsigned)tbycode_get_U(c));
 		break;
 	case OP_EVALTF:
-		sprintf(buf, "OP_EVALTF   %u", (unsigned)tbycode_get_U(c));
+		snprintf(buf, buf_size, "OP_EVALTF   %u", (unsigned)tbycode_get_U(c));
 		break;
 	case OP_IDXL:
-		sprintf(buf,
+		snprintf(buf, buf_size,
 			"OP_IDXL     %u  %u  %u",
 			(unsigned)tbycode_get_L(c),
 			(unsigned)tbycode_get_b(c),
 			(unsigned)tbycode_get_i(c));
 		break;
 	case OP_PUSHF:
-		sprintf(buf, "OP_PUSHF    %u", (unsigned)tbycode_get_U(c));
+		snprintf(buf, buf_size, "OP_PUSHF    %u", (unsigned)tbycode_get_U(c));
+		break;
+	case OP_PUSHRULE:
+		snprintf(buf, buf_size, "OP_PUSHRULE %u", (unsigned)tbycode_get_U(c));
+		break;
+	case OP_RULECOND:
+		snprintf(buf, buf_size, "OP_RULECOND %u", (unsigned)tbycode_get_U(c));
+		break;
+	case OP_RULEREQ:
+		snprintf(buf, buf_size, "OP_RULEREQ");
 		break;
 	case OP_ADD:
-		sprintf(buf,
+		snprintf(buf, buf_size,
 			"OP_ADD      %u  %u",
 			(unsigned)tbycode_get_L(c),
 			(unsigned)tbycode_get_R(c));
 		break;
 	case OP_SUB:
-		sprintf(buf,
+		snprintf(buf, buf_size,
 			"OP_SUB      %u  %u",
 			(unsigned)tbycode_get_L(c),
 			(unsigned)tbycode_get_R(c));
 		break;
 	case OP_MUL:
-		sprintf(buf,
+		snprintf(buf, buf_size,
 			"OP_MUL      %u  %u",
 			(unsigned)tbycode_get_L(c),
 			(unsigned)tbycode_get_R(c));
 		break;
 	case OP_DIV:
-		sprintf(buf,
+		snprintf(buf, buf_size,
 			"OP_DIV      %u  %u",
 			(unsigned)tbycode_get_L(c),
 			(unsigned)tbycode_get_R(c));
 		break;
 	case OP_MOD:
-		sprintf(buf,
+		snprintf(buf, buf_size,
 			"OP_MOD      %u  %u",
 			(unsigned)tbycode_get_L(c),
 			(unsigned)tbycode_get_R(c));
 		break;
 	case OP_POW:
-		sprintf(buf,
+		snprintf(buf, buf_size,
 			"OP_POW      %u  %u",
 			(unsigned)tbycode_get_L(c),
 			(unsigned)tbycode_get_R(c));
 		break;
 	case OP_MMUL:
-		sprintf(buf,
+		snprintf(buf, buf_size,
 			"OP_MMUL     %u  %u",
 			(unsigned)tbycode_get_L(c),
 			(unsigned)tbycode_get_R(c));
 		break;
 	case OP_POS:
-		sprintf(buf, "OP_POS");
+		snprintf(buf, buf_size, "OP_POS");
 		break;
 	case OP_NEG:
-		sprintf(buf, "OP_NEG");
+		snprintf(buf, buf_size, "OP_NEG");
 		break;
 	case OP_EQ:
-		sprintf(buf,
+		snprintf(buf, buf_size,
 			"OP_EQ       %u  %u",
 			(unsigned)tbycode_get_L(c),
 			(unsigned)tbycode_get_R(c));
 		break;
 	case OP_NE:
-		sprintf(buf,
+		snprintf(buf, buf_size,
 			"OP_NE       %u  %u",
 			(unsigned)tbycode_get_L(c),
 			(unsigned)tbycode_get_R(c));
 		break;
 	case OP_GE:
-		sprintf(buf,
+		snprintf(buf, buf_size,
 			"OP_GE       %u  %u",
 			(unsigned)tbycode_get_L(c),
 			(unsigned)tbycode_get_R(c));
 		break;
 	case OP_SG:
-		sprintf(buf,
+		snprintf(buf, buf_size,
 			"OP_SG       %u  %u",
 			(unsigned)tbycode_get_L(c),
 			(unsigned)tbycode_get_R(c));
 		break;
 	case OP_LE:
-		sprintf(buf,
+		snprintf(buf, buf_size,
 			"OP_LE       %u  %u",
 			(unsigned)tbycode_get_L(c),
 			(unsigned)tbycode_get_R(c));
 		break;
 	case OP_SL:
-		sprintf(buf,
+		snprintf(buf, buf_size,
 			"OP_SL       %u  %u",
 			(unsigned)tbycode_get_L(c),
 			(unsigned)tbycode_get_R(c));
 		break;
 	case OP_AND:
-		sprintf(buf,
+		snprintf(buf, buf_size,
 			"OP_AND      %u  %u",
 			(unsigned)tbycode_get_L(c),
 			(unsigned)tbycode_get_R(c));
 		break;
 	case OP_OR:
-		sprintf(buf,
+		snprintf(buf, buf_size,
 			"OP_OR       %u  %u",
 			(unsigned)tbycode_get_L(c),
 			(unsigned)tbycode_get_R(c));
 		break;
 	case OP_BAND:
-		sprintf(buf,
+		snprintf(buf, buf_size,
 			"OP_BAND     %u  %u",
 			(unsigned)tbycode_get_L(c),
 			(unsigned)tbycode_get_R(c));
 		break;
 	case OP_BOR:
-		sprintf(buf,
+		snprintf(buf, buf_size,
 			"OP_BOR      %u  %u",
 			(unsigned)tbycode_get_L(c),
 			(unsigned)tbycode_get_R(c));
@@ -317,8 +328,8 @@ void tbycode_tostring(tbycode c, char *buf)
 
 void tvmcmd_vect_init(tvmcmd_vect *v)
 {
-	v->data = NULL;
-	v->locs = NULL;
+	v->data = nullptr;
+	v->locs = nullptr;
 	v->size = 0;
 	v->capacity = 0;
 }
@@ -346,8 +357,8 @@ static void tsource_loc_copy(tsource_loc *dst, const tsource_loc *src)
 	memset(dst, 0, sizeof(*dst));
 	if (!src)
 		return;
-	dst->source = src->source ? tstring_dup(src->source) : NULL;
-	dst->file = src->file ? tstring_dup(src->file) : NULL;
+	dst->source = src->source ? tstring_dup(src->source) : nullptr;
+	dst->file = src->file ? tstring_dup(src->file) : nullptr;
 	dst->line = src->line;
 	dst->column = src->column;
 }
@@ -357,8 +368,8 @@ static void tsource_loc_capture(tsource_loc *dst)
 	const char *source = terror_current_source_context();
 	const char *file = terror_current_file_context();
 	memset(dst, 0, sizeof(*dst));
-	dst->source = source ? tstring_new(source) : NULL;
-	dst->file = file ? tstring_new(file) : NULL;
+	dst->source = source ? tstring_new(source) : nullptr;
+	dst->file = file ? tstring_new(file) : nullptr;
 	dst->line = terror_current_line_context();
 	dst->column = terror_current_column_context();
 }
@@ -380,8 +391,8 @@ void tvmcmd_vect_free(tvmcmd_vect *v)
 {
 	free(v->data);
 	tsource_loc_array_clear(v->locs, v->size);
-	v->data = NULL;
-	v->locs = NULL;
+	v->data = nullptr;
+	v->locs = nullptr;
 	v->size = 0;
 	v->capacity = 0;
 }
@@ -481,7 +492,7 @@ void tvmcmd_vect_resolve_loop_control(tvmcmd_vect *v, uint32_t begin,
 
 void consts_str_vect_init(consts_str_vect *v)
 {
-	v->data = NULL;
+	v->data = nullptr;
 	v->size = 0;
 	v->capacity = 0;
 }
@@ -492,7 +503,7 @@ void consts_str_vect_free(consts_str_vect *v)
 	for (i = 0; i < v->size; i++)
 		tstring_free(v->data[i]);
 	free(v->data);
-	v->data = NULL;
+	v->data = nullptr;
 	v->size = 0;
 	v->capacity = 0;
 }
@@ -516,7 +527,7 @@ uint_csts consts_str_vect_add(consts_str_vect *v, const char *str)
 
 void consts_long_vect_init(consts_long_vect *v)
 {
-	v->data = NULL;
+	v->data = nullptr;
 	v->size = 0;
 	v->capacity = 0;
 }
@@ -524,7 +535,7 @@ void consts_long_vect_init(consts_long_vect *v)
 void consts_long_vect_free(consts_long_vect *v)
 {
 	free(v->data);
-	v->data = NULL;
+	v->data = nullptr;
 	v->size = 0;
 	v->capacity = 0;
 }
@@ -548,7 +559,7 @@ uint_csts consts_long_vect_add(consts_long_vect *v, long val)
 
 void consts_float_vect_init(consts_float_vect *v)
 {
-	v->data = NULL;
+	v->data = nullptr;
 	v->size = 0;
 	v->capacity = 0;
 }
@@ -556,7 +567,7 @@ void consts_float_vect_init(consts_float_vect *v)
 void consts_float_vect_free(consts_float_vect *v)
 {
 	free(v->data);
-	v->data = NULL;
+	v->data = nullptr;
 	v->size = 0;
 	v->capacity = 0;
 }
@@ -637,14 +648,14 @@ twrapper *tanalyser_wrap(tvmcmd_vect *tcmds, tconsts *consts, tcinfo *info)
 	}
 	twrapper *wrapper = (twrapper *)calloc(1, sizeof(twrapper));
 	if (!wrapper)
-		return NULL;
+		return nullptr;
 
 	wrapper->info = *info;
 	wrapper->ncmds = tvmcmd_vect_size32(tcmds);
 	wrapper->cmdarr = (tbycode *)malloc(wrapper->ncmds * sizeof(tbycode));
 	if (wrapper->ncmds > 0 && !wrapper->cmdarr) {
 		free(wrapper);
-		return NULL;
+		return nullptr;
 	}
 	if (wrapper->ncmds > 0)
 		memcpy(wrapper->cmdarr, tcmds->data, wrapper->ncmds * sizeof(tbycode));
@@ -674,7 +685,7 @@ twrapper *tanalyser_wrap(tvmcmd_vect *tcmds, tconsts *consts, tcinfo *info)
 				goto wrap_err;
 		}
 	} else {
-		wrapper->consts.cstrs = NULL;
+		wrapper->consts.cstrs = nullptr;
 	}
 
 	/* Integers */
@@ -687,7 +698,7 @@ twrapper *tanalyser_wrap(tvmcmd_vect *tcmds, tconsts *consts, tcinfo *info)
 			   consts->__intcsts.data,
 			   wrapper->consts.ncints * sizeof(long));
 	} else {
-		wrapper->consts.cints = NULL;
+		wrapper->consts.cints = nullptr;
 	}
 
 	/* Doubles */
@@ -700,14 +711,14 @@ twrapper *tanalyser_wrap(tvmcmd_vect *tcmds, tconsts *consts, tcinfo *info)
 			   consts->__fltcsts.data,
 			   wrapper->consts.ncflts * sizeof(double));
 	} else {
-		wrapper->consts.cflts = NULL;
+		wrapper->consts.cflts = nullptr;
 	}
 
 	return wrapper;
 
 wrap_err:
 	tanalyser_clean_wrapper(wrapper);
-	return NULL;
+	return nullptr;
 }
 
 #define TAPC_FILE_MAGIC       ((uint64_t)0x5441504153424331ULL)
@@ -764,7 +775,7 @@ static int tapc_read_header(FILE *f, twrapper *wrapper)
 
 static void tapc_write_tstring(FILE *f, const tstring *s)
 {
-	uint8_t has_value = s != NULL;
+	uint8_t has_value = s != nullptr;
 	fwrite(&has_value, sizeof(has_value), 1, f);
 	if (has_value) {
 		uint64_t len = tstring_len(s);
@@ -776,7 +787,7 @@ static void tapc_write_tstring(FILE *f, const tstring *s)
 static int tapc_read_tstring(FILE *f, tstring **out)
 {
 	uint8_t has_value = 0;
-	*out = NULL;
+	*out = nullptr;
 	if (1 != fread(&has_value, sizeof(has_value), 1, f))
 		return 0;
 	if (!has_value)
@@ -793,7 +804,7 @@ static int tapc_read_tstring(FILE *f, tstring **out)
 	}
 	*out = tstring_new(raw);
 	free(raw);
-	return *out != NULL;
+	return *out != nullptr;
 }
 
 static void tapc_write_source_map(FILE *f, const twrapper *wrapper)
@@ -842,7 +853,7 @@ static void tapc_read_source_map(FILE *f, twrapper *wrapper)
 
 load_loc_err:
 	tsource_loc_array_clear(wrapper->source_locs, wrapper->ncmds);
-	wrapper->source_locs = NULL;
+	wrapper->source_locs = nullptr;
 }
 
 /**
@@ -898,7 +909,7 @@ int tanalyser_save_bin_file(const twrapper *wrapper, const char *filename)
 
 /**
  * Load wrapper from binary file (.tapc format).
- * Returns twrapper* on success, NULL on error.
+ * Returns twrapper* on success, nullptr on error.
  */
 twrapper *tanalyser_load_bin_file(const char *filename)
 {
@@ -908,13 +919,13 @@ twrapper *tanalyser_load_bin_file(const char *filename)
 
 	if (!f) {
 		twarn(ErrSession_IO, "tanalyser_load_bin_file", filename);
-		return NULL;
+		return nullptr;
 	}
 
 	wrapper = (twrapper *)calloc(1, sizeof(twrapper));
 	if (!wrapper) {
 		fclose(f);
-		return NULL;
+		return nullptr;
 	}
 
 	if (!tapc_read_header(f, wrapper)) {
@@ -922,9 +933,9 @@ twrapper *tanalyser_load_bin_file(const char *filename)
 		      "unsupported or truncated bytecode file");
 		free(wrapper);
 		fclose(f);
-		return NULL;
+		return nullptr;
 	}
-	wrapper->source_locs = NULL;
+	wrapper->source_locs = nullptr;
 
 	/* Read cmdarr */
 	{
@@ -935,7 +946,7 @@ twrapper *tanalyser_load_bin_file(const char *filename)
 			free(cmdarr);
 			free(wrapper);
 			fclose(f);
-			return NULL;
+			return nullptr;
 		}
 		wrapper->cmdarr = cmdarr;
 		for (uint_cmds instruction = 0; instruction < cmdlen; instruction++) {
@@ -945,7 +956,7 @@ twrapper *tanalyser_load_bin_file(const char *filename)
 				fclose(f);
 				twarn(ErrSession_IO, "tanalyser_load_bin_file",
 				      "invalid bytecode instruction");
-				return NULL;
+				return nullptr;
 			}
 		}
 	}
@@ -959,7 +970,7 @@ twrapper *tanalyser_load_bin_file(const char *filename)
 			free(wrapper->cmdarr);
 			free(wrapper);
 			fclose(f);
-			return NULL;
+			return nullptr;
 		}
 		wrapper->consts.cints = cints;
 	}
@@ -975,7 +986,7 @@ twrapper *tanalyser_load_bin_file(const char *filename)
 			free(wrapper->cmdarr);
 			free(wrapper);
 			fclose(f);
-			return NULL;
+			return nullptr;
 		}
 		wrapper->consts.cflts = cflts;
 	}
@@ -990,7 +1001,7 @@ twrapper *tanalyser_load_bin_file(const char *filename)
 			free(wrapper->cmdarr);
 			free(wrapper);
 			fclose(f);
-			return NULL;
+			return nullptr;
 		}
 
 		for (i = 0; i < ncstrs; i++) {
@@ -1020,7 +1031,7 @@ twrapper *tanalyser_load_bin_file(const char *filename)
 		free(wrapper->cmdarr);
 		free(wrapper);
 		fclose(f);
-		return NULL;
+		return nullptr;
 	}
 load_done:;
 
@@ -1060,7 +1071,7 @@ void tanalyser_display_wrapper(const twrapper *wrapper)
 	uint_cmds i;
 	char buf[128];
 	for (i = 0; i < wrapper->ncmds; i++) {
-		tbycode_tostring(wrapper->cmdarr[i], buf);
+		tbycode_tostring(wrapper->cmdarr[i], buf, sizeof(buf));
 		printf("[%u]%s\n", (unsigned)i, buf);
 	}
 	printf("Max Obj. Number: %u\n", (unsigned)wrapper->info.obj_max);

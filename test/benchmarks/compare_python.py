@@ -36,28 +36,85 @@ def write_markdown(
     runs: int,
     rows: list[tuple[str, int, int, int, float]],
     geometric_mean: float,
+    language: str,
 ) -> None:
     tapas_version = subprocess.run(
         [str(tapas), "-v"], check=True, capture_output=True, text=True
     ).stdout.splitlines()[0]
+    if language == "zh":
+        separator = "："
+        period = "。"
+        title = "# Tapas 与 Python 性能比较"
+        navigation = "简体中文 | [English](Results_en.md) | [项目主页](../../README.md)"
+        date_label = "测试日期"
+        environment_title = "## 测试环境"
+        system_label = "系统"
+        architecture_label = "处理器架构"
+        executable_label = "Tapas 可执行文件"
+        runs_text = f"有效运行次数：每项 {runs} 次，另预热 1 次"
+        results_title = "## 结果"
+        timing_text = "时间为进程 CPU 时间的中位数，不包含进程启动、源码加载和编译。"
+        ratio_text = "`Tapas/Python` 小于 1 表示 Tapas 更快。"
+        columns = "| 项目 | 源码 | 计算结果 | Tapas | Python | Tapas/Python |"
+        algorithm_title = "综合算法"
+        algorithm_description = "这些程序组合使用递归、分支、容器、索引和内存分配，更接近完整算法负载。"
+        hot_path_title = "基础热路径"
+        hot_path_description = "这些程序分别放大某一种常见 VM 操作，用来定位解释器的基础开销。"
+        group_mean = "本组比值的几何平均数为"
+        total_mean = "全部项目的几何平均数为"
+        notes_title = "## 说明"
+        notes = (
+            "这些程序用于比较两种实现执行相同算法时的解释器开销，不代表大型应用的完整性能。",
+            "结果会受系统负载、电源状态、编译器版本和 Python 版本影响。",
+            "更新 VM 或运行环境后，应使用本目录 README 中的命令重新生成。",
+        )
+    else:
+        separator = ": "
+        period = "."
+        title = "# Tapas and Python Performance Comparison"
+        navigation = "[简体中文](Results_zh.md) | English | [Project Home](../../README_en.md)"
+        date_label = "Test date"
+        environment_title = "## Test Environment"
+        system_label = "System"
+        architecture_label = "Architecture"
+        executable_label = "Tapas executable"
+        runs_text = f"Measured runs: {runs} per benchmark, after 1 warm-up run"
+        results_title = "## Results"
+        timing_text = "Times are median process CPU times and exclude process startup, source loading, and compilation."
+        ratio_text = "A `Tapas/Python` ratio below 1 means Tapas is faster."
+        columns = "| Benchmark | Source | Result | Tapas | Python | Tapas/Python |"
+        algorithm_title = "Complete Algorithms"
+        algorithm_description = "These programs combine recursion, branching, containers, indexing, and allocation to approximate complete algorithm workloads."
+        hot_path_title = "VM Hot Paths"
+        hot_path_description = "Each program amplifies one common VM operation to help isolate interpreter overhead."
+        group_mean = "The geometric mean ratio for this group is"
+        total_mean = "The geometric mean ratio across all benchmarks is"
+        notes_title = "## Notes"
+        notes = (
+            "These programs compare interpreter overhead while both implementations execute the same algorithms; they do not represent complete application performance.",
+            "Results depend on system load, power settings, compiler version, and Python version.",
+            "Regenerate the reports with the commands in this directory's README after changing the VM or runtime environment.",
+        )
     lines = [
-        "# Tapas 与 Python 性能比较",
+        title,
         "",
-        f"测试日期：{datetime.date.today().isoformat()}",
+        navigation,
         "",
-        "## 测试环境",
+        f"{date_label}{separator}{datetime.date.today().isoformat()}",
         "",
-        f"- 系统：`{platform.platform()}`",
-        f"- 处理器架构：`{platform.machine()}`",
-        f"- Python：`{platform.python_version()}`",
-        f"- Tapas：`{tapas_version}`",
-        f"- Tapas 可执行文件：`{tapas}`",
-        f"- 有效运行次数：每项 {runs} 次，另预热 1 次",
+        environment_title,
         "",
-        "## 结果",
+        f"- {system_label}{separator}`{platform.platform()}`",
+        f"- {architecture_label}{separator}`{platform.machine()}`",
+        f"- Python{separator}`{platform.python_version()}`",
+        f"- Tapas{separator}`{tapas_version}`",
+        f"- {executable_label}{separator}`{tapas}`",
+        f"- {runs_text}",
         "",
-        "时间为进程 CPU 时间的中位数，不包含进程启动、源码加载和编译。"
-        "`Tapas/Python` 小于 1 表示 Tapas 更快。",
+        results_title,
+        "",
+        timing_text,
+        ratio_text,
         "",
     ]
     rows_by_name = {row[0]: row for row in rows}
@@ -69,7 +126,7 @@ def write_markdown(
                 "",
                 description,
                 "",
-                "| 项目 | 源码 | 计算结果 | Tapas | Python | Tapas/Python |",
+                columns,
                 "| --- | --- | ---: | ---: | ---: | ---: |",
             ]
         )
@@ -85,30 +142,28 @@ def write_markdown(
         lines.extend(
             [
                 "",
-                f"本组比值的几何平均数为 **{statistics.geometric_mean(ratios):.3f}×**。",
+                f"{group_mean} **{statistics.geometric_mean(ratios):.3f}×**{period}",
                 "",
             ]
         )
 
     append_group(
-        "综合算法",
+        algorithm_title,
         ALGORITHM_BENCHMARKS,
-        "这些程序组合使用递归、分支、容器、索引和内存分配，更接近完整算法负载。",
+        algorithm_description,
     )
     append_group(
-        "基础热路径",
+        hot_path_title,
         HOT_PATH_BENCHMARKS,
-        "这些程序分别放大某一种常见 VM 操作，用来定位解释器的基础开销。",
+        hot_path_description,
     )
     lines.extend(
         [
-            f"全部项目的几何平均数为 **{geometric_mean:.3f}×**。",
+            f"{total_mean} **{geometric_mean:.3f}×**{period}",
             "",
-            "## 说明",
+            notes_title,
             "",
-            "这些程序用于比较两种实现执行相同算法时的解释器开销，不代表大型应用的"
-            "完整性能。结果会受系统负载、电源状态、编译器版本和 Python 版本"
-            "影响。更新 VM 或运行环境后，应使用本目录 README 中的命令重新生成。",
+            *notes,
             "",
         ]
     )
@@ -200,12 +255,16 @@ def main() -> int:
     print(f"hot-path geometric mean Tapas/Python: {hot_path_mean:.3f}x")
     print(f"geometric mean Tapas/Python: {geometric_mean:.3f}x")
     if args.markdown:
+        markdown_language = (
+            "en" if args.markdown.name.endswith("_en.md") else "zh"
+        )
         write_markdown(
             args.markdown,
             args.tapas,
             args.runs,
             rows,
             geometric_mean,
+            markdown_language,
         )
         print(f"wrote Markdown report: {args.markdown}")
     if failed:

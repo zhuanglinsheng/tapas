@@ -4,6 +4,7 @@ const vscode = require('vscode');
 const fs = require('fs');
 const path = require('path');
 const { LspConnection } = require('./protocol');
+const { formatSource } = require('./formatter');
 
 let client;
 
@@ -30,10 +31,9 @@ function serverCommand(context) {
   const configured = vscode.workspace.getConfiguration('tapas')
     .get('languageServer.path', '').trim();
   if (configured) return configured;
-  const candidates = [
-    path.join(context.extensionPath, 'server', 'tapas-language-server'),
-    path.resolve(context.extensionPath, '..', '..', 'build', 'bin', 'tapas-language-server'),
-  ];
+  const candidates = [];
+  if (context.extensionMode === vscode.ExtensionMode.Development)
+    candidates.push(path.resolve(context.extensionPath, '..', '..', 'build', 'bin', 'tapas-language-server'));
   for (const folder of vscode.workspace.workspaceFolders || []) {
     candidates.push(path.join(folder.uri.fsPath, 'build', 'bin', 'tapas-language-server'));
   }
@@ -47,10 +47,9 @@ function runtimeCommand(context, document) {
   const configured = vscode.workspace.getConfiguration('tapas')
     .get('runtime.path', '').trim();
   if (configured) return configured;
-  const candidates = [
-    path.join(context.extensionPath, 'runtime', 'tapas'),
-    path.resolve(context.extensionPath, '..', '..', 'build', 'bin', 'tapas'),
-  ];
+  const candidates = [];
+  if (context.extensionMode === vscode.ExtensionMode.Development)
+    candidates.push(path.resolve(context.extensionPath, '..', '..', 'build', 'bin', 'tapas'));
   const owner = document ? vscode.workspace.getWorkspaceFolder(document.uri) : undefined;
   if (owner) candidates.push(path.join(owner.uri.fsPath, 'build', 'bin', 'tapas'));
   for (const folder of vscode.workspace.workspaceFolders || [])
@@ -91,6 +90,16 @@ async function runCurrentFile(context) {
     focus: false,
   };
   await vscode.tasks.executeTask(task);
+}
+
+async function formatDocument(context, document) {
+  const executable = runtimeCommand(context, document);
+  const original = document.getText();
+  const formatted = await formatSource(executable, original);
+  if (formatted === original) return [];
+  const entireDocument = new vscode.Range(
+    document.positionAt(0), document.positionAt(original.length));
+  return [vscode.TextEdit.replace(entireDocument, formatted)];
 }
 
 function symbolKind(kind) {
@@ -135,7 +144,7 @@ class TapasClient {
     const workspaceFolders = (vscode.workspace.workspaceFolders || []).map((folder) => ({
       uri: folder.uri.toString(), name: folder.name,
     }));
-    await this.connection.request('initialize', {
+    const initialized = await this.connection.request('initialize', {
       processId: process.pid,
       rootUri: root,
       workspaceFolders,
@@ -144,11 +153,18 @@ class TapasClient {
         textDocument: {
           hover: { contentFormat: ['markdown', 'plaintext'] },
           definition: {}, references: {}, documentSymbol: {}, completion: {}, rename: {},
+          semanticTokens: { requests: { full: true }, tokenTypes: [], tokenModifiers: [] },
           publishDiagnostics: { versionSupport: true },
         },
       },
-      clientInfo: { name: 'Tapas VS Code', version: '0.1.0' },
+      clientInfo: {
+        name: 'Tapas VS Code',
+        version: this.context.extension.packageJSON.version,
+      },
     });
+    const semantic = initialized.capabilities?.semanticTokensProvider?.legend;
+    if (semantic) this.semanticLegend = new vscode.SemanticTokensLegend(
+      semantic.tokenTypes || [], semantic.tokenModifiers || []);
     this.connection.notify('initialized', {});
   }
 
@@ -248,7 +264,7 @@ class TapasClient {
 
   registerProviders() {
     const selector = [{ language: 'tapas', scheme: 'file' }, { language: 'tapas', scheme: 'untitled' }];
-    this.disposables.push(
+    const providers = [
       vscode.languages.registerHoverProvider(selector, {
         provideHover: async (document, at) => {
           const result = await this.request('textDocument/hover', requestPosition(document, at), null);
@@ -317,7 +333,17 @@ class TapasClient {
           return edit;
         },
       }),
-    );
+    ];
+    if (this.semanticLegend) providers.push(
+      vscode.languages.registerDocumentSemanticTokensProvider(selector, {
+        provideDocumentSemanticTokens: async (document) => {
+          const result = await this.request('textDocument/semanticTokens/full', {
+            textDocument: textDocument(document),
+          }, { data: [] });
+          return new vscode.SemanticTokens(Uint32Array.from(result?.data || []));
+        },
+      }, this.semanticLegend));
+    this.disposables.push(...providers);
   }
 
   open(document) {
@@ -354,9 +380,22 @@ class TapasClient {
 }
 
 async function activate(context) {
-  context.subscriptions.push(vscode.commands.registerCommand(
-    'tapas.runFile', () => runCurrentFile(context).catch((error) =>
-      vscode.window.showErrorMessage(`Could not run Tapas file: ${error.message}`))));
+  const selector = [
+    { language: 'tapas', scheme: 'file' },
+    { language: 'tapas', scheme: 'untitled' },
+  ];
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      'tapas.runFile', () => runCurrentFile(context).catch((error) =>
+        vscode.window.showErrorMessage(`Could not run Tapas file: ${error.message}`))),
+    vscode.commands.registerCommand(
+      'tapas.formatDocument', () => vscode.commands.executeCommand(
+        'editor.action.formatDocument')),
+    vscode.languages.registerDocumentFormattingEditProvider(selector, {
+      provideDocumentFormattingEdits: (document) =>
+        formatDocument(context, document),
+    }),
+  );
   client = new TapasClient(context);
   try {
     await client.start();
@@ -366,7 +405,7 @@ async function activate(context) {
     client.output.show(true);
     vscode.window.showErrorMessage(
       `Tapas Language Server could not start: ${error.message}. ` +
-      'Build tapas-language-server or set tapas.languageServer.path.');
+      'Install Tapas Core or set tapas.languageServer.path.');
   }
 }
 

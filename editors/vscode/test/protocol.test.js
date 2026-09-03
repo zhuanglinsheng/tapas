@@ -6,6 +6,7 @@ const os = require('os');
 const path = require('path');
 const { pathToFileURL } = require('url');
 const { LspConnection } = require('../protocol');
+const { formatSource } = require('../formatter');
 
 async function main() {
   const grammar = JSON.parse(fs.readFileSync(
@@ -18,6 +19,17 @@ async function main() {
 
   const executable = process.argv[2] || path.resolve(
     __dirname, '..', '..', '..', 'build', 'bin', 'tapas-language-server');
+  const runtime = process.argv[3] || path.join(path.dirname(executable), 'tapas');
+  const standardLibrary = path.resolve(path.dirname(runtime), '..', 'stdlib');
+  const formatted = await formatSource(runtime,
+    'function compact(value: Int) -> Int {\n' +
+    '    if(true){ return value }else{ return 0 }\n}\n' +
+    'function expanded(\n        value: Int,\n) -> Int\n{\n    return value\n}\n',
+    standardLibrary);
+  assert.strictEqual(formatted,
+    'function compact(value: Int) -> Int\n{\n' +
+    '    if (true) { return value } else { return 0 }\n}\n' +
+    'function expanded(\n        value: Int,\n) -> Int {\n    return value\n}\n');
   let resolveExit;
   const exited = new Promise((resolve) => {
     resolveExit = resolve;
@@ -43,6 +55,25 @@ async function main() {
     capabilities: { general: { positionEncodings: ['utf-16'] } },
   });
   assert.strictEqual(initialized.serverInfo.name, 'Tapas Language Server');
+  assert.strictEqual(initialized.serverInfo.version, '0.1.0');
+  const semanticLegend = initialized.capabilities.semanticTokensProvider.legend;
+  assert.deepStrictEqual(semanticLegend.tokenTypes,
+    ['namespace', 'type', 'function', 'parameter', 'variable', 'keyword']);
+  const catalog = await connection.request('tapas/syntaxCatalog', {});
+  const matches = (patterns, text) => patterns.some((pattern) =>
+    new RegExp(`^(?:${pattern.match})$`).test(text));
+  const keywordPatterns = [
+    ...grammar.repository.keywords.patterns,
+    ...grammar.repository.constants.patterns,
+  ];
+  for (const keyword of catalog.keywords)
+    assert.ok(matches(keywordPatterns, keyword), `${keyword} is missing from TextMate keywords`);
+  for (const type of catalog.types)
+    assert.ok(matches(grammar.repository.types.patterns.slice(0, 1), type),
+      `${type} is missing from TextMate types`);
+  for (const packageName of catalog.packages)
+    assert.ok(matches(grammar.repository.types.patterns.slice(1), packageName),
+      `${packageName} is missing from TextMate namespaces`);
   connection.notify('initialized', {});
   connection.notify('textDocument/didOpen', {
     textDocument: {
@@ -66,12 +97,13 @@ async function main() {
     position: { line: 1, character: 13 },
   });
   assert.ok(completion.some((item) => item.label === 'value'));
+  const semanticSource =
+    'function add(left: Int, right: List[Int]) -> Int {\n' +
+    '  return left + right[0]\n}\nlet answer = add(1, [2])\n' +
+    'let shown = print(answer)\nlet root = math::sqrt(4.0)\n';
   connection.notify('textDocument/didChange', {
     textDocument: { uri: 'file:///vscode.tap', version: 2 },
-    contentChanges: [{
-      text: 'function add(left: Int, right: List[Int]) -> Int {\n' +
-        '  return left + right[0]\n}\nlet answer = add(1, [2])\n',
-    }],
+    contentChanges: [{ text: semanticSource }],
   });
   const parameterHover = await connection.request('textDocument/hover', {
     textDocument: { uri: 'file:///vscode.tap' },
@@ -89,6 +121,51 @@ async function main() {
     position: { line: 3, character: 5 },
   });
   assert.match(callResultHover.contents.value, /answer: Int/);
+  connection.notify('textDocument/didChange', {
+    textDocument: { uri: 'file:///vscode.tap', version: 3 },
+    contentChanges: [{ text: 'pprint([1])\n' }],
+  });
+  const builtinHover = await connection.request('textDocument/hover', {
+    textDocument: { uri: 'file:///vscode.tap' },
+    position: { line: 0, character: 2 },
+  });
+  assert.match(builtinHover.contents.value,
+    /pprint\(\.\.\.values: AnyType\) -> Nil/);
+  connection.notify('textDocument/didChange', {
+    textDocument: { uri: 'file:///vscode.tap', version: 4 },
+    contentChanges: [{ text: 'let primes = [2, 3, 5]\nlet copied = primes.copy()\n' }],
+  });
+  const tunnelHover = await connection.request('textDocument/hover', {
+    textDocument: { uri: 'file:///vscode.tap' },
+    position: { line: 1, character: 22 },
+  });
+  assert.match(tunnelHover.contents.value, /copy\(value: T\) -> T/);
+  connection.notify('textDocument/didChange', {
+    textDocument: { uri: 'file:///vscode.tap', version: 5 },
+    contentChanges: [{ text: semanticSource }],
+  });
+  const semanticTokens = await connection.request('textDocument/semanticTokens/full', {
+    textDocument: { uri: 'file:///vscode.tap' },
+  });
+  assert.ok(semanticTokens.data.length > 0);
+  const semanticKinds = new Set();
+  const semanticNames = new Map();
+  const lines = semanticSource.split('\n');
+  let line = 0;
+  let character = 0;
+  for (let index = 0; index < semanticTokens.data.length; index += 5) {
+    line += semanticTokens.data[index];
+    character = semanticTokens.data[index] ? semanticTokens.data[index + 1] :
+      character + semanticTokens.data[index + 1];
+    const name = lines[line].slice(character, character + semanticTokens.data[index + 2]);
+    const kind = semanticLegend.tokenTypes[semanticTokens.data[index + 3]];
+    semanticKinds.add(kind);
+    semanticNames.set(name, kind);
+  }
+  for (const kind of ['namespace', 'keyword', 'function', 'parameter', 'type', 'variable'])
+    assert.ok(semanticKinds.has(kind), `${kind} semantic token was not returned`);
+  assert.strictEqual(semanticNames.get('print'), 'function');
+  assert.strictEqual(semanticNames.get('math'), 'namespace');
   connection.notify('textDocument/didOpen', {
     textDocument: {
       uri: mainUri, languageId: 'tapas', version: 1,

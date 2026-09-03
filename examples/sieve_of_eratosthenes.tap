@@ -1,18 +1,19 @@
 // Find all prime numbers up to a limit with the Sieve of Eratosthenes.
 // Time: O(n log log n); space: O(n).
 
-var primes_up_to = (limit: Int) -> List[Int] {
+function primes_up_to(limit: Int) -> List[Int]
+{
     let is_prime: List[Bool] = []
-    for(let value in 0 to (limit + 1)){
+    for (let value in 0 to (limit + 1)) {
         is_prime.append(value >= 2)
     }
 
     let candidate = 2
-    while(candidate * candidate <= limit){
-        if(is_prime[candidate]){
+    while (candidate * candidate <= limit) {
+        if (is_prime[candidate]) {
             // Smaller multiples were already crossed out by earlier primes.
             let multiple = candidate * candidate
-            while(multiple <= limit){
+            while (multiple <= limit) {
                 is_prime[multiple] = false
                 multiple = multiple + candidate
             }
@@ -21,12 +22,12 @@ var primes_up_to = (limit: Int) -> List[Int] {
     }
 
     let primes: List[Int] = []
-    for(let value in 2 to (limit + 1)){
-        if(is_prime[value]){
+    for (let value in 2 to (limit + 1)) {
+        if (is_prime[value]) {
             primes.append(value)
         }
     }
     return primes.copy()
 }
 
-sprint('primes up to 100: ', primes_up_to(100))
+pprint('primes up to 100: ', primes_up_to(100))

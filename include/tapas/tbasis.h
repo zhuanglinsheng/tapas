@@ -1,6 +1,10 @@
 #ifndef TAPAS_TBASIS_H
 #define TAPAS_TBASIS_H
 
+#if !defined(__cplusplus) && (!defined(__STDC_VERSION__) || __STDC_VERSION__ < 202311L)
+#error "Tapas requires an ISO C23 compiler"
+#endif
+
 /* ctypes */
 #include <math.h>
 #include <setjmp.h>
@@ -12,19 +16,11 @@
 #include <string.h>
 
 #include "tapas/ds/tstring.h"
+#include "tapas/version.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-
-/*===========================================================================*
- * Version & Meta Info
- *===========================================================================*/
-
-#define Tap_Version "1.0"
-#define Tap_Year    "2021"
-#define Tap_Author  "linsheng.z@outlook.com"
 
 
 /*===========================================================================*
@@ -165,6 +161,9 @@ typedef enum {
 	OP_EVALTF,
 	OP_IDXL,
 	OP_PUSHF,
+	OP_PUSHRULE,
+	OP_RULECOND,
+	OP_RULEREQ,
 	OP_ADD,
 	OP_SUB,
 	OP_MUL,
@@ -219,7 +218,14 @@ typedef enum {
 	compo_cppfunc  = 10,
 	compo_sessfunc = 11,
 	compo_time     = 12,
-	compo_ttypeval = 13
+	compo_ttypeval = 13,
+	compo_trule    = 14,
+	compo_trule_instance = 15,
+	compo_trule_builtin = 16,
+	compo_tevaluator = 17,
+	compo_trule_ir = 18,
+	compo_trule_term = 19,
+	compo_trule_item = 20
 } tcompo_type;
 
 

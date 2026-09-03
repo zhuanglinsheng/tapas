@@ -8,18 +8,6 @@ extern "C" {
 #endif
 
 /*===========================================================================*
- * 1. Session-Level Functions
- *===========================================================================*/
-
-void lib_ls(tobj *params, uint_regs len, tobj *vre, tcompo_env *env);
-void lib_path(tobj *params, uint_regs len, tobj *vre, tcompo_env *env);
-void tf_param(tobj *params, uint_regs len, tobj *vre, tcompo_env *env);
-void tf_nparam(tobj *params, uint_regs len, tobj *vre, tcompo_env *env);
-void tf_binary(tobj *params, uint_regs len, tobj *vre, tcompo_env *env);
-void register_os_sessf(tlib *lib);
-
-
-/*===========================================================================*
  * 2. Session Management (tsession)
  *===========================================================================*/
 
@@ -39,6 +27,9 @@ void tsession_eval_bycodes(tsession *sess, const char *file);
 
 /** Compile & execute a .tap file without saving .tapc */
 void tsession_execute_file(tsession *sess, const char *file, int interactive);
+
+int tsession_execute_module(tsession *sess, const char *module,
+			    int argument_count, const char *const *arguments);
 
 /** Execute markdown and update Tapas return blocks in place */
 void tsession_execute_markdown_update(tsession *sess, const char *file, int interactive);

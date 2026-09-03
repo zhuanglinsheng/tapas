@@ -1,5 +1,7 @@
 # Tapas 与 Python 性能比较
 
+简体中文 | [English](Results_en.md) | [项目主页](../../README.md)
+
 测试日期：2026-09-02
 
 ## 测试环境
@@ -7,13 +9,14 @@
 - 系统：`macOS-26.5.2-arm64-arm-64bit-Mach-O`
 - 处理器架构：`arm64`
 - Python：`3.13.3`
-- Tapas：`tap-script (1.0) Copyright (C) 2021 linsheng.z@outlook.com.`
+- Tapas：`Tapas 0.1.0 Copyright (C) 2020-2026 Zhuang Linsheng <zhuanglinsheng@outlook.com>.`
 - Tapas 可执行文件：`build-release/bin/tapas`
 - 有效运行次数：每项 11 次，另预热 1 次
 
 ## 结果
 
-时间为进程 CPU 时间的中位数，不包含进程启动、源码加载和编译。`Tapas/Python` 小于 1 表示 Tapas 更快。
+时间为进程 CPU 时间的中位数，不包含进程启动、源码加载和编译。
+`Tapas/Python` 小于 1 表示 Tapas 更快。
 
 ### 综合算法
 
@@ -49,4 +52,6 @@
 
 ## 说明
 
-这些程序用于比较两种实现执行相同算法时的解释器开销，不代表大型应用的完整性能。结果会受系统负载、电源状态、编译器版本和 Python 版本影响。更新 VM 或运行环境后，应使用本目录 README 中的命令重新生成。
+这些程序用于比较两种实现执行相同算法时的解释器开销，不代表大型应用的完整性能。
+结果会受系统负载、电源状态、编译器版本和 Python 版本影响。
+更新 VM 或运行环境后，应使用本目录 README 中的命令重新生成。

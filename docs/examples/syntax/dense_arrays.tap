@@ -1,0 +1,26 @@
+// Dense-array construction and common linear-algebra operations.
+
+let matrix = array(2, 2, [1, 2, 3, 4])
+print(dense::trace(matrix))
+print(dense::inner(matrix, matrix))
+
+let vector = array(1, 2, [3, 4])
+print(dense::norm(vector))
+pprint(dense::normalize(vector))
+pprint(dense::outer(
+    array(1, 2, [1, 2]),
+    array(2, 1, [3, 4])))
+pprint(dense::identity(3))
+
+let source = array(1, 2, [1, 2])
+var target = array(1, 2, 0)
+dense::copy_into(source, target)
+dense::scale_inplace(target, 2)
+dense::add_scaled_inplace(target, source, -1)
+pprint(target)
+
+let left = array(2, 2, [1, 2, 3, 4])
+let right = array(2, 2, [5, 6, 7, 8])
+var output = array(2, 2, [2, 4, 6, 8])
+dense::gemm(2, left, right, .5, output)
+pprint(output)

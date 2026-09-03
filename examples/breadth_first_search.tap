@@ -1,7 +1,7 @@
 // Breadth-first traversal of a graph represented by an adjacency dictionary.
 // Time: O(V + E); auxiliary space: O(V).
 
-var breadth_first_search = (
+function breadth_first_search(
         graph: Dictionary[String, List[String]],
         start: String,
 ) -> List[String] {
@@ -9,13 +9,13 @@ var breadth_first_search = (
     let visited: List[String] = [start]
     let order: List[String] = []
 
-    while(queue.len() > 0){
+    while (queue.len() > 0) {
         let vertex = queue[0]
-        queue.pop(0)
+        queue.pop_front()
         order.append(vertex)
 
-        for(let neighbor in graph[vertex]){
-            if((neighbor in visited) == false){
+        for (let neighbor in graph[vertex]) {
+            if ((neighbor in visited) == false) {
                 // Mark on enqueue so a vertex never enters the queue twice.
                 visited.append(neighbor)
                 queue.append(neighbor)
@@ -34,4 +34,4 @@ let graph: Dictionary[String, List[String]] = {
     'F' : ['C', 'E'],
 }
 
-sprint('BFS from A: ', breadth_first_search(graph, 'A'))
+pprint('BFS from A: ', breadth_first_search(graph, 'A'))

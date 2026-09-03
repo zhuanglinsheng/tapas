@@ -5,6 +5,28 @@
 #include <stdlib.h>
 #include <time.h>
 
+ttime *ttime_from_time(time_t value)
+{
+	ttime *out = (ttime *)calloc(1, sizeof(*out));
+	if (!out)
+		twarn(ErrRuntime_Other, "ttime_from_time", "out of memory");
+	out->base.vtable = &ttime_vtable;
+	out->value = value;
+	return out;
+}
+
+ttime *ttime_new(void)
+{
+	return ttime_from_time(time(nullptr));
+}
+
+time_t ttime_get(const ttime *value)
+{
+	return value->value;
+}
+
+/*----------------------- Required Vtable Operations -----------------------*/
+
 static const char *ttime_type(void)
 {
 	return "Time";
@@ -38,7 +60,45 @@ static int ttime_identical_impl(void *self, void *other)
 
 static tstring *ttime_string(void *self)
 {
-	return ttime_format((ttime *)self, "%Y-%m-%d %H:%M:%S");
+	char buffer[32];
+	time_t value = ((ttime *)self)->value;
+	struct tm *parts = localtime(&value);
+	if (!parts || !strftime(buffer, sizeof(buffer),
+				"%Y-%m-%d %H:%M:%S", parts))
+		return tstring_new("<invalid time>");
+	return tstring_new(buffer);
+}
+
+/*------------------------------- Operators --------------------------------*/
+
+static long ttime_seconds(const ttime *value, const char *where)
+{
+	int outside = (time_t)-1 > (time_t)0
+		? (uintmax_t)value->value > (uintmax_t)LONG_MAX
+		: (intmax_t)value->value < (intmax_t)LONG_MIN ||
+		  (intmax_t)value->value > (intmax_t)LONG_MAX;
+	if (outside)
+		twarn(ErrRuntime_Other, where,
+		      "timestamp is outside the Tapas integer range");
+	return (long)value->value;
+}
+
+static ttime *ttime_shifted(const ttime *value, long seconds)
+{
+	long base = ttime_seconds(value, "time arithmetic");
+	if ((seconds > 0 && base > LONG_MAX - seconds) ||
+	    (seconds < 0 && base < LONG_MIN - seconds))
+		twarn(ErrRuntime_Other, "time arithmetic", "time offset overflow");
+	time_t shifted = (time_t)(base + seconds);
+	if ((time_t)-1 > (time_t)0 && base + seconds < 0)
+		twarn(ErrRuntime_Other, "time arithmetic",
+		      "negative timestamps are not supported by platform time");
+	if ((time_t)-1 > (time_t)0
+		? (uintmax_t)shifted != (uintmax_t)(unsigned long)(base + seconds)
+		: (intmax_t)shifted != (intmax_t)(base + seconds))
+		twarn(ErrRuntime_Other, "time arithmetic",
+		      "timestamp is outside the platform time range");
+	return ttime_from_time(shifted);
 }
 
 static long ttime_integer(const tobj *value, const char *where)
@@ -61,7 +121,7 @@ static void ttime_add(void *self, const tobj *other, int rhs, tobj *out)
 		twarn(ErrRuntime_ParamsType, "ttime_add",
 		      "the time value must be the left operand");
 	long seconds = ttime_integer(other, "ttime_add");
-	tobj_set_compo(out, (tcompo_v *)ttime_shift((ttime *)self, seconds));
+	tobj_set_compo(out, (tcompo_v *)ttime_shifted((ttime *)self, seconds));
 }
 
 static void ttime_sub(void *self, const tobj *other, int rhs, tobj *out)
@@ -79,7 +139,7 @@ static void ttime_sub(void *self, const tobj *other, int rhs, tobj *out)
 	long seconds = ttime_integer(other, "ttime_sub");
 	if (seconds == LONG_MIN)
 		twarn(ErrRuntime_Other, "ttime_sub", "time offset overflow");
-	tobj_set_compo(out, (tcompo_v *)ttime_shift((ttime *)self, -seconds));
+	tobj_set_compo(out, (tcompo_v *)ttime_shifted((ttime *)self, -seconds));
 }
 
 static void ttime_compare(void *self, const tobj *other, int rhs, tobj *out,
@@ -122,6 +182,14 @@ static void ttime_le(void *s, const tobj *v, int rhs, tobj *out)
 	ttime_compare(s, v, rhs, out, 3);
 }
 
+/*------------------------------ Capabilities ------------------------------*/
+
+/*
+ * Time has no object capabilities. Arithmetic and ordering are operator
+ * semantics; Unix conversion and formatting are policies of the stdlib time
+ * package rather than protocols shared by unrelated runtime objects.
+ */
+
 tcompo_vtable ttime_vtable = {
 	.get_type = ttime_type,
 	.get_compo_type_code = ttime_code,
@@ -138,88 +206,3 @@ tcompo_vtable ttime_vtable = {
 	.op_ge = ttime_ge,
 	.op_le = ttime_le
 };
-
-ttime *ttime_from_time(time_t value)
-{
-	ttime *out = (ttime *)calloc(1, sizeof(*out));
-	if (!out)
-		twarn(ErrRuntime_Other, "ttime_from_time", "out of memory");
-	out->base.vtable = &ttime_vtable;
-	out->value = value;
-	return out;
-}
-
-ttime *ttime_new(void)
-{
-	return ttime_from_time(time(NULL));
-}
-
-time_t ttime_get(const ttime *value)
-{
-	return value->value;
-}
-
-ttime *ttime_from_unix(long seconds)
-{
-	if ((time_t)-1 > (time_t)0 && seconds < 0)
-		twarn(ErrRuntime_Other, "ttime_from_unix",
-		      "negative timestamps are not supported by platform time");
-	time_t converted = (time_t)seconds;
-	int outside = (time_t)-1 > (time_t)0
-		? (uintmax_t)converted != (uintmax_t)(unsigned long)seconds
-		: (intmax_t)converted != (intmax_t)seconds;
-	if (outside)
-		twarn(ErrRuntime_Other, "ttime_from_unix",
-		      "timestamp is outside the platform time range");
-	return ttime_from_time(converted);
-}
-
-long ttime_unix(const ttime *value)
-{
-	int outside = (time_t)-1 > (time_t)0
-		? (uintmax_t)value->value > (uintmax_t)LONG_MAX
-		: (intmax_t)value->value < (intmax_t)LONG_MIN ||
-		  (intmax_t)value->value > (intmax_t)LONG_MAX;
-	if (outside)
-		twarn(ErrRuntime_Other, "ttime_unix",
-		      "timestamp is outside the Tapas integer range");
-	return (long)value->value;
-}
-
-ttime *ttime_shift(const ttime *value, long seconds)
-{
-	long base = ttime_unix(value);
-	if ((seconds > 0 && base > LONG_MAX - seconds) ||
-	    (seconds < 0 && base < LONG_MIN - seconds))
-		twarn(ErrRuntime_Other, "ttime_shift", "time offset overflow");
-	return ttime_from_unix(base + seconds);
-}
-
-tstring *ttime_format(const ttime *value, const char *pattern)
-{
-	if (!pattern)
-		twarn(ErrRuntime_ParamsType, "ttime_format", "format is required");
-	if (*pattern == '\0')
-		return tstring_new_empty();
-	struct tm *parts = localtime(&value->value);
-	if (!parts)
-		twarn(ErrRuntime_Other, "ttime_format", "invalid local time");
-
-	size_t capacity = 128;
-	while (capacity <= 65536) {
-		char *buffer = (char *)malloc(capacity);
-		if (!buffer)
-			twarn(ErrRuntime_Other, "ttime_format", "out of memory");
-		size_t length = strftime(buffer, capacity, pattern, parts);
-		if (length > 0) {
-			tstring *result = tstring_new_len(buffer, length);
-			free(buffer);
-			return result;
-		}
-		free(buffer);
-		capacity *= 2;
-	}
-	twarn(ErrRuntime_Other, "ttime_format",
-	      "formatted time is empty or too large");
-	return NULL;
-}

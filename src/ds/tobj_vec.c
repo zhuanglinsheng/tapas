@@ -12,14 +12,14 @@ static void tobj_vec_retain(const tobj *obj)
 
 void tobj_vec_init(tobj_vec *v)
 {
-	v->data = NULL;
+	v->data = nullptr;
 	v->len = 0;
 	v->capacity = 0;
 }
 
 void tobj_vec_init_cap(tobj_vec *v, uint_objs cap)
 {
-	v->data = NULL;
+	v->data = nullptr;
 	v->len = 0;
 	v->capacity = 0;
 	if (cap)
@@ -34,7 +34,7 @@ void tobj_vec_free(tobj_vec *v)
 				tobj_ddc_ref_clear(&v->data[i]);
 		free(v->data);
 	}
-	v->data = NULL;
+	v->data = nullptr;
 	v->len = 0;
 	v->capacity = 0;
 }
@@ -107,14 +107,26 @@ void tobj_vec_insert(tobj_vec *v, uint_objs idx, const tobj *obj)
 	v->len++;
 }
 
-void tobj_vec_pop(tobj_vec *v, uint_objs idx)
+static tobj tobj_vec_remove(tobj_vec *v, uint_objs idx)
 {
-	if (v->data[idx].type == tcompo)
-		tobj_ddc_ref_clear(&v->data[idx]);
+	tobj removed = v->data[idx];
 	memmove(v->data + idx,
 		v->data + idx + 1,
 		(v->len - idx - 1) * sizeof(tobj));
 	v->len--;
+	return removed;
+}
+
+void tobj_vec_pop(tobj_vec *v, uint_objs idx)
+{
+	tobj removed = tobj_vec_remove(v, idx);
+	tobj_ddc_ref_clear(&removed);
+}
+
+void tobj_vec_take(tobj_vec *v, uint_objs idx, tobj *result)
+{
+	tobj_ddc_ref_clear(result);
+	*result = tobj_vec_remove(v, idx);
 }
 
 void tobj_vec_copy(tobj_vec *dst, const tobj_vec *src)

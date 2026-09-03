@@ -4,7 +4,7 @@
 
 void tobj_array_init(tobj_array *arr, uint_objs cap)
 {
-	arr->data = NULL;
+	arr->data = nullptr;
 	arr->len = 0;
 	arr->capacity = 0;
 	if (cap > 0) {
@@ -25,7 +25,7 @@ void tobj_array_free(tobj_array *arr)
 				tobj_ddc_ref_clear(&arr->data[i]);
 		free(arr->data);
 	}
-	arr->data = NULL;
+	arr->data = nullptr;
 	arr->len = 0;
 	arr->capacity = 0;
 }

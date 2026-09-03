@@ -104,7 +104,7 @@ void tstring_deinit(tstring *s)
 		return;
 	if (s->data && !tstring_uses_inline_storage(s))
 		free(s->data);
-	s->data = NULL;
+	s->data = nullptr;
 	s->len = 0;
 	s->cap = 0;
 }
@@ -115,13 +115,13 @@ tstring *tstring_new(const char *s)
 		s = "";
 	size_t len = strlen(s);
 	if (len == SIZE_MAX)
-		return NULL;
+		return nullptr;
 	tstring *ts = (tstring *)calloc(1, sizeof(tstring));
 	if (!ts)
-		return NULL;
+		return nullptr;
 	if (!tstring_init_len(ts, s, len)) {
 		free(ts);
-		return NULL;
+		return nullptr;
 	}
 	return ts;
 }
@@ -129,13 +129,13 @@ tstring *tstring_new(const char *s)
 tstring *tstring_new_len(const char *s, size_t len)
 {
 	if (len == SIZE_MAX)
-		return NULL;
+		return nullptr;
 	tstring *ts = (tstring *)calloc(1, sizeof(tstring));
 	if (!ts)
-		return NULL;
+		return nullptr;
 	if (!tstring_init_len(ts, s, len)) {
 		free(ts);
-		return NULL;
+		return nullptr;
 	}
 	return ts;
 }
@@ -144,10 +144,10 @@ tstring *tstring_new_cap(size_t cap)
 {
 	tstring *ts = (tstring *)calloc(1, sizeof(tstring));
 	if (!ts)
-		return NULL;
-	if (!tstring_init_storage(ts, NULL, 0, cap)) {
+		return nullptr;
+	if (!tstring_init_storage(ts, nullptr, 0, cap)) {
 		free(ts);
-		return NULL;
+		return nullptr;
 	}
 	return ts;
 }
@@ -292,7 +292,7 @@ void tstring_append_fmt(tstring *s, const char *fmt, ...)
 		return;
 	va_list ap;
 	va_start(ap, fmt);
-	int need = vsnprintf(NULL, 0, fmt, ap);
+	int need = vsnprintf(nullptr, 0, fmt, ap);
 	va_end(ap);
 	if (need < 0)
 		return;
@@ -646,12 +646,12 @@ void tstring_set_at(tstring *s, size_t i, char c)
 
 char *tstring_begin(tstring *s)
 {
-	return s ? s->data : NULL;
+	return s ? s->data : nullptr;
 }
 
 char *tstring_end(tstring *s)
 {
-	return s ? s->data + s->len : NULL;
+	return s ? s->data + s->len : nullptr;
 }
 
 /* ---- IO ---- */

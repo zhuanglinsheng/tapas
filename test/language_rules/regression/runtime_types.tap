@@ -1,0 +1,64 @@
+let Point = types::make_type(
+    'x' : types::Float,
+    'y' : types::Float,
+)
+let PointReordered = types::make_type(
+    'y' : types::Float,
+    'x' : types::Float,
+)
+print(Point == PointReordered)
+print(identical(Point, PointReordered))
+print(type(Point))
+print(len(Point))
+print(Point['x'] == types::Float)
+print(types::of(Point) == types::Type)
+print(types::of(print) == types::Function)
+print(types::matches({'x' : 1.0, 'y' : 2.0}, Point))
+print(types::matches({'x' : 1.0}, Point))
+
+let Number = types::union(types::Float, types::Int)
+let NumberAgain = types::union(types::Int, types::Float, types::Int)
+print(Number == NumberAgain)
+print(len(types::members(Number)))
+print(types::matches(1, Number))
+print(types::matches('one', Number))
+
+let Numbers = types::list(Number)
+print(types::base(Numbers) == types::List)
+print(types::parameters(Numbers)['item'] == Number)
+print(types::matches([1, 2.5], Numbers))
+print(types::matches([1, 'two'], Numbers))
+
+let Scores = types::dictionary(types::String, types::Float)
+print(types::matches({'Ada' : 9.5}, Scores))
+print(types::matches({1 : 9.5}, Scores))
+
+let PairType = types::pair(types::String, types::Int)
+print(types::matches('age' : 42, PairType))
+print(types::matches(42 : 'age', PairType))
+
+let TypeKeys = keys(Point)
+print(len(TypeKeys))
+print(len(types::fields(Point)))
+print(len(types::definition(types::Int)))
+
+let TypeMap = {Point : 'point'}
+print(TypeMap[PointReordered])
+
+let PointCopy = copy(Point)
+print(PointCopy == Point)
+print(identical(PointCopy, Point))
+
+let ReflectedFields = types::fields(Point)
+ReflectedFields['x'] = types::Int
+print(Point['x'] == types::Float)
+
+print(types::List == types::list(types::AnyType))
+print(types::matches([], types::list(types::Int)))
+print(types::matches('anything', types::AnyType))
+
+var FieldCount = 0
+for (let FieldName in Point) {
+    FieldCount = FieldCount + 1
+}
+print(FieldCount)

@@ -2,66 +2,39 @@
 
 [简体中文](TypeSystem_zh.md) | English | [Project Home](../README_en.md)
 
-This document defines the type system currently supported by Tapas: type
-annotations, runtime `Type` values, static checking, the `types` package, and
-implementation constraints. It supplements the language definition in
-`Syntax_en.md`; for type annotations, Type construction, static checking, and
-runtime Type operations, the rules in this document are normative.
+This document describes the type annotations, Type values, static checking,
+and `types` package currently supported by Tapas. It supplements the type-system
+definition in the [Language Reference](Syntax_en.md). The rules here are
+normative for those features; exact Rule Types and their constructors are
+defined separately in the [Rule documentation](Rules_en.md).
 
-The current type system follows four principles:
+Type annotations participate only in compile-time analysis. They do not change
+a value's runtime representation or insert implicit checks or conversions. A
+Type can also be stored, passed, returned, and exported as an ordinary value;
+this document calls such a value a Type value. User-defined Types are immutable,
+and their complete definitions must be visible at compile time.
 
-- Type annotations participate only in compile-time analysis. They do not
-  change the runtime representation of a value or insert implicit checks or
-  conversions.
-- A `Type` is also an ordinary runtime value and may be stored, passed,
-  returned, and exported.
-- User-defined Types are immutable, and their complete definitions must be
-  visible at compile time.
-- A value whose type cannot be determined statically may still flow into an
-  annotated position. Programs use `types::matches` for explicit validation at
-  dynamic boundaries.
-
-Conceptually, every Type is a recursive, immutable mapping:
-
-```text
-Dictionary[String, Type]
-```
-
-This is a uniform semantic model; it does not require the underlying C object
-to contain an ordinary `tdict`.
+When the compiler cannot determine a value's Type, the value may still flow
+into an annotated position. Code that needs to verify its actual structure at
+a dynamic boundary must call `types::matches` explicitly.
 
 
 
-## 1. Type Values and Static Types
+## 1. Core Concepts
 
-### 1.1 Runtime representation
+### 1.1 Type values and runtime Types
 
-`Type` is a distinct composite value category, alongside String, List,
-Dictionary, and Time. An ordinary Dictionary does not become a Type merely
-because its contents have the logical shape of a Type definition.
+A Type value belongs to a distinct value category alongside String, List,
+Dictionary, and Time. An ordinary Dictionary does not become a Type value merely
+because it resembles a Type definition. Once constructed, a Type value is
+immutable. Indexing, reflection, and iteration may read its definition or
+return an ordinary container copy, but cannot expose writable internal state.
 
-A Type is immutable once constructed. Indexing, reflection, and iteration may
-read its definition or return a copy in an ordinary container, but they must
-not expose a writable location within the Type.
-
-Type definitions recursively refer to other Types. The sole recursion
-terminus is:
-
-```text
-types::AnyType -> {}
-```
-
-`types::AnyType` is the only Type with an empty definition and also denotes any
-value. Users cannot construct an empty Type:
-
-```text
-types::make_type() // Compile error: a field Type must not be empty.
-```
-
-Every non-recursive definition path eventually reaches a predefined Type.
-Recursive Types form a finite graph through named definitions and back
-references. Direct recursion and mutual recursion in one lexical scope are
-supported. Runtime module-import cycles remain module errors.
+A Type value and a runtime Type are different concepts. A Type value is a value
+that a program can store and pass, such as `types::Int`. A runtime Type describes
+the category to which a value belongs while the program executes; the runtime
+Type of the integer `1`, for example, is `types::Int`. Because `types::of(value)`
+returns a runtime Type, `types::of(types::Int)` is `types::Type`.
 
 ### 1.2 Predefined Types
 
@@ -85,22 +58,42 @@ The `types` package exports the following Type values:
 | `types::BoolArray` | Boolean arrays |
 | `types::Time` | Instants in time |
 | `types::Type` | Type values |
+| `types::Indexable` | Objects that support index reads |
+| `types::IndexSettable` | Objects that support index writes |
+| `types::Appendable` | Objects that support appending |
+| `types::Deletable` | Objects that support deletion |
+| `types::Contains` | Objects that support `in` membership tests |
+| `types::Iterable` | Objects that support `for` iteration |
+| `types::Rule` | Any Rule |
+| `types::RuleInstance` | Any Rule instance |
 
-`types::List`, `types::Pair`, and `types::Dictionary` are called **raw
-container Types**.
+Type names in documentation and source use the capitalization shown above;
+without the `types::` qualifier they remain `Nil`, `Bool`, `Int`, and `Float`.
+Lowercase `nil` denotes the internal absence value, while lowercase `int()`,
+`float()`, and `bool()` name conversion functions. `Any`, `Array`, and
+`number` are not standard Type names; use `AnyType`, `RealArray | BoolArray`,
+and `Int | Float`, respectively.
+
+`types::List`, `types::Pair`, `types::Dictionary`, and `types::Iterator` describe
+only a value's basic category; this document calls them raw container Types.
+Capability Types such as `Indexable` and `Appendable` require the corresponding
+operation without constraining its parameter or result Types. See the
+[Standard Library](Stdlib_en.md) for the operations supported by each value
+category and the [Rule documentation](Rules_en.md) for exact Rule and
+RuleInstance Types.
 
 ### 1.3 Static Type expressions
 
-A runtime value being a Type does not by itself make the expression valid in a
-type annotation. The compiler recognizes only the following as static Type
-expressions:
+An expression that produces a Type value at runtime is not necessarily valid
+in a type annotation. The compiler recognizes only the following as static
+Type expressions:
 
 1. a predefined Type from the `types` package;
 2. an established static Type binding that has not subsequently been
    reassigned in the current scope;
 3. a static Type binding exported by a module interface;
-4. a direct call to `types::make_type`, `types::union`, `types::list`,
-   `types::pair`, or `types::dictionary` that satisfies Section 2.
+4. a Type construction form that satisfies Section 2, or an exact Rule Type
+   construction form defined by the Rule documentation.
 
 A type annotation may additionally use the parameterized Type applications
 defined in Section 3.1. This syntax constructs a Type only in an annotation; it
@@ -119,8 +112,9 @@ bindings, and other runtime operations are not static Type expressions. The
 compiler does not execute or inline an ordinary function to obtain a Type:
 
 ```tapas
-let choose = (flag){
-    if(flag){
+function choose(flag)
+{
+    if (flag) {
         return types::Int
     }
     return types::String
@@ -137,16 +131,15 @@ var current = types::Int
 current = types::String
 ```
 
-The runtime type of `current` is `types::Type`, but `current` cannot be used in
-an annotation.
+`current` stores a Type value, and its runtime Type is `types::Type`, but it
+cannot be used in an annotation.
 
-The five Type constructors use function-call syntax, but they are compile-time
-built-in forms rather than first-class functions that can be stored, passed, or
-called indirectly. They are valid only as calls recognized directly by the
-compiler, and every argument must be a static Type expression. The compiler
-emits a runtime Type constant or module-initialization code for the result. A
-program cannot construct a new Type definition from a file, the network, or
-other runtime data.
+Type construction forms use function-call syntax, but they are compile-time
+built-ins rather than first-class functions that can be stored, passed, or
+called indirectly. The compiler must recognize the form directly, and each Type
+argument must be a static Type expression. The compiler emits a Type-value
+constant or module-initialization code for the result; a program cannot build a
+new Type definition from a file, the network, or other runtime data.
 
 
 
@@ -165,14 +158,15 @@ let Person = types::make_type(
 )
 ```
 
-The Pairs are constructor inputs only. The result remains, conceptually, an
-immutable `Dictionary[String, Type]`. The compiler checks that:
+Pairs describe fields only. The result is a distinct, immutable Type value, not
+an ordinary Dictionary. The compiler checks that:
 
 1. the call contains at least one argument;
 2. every top-level argument is a Pair written directly in the call;
 3. the left member of each Pair is a String literal;
 4. field names are unique and do not begin with the reserved character `@`;
-5. the right member of each Pair is a static Type expression.
+5. the right member of each Pair is a static Type expression;
+6. an optional field wraps one directly written Pair in `types::optional`.
 
 Fields are separated by commas. Because the Pair operator is right-associative,
 a nested Pair cannot stand in for multiple arguments:
@@ -194,28 +188,42 @@ let OtherPerson = types::make_type(name_field) // Compile error
 ```
 
 Field names are case-sensitive and are compared as their original UTF-8 byte
-sequences; no Unicode normalization is performed. Every field is required.
-The current type system has no optional fields.
+sequences; no Unicode normalization is performed. Fields are required by
+default and may be marked optional with `types::optional`:
+
+```tapas
+let User = types::make_type(
+    'name' : types::String,
+    types::optional('age' : types::Int),
+)
+```
+
+`types::optional` is valid only directly inside `types::make_type` and must wrap
+one directly written Pair. An optional field may be absent; when present, its
+value must still match the declared Type. `types::optional_fields(T)` returns
+the optional field names of field Type `T`. Deleting an optional field is valid;
+deleting a required field is a compile error.
 
 A value matches a field Type if and only if it is a Dictionary, contains every
-required field, and the value of each required field recursively matches the
-corresponding Type. Undeclared extra fields do not affect matching.
+required field, and every declared field that is present recursively matches
+its Type. Undeclared extra fields do not affect matching.
 
-Field Types use structural equivalence. Names assigned to a Type, declaration
-locations, and field declaration order do not affect equivalence. Two
-definitions are equivalent when their field names and corresponding Types are
-identical. A Dictionary may therefore match several field Types; there is no
-global inheritance hierarchy.
+Field Types use structural equivalence. Binding names, declaration locations,
+and field order do not affect equivalence. Two definitions are equivalent only
+when their field names, field Types, and optional status are identical. A
+Dictionary may therefore match several field Types; there is no global
+inheritance hierarchy.
 
 ### 2.2 Parameterized containers
 
-Lists, Pairs, and Dictionaries with uniform key and value Types are described
-by these forms:
+Parameterized containers constrain List elements, the two members of a Pair,
+Dictionary keys and values, or the elements produced by an Iterator:
 
 ```tapas
 let IntList = types::list(types::Int)
 let Entry = types::pair(types::String, types::Int)
 let Scores = types::dictionary(types::String, types::Float)
+let IntIterator = types::iterator(types::Int)
 let Matrix = types::list(types::list(types::Float))
 ```
 
@@ -228,12 +236,13 @@ let values: IntList = [1, 2, 3]
 let direct_values: List[Int] = [1, 2, 3]
 let matrix: List[List[Float]] = []
 let scores: Dictionary[String, Float] = {}
+let indices: Iterator[Int] = 0 to 10
 ```
 
-`List[T]`, `Pair[A, B]`, and `Dictionary[K, V]` produce Types equivalent to
-`types::list(T)`, `types::pair(A, B)`, and `types::dictionary(K, V)`,
-respectively. The bracket form improves annotation syntax but does not add
-user-defined generic templates.
+`List[T]`, `Pair[A, B]`, `Dictionary[K, V]`, and `Iterator[T]` produce Types
+equivalent to `types::list(T)`, `types::pair(A, B)`,
+`types::dictionary(K, V)`, and `types::iterator(T)`, respectively. The bracket
+form makes annotations concise but does not add user-defined generic templates.
 
 A raw container Type checks only the runtime category and is not equivalent to
 a parameterized container using `types::AnyType`:
@@ -247,11 +256,9 @@ The former requires a fixed set of fields; the latter checks every key and
 value in the container. The current type system cannot combine both constraints
 in one Type.
 
-Iterators do not currently support an element Type because `types::matches`
-cannot check every element without consuming the Iterator. Arrays continue to
-use `types::RealArray` and `types::BoolArray`; integer parameters such as shape
-and dimension are outside this design, whose constructors accept only Type
-parameters.
+The current runtime Iterator produces only Int values, so an integer range
+matches `Iterator[Int]`. `types::matches` can validate that constraint without
+consuming the Iterator; other element Types do not match.
 
 ### 2.3 Unions
 
@@ -268,7 +275,7 @@ To construct a union, the compiler:
 
 1. flattens existing unions;
 2. removes equivalent duplicate members;
-3. sorts members by canonical representation;
+3. sorts members into a stable canonical order;
 4. uses the member itself if deduplication leaves only one member;
 5. uses `types::AnyType` if the union contains `types::AnyType`.
 
@@ -292,8 +299,8 @@ as `Type`, then completes it with one static Type assignment:
 let Tree: Type
 
 Tree = types::make_type(
-    'value': types::Int,
-    'children': types::list(Tree),
+    'value' : types::Int,
+    'children' : types::list(Tree),
 )
 ```
 
@@ -305,8 +312,8 @@ value. Several names may be declared first to form mutual recursion:
 let Left: Type
 let Right: Type
 
-Left = types::make_type('rights': types::list(Right))
-Right = types::make_type('lefts': types::list(Left))
+Left = types::make_type('rights' : types::list(Right))
+Right = types::make_type('lefts' : types::list(Left))
 ```
 
 Every cycle must pass through a real Type constructor such as a field,
@@ -321,52 +328,55 @@ cycle indefinitely. Display uses a finite recursion marker rather than trying
 to print the whole graph. Module interfaces preserve the structured graph
 rather than depending on expanded display text.
 
-### 2.5 Canonical representation and construction order
+### 2.5 Type equivalence and field construction order
 
-The canonical representation used for equivalence, ordering, and hashing of
-non-recursive Types is generated as follows:
+Binding names, declaration locations, and object addresses do not determine
+Type equivalence. Predefined Types compare by category; unions compare their
+flattened, deduplicated members; parameterized Types compare their base and
+parameters; and field Types compare field names, field Types, and optional
+status. Recursive Types compare as finite graphs with back references, so the
+comparison never expands indefinitely.
 
-1. `types::AnyType` uses a fixed terminus marker;
-2. every other predefined Type uses a fixed numeric identifier;
-3. a field Type encodes, in UTF-8 byte order by field name, each name's length,
-   the name itself, and the field Type;
-4. a parameterized container encodes the raw container identifier, fixed
-   parameter names, and parameter Types;
-5. a union is flattened and deduplicated, then its members are encoded in byte
-   order of their canonical representations;
-6. every segment includes its category and length; displayed text must not
-   simply be concatenated.
+Equivalent Types have the same hash and address the same Dictionary key,
+although different Types may coincidentally share a hash. Printed output and
+the diagnostic data returned by `types::definition` do not participate in
+equivalence.
 
-A recursive Type is compared directly as a finite graph with back references;
-it does not produce an infinitely expanded canonical string. Node numbers used
-during comparison belong only to that traversal and do not depend on declaration
-names or object addresses. Recursive Types use a stable hash compatible with
-structural equivalence; equivalent Types must have the same hash, although
-different Types may share one. Neither the canonical representation nor graph
-comparison is a display format or returned by `types::definition`.
-
-A field Type also has a **construction order**: the order in which its Pairs
-appear in `make_type`. The compiler and module interface preserve this order
-for positional structure literals. It is not part of the structural Type
-definition and does not participate in equivalence, assignability, or hashing.
-Type aliases and module imports preserve the construction order of the
-original Type.
-
-Two equivalent field Types may have different construction orders. Their
-positional structure literals are interpreted according to their respective
-orders even though both Types describe the same structure.
+A field Type also preserves the order in which fields appear in
+`types::make_type` for use by positional structure literals. This construction
+order is not part of the structural definition and does not affect equivalence,
+assignability, or hashing. Two equivalent field Types may therefore have
+different construction orders and interpret positional structure literals in
+their respective orders. Type aliases and module imports preserve the original
+construction order.
 
 
 
-## 3. Type Annotations and Object Construction
+## 3. Type Annotations and Value Construction
 
 ### 3.1 Annotation syntax and name resolution
 
-The annotation syntax in a declaration is:
+Annotations follow declaration names and function parameters, and may also
+describe function results:
+
+```tapas
+let annotation_count: Int = 1
+let annotation_values: List[Int] = [1, 2, 3]
+let annotation_identifier: Int | String = 'T-1'
+
+function annotation_size(text: String) -> Int
+{
+    return len(text)
+}
+```
+
+The complete grammar is:
 
 ```text
 declarator       = IDENTIFIER, [ ":", type-expression ], [ "=", expression ] ;
-type-expression  = function-type | type-application | qualified-type-name ;
+type-expression  = union-type ;
+union-type       = primary-type, { "|", primary-type } ;
+primary-type     = function-type | type-application | qualified-type-name ;
 function-type    = function-constructor, "[",
                    [ type-arguments, [ "," ] | "..." ], "]",
                    "->", type-expression ;
@@ -384,16 +394,30 @@ A parameterized Type application accepts only these built-in constructors:
 | `List[T]` | 1 | `types::list(T)` |
 | `Pair[A, B]` | 2 | `types::pair(A, B)` |
 | `Dictionary[K, V]` | 2 | `types::dictionary(K, V)` |
+| `Iterator[T]` | 1 | `types::iterator(T)` |
 | `Union[A, B, ...]` | at least 2 | `types::union(A, B, ...)` |
+| `A \| B \| ...` | at least 2 | `Union[A, B, ...]` |
 | `Function[A, B, ...] -> R` | zero or more parameters and one result | no runtime construction form |
+| `Rule[A, B, ...]` | zero or more parameters | `types::rule(A, B, ...)` |
+| `RuleInstance[A, B, ...]` | zero or more parameters | `types::rule_instance(A, B, ...)` |
 
 A constructor may also be qualified, as in `types::List[T]`. Each argument is
 recursively a `type-expression`, so applications may be nested to a finite
 depth. Names are case-sensitive. A wrong arity, an unsupported base Type, or
 an argument that is not a valid Type expression is a compile error. A trailing
-comma is allowed. An empty argument list is valid only in `Function[] -> R`.
-`Function[...] -> R` denotes a variadic function; variadic items cannot
-currently carry a separate Type annotation.
+comma is allowed. `Function[] -> R` denotes a function with no parameters;
+`Function[...] -> R` denotes a variadic function, whose variadic items cannot
+currently carry a separate Type annotation. See the [Rule documentation](Rules_en.md)
+for the details of Rule Types.
+
+Source annotations use the more concise `|` form by default. It is Type syntax
+sugar for `Union` and has lower precedence than Type applications and function
+Types. `List[Int | Float]` is equivalent to
+`List[Union[Int, Float]]`; in `Function[Int | Float] -> String | Nil`, the
+parameter and result are both union Types. `A | B | C` directly creates one
+three-member union rather than nested binary unions. In an ordinary expression,
+`|` remains element-wise OR. Tools currently display the stable full form
+`Union[A, B]`.
 
 An unqualified constructor name follows the normal shadowing rule. If the
 current scope contains a binding with that name, resolution does not fall back
@@ -406,7 +430,7 @@ expression:
 ```text
 let Identifier = types::union(types::Int, types::String)
 let value: Identifier = read()
-let direct: Union[Int, String] = read()
+let direct: Int | String = read()
 
 let other: types::union(types::Int, types::String) = read() // Compile error
 let invalid: Int[String] = 1                                // Compile error
@@ -423,16 +447,16 @@ An unqualified name following `:` is resolved in this order:
 
 1. look for a binding with the same name in the current lexical scope;
 2. if the binding is a static Type, use that Type;
-3. if it is an ordinary value or a non-static runtime Type, report an error and
-   do not fall back;
+3. if it is an ordinary value, or a Type value that cannot be resolved as a
+   static Type expression, report an error and do not fall back;
 4. if the current scope contains no such binding, look for a predefined Type in
    the `types` package;
 5. if no Type is found, report an unknown Type.
 
 Qualified names do not use fallback resolution. `model::Person` must resolve
 to a static Type through the module interface for `model`. Ordinary
-expressions do not use predefined-Type fallback either, so obtaining a runtime
-Type value requires its full name:
+expressions do not use predefined-Type fallback either, so obtaining a Type
+value requires its full name:
 
 ```tapas
 let schema = types::Int
@@ -463,14 +487,16 @@ function-literal = parameter-list, [ return-annotation ], block ;
 ```
 
 The named declaration
-`function name(parameters) -> Type { ... }` uses the same signature syntax. It
-is equivalent to binding the corresponding function literal to the read-only
-name `name`.
+`function name(parameters) -> Type
+{ ... }` uses the same signature syntax. It
+stores the function value in the read-only environment binding `name`, which
+other closures may capture.
 
 Each fixed parameter may be annotated or left unannotated:
 
 ```text
-let find = (values: List[Int], target: Int, start) -> Int {
+function find(values: List[Int], target: Int, start) -> Int
+{
     // ...
 }
 ```
@@ -486,7 +512,8 @@ function apply(
     return callback(value)
 }
 
-let formatter: Function[Int] -> String = (value: Int) -> String {
+let formatter: Function[Int] -> String = (value: Int) -> String
+{
     return str(value)
 }
 ```
@@ -515,8 +542,8 @@ inference.
 
 Parameter annotations provide compile-time constraints only. Compilation is
 accepted when an argument or call target is `Unknown`, and the compiler does
-not insert an implicit check at function entry. Use `types::matches` or
-`assert(rule)` explicitly when a dynamic boundary must enforce a more specific
+not insert an implicit check at function entry. Use `types::matches` or an
+inline `assert(rule { ... })` when a dynamic boundary must enforce a more specific
 condition. The variadic `...` form cannot carry a parameter annotation, but a
 result annotation may follow its parameter list.
 
@@ -526,7 +553,7 @@ metadata and does not change the runtime function object;
 `types::of(function_value)` still returns raw `types::Function`. Exact function
 Types currently have no runtime construction or reflection interface.
 
-### 3.3 Dictionaries and structure literals
+### 3.3 Field Types and structure literals
 
 A field Type still describes an ordinary Dictionary at runtime. The complete
 construction syntax is a Dictionary literal with a type annotation:
@@ -596,8 +623,12 @@ of these rules applies:
 6. `A` and `B` are parameterized containers of the same kind and every
    corresponding Type parameter is equivalent;
 7. `A` is a field Type and `B` is `types::Dictionary`;
-8. both `A` and `B` are field Types, `A` contains every field of `B`, and the
-   Types of fields with the same name are equivalent.
+8. both `A` and `B` are field Types, and `A` satisfies the required fields,
+   optional fields, and corresponding field Types expected by `B`;
+9. `A` and `B` are exact function Types satisfying the parameter-contravariance
+   and result-covariance rules in Section 3.2;
+10. `A` and `B` are Rule-related Types satisfying the assignability rules in
+    the Rule documentation.
 
 A field Type and a uniform-key/value Dictionary Type are not assignable to one
 another. Apart from the rules above, two known Types are not assignable. There
@@ -619,10 +650,12 @@ let numbers: NumberList = ints // Compile error
 
 Field Types support width assignability: an `A` with more fields is assignable
 to a `B` with fewer, provided fields with the same name have equivalent Types.
-Writing an undeclared field through a field-Type reference is a compile error;
-otherwise a narrower alias could corrupt an extra field required by the wider
-Type. To add fields, first assign the value explicitly to `types::Dictionary`
-and accept the loss of static field constraints.
+Every required field of `B` must also be required in `A`; an optional field of
+`B` may be absent from `A`, or may be required or optional there. Writing an
+undeclared field through a field-Type reference is a compile error; otherwise a
+narrower alias could corrupt an extra field required by the wider Type. To add
+fields, first assign the value explicitly to `types::Dictionary` and accept the
+loss of static field constraints.
 
 Parameterized containers and field Types are assignable to their corresponding
 raw container Types. Assignment to a raw container or `types::AnyType` loses
@@ -630,9 +663,10 @@ some static constraints. If the value is modified through the wider alias, the
 compiler does not guarantee that its original annotation still holds and does
 not insert a runtime check.
 
-When the compiler cannot determine an expression's Type, it uses the internal
-state `Unknown`. `Unknown` is not a Type, but it may enter any target position
-without causing an implicit runtime check:
+When the compiler cannot determine an expression's Type, static analysis uses
+the internal state `Unknown`. `Unknown` is not a program-visible Type value and
+cannot appear in an annotation. It may enter any target position without
+causing an implicit runtime check:
 
 ```text
 var amount: Int = 1
@@ -688,11 +722,11 @@ Without a target Type, container literals are inferred as follows:
 3. if every key of a non-empty Dictionary is a String literal and every value
    Type is known, infer a field Type;
 4. for any other non-empty Dictionary whose key and value Types are known, Key
-   and Value are their respective canonical unions;
+   and Value are the normalized unions of those Types;
 5. infer the corresponding raw container Type for an empty container or when
    any required member is `Unknown`.
 
-If an inferred canonical union has only one member, that member is used
+If an inferred union has only one member after normalization, that member is used
 directly. This is not subject to the source-level rule that `types::union`
 requires at least two arguments.
 
@@ -726,13 +760,16 @@ The compile-time Type construction forms are:
 | `types::make_type(...Pair(String, Type)) -> Type` | Construct a non-empty field Type |
 | `types::union(Type, Type, ...) -> Type` | Construct a union |
 | `types::list(Type) -> Type` | Construct a parameterized List Type |
+| `types::iterator(Type) -> Type` | Construct a parameterized Iterator Type |
 | `types::pair(Type, Type) -> Type` | Construct a parameterized Pair Type |
 | `types::dictionary(Type, Type) -> Type` | Construct a parameterized Dictionary Type |
+| `types::optional(Pair(String, Type))` | Mark an optional field inside a field Type |
 
-Annotations also provide `List[T]`, `Pair[A, B]`, `Dictionary[K, V]`, and
-`Union[A, B, ...]`. These forms construct the same Types as the functions in
-the table; they are not ordinary runtime indexing and do not define new Type
-templates.
+Annotations also provide `List[T]`, `Iterator[T]`, `Pair[A, B]`,
+`Dictionary[K, V]`, `Union[A, B, ...]`, `A | B`, and exact function Types.
+These forms are not ordinary runtime indexing and do not define new Type
+templates. Rule-related construction forms are defined in the
+[Rule documentation](Rules_en.md).
 
 The runtime-checking interfaces are:
 
@@ -746,6 +783,7 @@ The read-only reflection interfaces are:
 | Signature | Purpose |
 |---|---|
 | `types::fields(Type) -> Dictionary` | Return a copy of the user fields of a field Type |
+| `types::optional_fields(Type) -> List` | Return the optional field names of a field Type |
 | `types::members(Type) -> List` | Return the members of a union |
 | `types::base(Type) -> Type` | Return the raw Type of a parameterized container |
 | `types::parameters(Type) -> Dictionary` | Return a copy of a parameterized container's parameters |
@@ -772,8 +810,12 @@ The read-only reflection interfaces are:
 | Boolean array | `types::BoolArray` |
 | Instant in time | `types::Time` |
 | Type | `types::Type` |
+| Rule | `types::Rule` |
+| RuleInstance | `types::RuleInstance` |
 
-It never returns a union, parameterized container, or user-defined field Type:
+The table lists the core value categories; see the [Rule documentation](Rules_en.md)
+for Rule IR and evaluator value Types. `types::of` never returns a union,
+parameterized container, exact function Type, or user-defined field Type:
 
 ```tapas
 let dictionary_runtime_type_is_generic = types::of({'name' : 'Ada'}) == types::Dictionary
@@ -786,13 +828,17 @@ let incomplete_person_does_not_match = types::matches({'name' : 'Ada'}, Person)
 2. if `expected` is a union, return `true` when any member matches;
 3. if `expected` is a parameterized List, the value must be a List and every
    element must match Item;
-4. if `expected` is a parameterized Pair, the value must be a Pair and its two
+4. if `expected` is a parameterized Iterator, the value must be an Iterator and
+   its intrinsic element Type must match Item;
+5. if `expected` is a parameterized Pair, the value must be a Pair and its two
    members must match First and Second respectively;
-5. if `expected` is a parameterized Dictionary, the value must be a Dictionary
+6. if `expected` is a parameterized Dictionary, the value must be a Dictionary
    and every key and value must match Key and Value respectively;
-6. if `expected` is a field Type, the value must be a Dictionary containing
-   every required field, and each field value must match;
-7. otherwise, use the assignability rules in Section 4.1 to determine whether
+7. if `expected` is a field Type, the value must be a Dictionary containing
+   every required field, and every declared field that is present must match;
+8. if `expected` is an exact Rule, RuleInstance, or RuleTerm Type, matching
+   follows the signature or result-Type rules in the Rule documentation;
+9. otherwise, use the assignability rules in Section 4.1 to determine whether
    `types::of(value)` is assignable to `expected`.
 
 An empty List or Dictionary matches the corresponding parameterized container
@@ -805,14 +851,16 @@ the value.
 `types::fields(T)` returns a copy of the user fields for a field Type and an
 empty Dictionary for any other Type. `types::members(T)` returns union members
 in canonical order, or a one-element List containing `T` for any non-union.
-`types::base(T)` returns `types::List`, `types::Pair`, or
-`types::Dictionary` for a parameterized container, and otherwise returns `T`
-itself.
+`types::base(T)` returns the corresponding `types::List`, `types::Iterator`,
+`types::Pair`, or `types::Dictionary` for a parameterized container. It returns
+the corresponding raw Type for an exact Rule or RuleInstance Type, and returns
+`T` itself for other Types.
 
 For a parameterized container, `types::parameters(T)` returns a copy in an
 ordinary Dictionary with these fixed keys:
 
 - List: `item`;
+- Iterator: `item`;
 - Pair: `first`, `second`;
 - Dictionary: `key`, `value`.
 
@@ -835,15 +883,15 @@ result may contain internal encodings, is not stable across versions, and
 cannot be passed back to `types::make_type`. A Type's printed representation is
 likewise intended only for diagnostics.
 
-For non-recursive Types, `==` compares canonical representations; for recursive
-Types, it compares finite Type graphs. `!=` is its negation. Between a
+For non-recursive Types, `==` follows the equivalence rules in Section 2.5; for
+recursive Types, it compares finite Type graphs. `!=` is its negation. Between a
 Type and a non-Type, `==` returns `false` and `!=` returns `true`.
 `identical(A, B)` tests only whether both values refer to the same Type object.
 Equivalent Types may or may not share an object, and programs must not depend
 on either behavior.
 
 When a Type is used as a Dictionary key, key equality follows `==`. A
-non-recursive Type's hash is derived from its canonical representation; a
+non-recursive Type's hash is derived from its structural definition; a
 recursive Type uses a stable hash compatible with graph equivalence. Equivalent
 Types must have the same hash and address the same Dictionary entry.
 
@@ -854,7 +902,7 @@ a Type construction form are reported by the compiler.
 
 
 
-## 6. Modules and Tooling
+## 6. Types in Modules
 
 A module may export a static Type:
 
@@ -878,138 +926,36 @@ let origin: geometry::Point = {
 }
 ```
 
-The module interface stores the static Type graph. For a field Type, it also
-stores the construction order required by positional structure literals. The
-interface does not depend on results from `types::definition` or displayed
-text. An importing module reuses or materializes that Type graph; construction
-order is used only to expand structure literals at compile time.
+The module interface stores the complete structure of a static Type. For a
+field Type, it also preserves the construction order required by positional
+structure literals. An importing module does not reconstruct this information
+from printed output or from `types::definition`.
 
-A module may also export a binding whose runtime value is a Type but whose
-source is not a static Type expression. An importer can use that binding only
-as an ordinary runtime value, not in an annotation. A module interface must
-distinguish a “static Type binding” from an “ordinary binding whose runtime
-type is Type.”
-
-The reusable front end stores node, symbol, and function-signature Types as
-immutable `TypeId` values in a Type arena. The compiler and Language Server
-consume the same static analysis result. Only the compiler materializes a
-`TypeId` as a runtime `ttypeval` while generating a program; the Language
-Server does not link or execute the VM. Both sides statically evaluate only
-the defined Type construction forms and never execute ordinary Tapas functions.
+A module may also export an ordinary binding that happens to hold a Type value.
+If the binding did not originate from a static Type expression, an importer may
+read and pass it but cannot use it in an annotation. Module interfaces therefore
+distinguish static Type bindings from ordinary bindings whose runtime Type is
+`types::Type`.
 
 
 
-## 7. Implementation Constraints
-
-### 7.1 Internal object
-
-Type uses the distinct composite type code `compo_ttypeval`. To avoid confusion
-with the existing `ttypes`, its C structure is named `ttypeval`:
-
-```c
-typedef struct ttypeval {
-    tcompo_v compo_base;
-    thashtbl *definition;
-} ttypeval;
-```
-
-`compo_base` is the object header shared by composite values and stores the
-Type vtable pointer and reference count. `definition` is an immutable
-`String -> Type` mapping that stores only one level of the current Type's
-definition. Its Type values refer directly to existing `ttypeval` objects
-rather than copying the entire definition tree. The implementation uses
-`thashtbl` directly and does not wrap it in a mutable `tdict`.
-
-Only the following internal shapes are valid for `definition`:
-
-| Type | Logical contents |
-|---|---|
-| `types::AnyType` | `{}` |
-| Any other predefined Type | `{'@builtin/name' : types::AnyType}` |
-| Field Type | `{'field-name' : FieldType, ...}` |
-| Parameterized List | `{'@base' : types::List, '@item' : Item}` |
-| Parameterized Pair | `{'@base' : types::Pair, '@first' : First, '@second' : Second}` |
-| Parameterized Dictionary | `{'@base' : types::Dictionary, '@key' : Key, '@value' : Value}` |
-| Union | `{'@union/0' : Member0, '@union/1' : Member1, ...}` |
-
-For example:
-
-```tapas
-let int_definition_example = types::Int
-// {'@builtin/Int' : types::AnyType}
-
-let list_definition_example = types::list(types::Int)
-// {'@base' : types::List, '@item' : types::Int}
-
-let point_definition_example = Point
-// {'x' : types::Float, 'y' : types::Float}
-```
-
-Every key must be a String and every value must be a Type.
-`types::AnyType` is the only empty table. An ordinary field name cannot begin
-with `@`, and distinct internal shapes cannot be mixed.
-
-These reserved keys are implementation details. Programs must not depend on
-their exact names or order in the result of `types::definition` or in printed
-output. Union members must be normalized and sorted before insertion. The
-number in `@union/N` denotes canonical member order and must not be derived
-from hash-table iteration order.
-
-A raw container and a parameterized container using `types::AnyType` have
-different definitions. For example, `types::List` uses `@builtin/List`, while
-`types::list(types::AnyType)` uses `@base` and `@item`; the two are therefore
-not equivalent.
-
-### 7.2 Immutability and the object protocol
-
-An implementation writes a `ttypeval` only during internal construction. Once
-published, no `definition` entry may be added, removed, or replaced. The hash
-table owns references to its keys and values. Releasing a Type must release the
-table and, under the existing reference-counting rules, the Strings and Types
-it contains. Runtime entry points should still defensively reject an empty
-definition, a non-String key, a non-Type value, an invalid reserved key, or an
-invalid internal shape.
-
-A completed recursive Type graph may contain reference cycles. The current
-runtime retains such immutable graphs for the lifetime of the process; this
-does not change observable semantics. A future graph owner or cycle collector
-must preserve the same public behavior.
-
-No public operation may expose an internally writable location:
-
-- ordinary indexing, `len`, `keys`, and iteration expose only user fields and
-  hide every `@` key;
-- `types::fields`, `types::members`, `types::parameters`, and
-  `types::definition` return copies or new containers;
-- `types::base` returns the raw container Type according to the internal
-  category;
-- `==` and hashing use the canonical representation or recursive graph
-  semantics, independently of object addresses and hash-table iteration order.
-
-The `ttypeval` vtable provides the fixed type name `Type`, composite type code
-`compo_ttypeval`, release, read-only access, string representation, `==`, `!=`,
-and identity. When a Type is used as a Dictionary key, hashing and equivalence
-must use canonical or recursive-graph semantics rather than the address
-comparison used by ordinary composite objects.
-
-Field construction order is not stored in `ttypeval`; the compiler and module
-interface maintain it separately. The current structure does not constrain a
-future implementation. It may add category or hash caches, use sorted arrays
-or small-object inlining, or intern objects, provided the public behavior and
-the `Dictionary[String, Type]` logical model remain unchanged.
-
-
-
-## 8. Current Limitations
+## 7. Current Limitations and Implementation Boundary
 
 The current type system does not represent:
 
-- optional fields;
-- Iterator element Types;
 - array shapes, dimensions, or other numeric parameters;
 - precise function-signature Types that can be constructed or reflected at
   runtime;
 - intersections, nominal inheritance, or method Types.
 
-Future additions of these capabilities must not change the meaning of the
-Types defined here.
+Arrays continue to use `types::RealArray` and `types::BoolArray`; their shapes
+and dimensions are not Type parameters. Future additions of the capabilities
+listed above must not change the meaning of the Types defined here.
+
+This document specifies public language behavior, not internal structures such
+as `ttypeval`, the Type arena, canonical encodings, or caches. The contents of
+`types::definition` and printed Type text are diagnostic and may change with the
+implementation; programs must not depend on reserved keys or their order.
+The compiler, Language Server, and runtime may use different representations as
+long as they preserve the construction, equivalence, assignability, matching,
+and reflection behavior specified here.

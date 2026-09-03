@@ -1,6 +1,7 @@
 #ifndef TAPAS_COMPILE_WORKSPACE_H
 #define TAPAS_COMPILE_WORKSPACE_H
 
+#include "tapas/compile/frontend.h"
 #include "tapas/compile/module.h"
 
 #ifdef __cplusplus
@@ -32,13 +33,21 @@ typedef struct tworkspace_document {
 	struct tworkspace_document *next;
 } tworkspace_document;
 
+typedef struct tworkspace_reference_index tworkspace_reference_index;
+
 typedef struct {
 	tworkspace_document *documents;
 	tstring **roots;
 	uint32_t root_count;
 	uint32_t root_capacity;
 	uint64_t generation;
+	tworkspace_reference_index *references;
 } tworkspace;
+
+typedef struct {
+	const tworkspace_document *document;
+	tsource_span span;
+} tworkspace_reference;
 
 typedef struct {
 	const tworkspace_document *document;
@@ -52,39 +61,60 @@ typedef struct {
 	const char *standard_package;
 } tworkspace_namespace;
 
+
 void tworkspace_init(tworkspace *workspace);
+
 void tworkspace_free(tworkspace *workspace);
+
 void tworkspace_add_root(tworkspace *workspace, const char *uri_or_path);
+
 tworkspace_document *tworkspace_find(tworkspace *workspace, const char *uri);
-const tworkspace_document *tworkspace_find_const(
-	const tworkspace *workspace, const char *uri);
+
 tworkspace_document *tworkspace_open(tworkspace *workspace, const char *uri,
 				      const char *source, int64_t version);
+
 tworkspace_document *tworkspace_update(tworkspace *workspace, const char *uri,
 					const char *source, int64_t version);
+
 void tworkspace_close(tworkspace *workspace, const char *uri);
+
 tworkspace_document *tworkspace_load(tworkspace *workspace, const char *uri);
+
 tworkspace_document *tworkspace_reload(tworkspace *workspace, const char *uri);
+
 void tworkspace_refresh(tworkspace *workspace);
 
 const tworkspace_import *tworkspace_import_for_symbol(
 	const tworkspace_document *document, const tsemantic_symbol *symbol);
+
 int tworkspace_resolve_member(tworkspace *workspace,
 			      const tworkspace_document *document,
 			      uint32_t offset,
 			      tworkspace_member_resolution *result);
+
 int tworkspace_resolve_member_node(tworkspace *workspace,
 				   const tworkspace_document *document,
 				   tast_id member,
 				   tworkspace_member_resolution *result);
+
 int tworkspace_resolve_namespace_at(tworkspace *workspace,
 				    const tworkspace_document *document,
 				    uint32_t offset,
 				    tworkspace_namespace *result);
 
+int tworkspace_resolve_standard_at(
+	const tworkspace_document *document, uint32_t offset,
+	const tstandard_symbol **result, tsource_span *reference_span);
+
+uint32_t tworkspace_find_references(
+	const tworkspace *workspace, const tworkspace_document *target,
+	const tmodule_export *exported, tworkspace_reference **references);
+
 /* URI/path helpers are public so protocol adapters do not duplicate escaping. */
 tstring *tworkspace_uri_from_path(const char *path);
+
 tstring *tworkspace_path_from_uri(const char *uri);
+
 tstring *tworkspace_resolve_module_file(const char *path,
 					 const char *const *search_roots,
 					 uint32_t root_count);

@@ -257,8 +257,13 @@ static void test_control_flow_blocks(void)
 	       tast_assignment_statement);
 	const tast_node *conditional = node(&parsed, statements[2]);
 	assert(conditional->kind == tast_if_statement);
+	const tast_id *branches = tast_get_children(
+		&parsed.arena, conditional->conditional_statement.branches,
+		conditional->conditional_statement.branch_count);
+	assert(branches && conditional->conditional_statement.branch_count == 1);
+	const tast_node *branch = node(&parsed, branches[0]);
 	const tast_node *conditional_body = node(
-		&parsed, conditional->control_statement.body);
+		&parsed, branch->conditional_branch.body);
 	assert(conditional_body->kind == tast_block &&
 	       conditional_body->aggregate.count == 1);
 	parsed_free(&parsed);
@@ -277,17 +282,30 @@ static void test_control_flow_blocks(void)
 
 	parsed_expression alternative =
 		parse_statement("elif(value == 3){ value = 4 }");
-	assert(alternative.diagnostics.count == 0);
-	assert(node(&alternative, alternative.root)->kind ==
-	       tast_elif_statement);
+	assert(alternative.diagnostics.count == 1);
+	assert(node(&alternative, alternative.root)->kind == tast_error);
 	parsed_free(&alternative);
 
 	parsed_expression fallback =
 		parse_statement("else { value = 5 }");
-	assert(fallback.diagnostics.count == 0);
-	assert(node(&fallback, fallback.root)->kind ==
-	       tast_else_statement);
+	assert(fallback.diagnostics.count == 1);
+	assert(node(&fallback, fallback.root)->kind == tast_error);
 	parsed_free(&fallback);
+
+	parsed_expression chain = parse_statement(
+		"if(value < 0) { value = -1 } "
+		"elif(value > 0) { value = 1 } else { value = 0 }");
+	assert(chain.diagnostics.count == 0);
+	conditional = node(&chain, chain.root);
+	assert(conditional->kind == tast_if_statement);
+	assert(conditional->conditional_statement.branch_count == 3);
+	branches = tast_get_children(&chain.arena,
+		conditional->conditional_statement.branches,
+		conditional->conditional_statement.branch_count);
+	assert(node(&chain, branches[0])->conditional_branch.has_condition);
+	assert(node(&chain, branches[1])->conditional_branch.has_condition);
+	assert(!node(&chain, branches[2])->conditional_branch.has_condition);
+	parsed_free(&chain);
 }
 
 static void test_function_literals(void)
@@ -347,6 +365,91 @@ static void test_function_literals(void)
 	assert(named_function->function.parameter_count == 1);
 	assert(named_function->function.has_return_annotation);
 	parsed_free(&named);
+}
+
+static void test_multiline_block_headers(void)
+{
+	parsed_expression named = parse_module(
+		"function choose(value: Int) -> Int\n"
+		"// body starts on the next significant line\n"
+		"\n"
+		"{\n"
+		"  if(value > 0)\n"
+		"  {\n"
+		"    return value\n"
+		"  }\n"
+		"  return 0\n"
+		"}\n"
+		"let result = choose(2)\n");
+	assert(named.diagnostics.count == 0);
+	const tast_node *module = node(&named, named.root);
+	assert(module->kind == tast_module && module->aggregate.count == 2);
+	const tast_id *statements = tast_get_children(
+		&named.arena, module->aggregate.children, module->aggregate.count);
+	assert(node(&named, statements[0])->kind == tast_declaration_statement);
+	parsed_free(&named);
+
+	parsed_expression literal = parse_module(
+		"let identity = (value: Int) -> Int\n"
+		"{\n"
+		"  return value\n"
+		"}\n");
+	assert(literal.diagnostics.count == 0);
+	parsed_free(&literal);
+	literal = parse_module(
+		"let identity = (value)\n"
+		"{\n"
+		"  return value\n"
+		"}\n");
+	assert(literal.diagnostics.count == 0);
+	parsed_free(&literal);
+
+	parsed_expression controls = parse_module(
+		"if(true)\n{}\n"
+		"elif(false)\n{}\n"
+		"else\n{}\n"
+		"while(false)\n{}\n"
+		"for(let item in 0 to 1)\n{}\n");
+	assert(controls.diagnostics.count == 0);
+	module = node(&controls, controls.root);
+	assert(module->kind == tast_module && module->aggregate.count == 3);
+	parsed_free(&controls);
+
+	parsed_expression rule = parse_module(
+		"let positive = rule(value: Int)\n"
+		"{\n"
+		"  require value > 0\n"
+		"}\n");
+	assert(rule.diagnostics.count == 0);
+	parsed_free(&rule);
+
+	parsed_expression separate = parse_module(
+		"let value = 1\n"
+		"{'next': 2}\n");
+	assert(separate.diagnostics.count == 0);
+	module = node(&separate, separate.root);
+	assert(module->kind == tast_module && module->aggregate.count == 2);
+	parsed_free(&separate);
+	separate = parse_module(
+		"print(1)\n"
+		"{'next': 2}\n");
+	assert(separate.diagnostics.count == 0);
+	module = node(&separate, separate.root);
+	assert(module->kind == tast_module && module->aggregate.count == 2);
+	parsed_free(&separate);
+	separate = parse_module(
+		"let callback: Function[Int] -> Int\n"
+		"{'next': 2}\n");
+	assert(separate.diagnostics.count == 0);
+	module = node(&separate, separate.root);
+	assert(module->kind == tast_module && module->aggregate.count == 2);
+	parsed_free(&separate);
+
+	parsed_expression semicolon = parse_module(
+		"function broken();\n"
+		"{ return 0 }\n");
+	assert(semicolon.diagnostics.count > 0);
+	parsed_free(&semicolon);
 }
 
 static void test_module_tree(void)
@@ -431,7 +534,7 @@ static void test_semantic_model(void)
 		tstring_cstr(parsed.document.text), "inner +") -
 		tstring_cstr(parsed.document.text));
 	const tsemantic_symbol *at = tsemantic_symbol_at(
-		&semantic, &parsed.arena, reference_offset, NULL);
+		&semantic, &parsed.arena, reference_offset, nullptr);
 	assert(at && strcmp(tstring_cstr(at->name), "inner") == 0);
 	tsemantic_model_free(&semantic);
 	parsed_free(&parsed);
@@ -450,12 +553,38 @@ static void test_let_capture_diagnostic(void)
 	tfrontend_free(&frontend);
 }
 
+static void test_named_function_binding(void)
+{
+	tfrontend frontend;
+	tfrontend_init(&frontend, "functions.tap",
+		"function increment(value: Int) -> Int { return value + 1 }\n"
+		"function apply(value: Int) -> Int { return increment(value) }\n",
+		tfrontend_module);
+	assert(frontend.diagnostics.count == 0);
+	const tsemantic_symbol *base = nullptr;
+	for (uint32_t i = 0; i < frontend.semantic.symbol_count; i++)
+		if (strcmp(tstring_cstr(frontend.semantic.symbols[i].name),
+		    "increment") == 0)
+			base = &frontend.semantic.symbols[i];
+	assert(base && base->kind == tsemantic_symbol_function && base->captured);
+	tfrontend_free(&frontend);
+
+	tfrontend_init(&frontend, "functions.tap",
+		"function value() -> Int { return 1 }\n"
+		"value = value\n",
+		tfrontend_module);
+	assert(frontend.diagnostics.count == 1);
+	assert(strcmp(tstring_cstr(frontend.diagnostics.items[0].message),
+		"function binding cannot be assigned") == 0);
+	tfrontend_free(&frontend);
+}
+
 static void test_editor_type_information(void)
 {
 	tfrontend frontend;
 	tfrontend_init(&frontend, "types.tap",
 		"let count = 1\n"
-		"let ratio: Float = count\n"
+		"let ratio: Float = 1.0\n"
 		"let values = [count, 2]\n"
 		"function add(left: Int, right: List[Int]) -> Int {\n"
 		"  return left + right[0]\n"
@@ -494,6 +623,89 @@ static void test_editor_type_information(void)
 	tfrontend_free(&frontend);
 }
 
+static void test_capability_types(void)
+{
+	tfrontend frontend;
+	tfrontend_init(&frontend, "capabilities.tap",
+		"let indexed: Indexable = [1]\n"
+		"let writable: IndexSettable = [1]\n"
+		"let appended: Appendable = {}\n"
+		"let deleted: Deletable = ['value']\n"
+		"let searchable: Contains = 0 to 3\n"
+		"let iterable: Iterable = [1, 2]\n"
+		"let value = idx(indexed, 0)\n"
+		"writable[0] = value\n"
+		"append(appended, 'key': value)\n"
+		"delete(deleted, 0)\n"
+		"let found = 1 in searchable\n"
+		"for(let item in iterable) { let copy = item }\n",
+		tfrontend_module);
+	assert(frontend.diagnostics.count == 0);
+	tfrontend_free(&frontend);
+
+	tfrontend_init(&frontend, "invalid-capability.tap",
+		"let value: Deletable = 'text'\n",
+		tfrontend_module);
+	assert(frontend.diagnostics.count == 1);
+	assert(strcmp(tstring_cstr(frontend.diagnostics.items[0].message),
+		"initializer Type mismatch") == 0);
+	tfrontend_free(&frontend);
+
+	tfrontend_init(&frontend, "invalid-iterable.tap",
+		"for(let value in 1) { print(value) }\n",
+		tfrontend_module);
+	assert(frontend.diagnostics.count == 1);
+	assert(strcmp(tstring_cstr(frontend.diagnostics.items[0].message),
+		"for-loop value is not Iterable") == 0);
+	tfrontend_free(&frontend);
+}
+
+static void test_shared_type_diagnostics_and_narrowing(void)
+{
+	tfrontend frontend;
+	tfrontend_init(&frontend, "bad-index.tap",
+		"var values: Dictionary[String, Int] = {'a': 1}\n"
+		"values[2] = 3\n", tfrontend_module);
+	assert(frontend.diagnostics.count == 1);
+	assert(strcmp(tstring_cstr(frontend.diagnostics.items[0].message),
+		"Dictionary key Type mismatch") == 0);
+	tfrontend_free(&frontend);
+
+	tfrontend_init(&frontend, "narrow.tap",
+		"let Maybe = types::union(types::Int, types::String)\n"
+		"function take(value: Maybe) -> Int {\n"
+		"  if(types::matches(value, types::Int)) {\n"
+		"    return value\n"
+		"  }\n"
+		"  return 0\n"
+		"}\n", tfrontend_module);
+	assert(frontend.diagnostics.count == 0);
+	tfrontend_free(&frontend);
+
+	tfrontend_init(&frontend, "assigned.tap",
+		"let value: Int\n"
+		"if(true) {\n"
+		"  value = 1\n"
+		"}\n"
+		"else {\n"
+		"  value = 2\n"
+		"}\n"
+		"print(value)\n", tfrontend_module);
+	assert(frontend.diagnostics.count == 0);
+	tfrontend_free(&frontend);
+
+	tfrontend_init(&frontend, "unassigned.tap",
+		"let value: Int\n"
+		"if(true) {\n"
+		"  value = 1\n"
+		"}\n"
+		"print(value)\n", tfrontend_module);
+	assert(frontend.diagnostics.count == 1);
+	assert(strcmp(tstring_cstr(frontend.diagnostics.items[0].message),
+		"variable is read before initialization") == 0);
+	tfrontend_free(&frontend);
+}
+
 static tstatic_type_id test_external_type_resolver(
 	void *context, tstatic_type_arena *arena,
 	const char *qualified_name, int static_value)
@@ -503,8 +715,8 @@ static tstatic_type_id test_external_type_resolver(
 	if (static_value || strcmp(qualified_name, "external") != 0)
 		return TSTATIC_TYPE_UNKNOWN;
 	tstatic_type_id signature[] = {
-		tstatic_type_builtin_id(arena, tstatic_builtin_int),
-		tstatic_type_builtin_id(arena, tstatic_builtin_string)
+		tstatic_type_builtin_id(arena, tbuiltin_int),
+		tstatic_type_builtin_id(arena, tbuiltin_string)
 	};
 	return tstatic_type_make(
 		arena, tstatic_type_function, signature, 2, 0);
@@ -518,9 +730,10 @@ static void test_external_type_information(void)
 	int resolver_calls = 0;
 	ttype_info_analyze_with_resolver(
 		&frontend.document, &frontend.arena, &frontend.semantic,
-		&frontend.types, test_external_type_resolver, &resolver_calls);
+		&frontend.flow, &frontend.types, test_external_type_resolver,
+		&resolver_calls);
 	assert(resolver_calls > 0);
-	const tsemantic_symbol *result = NULL;
+	const tsemantic_symbol *result = nullptr;
 	for (uint32_t i = 0; i < frontend.semantic.symbol_count; i++)
 		if (strcmp(tstring_cstr(frontend.semantic.symbols[i].name),
 			   "result") == 0)
@@ -549,7 +762,7 @@ static void test_static_function_types(void)
 	tstatic_type_arena_init(&arena);
 	tstatic_type_id type = tstatic_type_parse(&arena,
 		"Function[Int, List[String]] -> Dictionary[String, Int]",
-		NULL, NULL);
+		nullptr, nullptr);
 	assert(type != TSTATIC_TYPE_UNKNOWN);
 	tstring *formatted = tstatic_type_format(&arena, type);
 	assert(strcmp(tstring_cstr(formatted),
@@ -557,15 +770,64 @@ static void test_static_function_types(void)
 	tstring_free(formatted);
 
 	tstatic_type_id nested = tstatic_type_parse(&arena,
-		"Function[] -> Function[Int] -> String", NULL, NULL);
+		"Function[] -> Function[Int] -> String", nullptr, nullptr);
 	assert(nested != TSTATIC_TYPE_UNKNOWN);
 	formatted = tstatic_type_format(&arena, nested);
 	assert(strcmp(tstring_cstr(formatted),
 		"Function[] -> Function[Int] -> String") == 0);
 	tstring_free(formatted);
-	assert(tstatic_type_parse(&arena, "Function[Int]", NULL, NULL) ==
+	assert(tstatic_type_parse(&arena, "Function[Int]", nullptr, nullptr) ==
 		TSTATIC_TYPE_UNKNOWN);
 	tstatic_type_arena_free(&arena);
+}
+
+static void test_union_type_syntax(void)
+{
+	tstatic_type_arena arena;
+	tstatic_type_arena_init(&arena);
+	tstatic_type_id shorthand = tstatic_type_parse(
+		&arena, "Int | Float", nullptr, nullptr);
+	tstatic_type_id constructor = tstatic_type_parse(
+		&arena, "Union[Int, Float]", nullptr, nullptr);
+	assert(shorthand != TSTATIC_TYPE_UNKNOWN);
+	assert(tstatic_type_equal(&arena, shorthand, constructor));
+	tstring *formatted = tstatic_type_format(&arena, shorthand);
+	assert(strcmp(tstring_cstr(formatted), "Union[Int, Float]") == 0);
+	tstring_free(formatted);
+
+	tstatic_type_id nested = tstatic_type_parse(&arena,
+		"Function[List[Int | Float], String | Nil] -> Int | Float | Nil",
+		nullptr, nullptr);
+	assert(nested != TSTATIC_TYPE_UNKNOWN);
+	formatted = tstatic_type_format(&arena, nested);
+	assert(strcmp(tstring_cstr(formatted),
+		"Function[List[Union[Int, Float]], Union[String, Nil]] -> "
+		"Union[Int, Float, Nil]") == 0);
+	tstring_free(formatted);
+	assert(tstatic_type_parse(&arena, "Int |", nullptr, nullptr) ==
+		TSTATIC_TYPE_UNKNOWN);
+	assert(tstatic_type_parse(&arena, "| Int", nullptr, nullptr) ==
+		TSTATIC_TYPE_UNKNOWN);
+	assert(tstatic_type_parse(&arena, "List[Int |]", nullptr, nullptr) ==
+		TSTATIC_TYPE_UNKNOWN);
+	assert(tstatic_type_parse(&arena, "Int | | Float", nullptr, nullptr) ==
+		TSTATIC_TYPE_UNKNOWN);
+	tstatic_type_arena_free(&arena);
+
+	tfrontend frontend;
+	tfrontend_init(&frontend, "union-syntax.tap",
+		"let number: Int | Float = 1\n"
+		"let values: List[Int | Float] = [number, 2.5]\n"
+		"function echo(value: Int | Float) -> Int | Float {\n"
+		"  return value\n"
+		"}\n",
+		tfrontend_module);
+	assert(frontend.diagnostics.count == 0);
+	assert(strcmp(ttype_info_for_symbol(&frontend.types, &frontend.semantic,
+		&frontend.semantic.symbols[0]), "Union[Int, Float]") == 0);
+	assert(strcmp(ttype_info_for_symbol(&frontend.types, &frontend.semantic,
+		&frontend.semantic.symbols[1]), "List[Union[Int, Float]]") == 0);
+	tfrontend_free(&frontend);
 }
 
 static tstatic_type_id make_static_tree_type(tstatic_type_arena *arena,
@@ -576,8 +838,8 @@ static tstatic_type_id make_static_tree_type(tstatic_type_arena *arena,
 	tstatic_type_id children = tstatic_type_make(
 		arena, tstatic_type_list, list_children, 1, 0);
 	tstatic_field fields[] = {
-		{ tstring_new("value"), value_type },
-		{ tstring_new("children"), children }
+		{ tstring_new("value"), value_type, 0 },
+		{ tstring_new("children"), children, 0 }
 	};
 	tstatic_type_id body = tstatic_type_make_fields(arena, fields, 2);
 	tstring_free(fields[0].name);
@@ -591,9 +853,9 @@ static void test_static_recursive_types(void)
 	tstatic_type_arena arena;
 	tstatic_type_arena_init(&arena);
 	tstatic_type_id int_type = tstatic_type_builtin_id(
-		&arena, tstatic_builtin_int);
+		&arena, tbuiltin_int);
 	tstatic_type_id string_type = tstatic_type_builtin_id(
-		&arena, tstatic_builtin_string);
+		&arena, tbuiltin_string);
 	tstatic_type_id first = make_static_tree_type(&arena, int_type);
 	tstatic_type_id second = make_static_tree_type(&arena, int_type);
 	tstatic_type_id different = make_static_tree_type(&arena, string_type);
@@ -624,12 +886,18 @@ static void test_module_interface_and_standard_environment(void)
 		"Function[Int] -> Int") == 0);
 	assert(tstandard_package("math"));
 	int found_sqrt = 0;
+	tstatic_type_arena signatures;
+	tstatic_type_arena_init(&signatures);
 	for (uint32_t i = 0; i < tstandard_symbol_count(); i++) {
 		const tstandard_symbol *symbol = tstandard_symbol_at(i);
 		found_sqrt |= symbol->package && strcmp(symbol->package, "math") == 0 &&
 			strcmp(symbol->name, "sqrt") == 0;
+		if (symbol->kind != tmodule_symbol_package)
+			assert(tstatic_type_parse(&signatures, symbol->type,
+				nullptr, nullptr) != TSTATIC_TYPE_UNKNOWN);
 	}
 	assert(found_sqrt);
+	tstatic_type_arena_free(&signatures);
 	tmodule_interface_free(&interface);
 	tfrontend_free(&frontend);
 }
@@ -669,6 +937,12 @@ static void test_workspace_import_resolution(void)
 		"answer") == 0);
 	assert(member.document && strcmp(tstring_cstr(member.exported->detail),
 		"Int") == 0);
+	const tworkspace_document *answer_document = member.document;
+	const tmodule_export *answer_export = member.exported;
+	tworkspace_reference *references = nullptr;
+	assert(tworkspace_find_references(&workspace, answer_document,
+		answer_export, &references) == 1);
+	free(references);
 	main_document = tworkspace_update(&workspace, tstring_cstr(main_uri),
 		"import bridge.tap as outer\nlet value = outer::nested::answer\n", 2);
 	member_offset = (uint32_t)(strstr(
@@ -678,6 +952,9 @@ static void test_workspace_import_resolution(void)
 		member_offset, &member));
 	assert(member.exported && strcmp(tstring_cstr(member.exported->name),
 		"answer") == 0);
+	assert(tworkspace_find_references(&workspace, answer_document,
+		answer_export, &references) == 1);
+	free(references);
 	tworkspace_namespace standard;
 	tworkspace_document *standard_document = tworkspace_update(&workspace,
 		tstring_cstr(main_uri), "let value = math::sqrt(4)\n", 3);
@@ -685,6 +962,36 @@ static void test_workspace_import_resolution(void)
 		(uint32_t)(strstr(tstring_cstr(standard_document->frontend.document.text),
 		"math") - tstring_cstr(standard_document->frontend.document.text)), &standard));
 	assert(standard.standard_package && strcmp(standard.standard_package, "math") == 0);
+	standard_document = tworkspace_update(&workspace, tstring_cstr(main_uri),
+		"let value = time::from_unix(1.5)\n", 4);
+	assert(standard_document->frontend.diagnostics.count > 0);
+	standard_document = tworkspace_update(&workspace, tstring_cstr(main_uri),
+		"let primes = [2, 3, 5]\n"
+		"let direct = copy(primes)\n"
+		"let tunneled = primes.copy()\n", 5);
+	assert(standard_document->frontend.diagnostics.count == 0);
+	uint32_t inferred_copies = 0;
+	for (uint32_t i = 0; i < standard_document->frontend.semantic.symbol_count; i++) {
+		const tsemantic_symbol *symbol =
+			&standard_document->frontend.semantic.symbols[i];
+		if (tstring_eq_cstr(symbol->name, "direct") ||
+		    tstring_eq_cstr(symbol->name, "tunneled")) {
+			assert(strcmp(ttype_info_for_symbol(
+				&standard_document->frontend.types,
+				&standard_document->frontend.semantic, symbol),
+				"List[Int]") == 0);
+			inferred_copies++;
+		}
+	}
+	assert(inferred_copies == 2);
+	member_offset = (uint32_t)(strstr(
+		tstring_cstr(standard_document->frontend.document.text), ".copy") + 1 -
+		tstring_cstr(standard_document->frontend.document.text));
+	assert(tworkspace_resolve_member(&workspace, standard_document,
+		member_offset, &member));
+	assert(member.standard && strcmp(member.standard->name, "copy") == 0);
+	assert(tworkspace_find_references(&workspace, answer_document,
+		answer_export, &references) == 0);
 	tworkspace_free(&workspace);
 	tstring_free(main_uri);
 	unlink(module_path);
@@ -703,13 +1010,18 @@ int main(void)
 	test_basic_statements();
 	test_control_flow_blocks();
 	test_function_literals();
+	test_multiline_block_headers();
 	test_module_tree();
 	test_semantic_model();
 	test_let_capture_diagnostic();
+	test_named_function_binding();
 	test_editor_type_information();
+	test_capability_types();
+	test_shared_type_diagnostics_and_narrowing();
 	test_external_type_information();
 	test_declaration_without_initializer();
 	test_static_function_types();
+	test_union_type_syntax();
 	test_static_recursive_types();
 	test_module_interface_and_standard_environment();
 	test_workspace_import_resolution();

@@ -2,6 +2,17 @@
 
 #include <stdlib.h>
 
+tpair *tpair_new(const tobj *first, const tobj *second)
+{
+	tpair *pair = (tpair *)calloc(1, sizeof(tpair));
+	pair->base.vtable = &tpair_vtable;
+	tobj_copy(&pair->first, first);
+	tobj_copy(&pair->second, second);
+	return pair;
+}
+
+/*----------------------- Required Vtable Operations -----------------------*/
+
 static const char *tpair_get_type(void)
 {
 	return "Pair";
@@ -66,31 +77,16 @@ static tstring *tpair_tostring_full(void *self)
 	return out;
 }
 
-tcompo_vtable tpair_vtable = {
-	.get_type = tpair_get_type,
-	.get_compo_type_code = tpair_get_code,
-	.len = tpair_len,
-	.copy = tpair_copy,
-	.free = tpair_free,
-	.identical = tpair_identical,
-	.tostring_abbr = tpair_tostring_abbr,
-	.tostring_full = tpair_tostring_full
-};
+/*------------------------------ Capabilities ------------------------------*/
 
-tpair *tpair_new(const tobj *f, const tobj *s)
-{
-	tpair *p = (tpair *)calloc(1, sizeof(tpair));
-	p->base.vtable = &tpair_vtable;
-	p->first = *f;
-	p->second = *s;
-	if (f->type == tcompo && f->val.v_tcompo)
-		f->val.v_tcompo->refctr++;
-	if (s->type == tcompo && s->val.v_tcompo)
-		s->val.v_tcompo->refctr++;
-	return p;
-}
+/*
+ * Pair supports indexed reads and writes for its two ordered members. It is
+ * not Appendable or Deletable because its size is fixed, and it is not
+ * Iterable because Tapas currently reserves iteration for sequence objects
+ * with an explicit traversal contract.
+ */
 
-void
+static void
 tpair_idx(tpair *p, const tobj *params, uint_regs np, tobj *vre)
 {
 	if (np != 1)
@@ -112,7 +108,7 @@ tpair_idx(tpair *p, const tobj *params, uint_regs np, tobj *vre)
 		twarn(ErrRuntime_IdxOutRange, "tpair_idx", "");
 }
 
-void
+static void
 tpair_iset(tpair *p, const tobj *params, uint_regs np, const tobj *vright)
 {
 	if (np != 1)
@@ -141,3 +137,32 @@ tpair_iset(tpair *p, const tobj *params, uint_regs np, const tobj *vright)
 	} else
 		twarn(ErrRuntime_IdxOutRange, "tpair_iset", "");
 }
+
+static void pair_index(void *self, const tobj *arguments,
+		       uint_regs argument_count, tobj *result)
+{
+	tpair_idx((tpair *)self, arguments, argument_count, result);
+}
+
+static void pair_index_set(void *self, const tobj *arguments,
+			   uint_regs argument_count, const tobj *value)
+{
+	tpair_iset((tpair *)self, arguments, argument_count, value);
+}
+
+static const tcompo_capabilities pair_capabilities = {
+	.indexable = pair_index,
+	.index_settable = pair_index_set
+};
+
+tcompo_vtable tpair_vtable = {
+	.get_type = tpair_get_type,
+	.get_compo_type_code = tpair_get_code,
+	.len = tpair_len,
+	.copy = tpair_copy,
+	.free = tpair_free,
+	.identical = tpair_identical,
+	.tostring_abbr = tpair_tostring_abbr,
+	.tostring_full = tpair_tostring_full,
+	.capabilities = &pair_capabilities
+};

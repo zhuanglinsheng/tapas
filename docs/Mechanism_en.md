@@ -2,510 +2,155 @@
 
 [简体中文](Mechanism_zh.md) | English | [Project Home](../README_en.md)
 
-Tapas can be understood through four layers: compilation, runtime state, the
-virtual machine, and the C interaction API.
+This document explains how Tapas compiles source into bytecode and how the virtual machine manages state, calls functions, and releases composite values.
+For language rules, see the [Language Reference](Syntax_en.md) and [Type System](TypeSystem_en.md); this document describes the current implementation only.
 
-At a high level, Tapas compiles source code into virtual-machine instructions
-with a single traversal, then executes those instructions on a stack-based
-virtual machine.
+## From Source to Bytecode
 
-At runtime, Tapas maintains an environment system for variables. During
-compilation, it also builds constant tables for integers, floating-point values,
-and strings.
+Tapas files, Markdown code blocks, command strings, and REPL input all use the same compilation pipeline:
 
-<br>
-
-## Introduction
-
-Like Lua, Tapas uses a recursive descent compiler to traverse source code and
-generate bycode. See the compiler implementation for the details.
-
-During compilation, Tapas maintains a register counter (``treg_ctr``) and a
-variable-name table (``tobj_ctr``). These structures determine where each
-variable is stored in the corresponding environment.
-
-After compilation, variable names are replaced by relative locations in the
-environment tree. The runtime does not resolve ordinary variable names by their
-source text.
-
-During execution, the Tapas virtual machine can read bycodes from ``.tapc``
-binary files. It loads the constant tables and instruction list, then interprets
-the instructions in order.
-
-After an expression is executed, its result is left on top of the VM stack.
-Statements consume or clear their intermediate stack values.
-
-Here is an executable example:
-
-```tapas
-var a = 0
-a = 1 + 2
+```text
+source
+  -> document and lossless tokens
+  -> AST
+  -> names, scopes, and control-flow facts
+  -> Type inference and checking
+  -> bytecode
 ```
 
-The first line is a variable declaration statement.
+The frontend first retains immutable source text and its line index, then produces lossless tokens that include whitespace and comments and parses the syntax into an AST.
+Semantic analysis builds lexical scopes, declarations, and name references; control-flow analysis records node relationships, enclosing functions, definite returns, and definite initialization; Type analysis performs inference and checking over the same result.
+The backend assigns environment and temporary slots and emits bytecode only when the frontend has no errors.
 
-The virtual machine allocates a slot in the root environment, which is a
-library, for this variable. After this declaration statement runs, no value is
-left on the VM stack.
+The command-line program and language server share this pipeline, so they no longer maintain separate syntax or Type rules.
+See the [compiler structure](../src/compile/README_en.md) for source directories and dependency boundaries.
 
-The second line is an assignment statement, which contains an addition expression.
+The compiled bytecode wrapper contains:
 
-For the right-hand side of the assignment, the virtual machine first pushes
-``1`` and ``2`` from the integer constant table onto the VM stack. It then adds
-them, removes the operands, and leaves the result ``3`` on top of the stack.
+- a list of 32-bit instructions;
+- integer, floating-point, and string constant tables;
+- a file and source location for each instruction;
+- maximum capacities for environment slots, temporary slots, and the runtime stack.
 
-The assignment then moves the value from the top of the VM stack into the slot
-for ``a`` and clears the stack. After the assignment statement finishes, the VM
-stack is empty again.
+The compiler has already assigned ordinary names to slots, so the virtual machine does not look them up by source name during variable access.
+A wrapper can be executed immediately or saved as a `.tapc` file and loaded later; see [Usage](Usage_en.md#compile-and-run-bytecode) for the corresponding commands.
 
-<br>
+## Runtime State
 
-## Garbage collection
+A library is the root environment of a program.
+When a Tapas function is called, the virtual machine creates a call environment beneath the parent environment captured when that function was defined.
+Values that must survive across expressions occupy environment slots, intermediate expression results use the runtime stack, local temporary values use separate temporary slots, and the virtual machine keeps a dedicated return-value location.
 
-Tapas uses reference counting to manage reference-type values.
-
-The reference-counting mechanism is built around ``tcompo_v``. Each composite
-value stores an integer counter that records how many owning references point
-to the value.
-
-Tapas values can be stored in four main places:
-
-- **Case 1.** the variable list in an environment
-- **Case 2.** collection values
-- **Case 3.** the virtual machine runtime stack
-- **Case 4.** the virtual machine result register, ``tvm::rev``
-
-In principle, when a reference value is stored in any of these places, its
-reference count should increase by one. In practice, Tapas tracks the first two
-storage locations. The VM stack and return register are treated as transient
-execution state rather than long-term storage.
-
-The reference counting rules are very simple:
-
-- **Case 1.** A newly created reference value starts with a reference count of zero.
-- **Case 2.** A newly created reference value must then be placed somewhere that owns or uses it.
-- **Case 3.** When a variable refers to a reference value, the reference count increases by one. When the variable releases it, the count decreases by one.
-- **Case 4.** When a collection, such as ``tpair``, ``tlist``, or ``tdict``, stores a reference value, the reference count increases by one. Dense arrays instead own their contiguous scalar storage directly. When a collection releases a composite element, its reference count decreases by one.
-- **Case 5.** A function return value is pushed onto the VM stack after the return instruction finishes.
-- **Case 6.** When a statement finishes, the VM clears its transient stack values.
-- **Case 7.** Whenever a reference count decreases, Tapas checks the value. If the count reaches zero, the value is released.
-
-<br>
-
-## Bycode Description
-
-Tapas bycode instructions are abstract VM instructions, not real CPU
-instructions.
-
-Like Lua VM instructions, Tapas bycodes are represented as unsigned integers.
-Tapas currently has 50 instructions.
-
-Each bycode is 32 bits long. The first 6 bits store the instruction code, which
-allows up to 64 instructions. The remaining 26 bits store instruction
-parameters.
-
-Instructions are grouped by bit layout. See the ``tbycode`` implementation for
-details.
-
-
-
-### No Parameters
-
-<embed>
-<p></p>
-<div style="width:120px;height:26px;border-width: thin;border-style:solid;display:inline-block;flex:none;text-align:center;">
-  Ins (6 bit)
-</div>
-<div style="width:400px;height:26px;border-width: thin;border-style:dashed;display:inline-block;text-align:center;">
-  Unused (26 bit)
-</div>
-<p></p>
-</embed>
-
-- ``OP_PASS`` Do nothing.
-- ``OP_THIS`` Push the value representing the current environment onto the stack.
-- ``OP_BASE`` Push the value representing the parent environment onto the stack.
-- ``OP_RET`` Return the stack top, clear the stack, and jump to the end of the instruction list.
-- ``OP_IN`` Pop the top two stack values as parameters, call the ``in`` operator, and push the result.
-- ``OP_PAIR`` Pop the top two stack values as parameters, call the pair operator, and push the result.
-- ``OP_TO`` Pop the top two stack values as parameters, call the ``to`` operator, and push the result.
-
-
-
-### U (1 parameter)
-
-<embed>
-<p></p>
-<div style="width:120px; height:26px; border-width:thin; border-style:solid; display:inline-block;text-align:center;">
-  Ins (6 bit)
-</div>
-<div style="width:400px; height:26px; border-width:thin; border-style:solid; display:inline-block;text-align:center;">
-  U (26 bit)
-</div>
-<p></p>
-</embed>
-
-- ``OP_VCRT isenv`` Create a new variable in the current environment or temporary area.
-- ``OP_TMPDEL oloc`` Delete temporary variables from the current virtual machine.
-- ``OP_JPF ncmd`` Jump forward by ``ncmd`` instructions.
-- ``OP_JPB ncmd`` Jump backward by ``ncmd`` instructions.
-- ``OP_CJPFPOP ncmd`` Require a boolean on top of the stack. If it is ``false``, pop it and jump forward by ``ncmd`` instructions.
-- ``OP_CJPBPOP ncmd`` Require a boolean on top of the stack. If it is ``false``, pop it and jump backward by ``ncmd`` instructions.
-- ``OP_PUSHI cloc`` Push the integer constant at ``cloc`` onto the stack.
-- ``OP_PUSHFLT cloc`` Push the floating-point constant at ``cloc`` onto the stack.
-- ``OP_PUSHB b`` Push boolean ``b`` onto the stack.
-- ``OP_PUSHS cloc`` Push the string constant at ``cloc`` onto the stack.
-- ``OP_PUSHDICT n`` Pop the top ``n`` stack values and use them to create a ``tdict`` value.
-- ``OP_PUSHINFO u`` Push unsigned integer metadata ``u`` onto the stack.
-- ``OP_IMPORT cloc`` Import a Tapas file whose path is stored as string constant ``cloc``.
-- ``OP_IDXR n`` Use the top ``n`` stack values as index arguments and the next value as the indexable object. Pop them and push the indexing result.
-- ``OP_EVAL n`` Use the top ``n`` stack values as call arguments and the next value as the callable object. Pop them and push the call result.
-- ``OP_EVALTF n`` Use the top ``n`` stack values as arguments and call the current function directly. Pop the arguments and push the result.
-
-The compiler still uses ``OP_PUSHINFO`` to store a binary operation's
-addressing mode. When a binary operation immediately follows it, the VM
-executes the pair as one fused operation without pushing that metadata.
-Arithmetic and numeric comparisons on integers and floats are completed
-directly in this fused path. Composite values with custom operators still use
-their vtable methods. This optimization neither changes the bytecode nor adds
-a runtime cache for binary operations.
-
-While executing an instruction, the VM records only the current instruction
-and its borrowed source location. The error system copies the file name and
-source text only when a runtime error occurs; normal execution does not rebuild
-the diagnostic context for every instruction.
-
-Inline bit operations decode opcodes and operands, and instruction execution is
-part of one interpreter loop. A Tapas call switches to an explicit call frame;
-it does not recursively enter another C interpreter function. Each frame owns
-its program counter, return location, local environment, operand storage,
-temporaries, and loop cursors. Returning clears retained values but keeps the
-allocated storage for another call at the same depth.
-
-Fixed-arity arguments are written into parameter slots reserved in the call
-environment. Only a dynamic argument list remains on the caller's operand
-stack for the duration of the call.
-
-When the same depth calls the same function again, the function object acts as
-a guard and the VM reuses the already validated frame layout directly. A call
-to another function still checks its parent environment, parameters, local
-slots, and operand-stack capacity.
-
-A direct tail call of the form ``return this(...)`` preserves its new arguments,
-clears the current frame, and resumes at the function entry without increasing
-the call depth. Environments retained by closures are copied into separate
-snapshots and do not depend on a reusable frame.
-
-Bytecode records the operation itself, not value types observed during one
-execution, and the VM does not rewrite instructions while running them. Each VM
-keeps a separate cache for the code it executes and accesses cache entries
-directly by instruction position. Loops, indexing operations, and calls use
-their generic path on the first execution. When the same position repeatedly
-sees the same types or function, later executions enter the corresponding implementation
-directly. Required guards remain in place; a position that sees different
-cases keeps its original instruction and falls back to generic dispatch.
-
-Caches are not written to `.tapc` files and do not belong to call frames. A
-list loop's current position does belong to its call frame and is accessed
-through a slot assigned by the cache. Different VMs can therefore execute the
-same bytecode safely, and recursive calls do not share loop positions.
-
-The compiler has already assigned slots to local names and temporary values.
-Instructions that address these slots access their arrays directly with a
-bounds check instead of entering a general array interface. An indexing
-instruction consumes its existing stack region and clears the container and
-arguments once after obtaining the result; it does not push the container
-again merely to clear that region.
-
-Creating and deleting local or temporary slots first reuses the array's
-existing capacity. Clearing a scalar slot only resets it; only composite values
-enter reference-counted release. Once an indexing cache has confirmed a stable
-container kind, one-integer List and String indexing and two-integer dense-array
-indexing use their concrete storage directly. Dense arrays compute
-`row * columns + column` while retaining negative-index, bounds, and assignment
-type checks. Slices or changing kinds return to the general path. `OP_IDXR` and
-`OP_IDXL` remain unchanged.
-
-Integers, floats, and booleans do not own composite values. Popping one of
-these values only moves the stack top because a later push overwrites the old
-slot. Arithmetic and comparisons whose operands are already known to be scalar
-also write their results directly instead of calling a generic setter that
-performs reference cleanup.
-
-Short character data is stored inside `tstring`; a separate buffer is allocated
-only after that capacity is exceeded. A runtime String embeds its `tstring`
-storage header, so a short String needs one allocation and remains an ordinary,
-independently mutable String. When the character length is already known, the
-runtime constructs the String directly from that length. Indexing avoids an
-end scan, and slicing no longer passes through a temporary `tstring`.
-
-A List slice has a known final length. The runtime allocates its element array
-once, copies the contiguous range, and increments reference counts only for
-composite elements instead of repeatedly appending and growing the result.
-
-
-
-### LR (2 parameters)
-
-<embed>
-<p></p>
-<div style="width:120px; height:26px; border-width:thin; border-style:solid; display:inline-block;text-align:center;">
-  Ins (6 bit)
-</div>
-<div style="width:205px; height:26px; border-width:thin; border-style:solid; display:inline-block;text-align:center;">
-  L (13 bit)
-</div>
-<div style="width:205px; height:26px; border-width:thin; border-style:solid; display:inline-block;text-align:center;">
-  R (13 bit)
-</div>
-<p></p>
-</embed>
-
-- ``OP_POPN nreg, interactive`` Pop ``nreg`` values from the top of the stack.
-- ``OP_POPCOV oloc, isenv`` Pop the stack top and assign it to the variable at ``oloc``.
-- ``OP_LOOPAS oloc, isenv`` Require an iterable value on top of the stack. Advance the iterator, assign the current item to the variable at ``oloc``, and push a boolean indicating whether iteration should continue. The runtime cache selects the implementation for integer ranges, lists, and Type values while the bytecode remains ``OP_LOOPAS``.
-- ``OP_PUSHX oloc, isenv`` Push the variable at ``oloc`` onto the stack.
-
-
-
-### CP (2 parameters)
-
-<embed>
-<p></p>
-<div style="width:120px; height:26px; border-width:thin; border-style:solid; display:inline-block;text-align:center;">
-  Ins (6 bit)
-</div>
-<div style="width:280px; height:26px; border-width:thin; border-style:solid; display:inline-block;text-align:center;">
-  C (18 bit)
-</div>
-<div style="width:120px; height:26px; border-width:thin; border-style:solid; display:inline-block;text-align:center;">
-  P (8 bit)
-</div>
-<p></p>
-</embed>
-
-- ``OP_PUSHF ncmds nparams`` Create a ``tfunc`` with ``nparams`` parameters from the next ``ncmds`` instructions and push it onto the stack.
-
-
-
-### iLR (3 parameters)
-
-<embed>
-<p></p>
-<div style="width:120px; height:26px; border-width:thin; border-style:solid; display:inline-block;text-align:center;">
-  Ins (6 bit)
-</div>
-<div style="width:70px; height:26px; border-width:thin; border-style:solid; display:inline-block;text-align:center;">
-  i (2 bit)
-</div>
-<div style="width:170px; height:26px; border-width:thin; border-style:solid; display:inline-block;text-align:center;">
-  L (12 bit)
-</div>
-<div style="width:170px; height:26px; border-width:thin; border-style:solid; display:inline-block;text-align:center;">
-  R (12 bit)
-</div>
-<p></p>
-</embed>
-
-Instructions with three parameters are mostly binary arithmetic and logical
-operations, and they share the same structure. The addition instruction is a
-representative example.
-
-- ``OP_ADD i L R`` Here ``i = 0, 1, 2, 3`` means:
-
-  - 0 - both sides are literals
-  - 1 - the left-hand side is a variable and the right-hand side is a literal
-  - 2 - the left-hand side is a literal and the right-hand side is a variable
-  - 3 - both sides are variables
-
-  ``L`` and ``R`` are the locations of the left-hand and right-hand values in
-  the constant table, when the value is a literal, or in the variable list, when
-  the value is a variable.
-
-- ``OP_IDXL oloc, nparams, isenv`` Use the variable at ``oloc`` as an indexable value. Use the top ``nparams`` stack values as index arguments, assign the target location with the next stack value, and pop the consumed values.
-
-<br>
-
-## Example
-
-We try to check the bycodes of the following function:
+For example:
 
 ```tapas
-var odd_multiples_of_three = (){
-    for(let i in 0 to 10){
-        if(i % 2 != 0 and i % 3 == 0){
-            print(i)
-        }
-    }
-}
-
-odd_multiples_of_three()
+var mechanism_total = 0
+mechanism_total = 1 + 2
 ```
-<pre class='Tapas-Return'>
-3
-9
-</pre>
-This program prints out all odd numbers that are multiples of 3 among 0 and 9.
 
-The same function can be imported from `examples/test_bycodes.tap`:
+The first statement creates the environment slot for `mechanism_total` and writes the integer constant `0` into it.
+The second reads `1` and `2` from the constant table, performs the addition on the runtime stack, and moves the result into the existing slot.
+The stack values used by that computation are cleared when the assignment finishes.
 
-```tapas
-import examples/test_bycodes.tap as lib
-var fn = lib['odd_multiples_of_three']
-fn()
-```
-<pre class='Tapas-Return'>
-3
-9
-</pre>
+## Instruction Execution and Function Calls
 
+The virtual machine reads instructions in program-counter order and decodes their opcodes and operands in one interpreter loop; jump instructions update the program counter directly.
 
-### Command Line
+Each Tapas function call has its own frame containing the program counter, return location, call environment, temporary slots, runtime stack, and loop cursors.
+The virtual machine switches frames inside the same interpreter loop instead of recursively entering a new C interpreter function for every Tapas call.
+When a function returns, the values held by its frame are cleared, but allocated storage is retained for later calls at the same depth.
 
-The simplest way to inspect the generated bycodes is the command-line option
-``-cr``, which compiles a source file and then displays the compiled bycodes:
+An ordinary call writes arguments into reserved parameter slots as it enters the function.
+Only a dynamic parameter list must read directly from the caller's runtime stack during the call.
+Calling the same function again at the same depth can reuse a validated frame layout; calling another function still checks the parent environment, argument count, and storage capacities.
+
+Direct tail recursion in the form `return this (...)` does not increase call depth.
+The virtual machine preserves the new arguments, clears and reuses the current frame, and continues from the function entry.
+
+A function value may refer to the parent environment at its definition site.
+When a returned closure still needs the current call environment, the runtime retains that environment so it does not depend on a frame that may later be reused.
+Loop cursors also belong to individual frames, so recursion through the same loop instruction cannot disturb an outer iteration.
+
+## Instruction Caches
+
+Bytecode records operations only; it neither records value categories observed during one execution nor rewrites itself at runtime.
+The virtual machine maintains a separate cache for each piece of executing code and addresses cache entries by instruction position.
+
+Loops, indexing, and function calls use a generic path on first execution.
+After the same position repeatedly sees the same value category or function, its cache can route later executions directly to the matching implementation.
+Values still undergo the required checks, and a different case falls back to generic dispatch without changing the original instruction.
+
+Index caches can directly handle one-integer indexing for List and String and two-integer indexing for RealArray and BoolArray.
+The dense-array path computes the element position directly while retaining negative-index, bounds, and write-Type checks; slices and different value categories fall back to the generic path.
+
+Caches are not written to `.tapc` files and do not belong to call frames.
+A list loop's current position, by contrast, belongs to its call frame and uses a cache-assigned slot, so separate virtual machines and recursive calls never share loop state.
+
+## Lifetime of Composite Values
+
+String, List, Dictionary, Function, and other composite values share the `tcompo_v` base and use reference counting for lifetime management.
+Environment slots, collection elements, the runtime stack, and return values may all hold composite values.
+
+Copying an ownership relationship increments the reference count; overwriting or clearing its location decrements it.
+Moving a value from the runtime stack into an environment slot or return location can transfer the existing ownership directly instead of incrementing and then decrementing it.
+Int, Float, and Bool hold no composite value, so popping them only moves the top-of-stack position.
+
+When a reference count reaches zero, the composite value releases itself through its vtable.
+List, Pair, and Dictionary also release the elements they own, while a dense array directly owns its scalar storage.
+
+A list slice determines its final length before allocating its result and then copies elements contiguously, avoiding repeated capacity checks and growth through item-by-item appends.
+Short String data is stored inside `tstring`; a separate buffer is allocated only when that internal capacity is exceeded.
+
+Reference counting cannot discover unreachable reference cycles.
+The current runtime has no additional tracing cycle collector, so programs should avoid forming container cycles that are no longer used.
+
+## Bytecode Format
+
+Tapas bytecode consists of abstract virtual-machine instructions, not physical CPU instructions.
+Each instruction is a 32-bit unsigned integer whose low six bits hold the opcode; the remaining bits are interpreted as one, two, or three operands according to that opcode.
+
+Instructions broadly cover:
+
+- stack, slot, and constant operations;
+- jumps, conditional branches, and loops;
+- function construction, ordinary calls, static calls, closure calls, and tail calls;
+- Type forward declarations and definitions;
+- Rule construction, Conditions, and `require`;
+- indexed reads, indexed writes, and imports;
+- arithmetic, comparison, logical, and matrix operations.
+
+Opcodes evolve with the implementation.
+The complete enumeration is defined by [`tins`](../include/tapas/tbasis.h), while the [bytecode interface](../include/tapas/tbycs.h) defines operand layouts and wrapper structures.
+Keeping the volatile instruction-by-instruction list in source prevents the documentation from reporting an obsolete count or omitting newly added instructions.
+
+## Inspecting Bytecode
+
+The sample program is [`examples/test_bycodes.tap`](examples/test_bycodes.tap).
+From the repository root, the following command compiles that file and displays the generated bytecode:
 
 ```sh
-./build/bin/tapas -cr docs/examples/test_bycodes.tap
+build/bin/tapas -cr docs/examples/test_bycodes.tap
 ```
 
-
-
-### C API
-
-The same operation is also available from the C session API:
+The C session API provides the same operation:
 
 ```c
 #include "tapas/tapas.h"
 
 int main(void)
 {
-    tsession *sess = tsession_new();
-    const char *src_codes = "docs/examples/test_bycodes.tap";
+    tsession *session = tsession_new();
+    const char *source = "docs/examples/test_bycodes.tap";
 
-    tsession_compile_file(sess, src_codes, 1);
-    tsession_show_bycodes(sess, src_codes);
-    tsession_free(sess);
+    tsession_compile_file(session, source, 1);
+    tsession_show_bycodes(session, source);
+    tsession_free(session);
     return 0;
 }
 ```
 
+See [C Interaction](Foreign_en.md) for the declarations and embedding workflow.
 
-
-### Inside Tapas
-
-Inside Tapas, use the debugging function ``__binary__([env])`` to print
-bytecode. The function accepts an optional environment value. Without arguments,
-``__binary__`` prints the current library or module wrapper.
-
-With a library argument, ``__binary__`` prints that library's wrapper:
-
-```tapas
-__binary__(lib)
-```
-<pre class='Tapas-Return'>
-[0]OP_VCRT     0  1
-[1]OP_PUSHINFO 0
-[2]OP_PUSHINFO 1
-[3]OP_PUSHINFO 5
-[4]OP_PUSHINFO 0
-[5]OP_PUSHF    35
-[6]OP_PUSHI    0
-[7]OP_PUSHI    1
-[8]OP_TO
-[9]OP_VCRT     1  0
-[10]OP_LOOPAS   0  0
-[11]OP_CJPFPOP  27
-[12]OP_PUSHI    1
-[13]OP_PUSHI    2
-[14]OP_PUSHX    0  tmp
-[15]OP_PUSHINFO 0
-[16]OP_MOD      0  1
-[17]OP_PUSHINFO 0
-[18]OP_NE       0  1
-[19]OP_CJPFPOP  11
-[20]OP_PUSHI    1
-[21]OP_PUSHI    3
-[22]OP_PUSHX    0  tmp
-[23]OP_PUSHINFO 0
-[24]OP_MOD      0  1
-[25]OP_PUSHINFO 0
-[26]OP_EQ       0  1
-[27]OP_PUSHB    1
-[28]OP_PUSHINFO 0
-[29]OP_AND      0  1
-[30]OP_JPF      1
-[31]OP_PUSHB    0
-[32]OP_CJPFPOP  5
-[33]OP_PUSHX    0  tmp
-[34]OP_PUSHX    0  upval 1
-[35]OP_EVAL     1
-[36]OP_POPN     1  1
-[37]OP_PASS
-[38]OP_JPB      29
-[39]OP_POPN     1  0
-[40]OP_TMPDEL   1
-[41]OP_POPCOV   34  1
-[42]OP_PUSHX    34  local
-[43]OP_PUSHS    0
-[44]OP_PAIR
-[45]OP_PUSHDICT 1
-[46]OP_RET
-Max Obj. Number: 35
-Max Tmp. Number: 0
-Max Reg. Number: 4
-Const Value List (Integers): 10, 0, 2, 3
-Const Value List (Double Floats):
-Const Value List (Character Strings): odd_multiples_of_three, i
-</pre>
-With a function argument, ``__binary__`` prints only the bytecode range occupied
-by that function body:
-
-```tapas
-__binary__(fn)
-```
-<pre class='Tapas-Return'>
-[6]OP_PUSHI    0
-[7]OP_PUSHI    1
-[8]OP_TO
-[9]OP_VCRT     1  0
-[10]OP_LOOPAS   0  0
-[11]OP_CJPFPOP  27
-[12]OP_PUSHI    1
-[13]OP_PUSHI    2
-[14]OP_PUSHX    0  tmp
-[15]OP_PUSHINFO 0
-[16]OP_MOD      0  1
-[17]OP_PUSHINFO 0
-[18]OP_NE       0  1
-[19]OP_CJPFPOP  11
-[20]OP_PUSHI    1
-[21]OP_PUSHI    3
-[22]OP_PUSHX    0  tmp
-[23]OP_PUSHINFO 0
-[24]OP_MOD      0  1
-[25]OP_PUSHINFO 0
-[26]OP_EQ       0  1
-[27]OP_PUSHB    1
-[28]OP_PUSHINFO 0
-[29]OP_AND      0  1
-[30]OP_JPF      1
-[31]OP_PUSHB    0
-[32]OP_CJPFPOP  5
-[33]OP_PUSHX    0  tmp
-[34]OP_PUSHX    0  upval 1
-[35]OP_EVAL     1
-[36]OP_POPN     1  1
-[37]OP_PASS
-[38]OP_JPB      29
-[39]OP_POPN     1  0
-[40]OP_TMPDEL   1
-Max Obj. Number: 35
-Max Tmp. Number: 0
-Max Reg. Number: 4
-Const Value List (Integers): 10, 0, 2, 3
-Const Value List (Double Floats):
-Const Value List (Character Strings): odd_multiples_of_three, i
-</pre>
-Using the instruction descriptions above, we can read the bycode and understand
-the execution flow of a Tapas script.
+Inside Tapas, `__binary__()` displays the current library's bytecode.
+When passed a Library or Function, it displays the bytecode or instruction range associated with that object.
+This function is an implementation-inspection aid, not a stable program-output interface.

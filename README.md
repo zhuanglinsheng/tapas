@@ -2,37 +2,29 @@
 
 # Tapas
 
-简体中文 | [English](README_en.md)
+简体中文 | [English](README_en.md) | [项目主页](README.md)
 
 Tapas 是一门以表达式为核心、注重程序可读性并具有结构化类型系统的编程语言，正在发展为面向复杂系统测试的可编程声明语言。
+它的目标是让领域规则成为可以动态构造、组合和解释的一等值，使验证器、生成器和其他解释器能够从同一份规则定义中派生合法状态、行为检查、边界场景、冲突解释和失败缩减。
 
-## 发展方向
+Tapas 当前主要用于描述复杂有状态系统和 AI Agent 业务环境中的测试规则。
+它强调让代码直接对应业务概念和约束，使读者不必先了解规则如何执行、生成或求解，也能理解测试要验证什么。
 
-Tapas 的目标是让领域规则成为第一类、可组合、可解释的声明。
-普通 Tapas 程序可以动态构造这些声明；验证器、生成器和其他解释器则可以从同一份声明派生合法测试状态、行为检查、边界场景、冲突解释和失败缩减。
-首要应用方向是复杂有状态系统和 AI Agent 业务环境的测试。
-声明应当直接表达领域意图，使读者无需理解底层的执行、生成或求解机制，也能快速理解程序。
+## 语言特色
 
-用于构造 Rule IR 的 `rule` 与 `require`、多解释器接口和测试生成能力目前仍在设计和开发中，不属于当前语言规范。
-相关方向见[可验证 Agent 环境设计](docs/paper_or/AgentEnvironment_zh.md)。
+- 业务规则可以像普通数据一样保存、传递和组合，同一份规则既可以直接用于检查，也可以交给不同工具分析和解释。
+- 灵活的类型系统可以在编译期发现错误，也允许程序在运行时读取和组合类型，便于描述复杂的业务状态。
+- 以表达式为核心的简洁语法支持一等函数、闭包、递归、常用容器和稠密数组。
+- 语言服务器和 Visual Studio Code 扩展提供实时诊断、补全、悬停信息和跨模块符号跳转。
 
-## 当前语言实现
+Tapas 使用 C23 实现，源码被编译为字节码并由栈式虚拟机执行。
+Tapas 程序可以作为脚本运行，也可以通过交互式 REPL 或 Markdown 代码块执行。
+公共 C API 用于将 Tapas 运行时嵌入其他程序。
 
-当前版本提供了承载上述方向所需的基础语言、类型系统和运行时：
+## 示例
 
-- 简洁、以表达式为核心的语法，以及一等函数、闭包和递归。
-- 编译期类型标注、结构 Type、联合 Type、一等 Type 值和运行时反射。
-- 常用容器、稠密数组、模块和可复用的 `.tapc` 字节码。
-- 语言服务器和 Visual Studio Code 扩展。
-
-Tapas 使用 C23 实现，源码被编译为字节码并由栈式虚拟机执行。Tapas 程序可以作为
-脚本运行，也可以通过交互式 REPL 或 Markdown 代码块执行。公共 C API 用于将 Tapas
-运行时嵌入其他程序。
-
-## 算法示例
-
-根目录下的 [`examples`](examples) 收录可直接运行的 `.tap` 程序。它们既展示
-常见算法，也覆盖 Tapas 的主要语言能力：
+[Tapas 入门示例](docs/examples/Basics_zh.md)用一个短小且可执行的程序串联变量、列表、函数和控制流，直观呈现语言的基本风格。
+下面是一些完整示例，涵盖斐波那契数列、经典排序、图搜索和动态规划等常见问题：
 
 | 示例 | 内容与展示重点 |
 | --- | --- |
@@ -45,62 +37,40 @@ Tapas 使用 C23 实现，源码被编译为字节码并由栈式虚拟机执行
 | [最长公共子序列](examples/longest_common_subsequence.tap) | 用动态规划求两个字符串的公共子序列，展示二维数组与结果回溯 |
 | [牛顿法](examples/newton_method.tap) | 迭代求平方根和非线性方程的根，展示浮点计算与数学函数 |
 
-完整索引和维护约定参见 [`examples/README.md`](examples/README.md)。包含算法讲解、
-复杂度分析和输出结果的可执行教程仍保留在 [`docs/examples`](docs/examples)。
+更多例子参见[语法示例集](docs/examples/syntax)。
 
 ## 构建与运行
 
-Tapas 需要支持 C23 的编译器、CMake 3.10 或更高版本和 GNU Readline。
-
-在项目根目录运行：
+Tapas 需要支持 C23 的编译器、CMake 3.21 或更高版本和 GNU Readline。
+在项目根目录构建 Tapas、运行测试并执行一个示例：
 
 ```sh
 cmake -S . -B build
 cmake --build build
-```
-
-构建完成后，创建 `hello.tap`：
-
-```tapas
-print('Hello, Tapas!')
-```
-<pre class='Tapas-Return'>
-Hello, Tapas!
-</pre>
-
-运行该文件：
-
-```sh
-build/bin/tapas hello.tap
-```
-
-也可以直接运行根目录下的算法示例：
-
-```sh
+ctest --test-dir build --output-on-failure
 build/bin/tapas examples/fibonacci.tap
 ```
 
-依赖安装、测试、安装、REPL、命令字符串、字节码和模块路径等用法参见
-[使用说明](docs/Usage_zh.md)。
+依赖安装、安装、REPL、字节码和模块等更多用法参见[使用说明](docs/Usage_zh.md)。
 
 ## Visual Studio Code 支持
 
-VS Code 扩展位于 [editors/vscode](editors/vscode)，支持语法高亮、实时诊断、
-悬停类型信息、代码补全、定义跳转、引用查找、重命名、工作区模块分析，以及运行
-当前 Tapas 文件。
+VS Code 扩展位于 [editors/vscode](editors/vscode)，支持语法高亮、实时诊断、悬停类型信息、代码补全、定义跳转、引用查找、重命名、工作区模块分析，以及运行当前 Tapas 文件。
 
-构建项目后即可安装扩展：
+这是不捆绑原生程序的薄扩展。先安装 Tapas Core，确保`tapas`和
+`tapas-language-server`位于`PATH`，或在设置中指定路径。开发仓库中的扩展可用以下命令安装：
 
 ```sh
 editors/vscode/install.sh
 ```
 
-安装完成后，在 VS Code 中执行 **Developer: Reload Window**。功能与配置说明详见
-[VS Code 扩展说明](editors/vscode/README.md)。
+安装完成后，在 VS Code 中执行 **Developer: Reload Window**。
+功能与配置说明详见[VS Code 扩展说明](editors/vscode/README.md)。
 
 ## 在 C 程序中嵌入 Tapas
 
-公共头文件位于 `include/tapas`。以下程序通过会话接口执行一段 Tapas 源码：
+公共头文件位于 `include/tapas`。
+以下程序通过会话接口执行一段 Tapas 源码：
 
 ```c
 #include "tapas/tapas.h"
@@ -119,26 +89,16 @@ int main(void)
 
 ## 文档
 
-- [使用说明](docs/Usage_zh.md)：构建、命令行选项、脚本、字节码、
-  Markdown 执行和模块路径。
-- [语言规范](docs/Syntax_zh.md)：语法、值类别、运算符、
-  语句、函数、模块、数组和内置接口。
-- [类型系统设计](docs/TypeSystem_zh.md)：编译期标注、Type 值、结构 Type
-  和 `types` 包。
-- [`rule` 与 `require` 设计](docs/Rules_zh.md)：Rule 字面量、规则组合、
-  标准检查和 Rule IR。
-- [`optimizers` 包设计](docs/Optimizers_zh.md)：Variable Term、传播、
-  可行性搜索、目标优化和后端扩展。
-- [可验证 Agent 环境设计](docs/paper_or/AgentEnvironment_zh.md)：实体、状态转换、业务政策、
-  场景生成、结果判定和确定性回放。
-- [C 交互](docs/Foreign_zh.md)：嵌入会话、注册 C 函数、
-  值操作和复合类型扩展。
-- [运行机制](docs/Mechanism_zh.md)：编译器、字节码、虚拟机、
-  环境和引用计数。
-- [性能基准](test/benchmarks/Results_zh.md)：Tapas 与 Python 在 VM 热路径、
-  函数调用、递归、列表访问和埃氏筛等负载上的逐项比较。
-- 示例：[递归斐波那契](docs/examples/Fibonacci_zh.md) 和
-  [排序算法](docs/examples/Sort_zh.md)。
+- [使用说明](docs/Usage_zh.md)：构建、命令行选项、脚本、字节码、Markdown 执行和模块路径。
+- [语言规范](docs/Syntax_zh.md)：语法、值类别、运算符、语句、函数、模块和数组。
+- [标准库](docs/Stdlib_zh.md)：根内建函数、原生包和随发行版提供的源码包。
+- [代码风格](docs/Style_zh.md)：缩进、函数与控制流布局，以及 `format` 包。
+- [类型系统设计](docs/TypeSystem_zh.md)：编译期标注、Type 值、结构 Type 和 `types` 包。
+- [Rule](docs/Rules_zh.md)：Rule 字面量、规则组合、标准检查和 Rule IR。
+- [C 交互](docs/Foreign_zh.md)：嵌入会话、注册 C 函数、值操作和复合类型扩展。
+- [运行机制](docs/Mechanism_zh.md)：编译器、字节码、虚拟机、环境和引用计数。
+- [性能基准](test/benchmarks/Results_zh.md)：Tapas 与 Python 在 VM 热路径、函数调用、递归、列表访问和埃氏筛等负载上的逐项比较。
+- 示例：[基础语法](docs/examples/Basics_zh.md)、[扩展语法程序](docs/examples/syntax)和[模块与目录包](docs/examples/modules/README.md)。
 
 ## 许可证
 
@@ -146,5 +106,5 @@ Tapas 使用 MIT 许可证发布，详见 [LICENSE](LICENSE)。
 
 ## 联系方式
 
-欢迎通过 Issue 反馈问题，也欢迎提交 Pull Request。联系邮箱：
-<linsheng.z@outlook.com>。
+欢迎通过 Issue 反馈问题，也欢迎提交 Pull Request。
+联系邮箱：<zhuanglinsheng@outlook.com>。

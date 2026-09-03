@@ -23,6 +23,9 @@ typedef void (*cblas_dcopy_fn)(const int, const double *, const int,
 typedef void (*cblas_daxpy_fn)(const int, const double, const double *,
 			       const int, double *, const int);
 typedef void (*cblas_dscal_fn)(const int, const double, double *, const int);
+typedef double (*cblas_ddot_fn)(const int, const double *, const int,
+				const double *, const int);
+typedef double (*cblas_dnrm2_fn)(const int, const double *, const int);
 typedef void (*cblas_dgemm_fn)(const int, const int, const int, const int,
 			       const int, const int, const double,
 			       const double *, const int, const double *,
@@ -32,6 +35,8 @@ typedef struct {
 	cblas_dcopy_fn dcopy;
 	cblas_daxpy_fn daxpy;
 	cblas_dscal_fn dscal;
+	cblas_ddot_fn ddot;
+	cblas_dnrm2_fn dnrm2;
 	cblas_dgemm_fn dgemm;
 } tblas_api;
 
@@ -54,7 +59,7 @@ static void close_library(tblas_handle handle)
 static void *find_symbol(tblas_handle handle, const char *name)
 {
 	FARPROC symbol = GetProcAddress(handle, name);
-	void *result = NULL;
+	void *result = nullptr;
 	if (sizeof(symbol) == sizeof(result))
 		memcpy(&result, &symbol, sizeof(result));
 	return result;
@@ -100,6 +105,10 @@ static int try_library(const char *path)
 			     find_symbol(handle, "cblas_daxpy")) &&
 		set_function(&candidate.dscal, sizeof(candidate.dscal),
 			     find_symbol(handle, "cblas_dscal")) &&
+		set_function(&candidate.ddot, sizeof(candidate.ddot),
+			     find_symbol(handle, "cblas_ddot")) &&
+		set_function(&candidate.dnrm2, sizeof(candidate.dnrm2),
+			     find_symbol(handle, "cblas_dnrm2")) &&
 		set_function(&candidate.dgemm, sizeof(candidate.dgemm),
 			     find_symbol(handle, "cblas_dgemm"));
 	if (!valid) {
@@ -172,34 +181,63 @@ static int blas_size(size_t value, const char *where)
 
 void tblas_copy(size_t n, const double *x, double *y)
 {
+	if (!n || x == y)
+		return;
 	require_blas();
-	if (n != 0)
-		api.dcopy(blas_size(n, "tblas_copy"), x, 1, y, 1);
+	api.dcopy(blas_size(n, "tblas_copy"), x, 1, y, 1);
 }
 
 void tblas_axpy(size_t n, double alpha, const double *x, double *y)
 {
+	if (!n || alpha == 0.0)
+		return;
 	require_blas();
-	if (n != 0)
-		api.daxpy(blas_size(n, "tblas_axpy"), alpha, x, 1, y, 1);
+	api.daxpy(blas_size(n, "tblas_axpy"), alpha, x, 1, y, 1);
 }
 
 void tblas_scal(size_t n, double alpha, double *x)
 {
+	if (!n || alpha == 1.0)
+		return;
 	require_blas();
-	if (n != 0)
-		api.dscal(blas_size(n, "tblas_scal"), alpha, x, 1);
+	api.dscal(blas_size(n, "tblas_scal"), alpha, x, 1);
+}
+
+double tblas_dot(size_t n, const double *x, const double *y)
+{
+	if (!n)
+		return 0.0;
+	require_blas();
+	return api.ddot(blas_size(n, "tblas_dot"), x, 1, y, 1);
+}
+
+double tblas_norm(size_t n, const double *x)
+{
+	if (!n)
+		return 0.0;
+	require_blas();
+	return api.dnrm2(blas_size(n, "tblas_norm"), x, 1);
 }
 
 void tblas_gemm(size_t rows, size_t shared, size_t cols,
-		const double *left, const double *right, double *out)
+		double alpha, const double *left, const double *right,
+		double beta, double *out)
 {
-	require_blas();
 	int m = blas_size(rows, "tblas_gemm");
 	int k = blas_size(shared, "tblas_gemm");
 	int n = blas_size(cols, "tblas_gemm");
-	if (m == 0 || n == 0 || k == 0)
+	if (m == 0 || n == 0)
 		return;
+	if (k == 0 || alpha == 0.0) {
+		if (beta == 0.0)
+			for (size_t i = 0; i < rows * cols; i++)
+				out[i] = 0.0;
+		else if (beta != 1.0)
+			for (size_t i = 0; i < rows * cols; i++)
+				out[i] *= beta;
+		return;
+	}
+	require_blas();
 	api.dgemm(CBLAS_ROW_MAJOR, CBLAS_NO_TRANS, CBLAS_NO_TRANS,
-		  m, n, k, 1.0, left, k, right, n, 0.0, out, n);
+		  m, n, k, alpha, left, k, right, n, beta, out, n);
 }

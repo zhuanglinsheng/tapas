@@ -3,9 +3,8 @@
 [简体中文](README.md) | English | [Project Home](../README_en.md)
 
 This directory contains standalone `.tap` programs that can be executed
-directly. They focus on complete implementations; tutorials with background,
-complexity analysis, and recorded output remain under
-[`docs/examples`](../docs/examples).
+directly and focus on complete implementations. Shorter examples of basic
+syntax and modules are available under [`docs/examples`](../docs/examples).
 
 Run any example from the project root:
 

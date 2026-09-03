@@ -1,0 +1,394 @@
+let Edit = types::make_type(
+    'end': types::Int,
+    'text': types::String,
+)
+
+function is_trivia(kind: String) -> Bool
+{
+    return kind == 'whitespace' or kind == 'newline' or kind == 'comment'
+}
+
+function expand_indentation(indentation: String) -> String
+{
+    let expanded = ''
+    for (let index in 0 to indentation.len()) {
+        if (indentation[index] == syntax::horizontal_tab) {
+            expanded.append('    ')
+        } else {
+            expanded.append(indentation[index])
+        }
+    }
+    return expanded.copy()
+}
+
+function whitespace_edits(
+        source: String,
+        tokens: List,
+) -> Dictionary {
+    let edits: Dictionary = {}
+    let line_start = true
+    for (let index in 0 to tokens.len()) {
+        let token = tokens[index]
+        let kind = token['kind']
+        if (kind == 'newline') {
+            line_start = true
+        } elif (kind == 'whitespace') {
+            let replacement = source[token['start']:token['end']]
+            if (line_start) {
+                replacement = expand_indentation(replacement)
+            }
+            if (index + 1 < tokens.len() and
+                (tokens[index + 1]['kind'] == 'newline' or
+                 tokens[index + 1]['kind'] == 'eof')) {
+                replacement = ''
+            }
+            if (replacement != source[token['start']:token['end']]) {
+                edits[token['start']] = {
+                    'end': token['end'],
+                    'text': replacement.copy(),
+                }
+            }
+        } elif (kind != 'eof') {
+            line_start = false
+        }
+    }
+    return edits.copy()
+}
+
+function lexical_view(
+        source: String,
+        clean_before: List[Bool],
+        indents: List[String],
+        lines: List[Int],
+) -> List {
+    let tokens = syntax::tokens(source)
+    let significant: List = []
+    let clean = true
+    let line_start = 0
+    let indentation_end = 0
+    let line_has_token = false
+    let line = 0
+
+    for (let token in tokens) {
+        let kind = token['kind']
+        if (kind == 'newline') {
+            line_start = token['end']
+            indentation_end = line_start
+            line_has_token = false
+            line = line + 1
+            continue
+        }
+        if (kind == 'whitespace') {
+            if (line_has_token == false) {
+                indentation_end = token['end']
+            }
+            continue
+        }
+        if (kind == 'comment') {
+            clean = false
+            line_has_token = true
+            continue
+        }
+        if (kind == 'eof') {
+            continue
+        }
+        if (line_has_token == false) {
+            indentation_end = token['start']
+        }
+        significant.append(token)
+        clean_before.append(clean)
+        indents.append(source[line_start:indentation_end])
+        lines.append(line)
+        clean = true
+        line_has_token = true
+    }
+    return significant.copy()
+}
+
+function parenthesis_matches(
+        tokens: List,
+) -> Dictionary[Int, Int] {
+    let matches: Dictionary[Int, Int] = {}
+    let stack: List[Int] = []
+    for (let index in 0 to tokens.len()) {
+        let kind = tokens[index]['kind']
+        if (kind == '(') {
+            stack.append(index)
+        } elif (kind == ')' and stack.len() > 0) {
+            let opening = stack[stack.len() - 1]
+            pop_back(stack)
+            matches[opening] = index
+        }
+    }
+    return matches.copy()
+}
+
+function block_after(tokens: List, start: Int) -> Int
+{
+    let square_depth = 0
+    let parenthesis_depth = 0
+    let index: Int = start
+    let result = -1
+    let finished = false
+    while (index < tokens.len() and finished == false) {
+        let kind = tokens[index]['kind']
+        if (kind == '[') {
+            square_depth = square_depth + 1
+        } elif (kind == ']') {
+            square_depth = square_depth - 1
+        } elif (kind == '(') {
+            parenthesis_depth = parenthesis_depth + 1
+        } elif (kind == ')') {
+            parenthesis_depth = parenthesis_depth - 1
+        } elif (kind == '{' and square_depth == 0 and parenthesis_depth == 0) {
+            result = index
+            finished = true
+        } elif ((kind == ';' or kind == '=') and
+                square_depth == 0 and parenthesis_depth == 0) {
+            finished = true
+        }
+        if (finished == false) {
+            index = index + 1
+        }
+    }
+    return int(result)
+}
+
+function is_function_prefix(kind: String) -> Bool
+{
+    return (kind == '(' or kind == '[' or kind == '{' or kind == ',' or
+        kind == ':' or kind == '=' or kind == 'function' or
+        kind == 'return' or kind == 'and' or kind == 'or' or
+        kind == '+' or kind == '-' or kind == '*' or kind == '/' or
+        kind == '%' or kind == '==' or kind == '!=' or kind == '<' or
+        kind == '<=' or kind == '>' or kind == '>=')
+}
+
+function is_keyword(kind: String) -> Bool
+{
+    return kind in [
+        'and', 'as', 'base', 'break', 'continue', 'elif', 'else',
+        'false', 'for', 'function', 'if', 'import', 'in', 'let',
+        'nil', 'of', 'or', 'return', 'rule', 'require', 'this',
+        'to', 'true', 'var', 'while',
+    ]
+}
+
+function put_edit(
+        edits: Dictionary,
+        clean_before: List[Bool],
+        tokens: List,
+        left: Int,
+        right: Int,
+        text: String,
+) -> Nil {
+    if (clean_before[right]) {
+        edits[tokens[left]['end']] = {
+            'end': tokens[right]['start'],
+            'text': text,
+        }
+    }
+}
+
+function structural_edits(
+        source: String,
+        tokens: List,
+        clean_before: List[Bool],
+        indents: List[String],
+        lines: List[Int],
+        line_break: String,
+) -> Dictionary {
+    let edits: Dictionary = {}
+    let matches = parenthesis_matches(tokens)
+    let function_braces: Dictionary[Int, Int] = {}
+
+    for (let index in 0 to tokens.len()) {
+        let kind = tokens[index]['kind']
+        let qualified = false
+        if (index > 0) {
+            qualified = (tokens[index - 1]['kind'] == '::' or
+                tokens[index - 1]['kind'] == '.')
+        }
+        let followed_by_delimiter = false
+        if (index + 1 < tokens.len()) {
+            followed_by_delimiter = (tokens[index + 1]['kind'] == '(' or
+                tokens[index + 1]['kind'] == '{')
+        }
+        if (is_keyword(kind) and followed_by_delimiter and
+            qualified == false) {
+            put_edit(edits, clean_before, tokens, index, index + 1, ' ')
+        }
+        if ((kind == 'if' or kind == 'elif' or kind == 'for' or
+             kind == 'while' or (kind == 'rule' and qualified == false)) and
+            index + 1 < tokens.len()) {
+            let opening = index + 1
+            if (tokens[opening]['kind'] == '(' and opening in matches) {
+                let closing = matches[opening]
+                put_edit(edits, clean_before, tokens, index, opening, ' ')
+                if (closing + 1 < tokens.len() and
+                    tokens[closing + 1]['kind'] == '{') {
+                    put_edit(
+                        edits, clean_before, tokens,
+                        closing, closing + 1, ' ')
+                }
+            }
+        } elif ((kind == 'else' or (kind == 'rule' and qualified == false)) and
+                index + 1 < tokens.len() and
+                tokens[index + 1]['kind'] == '{') {
+            put_edit(edits, clean_before, tokens, index, index + 1, ' ')
+        }
+
+        if ((kind == 'elif' or kind == 'else') and index > 0 and
+            tokens[index - 1]['kind'] == '}') {
+            put_edit(edits, clean_before, tokens, index - 1, index, ' ')
+        }
+
+        if (kind == 'function' and index + 2 < tokens.len()) {
+            let opening = index + 2
+            if (tokens[opening]['kind'] == '(' and opening in matches) {
+                let brace = block_after(tokens, matches[opening] + 1)
+                if (brace >= 0) {
+                    function_braces[brace] = index
+                }
+            }
+        }
+    }
+
+    for (let opening in 0 to tokens.len()) {
+        if (tokens[opening]['kind'] != '(' or (opening in matches) == false) {
+            continue
+        }
+        let previous = ''
+        if (opening > 0) {
+            previous = tokens[opening - 1]['kind']
+        }
+        if (opening > 0 and is_function_prefix(previous) == false) {
+            continue
+        }
+        let closing = matches[opening]
+        let after = closing + 1
+        if (after >= tokens.len()) {
+            continue
+        }
+        if (tokens[after]['kind'] == '{') {
+            if ((after in function_braces) == false) {
+                function_braces[after] = opening
+            }
+        } elif (tokens[after]['kind'] == '->') {
+            let brace = block_after(tokens, after + 1)
+            if (brace >= 0 and (brace in function_braces) == false) {
+                function_braces[brace] = opening
+            }
+        }
+    }
+
+    for (let brace in keys(function_braces)) {
+        let header = function_braces[brace]
+        let prefix = ' '
+        if (lines[header] == lines[brace - 1]) {
+            prefix = line_break.copy()
+            prefix.append(indents[header])
+        }
+        put_edit(
+            edits, clean_before, tokens,
+            brace - 1, brace,
+            prefix)
+    }
+    return edits.copy()
+}
+
+function apply_edits(source: String, edits: Dictionary) -> String
+{
+    let output = ''
+    let position = 0
+    while (position < source.len()) {
+        if (position in edits) {
+            let edit = edits[position]
+            delete(edits, position)
+            output.append(edit['text'])
+            position = edit['end']
+        } else {
+            output.append(source[position])
+            position = position + 1
+        }
+    }
+    return output.copy()
+}
+
+function source(source_text: String) -> String
+{
+    let all_tokens = syntax::tokens(source_text)
+    let clean_before: List[Bool] = []
+    let indents: List[String] = []
+    let lines: List[Int] = []
+    let tokens = lexical_view(
+        source_text, clean_before, indents, lines)
+    let line_break = syntax::line_feed
+    for (let token in all_tokens) {
+        if (token['kind'] == 'newline') {
+            line_break = source_text[token['start']:token['end']]
+            break
+        }
+    }
+    let edits = whitespace_edits(source_text, all_tokens)
+    let structure = structural_edits(
+        source_text, tokens, clean_before, indents, lines, line_break)
+    for (let start in keys(structure)) {
+        edits[start] = structure[start]
+    }
+    let formatted = apply_edits(
+        source_text, edits)
+    return formatted.copy()
+}
+
+function is_formatted(source_text: String) -> Bool
+{
+    return source(source_text) == source_text
+}
+
+function file(path: String) -> Bool
+{
+    let original = io::read_text(path)
+    let formatted = source(original)
+    if (formatted == original) {
+        return false
+    }
+    io::replace_text(path, formatted)
+    return true
+}
+
+function check_file(path: String) -> Bool
+{
+    return is_formatted(io::read_text(path))
+}
+
+function main(arguments: List[String]) -> Int
+{
+    let checking = false
+    let failed = false
+    for (let argument in arguments) {
+        if (argument == '--check') {
+            checking = true
+        } elif (checking) {
+            if (check_file(argument) == false) {
+                print(argument)
+                failed = true
+            }
+        } elif (file(argument)) {
+            print(argument)
+        }
+    }
+    if (failed) {
+        return 1
+    }
+    return 0
+}
+
+return {
+    'Edit'         : Edit,
+    'source'       : source,
+    'is_formatted' : is_formatted,
+    'file'         : file,
+    'check_file'   : check_file,
+    'main'         : main,
+}

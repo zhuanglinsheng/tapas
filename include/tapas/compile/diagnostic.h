@@ -19,17 +19,20 @@ typedef struct {
 	tstring *message;
 } tdiagnostic;
 
-typedef struct {
+typedef struct tdiagnostics {
 	tdiagnostic *items;
 	uint32_t count;
 	uint32_t capacity;
 } tdiagnostics;
 
+
 void tdiagnostics_init(tdiagnostics *diagnostics);
+
 void tdiagnostics_free(tdiagnostics *diagnostics);
+
 void tdiagnostics_add(tdiagnostics *diagnostics,
-			      tdiagnostic_severity severity,
-			      tsource_span span, const char *message);
+		      tdiagnostic_severity severity,
+		      tsource_span span, const char *message);
 
 #ifdef __cplusplus
 }

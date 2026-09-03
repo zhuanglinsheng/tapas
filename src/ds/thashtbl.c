@@ -283,16 +283,16 @@ void thashtbl_set(thashtbl *tbl, const tobj *key, const tobj *value)
 const tobj *thashtbl_get(const thashtbl *tbl, const tobj *key)
 {
 	if (!tbl || tbl->capacity == 0)
-		return NULL;
+		return nullptr;
 	int found = 0;
 	uint64_t hash = thash_tobj_hash(key);
 	uint_objs idx = thashtbl_find_slot(tbl, key, hash, &found);
-	return found ? &tbl->entries[idx].value : NULL;
+	return found ? &tbl->entries[idx].value : nullptr;
 }
 
 int thashtbl_contains(const thashtbl *tbl, const tobj *key)
 {
-	return thashtbl_get(tbl, key) != NULL;
+	return thashtbl_get(tbl, key) != nullptr;
 }
 
 int thashtbl_delete(thashtbl *tbl, const tobj *key)

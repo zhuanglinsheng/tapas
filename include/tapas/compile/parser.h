@@ -2,7 +2,8 @@
 #define TAPAS_COMPILE_PARSER_H
 
 #include "tapas/compile/ast.h"
-#include "tapas/compile/diagnostic.h"
+
+typedef struct tdiagnostics tdiagnostics;
 
 #ifdef __cplusplus
 extern "C" {
@@ -23,8 +24,11 @@ void tparser_init(tparser *parser,
 		  const tsyntax_tokens *tokens,
 		  tast_arena *arena,
 		  tdiagnostics *diagnostics);
+
 tast_id tparser_parse_expression(tparser *parser);
+
 tast_id tparser_parse_statement(tparser *parser);
+
 tast_id tparser_parse_module(tparser *parser);
 
 #ifdef __cplusplus

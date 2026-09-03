@@ -16,6 +16,8 @@ int main(void)
 	assert(input && output);
 	frame(input, "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{}}");
 	frame(input, "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didOpen\",\"params\":{\"textDocument\":{\"uri\":\"file:///test.tap\",\"languageId\":\"tapas\",\"version\":1,\"text\":\"let 名称 = 1\\nlet value = 名称 +\\n\"}}}");
+	frame(input, "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didOpen\",\"params\":{\"textDocument\":{\"uri\":\"file:///type-error.tap\",\"languageId\":\"tapas\",\"version\":1,\"text\":\"var values: Dictionary[String, Int] = {'a': 1}\\nvalues[2] = 3\\n\"}}}");
+	frame(input, "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didOpen\",\"params\":{\"textDocument\":{\"uri\":\"file:///builtin.tap\",\"languageId\":\"tapas\",\"version\":1,\"text\":\"pprint([1])\\nlet primes = [2, 3, 5]\\nlet copied = primes.copy()\\n\"}}}");
 	frame(input, "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"textDocument/definition\",\"params\":{\"textDocument\":{\"uri\":\"file:///test.tap\"},\"position\":{\"line\":1,\"character\":12}}}");
 	frame(input, "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"textDocument/hover\",\"params\":{\"textDocument\":{\"uri\":\"file:///test.tap\"},\"position\":{\"line\":1,\"character\":12}}}");
 	frame(input, "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"textDocument/references\",\"params\":{\"textDocument\":{\"uri\":\"file:///test.tap\"},\"position\":{\"line\":1,\"character\":12},\"context\":{\"includeDeclaration\":true}}}");
@@ -23,7 +25,9 @@ int main(void)
 	frame(input, "{\"jsonrpc\":\"2.0\",\"id\":6,\"method\":\"textDocument/completion\",\"params\":{\"textDocument\":{\"uri\":\"file:///test.tap\"},\"position\":{\"line\":1,\"character\":12}}}");
 	frame(input, "{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"textDocument/prepareRename\",\"params\":{\"textDocument\":{\"uri\":\"file:///test.tap\"},\"position\":{\"line\":1,\"character\":12}}}");
 	frame(input, "{\"jsonrpc\":\"2.0\",\"id\":8,\"method\":\"textDocument/rename\",\"params\":{\"textDocument\":{\"uri\":\"file:///test.tap\"},\"position\":{\"line\":1,\"character\":12},\"newName\":\"renamed\"}}");
-	frame(input, "{\"jsonrpc\":\"2.0\",\"id\":9,\"method\":\"shutdown\",\"params\":null}");
+	frame(input, "{\"jsonrpc\":\"2.0\",\"id\":9,\"method\":\"textDocument/hover\",\"params\":{\"textDocument\":{\"uri\":\"file:///builtin.tap\"},\"position\":{\"line\":0,\"character\":2}}}");
+	frame(input, "{\"jsonrpc\":\"2.0\",\"id\":10,\"method\":\"textDocument/hover\",\"params\":{\"textDocument\":{\"uri\":\"file:///builtin.tap\"},\"position\":{\"line\":2,\"character\":22}}}");
+	frame(input, "{\"jsonrpc\":\"2.0\",\"id\":11,\"method\":\"shutdown\",\"params\":null}");
 	frame(input, "{\"jsonrpc\":\"2.0\",\"method\":\"exit\",\"params\":null}");
 	rewind(input);
 	assert(tlsp_run(input, output) == 0);
@@ -39,6 +43,7 @@ int main(void)
 	assert(strstr(text, "Tapas Language Server"));
 	assert(strstr(text, "publishDiagnostics"));
 	assert(strstr(text, "unexpected end of input"));
+	assert(strstr(text, "Dictionary key Type mismatch"));
 	assert(strstr(text, "\"line\":0,\"character\":4"));
 	assert(strstr(text, "let 名称"));
 	assert(strstr(text, "let 名称: Int"));
@@ -48,7 +53,9 @@ int main(void)
 	assert(strstr(text, "completionProvider"));
 	assert(strstr(text, "triggerCharacters"));
 	assert(strstr(text, "renameProvider"));
-	assert(strstr(text, "\\\"newText\\\":\\\"renamed\\\"") == NULL);
+	assert(strstr(text, "pprint(...values: AnyType) -> Nil"));
+	assert(strstr(text, "copy(value: T) -> T"));
+	assert(strstr(text, "\\\"newText\\\":\\\"renamed\\\"") == nullptr);
 	assert(strstr(text, "\"newText\":\"renamed\""));
 	free(text);
 	fclose(input);

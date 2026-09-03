@@ -2,6 +2,7 @@
 #define TAPAS_TENV_H
 
 #include "tapas/tval.h"
+#include "tapas/textension.h"
 #include "tapas/ds/tobj_array.h"
 #include "tapas/runtime/tcfn.h"
 #include "tapas/tbycs.h"
@@ -132,7 +133,12 @@ tdict *tlib_get_exposed(tlib *lb);
 void tlib_set_exposed(tlib *lb, tdict *d);
 void tlib_lib_add_obj(tlib *lb, const char *name, const tobj *v);
 tdict *tlib_add_pkg(tlib *lb, const char *pkgname);
+void tlib_add_cfn(tlib *lb, const tcfn_descriptor *descriptor);
+void tlib_add_pkg_cfn(tdict *pkg, const tcfn_descriptor *descriptor);
+int tlib_install_extension(tlib *lb,
+			   const textension_descriptor *extension);
 void tlib_add_cppf(tlib *lb, const char *name, genf_t f, uint_regs nparams_sig);
+const tobj *tlib_find(const tlib *lb, const char *name);
 void tlib_add_path(tlib *lb, const char *paths_str);
 tstring **tlib_get_paths(tlib *lb);
 uint_lexs tlib_get_npaths(tlib *lb);

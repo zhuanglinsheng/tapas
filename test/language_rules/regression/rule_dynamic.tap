@@ -1,0 +1,66 @@
+let value = rules::parameter("value", types::Int)
+let lower = rules::constant(0)
+let upper = rules::constant(10)
+let first = rules::condition(value >= lower, "value must be non-negative")
+let second = rules::condition(value <= upper, "value must be at most ten")
+let in_range = rules::make("InRange", [value], [first, second])
+
+print(rules::check(in_range(5))["passed"])
+print(rules::check(in_range(11))["passed"])
+print(len(rules::parameters(rules::inspect(in_range))))
+print(len(rules::terms(rules::inspect(in_range))))
+print(types::matches(value, rules::term(types::Int)))
+print(types::matches(rules::inspect(in_range), rules::RuleIR))
+let encoded = rules::serialize(in_range)
+let restored = rules::deserialize(encoded)
+print(rules::check(restored(5))["passed"])
+let observer = evaluators::make("observer", 1, (context)
+{
+    return {
+        "status": "Success",
+        "value": evaluators::binding(
+            context, context["ir"]["parameters"][0]),
+        "violations": [],
+        "diagnostics": []
+    }
+})
+print(evaluators::eval(in_range(7), observer)["value"])
+print(evaluators::compile(in_range, observer)["status"])
+
+let sourced = rule (number: Int) {
+    "number must be positive": number > 0
+}
+let sourced_ir = rules::inspect(sourced)
+print(len(rules::items(sourced_ir)))
+print(rules::parameters(sourced_ir)[0]["payload"])
+print(types::matches(rules::parameters(sourced_ir)[0],
+    rules::term(types::Int)))
+print(types::matches(sourced, types::of(sourced)))
+let source_observer = evaluators::make("source-observer", 1, (context)
+{
+    return {
+        "status": "Success",
+        "value": evaluators::value(
+            context, context["ir"]["items"][0]["term"]),
+        "violations": [],
+        "diagnostics": []
+    }
+})
+print(evaluators::eval(sourced(2), source_observer)["value"])
+
+let ceiling = 4
+let captured = rule (number: Int) {
+    number < ceiling
+}
+print(len(rules::inspect(captured)["captures"]))
+let capture_observer = evaluators::make("capture-observer", 1, (context)
+{
+    return {
+        "status": "Success",
+        "value": evaluators::capture(
+            context, context["ir"]["captures"][0]),
+        "violations": [],
+        "diagnostics": []
+    }
+})
+print(evaluators::eval(captured(2), capture_observer)["value"])

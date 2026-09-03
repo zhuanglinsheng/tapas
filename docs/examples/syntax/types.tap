@@ -1,0 +1,30 @@
+// Union, structural, and parameterized Types.
+
+let Number = types::union(types::Int, types::Float)
+var amount: Number = 1
+amount = 2.5
+
+let Point = types::make_type(
+    'x' : types::Int,
+    'y' : types::Float,
+)
+let point: Point = {3, 4.5}
+
+let integers: List[Int] = [1, 2, 3]
+let scores: types::Dictionary[String, Float] = {
+    'Ada' : 9.5,
+}
+let identifier: Union[Int, String] = 'tapas'
+
+print(amount)
+print(point['x'])
+print(types::matches(point, Point))
+print(types::matches(integers, types::list(types::Int)))
+print(types::matches(
+    scores,
+    types::dictionary(types::String, types::Float),
+))
+print(types::matches(
+    identifier,
+    types::union(types::Int, types::String),
+))

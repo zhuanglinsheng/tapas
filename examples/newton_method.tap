@@ -1,29 +1,38 @@
 // Newton method for square roots and roots of general functions.
 // Each iteration roughly doubles the number of correct digits near the root.
 
-var square_root = (
-        value: Union[Int, Float],
+function square_root(
+        value: Int | Float,
         tolerance: Float,
 ) -> Float {
-    if(value < 0){
-        return -1.0
-    }
-    if(value == 0){
+
+    assert(rule {
+        "tolerance must be positive": tolerance > 0.0
+        "value must be non-negative": value >= 0
+    })
+
+    if (value == 0) {
         return 0.0
     }
 
     let estimate: Float = float(value)
-    while(math::abs(estimate * estimate - value) > tolerance){
+    while (math::abs(estimate * estimate - value) > tolerance) {
         estimate = (estimate + value / estimate) / 2.0
     }
     return float(estimate)
 }
 
 // Solve x^3 - x - 2 = 0.
-var cubic_root = (initial: Float, tolerance: Float) -> Float {
+function cubic_root(initial: Float, tolerance: Float) -> Float
+{
+
+    assert(rule {
+        "tolerance must be positive": tolerance > 0.0
+    })
+
     let x: Float = initial
     let step: Float = 1.0
-    while(math::abs(step) > tolerance){
+    while (math::abs(step) > tolerance) {
         let value: Float = x * x * x - x - 2.0
         let derivative: Float = 3.0 * x * x - 1.0
         // Newton update: x_next = x - f(x) / f_derivative(x).
@@ -33,5 +42,5 @@ var cubic_root = (initial: Float, tolerance: Float) -> Float {
     return float(x)
 }
 
-print('sqrt(2) = ', square_root(2, 0.000000000001))
-print('root of x^3 - x - 2 = ', cubic_root(1.5, 0.000000000001))
+print('sqrt(2) = ', square_root(2, 1e-12))
+print('root of x^3 - x - 2 = ', cubic_root(1.5, 1e-12))

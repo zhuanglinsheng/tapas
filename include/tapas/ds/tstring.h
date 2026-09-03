@@ -1,7 +1,6 @@
 #ifndef TAPAS_DS_TSTRING_H
 #define TAPAS_DS_TSTRING_H
 
-#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>

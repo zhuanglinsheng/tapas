@@ -2,8 +2,8 @@
 
 简体中文 | [English](README_en.md) | [项目主页](../README.md)
 
-本目录收录可直接执行的独立 `.tap` 程序。它们侧重展示完整实现；包含背景说明、
-复杂度分析和运行结果的教程仍位于 [`docs/examples`](../docs/examples)。
+本目录收录可直接执行的独立 `.tap` 程序，侧重展示完整实现。更短的基础语法和
+模块示例位于 [`docs/examples`](../docs/examples)。
 
 从项目根目录运行任一示例：
 

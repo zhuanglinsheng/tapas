@@ -1,17 +1,19 @@
 // Seven classic sorting algorithms.
 
-var swap = (xs: List[Int], i: Int, j: Int) -> Nil {
+function swap(xs: List[Int], i: Int, j: Int) -> Nil
+{
     let temporary = xs[i]
     xs[i] = xs[j]
     xs[j] = temporary
 }
 
-var bubble_sort = (xs: List[Int]) -> List[Int] {
+function bubble_sort(xs: List[Int]) -> List[Int]
+{
     // Stable, in place. Time: O(n^2); space: O(1).
     let n = xs.len()
-    for(let i in 0 to n){
-        for(let j in 0 to (n - i - 1)){
-            if(xs[j] > xs[j + 1]){
+    for (let i in 0 to n) {
+        for (let j in 0 to (n - i - 1)) {
+            if (xs[j] > xs[j + 1]) {
                 swap(xs, j, j + 1)
             }
         }
@@ -19,30 +21,32 @@ var bubble_sort = (xs: List[Int]) -> List[Int] {
     return xs
 }
 
-var selection_sort = (xs: List[Int]) -> List[Int] {
+function selection_sort(xs: List[Int]) -> List[Int]
+{
     // Unstable, in place. Time: O(n^2); space: O(1).
     let n = xs.len()
-    for(let i in 0 to n){
+    for (let i in 0 to n) {
         let minimum = i
-        for(let j in (i + 1) to n){
-            if(xs[j] < xs[minimum]){
+        for (let j in (i + 1) to n) {
+            if (xs[j] < xs[minimum]) {
                 minimum = j
             }
         }
-        if(minimum != i){
+        if (minimum != i) {
             swap(xs, i, minimum)
         }
     }
     return xs
 }
 
-var insertion_sort = (xs: List[Int]) -> List[Int] {
+function insertion_sort(xs: List[Int]) -> List[Int]
+{
     // Stable, in place. Time: O(n^2), or O(n) when already sorted.
     let n = xs.len()
-    for(let i in 1 to n){
+    for (let i in 1 to n) {
         let value = xs[i]
         let j = i - 1
-        while(j >= 0 and xs[j] > value){
+        while (j >= 0 and xs[j] > value) {
             xs[j + 1] = xs[j]
             j = j - 1
         }
@@ -51,15 +55,16 @@ var insertion_sort = (xs: List[Int]) -> List[Int] {
     return xs
 }
 
-var shell_sort = (xs: List[Int]) -> List[Int] {
+function shell_sort(xs: List[Int]) -> List[Int]
+{
     // In-place gapped insertion sort using a simple halving gap sequence.
     let n = xs.len()
     let gap = n / 2
-    while(gap > 0){
-        for(let i in gap to n){
+    while (gap > 0) {
+        for (let i in gap to n) {
             let value = xs[i]
             let j = i
-            while(j >= gap and xs[j - gap] > value){
+            while (j >= gap and xs[j - gap] > value) {
                 xs[j] = xs[j - gap]
                 j = j - gap
             }
@@ -70,9 +75,10 @@ var shell_sort = (xs: List[Int]) -> List[Int] {
     return xs
 }
 
-var merge_sort = (xs: List[Int]) -> List[Int] {
+function merge_sort(xs: List[Int]) -> List[Int]
+{
     // Stable. Time: O(n log n); temporary space: O(n).
-    if(xs.len() <= 1){
+    if (xs.len() <= 1) {
         return xs.copy()
     }
 
@@ -83,30 +89,30 @@ var merge_sort = (xs: List[Int]) -> List[Int] {
     let i = 0
     let j = 0
 
-    while(i < left.len() and j < right.len()){
-        if(left[i] <= right[j]){
+    while (i < left.len() and j < right.len()) {
+        if (left[i] <= right[j]) {
             result.append(left[i])
             i = i + 1
-        }
-        else{
+        } else {
             result.append(right[j])
             j = j + 1
         }
     }
-    while(i < left.len()){
+    while (i < left.len()) {
         result.append(left[i])
         i = i + 1
     }
-    while(j < right.len()){
+    while (j < right.len()) {
         result.append(right[j])
         j = j + 1
     }
     return result.copy()
 }
 
-var quick_sort = (xs: List[Int]) -> List[Int] {
+function quick_sort(xs: List[Int]) -> List[Int]
+{
     // Stable functional partition. Average time: O(n log n); extra space: O(n).
-    if(xs.len() <= 1){
+    if (xs.len() <= 1) {
         return xs.copy()
     }
 
@@ -115,55 +121,54 @@ var quick_sort = (xs: List[Int]) -> List[Int] {
     let equal: List[Int] = []
     let right: List[Int] = []
 
-    for(let value in xs){
-        if(value < pivot){
+    for (let value in xs) {
+        if (value < pivot) {
             left.append(value)
-        }
-        elif(value > pivot){
+        } elif (value > pivot) {
             right.append(value)
-        }
-        else{
+        } else {
             equal.append(value)
         }
     }
-    return this(left).union(equal).union(this(right))
+    return this(left).concat(equal).concat(this(right))
 }
 
-var heapify = (xs: List[Int], n: Int, root: Int) -> Nil {
+function heapify(xs: List[Int], n: Int, root: Int) -> Nil
+{
     let current = root
     let finished = false
-    while(finished == false){
+    while (finished == false) {
         let largest = current
         let left = current * 2 + 1
         let right = current * 2 + 2
 
-        if(left < n and xs[left] > xs[largest]){
+        if (left < n and xs[left] > xs[largest]) {
             largest = left
         }
-        if(right < n and xs[right] > xs[largest]){
+        if (right < n and xs[right] > xs[largest]) {
             largest = right
         }
-        if(largest != current){
+        if (largest != current) {
             swap(xs, current, largest)
             current = largest
-        }
-        else{
+        } else {
             finished = true
         }
     }
 }
 
-var heap_sort = (xs: List[Int]) -> List[Int] {
+function heap_sort(xs: List[Int]) -> List[Int]
+{
     // Unstable, in place. Time: O(n log n); space: O(1).
     let n = xs.len()
     let i = n / 2 - 1
-    while(i >= 0){
+    while (i >= 0) {
         heapify(xs, n, i)
         i = i - 1
     }
 
     let end = n - 1
-    while(end > 0){
+    while (end > 0) {
         swap(xs, 0, end)
         heapify(xs, end, 0)
         end = end - 1
@@ -173,17 +178,18 @@ var heap_sort = (xs: List[Int]) -> List[Int] {
 
 var sample: List[Int] = [2, 7, 3, 4, 3, 1, 9, 1, 8, 4, 6, 9, 5]
 
-var show_inplace_sort = (name: String, sorter: Function) -> Nil {
+function show_inplace_sort(name: String, sorter: Function) -> Nil
+{
     let values: List[Int] = sample.copy()
     let sorted = sorter(values)
-    sprint(name, ': ', values)
+    pprint(name, ': ', values)
 }
 
-sprint('original: ', sample)
+pprint('original: ', sample)
 show_inplace_sort('bubble', bubble_sort)
 show_inplace_sort('selection', selection_sort)
 show_inplace_sort('insertion', insertion_sort)
 show_inplace_sort('shell', shell_sort)
-sprint('merge: ', merge_sort(sample))
-sprint('quick: ', quick_sort(sample))
+pprint('merge: ', merge_sort(sample))
+pprint('quick: ', quick_sort(sample))
 show_inplace_sort('heap', heap_sort)

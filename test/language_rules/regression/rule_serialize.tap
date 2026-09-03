@@ -1,0 +1,6 @@
+let value = rules::parameter("value", types::Int)
+let zero = rules::constant(0)
+let positive = rules::make("Positive", [value], [
+    rules::condition(value > zero, "positive")
+])
+print(rules::serialize(positive))

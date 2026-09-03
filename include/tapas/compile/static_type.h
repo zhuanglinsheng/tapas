@@ -2,6 +2,7 @@
 #define TAPAS_COMPILE_STATIC_TYPE_H
 
 #include "tapas/ds/tstring.h"
+#include "tapas/tbuiltin.h"
 
 #include <stdint.h>
 
@@ -16,37 +17,20 @@ typedef uint32_t tstatic_type_id;
 typedef enum {
 	tstatic_type_builtin,
 	tstatic_type_list,
+	tstatic_type_iterator,
 	tstatic_type_pair,
 	tstatic_type_dictionary,
 	tstatic_type_function,
+	tstatic_type_rule,
+	tstatic_type_rule_instance,
 	tstatic_type_union,
 	tstatic_type_fields,
 	tstatic_type_recursive
 } tstatic_type_kind;
 
-typedef enum {
-	tstatic_builtin_any = 0,
-	tstatic_builtin_nil,
-	tstatic_builtin_bool,
-	tstatic_builtin_int,
-	tstatic_builtin_float,
-	tstatic_builtin_string,
-	tstatic_builtin_list,
-	tstatic_builtin_pair,
-	tstatic_builtin_dictionary,
-	tstatic_builtin_iterator,
-	tstatic_builtin_function,
-	tstatic_builtin_library,
-	tstatic_builtin_real_array,
-	tstatic_builtin_bool_array,
-	tstatic_builtin_time,
-	tstatic_builtin_type,
-	tstatic_builtin_count
-} tstatic_builtin;
-
 typedef struct {
 	tstatic_type_kind kind;
-	tstatic_builtin builtin;
+	tbuiltin_id builtin;
 	uint32_t children;
 	uint32_t child_count;
 	uint32_t fields;
@@ -57,6 +41,7 @@ typedef struct {
 typedef struct {
 	tstring *name;
 	tstatic_type_id type;
+	uint8_t optional;
 } tstatic_field;
 
 typedef struct {
@@ -77,7 +62,9 @@ typedef tstatic_type_id (*tstatic_type_resolver)(void *context,
 void tstatic_type_arena_init(tstatic_type_arena *arena);
 void tstatic_type_arena_free(tstatic_type_arena *arena);
 tstatic_type_id tstatic_type_builtin_id(tstatic_type_arena *arena,
-						tstatic_builtin builtin);
+						tbuiltin_id builtin);
+tstatic_type_id tstatic_type_builtin_named(tstatic_type_arena *arena,
+					   const char *name);
 tstatic_type_id tstatic_type_make(tstatic_type_arena *arena,
 				  tstatic_type_kind kind,
 				  const tstatic_type_id *children,

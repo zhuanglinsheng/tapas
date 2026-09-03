@@ -1,0 +1,29 @@
+let User = types::make_type(
+    'name': types::String,
+    types::optional('age': types::Int),
+)
+
+let user: User = {'name': 'Ada'}
+let IntIterator = types::iterator(types::Int)
+let values: Iterator[Int] = 0 to 3
+
+let MaybeNumber = types::union(types::Int, types::String)
+function narrowed(value: MaybeNumber) -> Int
+{
+    if (types::matches(value, types::Int)) {
+        return value
+    }
+    return 0
+}
+
+print(types::matches(user, User))
+print(types::optional_fields(User)[0])
+print(types::matches(values, IntIterator))
+print(types::parameters(IntIterator)['item'] == types::Int)
+print(narrowed(7))
+var total: Int = 0
+for (let value in values) {
+    let checked: Int = value
+    total = total + checked
+}
+print(total)
