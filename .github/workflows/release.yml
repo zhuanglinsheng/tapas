@@ -1,0 +1,168 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate release version
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          package-manager-cache: false
+
+      - name: Match tag, Core, and extension versions
+        id: version
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          cmake_version="$(sed -nE 's/^project\(tapas VERSION ([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' CMakeLists.txt)"
+          extension_version="$(node -p "require('./editors/vscode/package.json').version")"
+
+          test -n "$cmake_version"
+          test "$version" = "$cmake_version"
+          test "$version" = "$extension_version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  core:
+    name: Core (${{ matrix.asset_suffix }})
+    needs: validate
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            asset_suffix: linux-x64
+          - runner: macos-15-intel
+            asset_suffix: macos-x64
+          - runner: macos-15
+            asset_suffix: macos-arm64
+    runs-on: ${{ matrix.runner }}
+    env:
+      VERSION: ${{ needs.validate.outputs.version }}
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@v6
+
+      - name: Install GNU Readline on Linux
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes libreadline-dev
+
+      - name: Install GNU Readline on macOS
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          brew install readline
+          echo "CMAKE_PREFIX_PATH=$(brew --prefix readline)" >> "$GITHUB_ENV"
+
+      - name: Configure
+        shell: bash
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        shell: bash
+        run: cmake --build build --parallel
+
+      - name: Test
+        shell: bash
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Install and archive
+        shell: bash
+        run: |
+          package="tapas-core-$VERSION-${{ matrix.asset_suffix }}"
+          mkdir -p dist
+          cmake --install build --prefix "dist/$package"
+          cp LICENSE README.md README_en.md "dist/$package/"
+          tar -czf "dist/$package.tar.gz" -C dist "$package"
+
+      - name: Upload Core archive
+        uses: actions/upload-artifact@v7
+        with:
+          name: core-${{ matrix.asset_suffix }}
+          path: dist/*.tar.gz
+          if-no-files-found: error
+
+  vscode:
+    name: VS Code extension
+    needs: validate
+    runs-on: ubuntu-24.04
+    env:
+      VERSION: ${{ needs.validate.outputs.version }}
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          package-manager-cache: false
+
+      - name: Package VSIX
+        working-directory: editors/vscode
+        run: |
+          mkdir -p ../../dist
+          npx --yes @vscode/vsce package \
+            --no-dependencies \
+            --out "../../dist/tapas-language-$VERSION.vsix"
+
+      - name: Upload VSIX
+        uses: actions/upload-artifact@v7
+        with:
+          name: vscode
+          path: dist/*.vsix
+          if-no-files-found: error
+
+  publish:
+    name: Publish GitHub Release
+    needs:
+      - validate
+      - core
+      - vscode
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERSION: ${{ needs.validate.outputs.version }}
+    steps:
+      - name: Download release artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Create checksums
+        shell: bash
+        run: |
+          cd dist
+          sha256sum *.tar.gz *.vsix > SHA256SUMS
+
+      - name: Create GitHub Release
+        shell: bash
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --verify-tag \
+            --title "Tapas $VERSION" \
+            --generate-notes
