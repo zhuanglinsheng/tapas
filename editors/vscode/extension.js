@@ -2,6 +2,7 @@
 
 const vscode = require('vscode');
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const { LspConnection } = require('./protocol');
 const { formatSource } = require('./formatter');
@@ -34,26 +35,21 @@ function serverCommand(context) {
   const candidates = [];
   if (context.extensionMode === vscode.ExtensionMode.Development)
     candidates.push(path.resolve(context.extensionPath, '..', '..', 'build', 'bin', 'tapas-language-server'));
-  for (const folder of vscode.workspace.workspaceFolders || []) {
-    candidates.push(path.join(folder.uri.fsPath, 'build', 'bin', 'tapas-language-server'));
-  }
+  candidates.push(path.join(os.homedir(), '.tapas', 'bin', 'tapas-language-server'));
   for (const candidate of candidates) {
     if (fs.existsSync(candidate)) return candidate;
   }
   return 'tapas-language-server';
 }
 
-function runtimeCommand(context, document) {
+function runtimeCommand(context) {
   const configured = vscode.workspace.getConfiguration('tapas')
     .get('runtime.path', '').trim();
   if (configured) return configured;
   const candidates = [];
   if (context.extensionMode === vscode.ExtensionMode.Development)
     candidates.push(path.resolve(context.extensionPath, '..', '..', 'build', 'bin', 'tapas'));
-  const owner = document ? vscode.workspace.getWorkspaceFolder(document.uri) : undefined;
-  if (owner) candidates.push(path.join(owner.uri.fsPath, 'build', 'bin', 'tapas'));
-  for (const folder of vscode.workspace.workspaceFolders || [])
-    candidates.push(path.join(folder.uri.fsPath, 'build', 'bin', 'tapas'));
+  candidates.push(path.join(os.homedir(), '.tapas', 'bin', 'tapas'));
   for (const candidate of candidates) {
     if (fs.existsSync(candidate)) return candidate;
   }
@@ -72,7 +68,7 @@ async function runCurrentFile(context) {
   }
   if (document.isDirty && !await document.save()) return;
 
-  const executable = runtimeCommand(context, document);
+  const executable = runtimeCommand(context);
   const folder = vscode.workspace.getWorkspaceFolder(document.uri);
   const args = folder ? ['-p', folder.uri.fsPath, document.uri.fsPath] :
     [document.uri.fsPath];
@@ -93,7 +89,7 @@ async function runCurrentFile(context) {
 }
 
 async function formatDocument(context, document) {
-  const executable = runtimeCommand(context, document);
+  const executable = runtimeCommand(context);
   const original = document.getText();
   const formatted = await formatSource(executable, original);
   if (formatted === original) return [];
