@@ -1,10 +1,12 @@
 let positive = rule (value: Int) {
-    "value must be positive": value > 0
+    "value must be positive":
+        value > 0
 }
 
 let bounded = rule (value: Int) {
     require positive(value)
-    "value must be below ten": value < 10
+    "value must be below ten":
+        value < 10
 }
 
 assert(bounded(5))

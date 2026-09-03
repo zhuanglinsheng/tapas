@@ -496,12 +496,14 @@ expression at the outermost level of a Rule body is a Condition that must hold:
 
 ```tapas
 let tutorial_positive = rule (value: Int) {
-    'value must be positive' : value > 0
+    'value must be positive':
+        value > 0
 }
 
 let tutorial_small_positive = rule (value: Int) {
     require tutorial_positive(value)
-    'value must be below ten' : value < 10
+    'value must be below ten':
+        value < 10
 }
 
 assert(tutorial_small_positive(5))

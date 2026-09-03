@@ -35,20 +35,25 @@ signature line instead of adding another line:
 
 ```text
 function structural_edits(
-        source: String,
-        tokens: List,
+        source      : String,
+        tokens      : List,
         clean_before: List[Bool],
-        indents: List[String],
-        line_break: String,
+        indents     : List[String],
+        line_break  : String,
 ) -> Dictionary {
     return {}
 }
 ```
 
 Continuation parameters are indented eight spaces from the function
-declaration. This rule depends on whether the parameter list crosses a physical
-line, not on a line-length threshold. A return type split across lines also
-forms a multiline signature.
+declaration. When a function or Rule parameter list spans multiple lines, align
+all parameter `:` characters vertically. The alignment column immediately
+follows the longest parameter name: that name has no space before `:`, while
+shorter names are padded with spaces. Keep one space between `:` and the Type.
+A single-line parameter list retains the compact `name: Type` form. This rule
+depends on whether the parameter list crosses a physical line, not on a
+line-length threshold. A return type split across lines also forms a multiline
+signature.
 
 ## Control Flow
 
@@ -83,9 +88,7 @@ Write a Rule used by only one assertion directly inside `assert`, without an
 otherwise unused local name:
 
 ```text
-assert(rule {
-    value is Int | Float
-})
+assert(rule { value is Int | Float })
 ```
 
 Keep one space between the Rule keyword and a parameter list:
@@ -96,8 +99,56 @@ let Positive = rule (value: Int) {
 }
 ```
 
-Leave a blank line between a function tag, its argument assertion, and its
-implementation so that the contract and implementation remain distinct.
+For a multiline Rule parameter list, use the same alignment as for function
+parameters:
+
+```text
+let WithinRange = rule (
+        value  : Int,
+        minimum: Int,
+        maximum: Int,
+) {
+    value >= minimum
+    value <= maximum
+}
+```
+
+When a Condition has a String description, put its proposition on the next
+line and indent it one additional level from the description. Leave one blank
+line between adjacent described Conditions in the same Rule. Conditions
+without String descriptions do not require blank lines:
+
+```text
+let Transferable = rule (balance: Int, amount: Int) {
+    "amount must be positive":
+        amount > 0
+
+    "balance is insufficient":
+        balance >= amount
+}
+```
+
+When a String description introduces a Condition block whose Conditions share
+that description, keep `{` after the colon instead of placing it on a separate
+line. Indent the block Conditions one level and write them consecutively;
+blank lines within the block are not required:
+
+```text
+"quantity is outside the range": {
+    quantity >= minimum
+    quantity <= maximum
+}
+```
+
+An anonymous Rule declared directly through `assert` inside a function may
+remain compact. When it contains exactly one Condition without a String
+description, the entire assertion may share one line. Do not use this exception
+for a described Condition or a Rule with multiple Conditions.
+
+Blank lines before or after `assert` are not required. Within a function body,
+use blank lines to separate logical groups such as argument assertions, local
+setup, primary computation, and result handling. Consecutive statements in the
+same group may remain compact.
 
 ## Formatting
 

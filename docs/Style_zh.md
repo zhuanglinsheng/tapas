@@ -32,17 +32,21 @@ function add(left: Int, right: Int) -> Int
 
 ```text
 function structural_edits(
-        source: String,
-        tokens: List,
+        source      : String,
+        tokens      : List,
         clean_before: List[Bool],
-        indents: List[String],
-        line_break: String,
+        indents     : List[String],
+        line_break  : String,
 ) -> Dictionary {
     return {}
 }
 ```
 
 续行参数相对函数声明缩进八个空格。
+函数或 Rule 的参数列表跨行书写时，所有参数的`:`纵向对齐。
+对齐列紧跟最长参数名；最长参数名与`:`之间不留空格，较短参数名用空格补齐。
+`:`与类型之间保留一个空格。
+单行参数列表仍采用紧凑的`name: Type`形式。
 这条规则以函数参数列表是否跨越物理行判断，而不是以签名长度判断。
 返回类型跨行书写时也视为多行签名。
 
@@ -77,9 +81,7 @@ for (let value in values) {
 只用于一次断言的 Rule 默认直接写在`assert`内，不引入无意义的局部名称：
 
 ```text
-assert(rule {
-    value is Int | Float
-})
+assert(rule { value is Int | Float })
 ```
 
 带参数的 Rule 在关键字与参数列表之间保留一个空格：
@@ -90,7 +92,50 @@ let Positive = rule (value: Int) {
 }
 ```
 
-函数标签、参数断言和函数实现之间各留一个空行，使契约与实现边界清晰。
+Rule 的参数列表跨行时，使用与函数参数相同的对齐规则：
+
+```text
+let WithinRange = rule (
+        value  : Int,
+        minimum: Int,
+        maximum: Int,
+) {
+    value >= minimum
+    value <= maximum
+}
+```
+
+Rule 中带字符串说明的 Condition 必须将命题写在下一行，并相对说明再缩进一级。
+同一个 Rule 中相邻且带字符串说明的 Condition 之间保留一个空行；不带字符串
+说明的 Condition 不要求空行：
+
+```text
+let Transferable = rule (balance: Int, amount: Int) {
+    "amount must be positive":
+        amount > 0
+
+    "balance is insufficient":
+        balance >= amount
+}
+```
+
+字符串说明右侧是共享说明的 Condition 块时，`{`跟在冒号后，不单独换行。
+块内的 Condition 相对说明缩进一级并连续书写，不强制插入空行：
+
+```text
+"quantity is outside the range": {
+    quantity >= minimum
+    quantity <= maximum
+}
+```
+
+函数内部通过`assert`直接声明的匿名 Rule 可以保持紧凑：当 Rule 只有一个且
+不带字符串说明的 Condition 时，整个断言可以写在一行。带字符串说明或包含多个
+Condition 时不使用这个例外。
+
+`assert`前后不强制保留空行。函数体内建议用空行分隔不同的逻辑代码块，
+例如将参数断言、局部准备、主要计算和结果处理分别成组；同一组内的连续语句
+可以紧凑书写。
 
 ## 格式化
 

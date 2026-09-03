@@ -269,11 +269,11 @@ if(BUILD_TESTING)
             -P ${CMAKE_CURRENT_SOURCE_DIR}/test/cmake/format.cmake
     )
 
-    # Top-level examples are standalone programs and form part of the public
-    # language surface. Keep modules in subdirectories so they are not treated
-    # as executable entry points.
+    # General examples are standalone programs and form part of the public
+    # language surface. Product examples live in sibling directories and have
+    # their own end-to-end test harnesses.
     file(GLOB TAPAS_EXAMPLES CONFIGURE_DEPENDS
-        "${CMAKE_CURRENT_SOURCE_DIR}/examples/*.tap"
+        "${CMAKE_CURRENT_SOURCE_DIR}/examples/general/*.tap"
     )
     foreach(EXAMPLE IN LISTS TAPAS_EXAMPLES)
         get_filename_component(EXAMPLE_NAME "${EXAMPLE}" NAME_WE)

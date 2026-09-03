@@ -823,7 +823,8 @@ static int begins_function_parameters(const tparser *parser,
 }
 
 static statement_boundary find_statement_end(
-	const tparser *parser, uint32_t start, tsyntax_kind closing)
+	const tparser *parser, uint32_t start, tsyntax_kind closing,
+	int continue_rule_description)
 {
 	uint32_t first = next_significant(parser, start);
 	tsyntax_kind first_kind = raw_token(parser, first)->kind;
@@ -846,6 +847,13 @@ static statement_boundary find_statement_end(
 		if (top && kind == tsyntax_newline) {
 			uint32_t next = next_significant(parser, at + 1);
 			tsyntax_kind next_kind = raw_token(parser, next)->kind;
+			uint32_t previous = at;
+			while (previous > start && tsyntax_kind_is_trivia(
+			       parser->tokens->items[previous - 1].kind))
+				previous--;
+			if (continue_rule_description && previous > start &&
+			    parser->tokens->items[previous - 1].kind == tsyntax_colon)
+				continue;
 			if ((block == block_expected && next_kind == tsyntax_lbrace) ||
 			    (conditional && block == block_opened &&
 			     (next_kind == tsyntax_kw_elif ||
@@ -899,7 +907,8 @@ static statement_list parse_statement_list(tparser *parser,
 	uint32_t start = parser->cursor;
 	for (;;) {
 		statement_boundary boundary = find_statement_end(
-			parser, start, closing);
+			parser, start, closing,
+			parse_range == parse_rule_item_range);
 		append_node(&list.items, &list.count, &list.capacity,
 			parse_range(parser, start, boundary.end));
 		parser->cursor = boundary.next;

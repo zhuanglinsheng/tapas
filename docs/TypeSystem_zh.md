@@ -421,7 +421,7 @@ function find(values: List[Int], target: Int, start) -> Int
 ```tapas
 function apply(
         callback: Function[Int] -> String,
-        value: Int,
+        value   : Int,
 ) -> String {
     return callback(value)
 }

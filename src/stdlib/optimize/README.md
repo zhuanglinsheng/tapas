@@ -21,9 +21,14 @@ var cost = optimize::variable(
 )
 
 let Plan = rule (limit: Int) {
-    "数量不能为负数": quantity >= 0
-    "数量不能超过限制": quantity <= limit
-    "成本关系不成立": cost == quantity * 3
+    "数量不能为负数":
+        quantity >= 0
+
+    "数量不能超过限制":
+        quantity <= limit
+
+    "成本关系不成立":
+        cost == quantity * 3
 }
 
 let feasible = evaluators::eval(

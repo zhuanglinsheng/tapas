@@ -147,7 +147,8 @@ set(rule_expected [=[false
 1
 value must be below ten
 rule (value: Int) {
-    "value must be positive": value > 0
+    "value must be positive":
+        value > 0
 }
 true
 false

@@ -11,12 +11,14 @@ and [Type System](TypeSystem_en.md) for the surrounding language.
 
 ```tapas
 let docs_positive = rule (value: Int) {
-    "value must be positive": value > 0
+    "value must be positive":
+        value > 0
 }
 
 let docs_bounded = rule (value: Int) {
     require docs_positive(value)
-    "value must be below ten": value < 10
+    "value must be below ten":
+        value < 10
 }
 
 assert(docs_bounded(5))
@@ -65,7 +67,7 @@ its signature at runtime.
 
 ```text
 let Between = rule (
-    value: Int,
+    value  : Int,
     minimum: Int,
     maximum: Int,
 ) {
@@ -162,8 +164,11 @@ Use an anonymous Rule for a function contract that is not reused:
 function withdraw(account, amount)
 {
     assert(rule {
-        "amount must be positive": amount > 0
-        "insufficient balance": account.balance >= amount
+        "amount must be positive":
+            amount > 0
+
+        "insufficient balance":
+            account.balance >= amount
     })
 
     account.balance = account.balance - amount

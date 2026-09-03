@@ -2,13 +2,12 @@
 // Each iteration roughly doubles the number of correct digits near the root.
 
 function square_root(
-        value: Int | Float,
+        value    : Int | Float,
         tolerance: Float,
 ) -> Float {
-
     assert(rule {
-        "tolerance must be positive": tolerance > 0.0
-        "value must be non-negative": value >= 0
+        tolerance > 0.0
+        value >= 0
     })
 
     if (value == 0) {
@@ -25,10 +24,7 @@ function square_root(
 // Solve x^3 - x - 2 = 0.
 function cubic_root(initial: Float, tolerance: Float) -> Float
 {
-
-    assert(rule {
-        "tolerance must be positive": tolerance > 0.0
-    })
+    assert(rule { tolerance > 0.0 })
 
     let x: Float = initial
     let step: Float = 1.0

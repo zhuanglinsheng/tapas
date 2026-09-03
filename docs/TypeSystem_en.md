@@ -507,7 +507,7 @@ ordinary bindings:
 ```tapas
 function apply(
         callback: Function[Int] -> String,
-        value: Int,
+        value   : Int,
 ) -> String {
     return callback(value)
 }

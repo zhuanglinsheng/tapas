@@ -28,14 +28,14 @@ Tapas 程序可以作为脚本运行，也可以通过交互式 REPL 或 Markdow
 
 | 示例 | 内容与展示重点 |
 | --- | --- |
-| [Fibonacci](examples/fibonacci.tap) | 用递归和迭代生成 Fibonacci 数列，展示函数递归、循环与列表 |
-| [排序算法](examples/sorting.tap) | 实现冒泡、选择、插入、希尔、归并、快速和堆排序，展示切片、高阶函数与原地修改 |
-| [二分查找](examples/binary_search.tap) | 在有序列表中查找目标，展示循环边界和提前返回 |
-| [欧几里得算法](examples/euclidean_algorithm.tap) | 计算最大公约数、最小公倍数和 Bézout 系数，展示整数运算与多值结果 |
-| [埃氏筛](examples/sieve_of_eratosthenes.tap) | 筛选指定范围内的素数，展示布尔列表和嵌套循环 |
-| [广度优先搜索](examples/breadth_first_search.tap) | 遍历字典表示的图，展示队列、字典和成员判断 |
-| [最长公共子序列](examples/longest_common_subsequence.tap) | 用动态规划求两个字符串的公共子序列，展示二维数组与结果回溯 |
-| [牛顿法](examples/newton_method.tap) | 迭代求平方根和非线性方程的根，展示浮点计算与数学函数 |
+| [Fibonacci](examples/general/fibonacci.tap) | 用递归和迭代生成 Fibonacci 数列，展示函数递归、循环与列表 |
+| [排序算法](examples/general/sorting.tap) | 实现冒泡、选择、插入、希尔、归并、快速和堆排序，展示切片、高阶函数与原地修改 |
+| [二分查找](examples/general/binary_search.tap) | 在有序列表中查找目标，展示循环边界和提前返回 |
+| [欧几里得算法](examples/general/euclidean_algorithm.tap) | 计算最大公约数、最小公倍数和 Bézout 系数，展示整数运算与多值结果 |
+| [埃氏筛](examples/general/sieve_of_eratosthenes.tap) | 筛选指定范围内的素数，展示布尔列表和嵌套循环 |
+| [广度优先搜索](examples/general/breadth_first_search.tap) | 遍历字典表示的图，展示队列、字典和成员判断 |
+| [最长公共子序列](examples/general/longest_common_subsequence.tap) | 用动态规划求两个字符串的公共子序列，展示二维数组与结果回溯 |
+| [牛顿法](examples/general/newton_method.tap) | 迭代求平方根和非线性方程的根，展示浮点计算与数学函数 |
 
 更多例子参见[语法示例集](docs/examples/syntax)；模块组织方式参见[模块与目录包](docs/examples/modules/README.md)。
 
@@ -56,7 +56,7 @@ cmake --install build --prefix "$HOME/.tapas"
 ```sh
 export PATH="$HOME/.tapas/bin:$PATH"
 tapas --version
-tapas examples/fibonacci.tap
+tapas examples/general/fibonacci.tap
 ```
 
 依赖安装、安装、REPL、字节码和模块等更多用法参见[使用说明](docs/Usage_zh.md)。

@@ -44,14 +44,14 @@ kinds of computation:
 
 | Example | Topic and focus |
 | --- | --- |
-| [Fibonacci](examples/fibonacci.tap) | Recursive and iterative Fibonacci, demonstrating recursion, loops, and lists |
-| [Sorting](examples/sorting.tap) | Bubble, selection, insertion, shell, merge, quick, and heap sort, demonstrating slices, higher-order functions, and mutation |
-| [Binary search](examples/binary_search.tap) | Searching an ordered list, demonstrating loop boundaries and early returns |
-| [Euclidean algorithm](examples/euclidean_algorithm.tap) | GCD, LCM, and Bézout coefficients, demonstrating integer arithmetic and multi-value results |
-| [Sieve of Eratosthenes](examples/sieve_of_eratosthenes.tap) | Finding primes, demonstrating Boolean lists and nested loops |
-| [Breadth-first search](examples/breadth_first_search.tap) | Traversing a dictionary-backed graph, demonstrating queues, dictionaries, and membership tests |
-| [Longest common subsequence](examples/longest_common_subsequence.tap) | Dynamic programming over two strings, demonstrating arrays and result reconstruction |
-| [Newton's method](examples/newton_method.tap) | Approximating square roots and nonlinear roots, demonstrating floating-point and math functions |
+| [Fibonacci](examples/general/fibonacci.tap) | Recursive and iterative Fibonacci, demonstrating recursion, loops, and lists |
+| [Sorting](examples/general/sorting.tap) | Bubble, selection, insertion, shell, merge, quick, and heap sort, demonstrating slices, higher-order functions, and mutation |
+| [Binary search](examples/general/binary_search.tap) | Searching an ordered list, demonstrating loop boundaries and early returns |
+| [Euclidean algorithm](examples/general/euclidean_algorithm.tap) | GCD, LCM, and Bézout coefficients, demonstrating integer arithmetic and multi-value results |
+| [Sieve of Eratosthenes](examples/general/sieve_of_eratosthenes.tap) | Finding primes, demonstrating Boolean lists and nested loops |
+| [Breadth-first search](examples/general/breadth_first_search.tap) | Traversing a dictionary-backed graph, demonstrating queues, dictionaries, and membership tests |
+| [Longest common subsequence](examples/general/longest_common_subsequence.tap) | Dynamic programming over two strings, demonstrating arrays and result reconstruction |
+| [Newton's method](examples/general/newton_method.tap) | Approximating square roots and nonlinear roots, demonstrating floating-point and math functions |
 
 See the [syntax example collection](docs/examples/syntax) for more examples and
 [modules and directory packages](docs/examples/modules/README_en.md) for module
@@ -76,7 +76,7 @@ example:
 ```sh
 export PATH="$HOME/.tapas/bin:$PATH"
 tapas --version
-tapas examples/fibonacci.tap
+tapas examples/general/fibonacci.tap
 ```
 
 See [Usage](docs/Usage_en.md) for dependency installation, installation, the

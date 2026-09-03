@@ -452,6 +452,35 @@ static void test_multiline_block_headers(void)
 	parsed_free(&semicolon);
 }
 
+static void test_multiline_rule_descriptions(void)
+{
+	parsed_expression parsed = parse_module(
+		"let Described = rule (value: Int) {\n"
+		"  \"value must be positive\":\n"
+		"    value > 0\n"
+		"\n"
+		"  \"value must be below ten\": {\n"
+		"      value < 10\n"
+		"    }\n"
+		"}\n");
+	assert(parsed.diagnostics.count == 0);
+	const tast_node *module = node(&parsed, parsed.root);
+	assert(module->kind == tast_module && module->aggregate.count == 1);
+	const tast_id *statements = tast_get_children(
+		&parsed.arena, module->aggregate.children, module->aggregate.count);
+	const tast_node *declaration = node(&parsed, statements[0]);
+	const tast_node *rule = node(
+		&parsed, declaration->declaration_statement.initializer);
+	const tast_node *body = node(&parsed, rule->function.body);
+	assert(rule->kind == tast_rule);
+	assert(body->kind == tast_block && body->aggregate.count == 2);
+	const tast_id *conditions = tast_get_children(
+		&parsed.arena, body->aggregate.children, body->aggregate.count);
+	assert(node(&parsed, conditions[0])->rule_condition.has_description);
+	assert(node(&parsed, conditions[1])->rule_condition.has_description);
+	parsed_free(&parsed);
+}
+
 static void test_module_tree(void)
 {
 	parsed_expression parsed = parse_module(
@@ -1011,6 +1040,7 @@ int main(void)
 	test_control_flow_blocks();
 	test_function_literals();
 	test_multiline_block_headers();
+	test_multiline_rule_descriptions();
 	test_module_tree();
 	test_semantic_model();
 	test_let_capture_diagnostic();

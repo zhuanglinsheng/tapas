@@ -56,10 +56,10 @@ function whitespace_edits(
 }
 
 function lexical_view(
-        source: String,
+        source      : String,
         clean_before: List[Bool],
-        indents: List[String],
-        lines: List[Int],
+        indents     : List[String],
+        lines       : List[Int],
 ) -> List {
     let tokens = syntax::tokens(source)
     let significant: List = []
@@ -164,23 +164,13 @@ function is_function_prefix(kind: String) -> Bool
         kind == '<=' or kind == '>' or kind == '>=')
 }
 
-function is_keyword(kind: String) -> Bool
-{
-    return kind in [
-        'and', 'as', 'base', 'break', 'continue', 'elif', 'else',
-        'false', 'for', 'function', 'if', 'import', 'in', 'let',
-        'nil', 'of', 'or', 'return', 'rule', 'require', 'this',
-        'to', 'true', 'var', 'while',
-    ]
-}
-
 function put_edit(
-        edits: Dictionary,
+        edits       : Dictionary,
         clean_before: List[Bool],
-        tokens: List,
-        left: Int,
-        right: Int,
-        text: String,
+        tokens      : List,
+        left        : Int,
+        right       : Int,
+        text        : String,
 ) -> Nil {
     if (clean_before[right]) {
         edits[tokens[left]['end']] = {
@@ -191,12 +181,12 @@ function put_edit(
 }
 
 function structural_edits(
-        source: String,
-        tokens: List,
+        source      : String,
+        tokens      : List,
         clean_before: List[Bool],
-        indents: List[String],
-        lines: List[Int],
-        line_break: String,
+        indents     : List[String],
+        lines       : List[Int],
+        line_break  : String,
 ) -> Dictionary {
     let edits: Dictionary = {}
     let matches = parenthesis_matches(tokens)
@@ -209,13 +199,8 @@ function structural_edits(
             qualified = (tokens[index - 1]['kind'] == '::' or
                 tokens[index - 1]['kind'] == '.')
         }
-        let followed_by_delimiter = false
-        if (index + 1 < tokens.len()) {
-            followed_by_delimiter = (tokens[index + 1]['kind'] == '(' or
-                tokens[index + 1]['kind'] == '{')
-        }
-        if (is_keyword(kind) and followed_by_delimiter and
-            qualified == false) {
+        if (kind == 'rule' and qualified == false and
+            index + 1 < tokens.len() and tokens[index + 1]['kind'] == '{') {
             put_edit(edits, clean_before, tokens, index, index + 1, ' ')
         }
         if ((kind == 'if' or kind == 'elif' or kind == 'for' or

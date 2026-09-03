@@ -8,12 +8,14 @@ Rule 是带参数、可组合、可检查的一等值，用于表达函数契约
 
 ```tapas
 let docs_positive = rule (value: Int) {
-    "value must be positive": value > 0
+    "value must be positive":
+        value > 0
 }
 
 let docs_bounded = rule (value: Int) {
     require docs_positive(value)
-    "value must be below ten": value < 10
+    "value must be below ten":
+        value < 10
 }
 
 assert(docs_bounded(5))
@@ -58,7 +60,7 @@ Rule 参数必须具有 Type 标注。
 
 ```text
 let Between = rule (
-    value: Int,
+    value  : Int,
     minimum: Int,
     maximum: Int,
 ) {
@@ -146,8 +148,11 @@ Requirement 使用目标 Rule 自己的签名、IR 和捕获环境。
 function withdraw(account, amount)
 {
     assert(rule {
-        "amount must be positive": amount > 0
-        "insufficient balance": account.balance >= amount
+        "amount must be positive":
+            amount > 0
+
+        "insufficient balance":
+            account.balance >= amount
     })
 
     account.balance = account.balance - amount

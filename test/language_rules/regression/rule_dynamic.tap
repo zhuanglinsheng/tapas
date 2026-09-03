@@ -28,7 +28,8 @@ print(evaluators::eval(in_range(7), observer)["value"])
 print(evaluators::compile(in_range, observer)["status"])
 
 let sourced = rule (number: Int) {
-    "number must be positive": number > 0
+    "number must be positive":
+        number > 0
 }
 let sourced_ir = rules::inspect(sourced)
 print(len(rules::items(sourced_ir)))

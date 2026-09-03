@@ -394,12 +394,14 @@ Rule 参数必须带有 Type 标注，Rule 体最外层的 Bool 表达式表示�
 
 ```tapas
 let tutorial_positive = rule (value: Int) {
-    'value must be positive' : value > 0
+    'value must be positive':
+        value > 0
 }
 
 let tutorial_small_positive = rule (value: Int) {
     require tutorial_positive(value)
-    'value must be below ten' : value < 10
+    'value must be below ten':
+        value < 10
 }
 
 assert(tutorial_small_positive(5))
