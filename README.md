@@ -37,35 +37,41 @@ Tapas 程序可以作为脚本运行，也可以通过交互式 REPL 或 Markdow
 | [最长公共子序列](examples/longest_common_subsequence.tap) | 用动态规划求两个字符串的公共子序列，展示二维数组与结果回溯 |
 | [牛顿法](examples/newton_method.tap) | 迭代求平方根和非线性方程的根，展示浮点计算与数学函数 |
 
-更多例子参见[语法示例集](docs/examples/syntax)。
+更多例子参见[语法示例集](docs/examples/syntax)；模块组织方式参见[模块与目录包](docs/examples/modules/README.md)。
 
-## 构建与运行
+## 构建、测试与安装
 
 Tapas 需要支持 C23 的编译器、CMake 3.21 或更高版本和 GNU Readline。
-在项目根目录构建 Tapas、运行测试并执行一个示例：
+在项目根目录构建并测试 Release 版本，然后安装到用户目录：
 
 ```sh
-cmake -S . -B build
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 ctest --test-dir build --output-on-failure
-build/bin/tapas examples/fibonacci.tap
+cmake --install build --prefix "$HOME/.tapas"
+```
+
+将安装目录加入`PATH`后，可以验证版本并运行示例：
+
+```sh
+export PATH="$HOME/.tapas/bin:$PATH"
+tapas --version
+tapas examples/fibonacci.tap
 ```
 
 依赖安装、安装、REPL、字节码和模块等更多用法参见[使用说明](docs/Usage_zh.md)。
 
-## Visual Studio Code 支持
+## Visual Studio Code 扩展
 
-VS Code 扩展位于 [editors/vscode](editors/vscode)，支持语法高亮、实时诊断、悬停类型信息、代码补全、定义跳转、引用查找、重命名、工作区模块分析，以及运行当前 Tapas 文件。
+Tapas 提供独立的薄版 VS Code 扩展，支持语法高亮、实时诊断、悬停类型信息、代码补全、定义跳转、引用查找、重命名、工作区模块分析、运行和格式化。扩展不包含 Tapas Core。
 
-这是不捆绑原生程序的薄扩展。先安装 Tapas Core，确保`tapas`和
-`tapas-language-server`位于`PATH`，或在设置中指定路径。开发仓库中的扩展可用以下命令安装：
+请先按上一节把 Tapas Core 安装到`$HOME/.tapas`。可以从 Visual Studio Code Marketplace 安装 [Tapas](https://marketplace.visualstudio.com/items?itemName=tapas-language.tapas-language)，也可以从 GitHub Release 下载独立 VSIX：
 
 ```sh
-editors/vscode/install.sh
+code --install-extension tapas-language.tapas-language
 ```
 
-安装完成后，在 VS Code 中执行 **Developer: Reload Window**。
-功能与配置说明详见[VS Code 扩展说明](editors/vscode/README.md)。
+扩展依次使用显式配置、`$HOME/.tapas/bin`和系统`PATH`查找`tapas`与`tapas-language-server`，不会执行当前工作区中的二进制。从源码调试扩展、开发目录安装、测试、打包及详细配置参见[VS Code 扩展文档](editors/vscode/README_zh.md)。
 
 ## 在 C 程序中嵌入 Tapas
 
@@ -98,7 +104,6 @@ int main(void)
 - [C 交互](docs/Foreign_zh.md)：嵌入会话、注册 C 函数、值操作和复合类型扩展。
 - [运行机制](docs/Mechanism_zh.md)：编译器、字节码、虚拟机、环境和引用计数。
 - [性能基准](test/benchmarks/Results_zh.md)：Tapas 与 Python 在 VM 热路径、函数调用、递归、列表访问和埃氏筛等负载上的逐项比较。
-- 示例：[基础语法](docs/examples/Basics_zh.md)、[扩展语法程序](docs/examples/syntax)和[模块与目录包](docs/examples/modules/README.md)。
 
 ## 许可证
 
@@ -107,4 +112,4 @@ Tapas 使用 MIT 许可证发布，详见 [LICENSE](LICENSE)。
 ## 联系方式
 
 欢迎通过 Issue 反馈问题，也欢迎提交 Pull Request。
-联系邮箱：<zhuanglinsheng@outlook.com>。
+联系邮箱：<linsheng.z@outlook.com>。

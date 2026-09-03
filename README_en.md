@@ -53,41 +53,57 @@ kinds of computation:
 | [Longest common subsequence](examples/longest_common_subsequence.tap) | Dynamic programming over two strings, demonstrating arrays and result reconstruction |
 | [Newton's method](examples/newton_method.tap) | Approximating square roots and nonlinear roots, demonstrating floating-point and math functions |
 
-See the [syntax example collection](docs/examples/syntax) for more examples.
+See the [syntax example collection](docs/examples/syntax) for more examples and
+[modules and directory packages](docs/examples/modules/README_en.md) for module
+organization.
 
-## Build and Run
+## Build, Test, and Install
 
 Tapas requires a C23 compiler, CMake 3.21 or newer, and GNU Readline.
-From the project root, build Tapas, run the tests, and execute an example:
+From the project root, build and test a Release configuration, then install it
+in the user directory:
 
 ```sh
-cmake -S . -B build
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 ctest --test-dir build --output-on-failure
-build/bin/tapas examples/fibonacci.tap
+cmake --install build --prefix "$HOME/.tapas"
+```
+
+Add the installation directory to `PATH`, verify the version, and run an
+example:
+
+```sh
+export PATH="$HOME/.tapas/bin:$PATH"
+tapas --version
+tapas examples/fibonacci.tap
 ```
 
 See [Usage](docs/Usage_en.md) for dependency installation, installation, the
 REPL, bytecode, modules, and more.
 
-## Visual Studio Code
+## Visual Studio Code Extension
 
-The extension under [editors/vscode](editors/vscode) provides syntax
-highlighting, live diagnostics, Type hover information, completion, definition
-lookup, references, rename, workspace module analysis, and a command for
-running the current Tapas file.
+Tapas provides a separate thin VS Code extension with syntax highlighting,
+live diagnostics, Type hover information, completion, definition lookup,
+references, rename, workspace module analysis, running, and formatting. The
+extension does not contain Tapas Core.
 
-This is a thin extension with no bundled native programs. Install Tapas Core
-first so `tapas` and `tapas-language-server` are on `PATH`, or configure their
-paths in settings. Install the extension from a development checkout with:
+First install Tapas Core under `$HOME/.tapas` as described above. Install
+[Tapas](https://marketplace.visualstudio.com/items?itemName=tapas-language.tapas-language)
+from the Visual Studio Code Marketplace, or download the standalone VSIX from
+the GitHub Release:
 
 ```sh
-editors/vscode/install.sh
+code --install-extension tapas-language.tapas-language
 ```
 
-Run **Developer: Reload Window** in VS Code after installation. See the
-[VS Code extension documentation](editors/vscode/README_en.md) for capabilities
-and configuration.
+The extension searches explicit settings, `$HOME/.tapas/bin`, and the system
+`PATH` for `tapas` and `tapas-language-server`. It does not execute binaries
+from the current workspace. See the
+[VS Code extension documentation](editors/vscode/README.md) for source
+debugging, development installation, tests, packaging, and detailed
+configuration.
 
 ## Using Tapas From C
 
@@ -129,9 +145,6 @@ See [C Interaction](docs/Foreign_en.md) for API, linking, and extension details.
   environments, and reference counting.
 - [Performance Benchmarks](test/benchmarks/Results_en.md) — per-workload Tapas
   and Python comparisons for algorithms and VM hot paths.
-- Examples: [Basic Syntax](docs/examples/Basics_en.md),
-  [extended syntax programs](docs/examples/syntax), and
-  [modules and directory packages](docs/examples/modules/README_en.md).
 
 ## License
 
@@ -140,4 +153,4 @@ Tapas is distributed under the MIT License. See [LICENSE](LICENSE).
 ## Contact
 
 Issues and pull requests are welcome. Contact:
-<zhuanglinsheng@outlook.com>.
+<linsheng.z@outlook.com>.
