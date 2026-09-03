@@ -13,6 +13,12 @@ set(CMAKE_C_STANDARD 23)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF)
 
+# glibc hides POSIX declarations when a strict ISO C mode is selected unless
+# the application requests the corresponding POSIX interface level.
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    add_compile_definitions(_POSIX_C_SOURCE=200809L)
+endif()
+
 configure_file(
     include/tapas/version.h.in
     generated/tapas/version.h
