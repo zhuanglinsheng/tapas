@@ -138,7 +138,7 @@ Tapas 字节码是抽象虚拟机指令，不是真实 CPU 指令。
 - 索引读取、索引写入和导入；
 - 算术、比较、逻辑和矩阵运算。
 
-操作码会随实现演进，完整枚举以[`tins`](../include/tapas/tbasis.h)为准，位布局和包装器结构以[字节码接口](../include/tapas/tbycs.h)为准。
+操作码会随实现演进，完整枚举以[`tins`](../include/tapas/basic_defs/tbasis.h)为准，位布局和包装器结构以[字节码接口](../include/tapas/basic_defs/tbycs.h)为准。
 将容易变化的逐指令清单保留在源码中，可以避免实现增加指令后文档继续给出过期数量或遗漏新指令。
 
 ## 蕴含前件的检查
@@ -171,7 +171,7 @@ build/bin/tapas -cr docs/examples/test_bycodes.tap
 C 会话 API 提供相同操作：
 
 ```c
-#include "tapas/tapas.h"
+#include "tapas/tsession.h"
 
 int main(void)
 {

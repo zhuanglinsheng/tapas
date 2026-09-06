@@ -201,7 +201,7 @@ let indices: Iterator[Int] = 0 to 10
 ```
 
 `List[T]`、`Pair[A, B]`、`Dictionary[K, V]`和`Iterator[T]`分别与`types::list(T)`、`types::pair(A, B)`、`types::dictionary(K, V)`和`types::iterator(T)`产生等价 Type。
-方括号形式只用于简化类型标注，不引入用户定义的泛型模板。
+同一方括号应用语法也适用于由 `types::template` 定义的用户 Type 模板。
 
 原始容器 Type 只检查运行时类别，与使用`types::AnyType`的参数化容器不等价：
 
@@ -374,9 +374,15 @@ Function[Type, Type, ...; Value, Value, ...] -> ResultType
 - 原始类型与零参数签名不同：`Rule` 不等于 `Rule[]`；`Function` 不等于
   `Function[] -> AnyType`。不能机械地删除空括号或精确签名的返回类型。
 
-当前支持下表中的类型参数构造器（含显式空值参数区），以及值参数构造器
-`InstanceOf[R]`，等价于 `InstanceOf[; R]`。`R` 是规则值的名称或限定成员引用，
-例如 `model::Exchange`；暂不接受任意表达式，也不开放用户自定义泛型构造器。
+除下表中的内建构造器外，用户可用
+`types::template(type_parameters, value_parameters, definition)` 定义模板。类型参数由
+`types::parameter(name)` 创建；值参数由 `types::value_parameter(name)` 创建，在第二个
+列表中可直接列出（约束为 `AnyType`），或写成 `parameter : ConstraintType`。同时包含两类参数的应用必须写作
+`Template[Types; Values]`；只含一类时省略空参数区。当前用户模板的值实参限于
+Bool、Int、Float 和 String 字面量，替换结果是精确值 Type。
+
+值参数构造器 `InstanceOf[R]` 等价于 `InstanceOf[; R]`。`R` 是规则值的名称或限定成员引用，
+例如 `model::Exchange`；它使用专门的运行时身份绑定规则，不是普通字面量值参数。
 
 `InstanceOf[R]` 表示由**同一个运行时 Rule 对象**绑定产生的实例；参数签名从 R 推导，
 无论 R 有零个、一个还是多个参数，都不需要在标注里重复。它不表示实例的约束成立，

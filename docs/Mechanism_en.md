@@ -144,7 +144,7 @@ Instructions broadly cover:
 - arithmetic, comparison, logical, and matrix operations.
 
 Opcodes evolve with the implementation.
-The complete enumeration is defined by [`tins`](../include/tapas/tbasis.h), while the [bytecode interface](../include/tapas/tbycs.h) defines operand layouts and wrapper structures.
+The complete enumeration is defined by [`tins`](../include/tapas/basic_defs/tbasis.h), while the [bytecode interface](../include/tapas/basic_defs/tbycs.h) defines operand layouts and wrapper structures.
 Keeping the volatile instruction-by-instruction list in source prevents the documentation from reporting an obsolete count or omitting newly added instructions.
 
 ## Checking Implication Antecedents
@@ -184,7 +184,7 @@ build/bin/tapas -cr docs/examples/test_bycodes.tap
 The C session API provides the same operation:
 
 ```c
-#include "tapas/tapas.h"
+#include "tapas/tsession.h"
 
 int main(void)
 {

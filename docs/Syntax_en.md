@@ -29,7 +29,7 @@ example and may intentionally be incomplete or invalid Tapas.
 Tapas is an expression-oriented scripting language with optional Type
 annotations and compile-time checking. A source file contains statements
 separated by a newline or semicolon. Newlines inside parentheses, brackets,
-braces, or strings do not separate statements.
+or braces do not separate statements.
 
 ```tapas
 var tutorial_limit = 5
@@ -101,6 +101,14 @@ tutorial_number = 1.5
 
 Here the annotation allows `tutorial_number` to hold either `Int` or `Float`,
 so both assignments pass compile-time checking.
+
+A user Type template is created with
+`types::template(type-parameter-list, value-parameter-list, definition)` and
+applied in an annotation as `Template[Types; Values]`. When only one category
+exists its empty section is omitted, as in `Box[String]` or `Exact[3]`; the
+semicolon is required when both categories exist. Value arguments currently
+accept Bool, Int, Float, and String literals. See the [Type System](TypeSystem_en.md)
+for the complete construction rules.
 
 Tapas source provides these literals directly:
 
@@ -248,10 +256,10 @@ uses the Type's equality operation and is not a substitute for identity testing.
 
 ### 6. Strings, lists, pairs, and dictionaries
 
-Strings use either quote style and may span physical lines. Tapas strings are
-byte strings: indexing counts bytes, not Unicode code points. There are no
-escape sequences; a backslash is ordinary, and the delimiter quote cannot
-occur inside the string.
+Strings use either quote style and must close on the same physical line. Tapas
+strings are byte strings: indexing counts bytes, not Unicode code points.
+String literals support `\n`, `\r`, `\t`, `\\`, `\'`, and `\"`; any other
+backslash sequence is a compile error.
 
 Strings and lists accept one integer index. Negative indices count backward
 from the end. They also accept a half-open slice `start:end`; either endpoint
@@ -689,10 +697,10 @@ version. Non-ASCII bytes may occur in strings and comments but not identifiers.
 `SPACE`, horizontal tab, carriage return, and line feed are whitespace.
 Whitespace separates tokens when their concatenation would form another token.
 
-The lexer tracks parentheses `()`, brackets `[]`, braces `{}`, and string
-delimiters. A newline or semicolon is a `SEPARATOR` only when all delimiter
-depths are zero and the lexer is outside a string. Inside delimiters it is
-ordinary whitespace, except inside a string where it is content.
+The lexer tracks parentheses `()`, brackets `[]`, and braces `{}`. A newline or
+semicolon is a `SEPARATOR` only when all delimiter depths are zero. A newline
+inside those delimiters is ordinary whitespace; a string literal cannot
+contain a physical newline.
 
 Unmatched closing delimiters and end-of-file with an open delimiter or string
 are lexical errors. Delimiters inside strings and comments have no nesting
@@ -757,13 +765,17 @@ outside the runtime's representable range are compile errors.
 Single- and double-quoted strings have identical semantics:
 
 ```ebnf
-single-string = "'", { code-point-except-single-quote }, "'" ;
-double-string = '"', { code-point-except-double-quote }, '"' ;
+escape-sequence = "\\", ("n" | "r" | "t" | "\\" | "'" | '"') ;
+single-string = "'", { code-point-except-single-quote-backslash-CR-LF
+                       | escape-sequence }, "'" ;
+double-string = '"', { code-point-except-double-quote-backslash-CR-LF
+                       | escape-sequence }, '"' ;
 ```
 
-Content may include newlines and the other quote style. There are no escape
-sequences: `\n` is two bytes. Consequently, a string cannot contain its own
-delimiter quote. Source generators should choose the other quote style.
+The literal must close on the same physical line and may directly contain the
+other quote style. `\n`, `\r`, and `\t` produce LF, CR, and horizontal tab;
+`\\`, `\'`, and `\"` produce a backslash and the two quote characters. Any
+other escape sequence is a compile error.
 
 ### 7. Operators and punctuation
 
@@ -864,8 +876,13 @@ function-type     = ( "Function" | "types::Function" ), "[",
                     [ type-arguments, [ "," ] | "..." ], [ ";" ], "]",
                     "->", type-expression ;
 type-application  = qualified-type-name,
-                    "[", [ type-arguments, [ "," ] ], [ ";" ], "]" ;
+                    "[", [ application-arguments ], "]" ;
+application-arguments = type-arguments, [ "," ], [ ";", [ value-arguments, [ "," ] ] ]
+                    | ";", value-arguments, [ "," ]
+                    | value-arguments, [ "," ] ;
 type-arguments    = type-expression, { ",", type-expression } ;
+value-arguments   = value-argument, { ",", value-argument } ;
+value-argument    = "true" | "false" | INTEGER | FLOAT | STRING ;
 qualified-type-name = IDENTIFIER, { "::", IDENTIFIER } ;
 assignment        = assignment-target, "=", expression ;
 assignment-target = IDENTIFIER, [ index-suffix ] ;

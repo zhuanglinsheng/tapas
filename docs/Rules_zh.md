@@ -70,7 +70,15 @@ let Between = rule (
 }
 
 let instance = Between(5, 0, 10)
+
+let same_instance = Between({
+    'maximum': 10,
+    'value': 5,
+    'minimum': 0
+})
 ```
+
+Rule 也接受一个 Dictionary 作为具名实参表。Dictionary 必须用形参名作为键，完整且仅包含该 Rule 的全部形参；值仍按对应形参的 Type 检查。对于只有一个形参的 Rule，仅当 Dictionary 包含该形参名时采用具名绑定，否则 Dictionary 仍作为普通位置实参。
 
 零参数 Rule 可以省略参数列表。
 Rule 体最外层的 Bool 表达式形成 Condition，裸实例形成子规则要求；所有项目都必须成立，空 Rule 恒成立。
@@ -154,7 +162,7 @@ let Exchange = rule (approved: Bool, stock: Int, quantity: Int) {
 
 第一版只允许 Rule 体最外层使用 `implies`，不支持链式、嵌套、空后件块，或在后件块中使用裸实例要求、声明和控制流。前后件按现有表达式换行规则解析。
 
-动态构造使用 `rules::implication(antecedent, consequents[, description]) -> rules::Item`，前件 Term 的 Type 可为 Bool、RuleInstance 或两者的联合；后件仍为非空 Bool Term List（不是 Condition List）。Item 的 `antecedent` 保留原始 Term 及其 Type，`consequents` 保留后件。含 RuleInstance 前件的动态 IR 使用版本 3 / `TPIR3`；纯 Bool 蕴含仍使用版本 2，读取兼容 `TPIR1/2`。源码 Rule 序列化的运行时重连限制不变；动态 IR 若只声明实例参数，则仍可跨进程恢复，实例值由调用方重新绑定。自定义 evaluator 必须区分 Bool 值与 RuleInstance 的成立性检查，不能把实例当作普通 Bool。
+动态构造使用 `rules::implication(antecedent, consequents[, description]) -> RuleItem`，前件 RuleTerm 的 Type 可为 Bool、RuleInstance 或两者的联合；后件仍为非空 Bool RuleTerm List（不是 Condition List）。RuleItem 的 `antecedent` 保留原始 RuleTerm 及其 Type，`consequents` 保留后件。含 RuleInstance 前件的动态 IR 使用版本 3 / `TPIR3`；纯 Bool 蕴含仍使用版本 2，读取兼容 `TPIR1/2`。源码 Rule 序列化的运行时重连限制不变；动态 IR 若只声明实例参数，则仍可跨进程恢复，实例值由调用方重新绑定。自定义 evaluator 必须区分 Bool 值与 RuleInstance 的成立性检查，不能把实例当作普通 Bool。
 
 RuleInstance 前件示例（无需手动调用 checker）：
 
@@ -505,14 +513,14 @@ rule-application = expression ;
 
 ## 10. 离散点集、整数区间与成员判断
 
-`rules::points(element_type, ...values)` 创建 `PointsOf[T]`，其中 T 是传入的 Type。允许空点集，逐项检查成员类型，并按 `identical` 语义去除重复值。T 可以是任意现有 Type，包括 Enum、结构 Type、容器、函数和规则类型；没有仅限标量的限制。Type 值在表达式中使用 `types::Int` 等现有写法，类型标注可以写 `PointsOf[Int]`。
+`rules::points(element_type, ...values)` 创建 `rules::PointsOf[T]`，其中 T 是传入的 Type。允许空点集，逐项检查成员类型，并按 `identical` 语义去除重复值。T 可以是任意现有 Type，包括 Enum、结构 Type、容器、函数和规则类型；没有仅限标量的限制。Type 值在表达式中使用 `types::Int` 等现有写法，类型标注使用包限定形式 `rules::PointsOf[Int]`。
 
-`rules::range(start, end)` 创建 `RangeOf[Int]`，表示包含两端的闭整数区间。第一版只接受 Int，拒绝 Float、混合端点及 `start > end`；相同端点表示单点区间。区间不会展开为列表，因此可以表示完整的大整数边界。
+`rules::range(start, end)` 创建 `rules::RangeOf[Int]`，表示包含两端的闭整数区间。第一版只接受 Int，拒绝 Float、混合端点及 `start > end`；相同端点表示单点区间。区间不会展开为列表，因此可以表示完整的大整数边界。
 
 ```tapas
 let domain_color = types::enum('red', 'green', 'blue')
-let domain_choices: PointsOf[domain_color] = rules::points(domain_color, 'red', 'blue')
-let domain_limits: RangeOf[Int] = rules::range(1, 20)
+let domain_choices: rules::PointsOf[domain_color] = rules::points(domain_color, 'red', 'blue')
+let domain_limits: rules::RangeOf[Int] = rules::range(1, 20)
 let domain_rule = rule (color: domain_color, quantity: Int) {
     color in domain_choices
     quantity in domain_limits

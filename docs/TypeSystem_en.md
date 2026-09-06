@@ -247,8 +247,9 @@ let indices: Iterator[Int] = 0 to 10
 
 `List[T]`, `Pair[A, B]`, `Dictionary[K, V]`, and `Iterator[T]` produce Types
 equivalent to `types::list(T)`, `types::pair(A, B)`,
-`types::dictionary(K, V)`, and `types::iterator(T)`, respectively. The bracket
-form makes annotations concise but does not add user-defined generic templates.
+`types::dictionary(K, V)`, and `types::iterator(T)`, respectively. The same
+bracket application syntax is available to user Type templates defined with
+`types::template`.
 
 A raw container Type checks only the runtime category and is not equivalent to
 a parameterized container using `types::AnyType`:
@@ -460,9 +461,19 @@ Omission is determined by the constructor signature, not by guessing the argumen
 - Raw Types and zero-parameter signatures remain distinct: `Rule` is not `Rule[]`,
   and `Function` is not `Function[] -> AnyType`.
 
-The Type-only constructors below support explicit empty value sections.
+In addition to the builtin constructors below, users can define a template with
+`types::template(type_parameters, value_parameters, definition)`. A Type
+parameter is created by `types::parameter(name)`. A Value parameter is created
+by `types::value_parameter(name)` and may appear directly in the second list
+(constrained by `AnyType`) or as `parameter : ConstraintType`. Applications containing both categories must use
+`Template[Types; Values]`; an empty category is omitted when the template has
+only the other category. User-template Value arguments currently accept static
+Bool, Int, Float, and String literals and substitute them as exact-value
+Types.
+
 `InstanceOf[R]`, equivalent to `InstanceOf[; R]`, accepts a Rule name or qualified
-member reference such as `model::Exchange`, not arbitrary expressions.
+member reference such as `model::Exchange`, not arbitrary expressions. It uses
+special runtime identity binding rather than ordinary literal Value parameters.
 User-defined generic constructors are not supported.
 
 Membership requires the **same runtime Rule object**. Its zero, one, or multiple

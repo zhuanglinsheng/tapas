@@ -25,7 +25,7 @@ Tapas 二进制程序会按文档顺序把这些代码块作为同一个程序�
 
 Tapas 是一门以表达式为核心、支持可选 Type 标注和编译期检查的脚本语言。
 源文件由一条条语句组成。
-通常情况下，换行或分号表示一条语句结束；但如果换行出现在圆括号、方括号、花括号或字符串内部，它只相当于普通空白，不会结束语句。
+通常情况下，换行或分号表示一条语句结束；但如果换行出现在圆括号、方括号或花括号内部，它只相当于普通空白，不会结束语句。
 
 ```tapas
 var tutorial_limit = 5
@@ -88,6 +88,11 @@ tutorial_number = 1.5
 ```
 
 上例中的标注允许`tutorial_number`保存`Int`或`Float`，因此两次赋值都能通过编译期检查。
+
+用户定义的 Type 模板由 `types::template(类型参数列表, 值参数列表, 定义)` 创建，
+并在标注中用 `Template[Types; Values]` 应用。只有一类参数时省略空参数区，例如
+`Box[String]` 或 `Exact[3]`；两类参数同时存在时分号不可省略。值实参当前限于
+Bool、Int、Float 和 String 字面量。完整构造规则见[类型系统](TypeSystem_zh.md)。
 
 源码直接提供以下字面量：
 
@@ -201,9 +206,9 @@ pprint(tutorial_outer)
 
 ### 6. 字符串、列表、对和字典
 
-字符串可使用任一种引号，并可跨物理行。
+字符串可使用任一种引号，并且必须在同一物理行闭合。
 Tapas 字符串是字节串，索引按字节而不是 Unicode 码点计数。
-语言没有转义序列；反斜杠是普通字符，字符串内部不能出现作为分隔符的同种引号。
+字符串支持`\n`、`\r`、`\t`、`\\`、`\'`和`\"`转义；其他反斜杠序列是编译错误。
 
 字符串和列表接受一个整数索引，负索引从末尾反向计数。
 二者也接受半开切片`start:end`，任一端点都可以省略。
@@ -527,14 +532,14 @@ import 'path with spaces/module.tap' as module_name
 ### 1. 源文本与位置
 
 编译器按字节读取源文件。
-语法中的标点、关键字、标识符和数字都使用 ASCII 字符；字符串可以包含除自身结束引号外的其他字节。
+语法中的标点、关键字、标识符和数字都使用 ASCII 字符；字符串可以直接包含除自身结束引号、反斜杠和换行外的其他字节。
 LF、CRLF 和单独的 CR 都表示一次换行。
 错误位置的行号和列号从 1 开始，其中列号按字节计算。
 
 ### 2. 空白、嵌套与语句分隔
 
 空格、水平制表符、垂直制表符和换页符都属于普通空白。
-圆括号、方括号、花括号和字符串之外的换行会生成语句分隔标记`SEP`；它们内部的换行只算普通空白。
+圆括号、方括号和花括号之外的换行会生成语句分隔标记`SEP`；括号内部的换行只算普通空白，字符串内部不能直接换行。
 字符串之外的`;`也会生成`SEP`。
 连续出现多个分隔符时，效果与一个分隔符相同。
 
@@ -588,12 +593,15 @@ float-literal    = (digits, ".", [digits] | ".", digits), [exponent]
 ### 6. 字符串字面量
 
 ```ebnf
-single-string = "'", { code-point-except-single-quote }, "'" ;
-double-string = '"', { code-point-except-double-quote }, '"' ;
+escape-sequence = "\\", ("n" | "r" | "t" | "\\" | "'" | '"') ;
+single-string = "'", { code-point-except-single-quote-backslash-CR-LF
+                       | escape-sequence }, "'" ;
+double-string = '"', { code-point-except-double-quote-backslash-CR-LF
+                       | escape-sequence }, '"' ;
 ```
 
 两种引号语义相同。
-字符串可以包含换行和另一种引号，没有转义序列。
+字符串必须在同一物理行闭合，可以直接包含另一种引号。`\n`、`\r`、`\t`分别产生 LF、CR 和水平制表符；`\\`、`\'`和`\"`分别产生反斜杠及两种引号。其他转义序列是编译错误。
 
 ### 7. 运算符和标点
 
@@ -687,8 +695,13 @@ function-type     = ( "Function" | "types::Function" ), "[",
                     [ type-arguments, [ "," ] | "..." ], [ ";" ], "]",
                     "->", type-expression ;
 type-application  = qualified-type-name,
-                    "[", [ type-arguments, [ "," ] ], [ ";" ], "]" ;
+                    "[", [ application-arguments ], "]" ;
+application-arguments = type-arguments, [ "," ], [ ";", [ value-arguments, [ "," ] ] ]
+                    | ";", value-arguments, [ "," ]
+                    | value-arguments, [ "," ] ;
 type-arguments    = type-expression, { ",", type-expression } ;
+value-arguments   = value-argument, { ",", value-argument } ;
+value-argument    = "true" | "false" | INTEGER | FLOAT | STRING ;
 qualified-type-name = IDENTIFIER, { "::", IDENTIFIER } ;
 assignment        = assignment-target, "=", expression ;
 assignment-target = IDENTIFIER, [ index-suffix ] ;

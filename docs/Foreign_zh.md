@@ -5,7 +5,8 @@
 本文说明如何从 C 调用 Tapas 代码，以及如何向 Tapas 脚本公开 C 函数。
 
 公开 C API 声明在`include/tapas`下的头文件中。
-大多数使用者只需包含`tapas/tapas.h`；该文件包含会话 API 和运行时值类型。
+嵌入 Tapas 的使用者通常只需包含`tapas/tsession.h`；原生扩展另外包含
+`tapas/tval.h`、`tapas/textension.h`以及实际使用的对象头。
 
 ## 从 C 调用 Tapas 脚本
 
@@ -48,7 +49,7 @@ abs(-2).print()
 下面的 C 程序编译并执行该文件：
 
 ```c
-#include "tapas/tapas.h"
+#include "tapas/tsession.h"
 
 int main(void)
 {
@@ -65,7 +66,7 @@ int main(void)
 不需要保存字节码时，改用`tsession_execute_file`：
 
 ```c
-#include "tapas/tapas.h"
+#include "tapas/tsession.h"
 
 int main(void)
 {
@@ -81,7 +82,7 @@ int main(void)
 也可以直接执行 C 字符串中的 Tapas 代码：
 
 ```c
-#include "tapas/tapas.h"
+#include "tapas/tsession.h"
 
 int main(void)
 {
@@ -129,7 +130,8 @@ static const textension_symbol functions[] = {
 下面用 C 实现一个整数求和函数：
 
 ```c
-#include "tapas/tapas.h"
+#include "tapas/textension.h"
+#include "tapas/tval.h"
 
 static void c_int_sum(tobj *params, uint_regs len, tobj *vre)
 {
@@ -150,7 +152,9 @@ static void c_int_sum(tobj *params, uint_regs len, tobj *vre)
 运行 Tapas 脚本前，将方法表放入根模块和扩展描述符并一次安装：
 
 ```c
-#include "tapas/tapas.h"
+#include "tapas/tsession.h"
+#include "tapas/textension.h"
+#include "tapas/tval.h"
 
 static void c_int_sum(tobj *params, uint_regs len, tobj *vre)
 {
@@ -390,14 +394,14 @@ tcompo_v *tobj_get_v_tcompo(const tobj *v);
 使用具体运行时类型时，应包含对应的独立头文件：
 
 ```text
-#include "tapas/runtime/tstr.h"
-#include "tapas/runtime/tlist.h"
-#include "tapas/runtime/tpair.h"
-#include "tapas/runtime/tdict.h"
-#include "tapas/runtime/titer.h"
-#include "tapas/runtime/tarray.h"
-#include "tapas/runtime/ttime.h"
-#include "tapas/runtime/tcfn.h"
+#include "tapas/objects/tstr.h"
+#include "tapas/objects/tlist.h"
+#include "tapas/objects/tpair.h"
+#include "tapas/objects/tdict.h"
+#include "tapas/objects/titer.h"
+#include "tapas/objects/tarray.h"
+#include "tapas/objects/ttime.h"
+#include "tapas/objects/tcfn.h"
 ```
 
 内置集合构造器包括：

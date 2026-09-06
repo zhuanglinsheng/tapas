@@ -5,9 +5,9 @@
 This document describes how to call Tapas code from C and how to expose C
 functions to Tapas scripts.
 
-The public C API is declared in the headers under `include/tapas`. Most users
-only need `tapas/tapas.h`, which includes the session API and the runtime value
-types.
+The public C API is declared in the headers under `include/tapas`. Embedders
+usually need only `tapas/tsession.h`; native extensions additionally include
+`tapas/tval.h`, `tapas/textension.h`, and the object headers they actually use.
 
 
 
@@ -52,7 +52,7 @@ abs(-2).print()
 The following C program compiles and executes it:
 
 ```c
-#include "tapas/tapas.h"
+#include "tapas/tsession.h"
 
 int main(void)
 {
@@ -70,7 +70,7 @@ If the bytecode file does not need to be saved, call
 `tsession_execute_file` instead:
 
 ```c
-#include "tapas/tapas.h"
+#include "tapas/tsession.h"
 
 int main(void)
 {
@@ -86,7 +86,7 @@ int main(void)
 Tapas code can also be executed from a C string:
 
 ```c
-#include "tapas/tapas.h"
+#include "tapas/tsession.h"
 
 int main(void)
 {
@@ -137,7 +137,8 @@ compatibility interfaces.
 Here is a C implementation of an integer sum function:
 
 ```c
-#include "tapas/tapas.h"
+#include "tapas/textension.h"
+#include "tapas/tval.h"
 
 static void c_int_sum(tobj *params, uint_regs len, tobj *vre)
 {
@@ -159,7 +160,9 @@ Before running Tapas code, place the method table in a root module and install
 the extension once:
 
 ```c
-#include "tapas/tapas.h"
+#include "tapas/tsession.h"
+#include "tapas/textension.h"
+#include "tapas/tval.h"
 
 static void c_int_sum(tobj *params, uint_regs len, tobj *vre)
 {
@@ -435,14 +438,14 @@ that reference counts remain consistent.
 header when using a concrete runtime type:
 
 ```text
-#include "tapas/runtime/tstr.h"
-#include "tapas/runtime/tlist.h"
-#include "tapas/runtime/tpair.h"
-#include "tapas/runtime/tdict.h"
-#include "tapas/runtime/titer.h"
-#include "tapas/runtime/tarray.h"
-#include "tapas/runtime/ttime.h"
-#include "tapas/runtime/tcfn.h"
+#include "tapas/objects/tstr.h"
+#include "tapas/objects/tlist.h"
+#include "tapas/objects/tpair.h"
+#include "tapas/objects/tdict.h"
+#include "tapas/objects/titer.h"
+#include "tapas/objects/tarray.h"
+#include "tapas/objects/ttime.h"
+#include "tapas/objects/tcfn.h"
 ```
 
 The built-in collection constructors include:

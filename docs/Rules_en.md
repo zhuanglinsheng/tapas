@@ -76,7 +76,20 @@ let Between = rule (
 }
 
 let instance = Between(5, 0, 10)
+
+let same_instance = Between({
+    'maximum': 10,
+    'value': 5,
+    'minimum': 0
+})
 ```
+
+A Rule also accepts one Dictionary as a named argument table. Its keys must be
+the parameter names, and it must contain all and only the Rule's parameters;
+each value is still checked against the corresponding parameter Type. For a
+Rule with one parameter, named binding is used only when the Dictionary contains
+that parameter name. Otherwise the Dictionary remains an ordinary positional
+argument.
 
 A zero-parameter Rule may omit its parameter list. A top-level Bool expression
 in the body forms a Condition; a bare instance forms a child obligation. Every item must hold; an empty Rule passes.
@@ -168,7 +181,7 @@ The checker evaluates the antecedent once. False skips all consequents and passe
 
 The first version only supports body-level implication items: no chains, nesting, empty consequent blocks, declarations, control flow, or bare instance obligations inside consequent blocks. Existing expression newline boundaries apply.
 
-Dynamic construction uses `rules::implication(antecedent, consequents[, description]) -> rules::Item`: the antecedent Term may have Bool, RuleInstance, or their union Type; consequents remain a nonempty List of Bool Terms. `antecedent` preserves the original Term and its Type. RuleInstance antecedents require IR version 3 / `TPIR3`; Bool-only implications retain version 2, and readers accept `TPIR1/2`. Source Rule serialization retains its runtime-reconnection limitation. Dynamic IR declaring instance parameters remains portable: the caller binds fresh instances after restoration. Custom evaluators must distinguish Bool values from RuleInstance satisfaction checks.
+Dynamic construction uses `rules::implication(antecedent, consequents[, description]) -> RuleItem`: the antecedent RuleTerm may have Bool, RuleInstance, or their union Type; consequents remain a nonempty List of Bool RuleTerms. `antecedent` preserves the original RuleTerm and its Type. RuleInstance antecedents require IR version 3 / `TPIR3`; Bool-only implications retain version 2, and readers accept `TPIR1/2`. Source Rule serialization retains its runtime-reconnection limitation. Dynamic IR declaring instance parameters remains portable: the caller binds fresh instances after restoration. Custom evaluators must distinguish Bool values from RuleInstance satisfaction checks.
 
 RuleInstance antecedents need no explicit checker call:
 
@@ -536,13 +549,13 @@ syntax.
 
 ## 10. Points, integer ranges, and membership
 
-`rules::points(element_type, ...values)` creates `PointsOf[T]`, preserving the supplied element Type. It accepts any existing Type, including enums, records, containers, functions, and rules. Every member is checked against T; duplicates are removed using `identical`. Empty points are allowed. In value expressions use existing Type values such as `types::Int`; annotations can use `PointsOf[Int]`.
+`rules::points(element_type, ...values)` creates `rules::PointsOf[T]`, preserving the supplied element Type. It accepts any existing Type, including enums, records, containers, functions, and rules. Every member is checked against T; duplicates are removed using `identical`. Empty points are allowed. In value expressions use existing Type values such as `types::Int`; annotations use the package-qualified form `rules::PointsOf[Int]`.
 
-`rules::range(start, end)` creates `RangeOf[Int]`, a closed interval including both endpoints. This first version only accepts Int endpoints. Float endpoints, mixed types, and reversed bounds are rejected. Equal bounds form a singleton. Intervals are never expanded into lists.
+`rules::range(start, end)` creates `rules::RangeOf[Int]`, a closed interval including both endpoints. This first version only accepts Int endpoints. Float endpoints, mixed types, and reversed bounds are rejected. Equal bounds form a singleton. Intervals are never expanded into lists.
 
 ```tapas
-let domain_points: PointsOf[Int] = rules::points(types::Int, 1, 4, 9)
-let domain_range: RangeOf[Int] = rules::range(0, 5)
+let domain_points: rules::PointsOf[Int] = rules::points(types::Int, 1, 4, 9)
+let domain_range: rules::RangeOf[Int] = rules::range(0, 5)
 let domain_member = rule (x: Int) { x in domain_points and x in domain_range }
 assert(domain_member(4))
 print(rules::check(domain_member(9))::passed)

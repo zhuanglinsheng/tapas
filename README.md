@@ -2,110 +2,94 @@
 
 # Tapas
 
-简体中文 | [English](README_en.md) | [项目主页](README.md)
+简体中文 | [English](README_en.md)
 
-Tapas 是一个面向复杂业务的规则驱动测试系统。
-业务规则只需定义一次，就能用于生成测试输入和检查执行结果。
+Tapas 是一个面向业务约束测试的 DSL 和求解器。它可以将订单、支付、权限、AI Agent 与仿真环境中的约束写成可执行 Rule，用于检查真实系统的输入、输出和状态变化，也用于生成边界数据或故意违反指定条件的测试输入。
 
-## 一个简单的例子
+Tapas 的核心特点是让检查标准与数据生成模型共用同一份 Rule。Rule 可以组合、限制或反转，使测试者能够按目标构造数据，而不必分别维护规则和样例；当一组条件无法同时成立时，求解结果还会指出相关规则和冲突条件。
 
-**场景：** 仓库有 7 件商品，每笔订单最多购买 6 件。你准备测试“一笔订单清空库存”，这组要求能同时满足吗？
+## 一个简单的例子：定向生成失败输入
 
-把限购规则和库存变化写下来，让 Tapas 检查这个测试场景是否可行：
+**场景：** 仓库需要测试库存不足的销售请求。每笔订单可以买 1 至 6 件商品，但销售数量不能超过当前库存。
+
+(1) **写下业务规则。** `SaleRequest` 描述所有正常销售请求都应满足的条件：
 
 ```tapas
-let StockChange = rule (
-        before: Int,   // 卖出前的库存
-        sold: Int,     // 本次卖出的数量
-        after: Int     // 卖出后的库存
+let SaleRequest = rule (
+        current_stock: Int,
+        sale_quantity: Int
 ) {
-    "每笔订单可以购买 1 至 6 件":
-        sold in rules::range(1, 6)
+    '每笔订单可以购买 1 至 6 件':
+        sale_quantity in rules::range(1, 6)
 
-    "卖出数量不能超过当前库存":
-        sold <= before
-
-    "剩余库存必须等于原库存减去卖出数量":
-        after == before - sold
+    '销售数量不能超过当前库存':
+        sale_quantity <= current_stock
 }
 ```
 
-这条规则描述了每次销售都要遵守的要求。接下来固定销售前后的库存，构造“一笔订单清空库存”的测试场景：
+(2) **生成库存不足的数据。** 用 `rules::violate` 反转“销售数量不能超过当前库存”，再从目标场景中生成一份数据：
 
 ```tapas
-// 要求：一笔订单清空库存
-let trial_1 = rules::restrict(StockChange, 'before': 7, 'after': 0)
+let InsufficientStockRequest = rules::violate(
+    SaleRequest,
+    '销售数量不能超过当前库存'
+)
 
-// 执行检测
-let test_result_1 = solve::hold(trial_1)
+let generated = solve::sample(InsufficientStockRequest, 1, {
+    'current_stock': rules::range(0, 7),
+    'sale_quantity': rules::range(1, 6)
+}, rng = random::generator(random::pcg32_xsh_rr, 42))
 
-// 查看查询结论和参与冲突的条件
-pprint('status    = ', test_result_1::status)
-pprint('conflicts = ', test_result_1::conflicts)
+let test_input = generated::samples[0]
+pprint('test input = ', test_input)
+```
+<pre class='Tapas-Return'>
+test input = {
+    sale_quantity : 2,
+    current_stock : 0
+}
+</pre>
+
+(3) **确认生成目标。** 将样本交回原始 Rule。结果应为 `unsat`，而冲突应指向刚才反转的条件：
+
+```tapas
+let result = solve::hold(SaleRequest(test_input))
+pprint('status    = ', result::status)
+pprint('conflicts = ', result::conflicts)
 ```
 <pre class='Tapas-Return'>
 status    = unsat
 conflicts = [{
-    rule : Rule #2[Int, Int, Int],
-    condition : (sold in rules::range(1, 6))
-}, {
-    rule : Rule #2[Int, Int, Int],
-    condition : (after == (before - sold))
-}, {
-    rule : Rule #3[Int, Int, Int],
-    condition : (before == 7)
-}, {
-    rule : Rule #3[Int, Int, Int],
-    condition : (after == 0)
+    rule : Rule #1[Int, Int],
+    condition : (sale_quantity <= current_stock)
 }]
 </pre>
 
-查询结果是 **`unsat`（无解）**。清空库存需要卖出 7 件，但每笔订单最多购买 6 件，这两项要求发生了冲突。`conflicts` 会列出参与冲突的规则和条件，帮助定位原因。
-
-将目标改为剩下 1 件，就能找到卖出 **6 件**的输入。业务规则没有改变，只调整了本次测试的目标。这时再把输入交给库存系统执行，就可以用同一条规则检查实际结果。
-
-```tapas
-// 要求：库存还剩下 1 件
-let trial_2 = rules::restrict(StockChange, 'before': 7, 'after': 1)
-
-// 执行检测
-let test_result_2 = solve::hold(trial_2)
-
-// 查看查询结论和参与冲突的条件
-pprint('status    = ', test_result_2::status)
-pprint('conflicts = ', test_result_2::conflicts)
-```
-<pre class='Tapas-Return'>
-status    = sat
-conflicts = []
-</pre>
-
-## 系统特点
-
-- 同一份规则用于生成与检查。输入条件、成功与拒绝时的状态变化可以组合成一个业务模型，供不同测试复用。
-- 按测试目标寻找输入。可以要求“恰好清空库存”，也可以固定身份与确认信息，寻找“只因额度不足而被拒绝”的请求。
-- 场景通过限制来调整。固定值、整数区间和离散候选可以继续叠加；条件无法同时满足时，查询返回无解，并可列出相关 Rule 和冲突条件。
-
-Tapas 适用于订单、支付、权限和工作流等有状态业务，也面向 AI Agent 与仿真环境。当前示例由测试脚本连接输入生成、实际执行和结果检查，多步状态探索与失败缩减尚未实现。
+这不是随机撞到一个异常值：Tapas 保留“每笔购买 1 至 6 件”，只反转选中的库存条件。固定随机源后，示例输出可以复现。分布、随机源和采样上限等设置见 [solve 包说明](src/stdlib/solve/README.md)；完整程序见[生成失败测试数据示例](examples/solve/generate_violations.tap)。
 
 ## 继续了解
 
 | 想了解的内容 | 从这里开始 |
 | --- | --- |
-| 完整的业务测试如何编写 | [换货业务教程](examples/retail/README.md)：从订单建模到正确拒绝、缺陷检测和多变量输入生成 |
+| 怎样检查完整的业务状态转移 | [换货业务教程](examples/retail/README.md)：将前状态、请求、实际输出和后状态绑定到模型，检查正确拒绝和故意缺陷 |
+| 怎样生成失败测试数据 | [生成失败测试数据示例](examples/solve/generate_violations.tap)：从具名规则条件派生场景、采样并检查结果 |
 | 怎样求解规则、读取失败原因 | [可行性示例](examples/solve/feasibility.tap)与[冲突诊断示例](examples/solve/diagnostics.tap)：两个可独立运行的小程序 |
 | 代码的基本写法 | [Tapas 入门](docs/examples/Basics_zh.md)：变量、函数和控制流；[模块与目录包](docs/examples/modules/README.md)：跨文件组织代码 |
 | 还有哪些可运行案例 | [示例目录](examples/README.md)：求解、业务测试与通用算法 |
 
-## 构建、测试与安装
+## 安装和构建
 
-准备支持 C23 的编译器、CMake 3.21 或更高版本、GNU Readline 和 Python 3，然后在仓库根目录构建并运行测试：
+可以从 [GitHub Releases](https://github.com/zhuanglinsheng/tapas/releases) 下载 Linux 或 macOS 的预编译包，也可以从源码构建。
+
+Tapas 依赖 GNU Readline 和 Python 3，Python 环境中需要安装 OR-Tools 包。请确保系统能从默认搜索路径找到 GNU Readline 和 Python，并且 Python 可以导入 `ortools`。从源码构建还需要支持 C23 的编译器和 CMake 3.21 或更高版本。在仓库根目录运行：
 
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 ctest --test-dir build --output-on-failure
 ```
+
+测试覆盖源码与字节码执行、合法与非法语言规则、求解、语言服务器、格式化以及文档中的可运行示例。
 
 将 Tapas 安装到用户目录：
 
@@ -114,19 +98,13 @@ cmake --install build --prefix "$HOME/.tapas"
 export PATH="$HOME/.tapas/bin:$PATH"
 ```
 
-运行求解功能前，请确保系统默认的 `python3` 已安装 OR-Tools。下面的命令会运行一个库存分配示例并打印求解结果：
+依赖的安装方法见[使用说明](docs/Usage_zh.md)，求解支持范围见 [solve 包说明](src/stdlib/solve/README.md)。
 
-```sh
-tapas examples/solve/feasibility.tap
-```
+## Visual Studio Code 扩展
 
-构建工具的安装方法见[使用说明](docs/Usage_zh.md)，求解环境与支持范围见 [solve 包说明](src/stdlib/solve/README.md)。普通规则检查不需要 Python 或 OR-Tools。
+Tapas 的 Visual Studio Code 扩展提供语法高亮、实时诊断、类型悬停与补全，以及跨模块的跳转、引用查找和重命名。语言服务会索引工作区中的 `.tap` 文件，并在源码尚未写完整时继续提供可恢复的分析结果。
 
-## 编辑与接入
-
-[Visual Studio Code 扩展](https://marketplace.visualstudio.com/items?itemName=tapas-language.tapas-language)提供语法高亮、诊断、补全、类型悬停、跳转、运行和格式化。扩展需要单独安装 Tapas Core；安装与配置见[扩展文档](editors/vscode/README_zh.md)。
-
-Tapas 可以作为脚本运行，也可以通过公共 C API 嵌入其他程序。会话创建、C 函数注册和业务数据接入见 [C 交互](docs/Foreign_zh.md)。
+安装 Tapas Core 后，可以从 [Visual Studio Code Marketplace](https://marketplace.visualstudio.com/items?itemName=tapas-language.tapas-language) 安装扩展。VSIX 安装、运行器与语言服务器路径配置等内容见[扩展文档](https://github.com/zhuanglinsheng/tapas/blob/main/editors/vscode/README_zh.md)。
 
 ## 文档
 
