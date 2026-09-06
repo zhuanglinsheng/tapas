@@ -50,13 +50,20 @@ Tapas 使用`Rule`保存领域事实，并让不同 evaluator 在不改变规则
 下面的 Rule 使用当前已经实现的语法描述一条简化的退货规则：
 
 ```tapas
+let OrderStatus = types::enum(
+    "Pending",
+    "Shipped",
+    "Delivered",
+    "Cancelled",
+)
+
 let Refundable = rule (
-    status        : String,
+    status        : OrderStatus,
     delivered_days: Int,
     confirmed     : Bool,
 ) {
     "order has not been delivered":
-        status == "Delivered"
+        status == OrderStatus["Delivered"]
 
     "delivery time is invalid":
         delivered_days >= 0
@@ -69,7 +76,7 @@ let Refundable = rule (
 }
 
 let checked = rules::check(
-    Refundable("Delivered", 14, true),
+    Refundable(OrderStatus["Delivered"], 14, true),
 )
 print(checked["passed"])
 ```
@@ -416,7 +423,7 @@ checker 继续保留完整 Tapas 运行语义，并形成所有测试能力共�
 
 第一批生成范围包括：
 
-- Bool、有限范围 Int、枚举式值和常用 String 约束；
+- Bool、有限范围 Int、`types::enum`有限值和常用 String 约束；
 - List、Dictionary 和结构化领域对象；
 - Condition 和嵌套 Requirement；
 - 等于、不等于、范围、集合成员、长度和基础逻辑组合；
