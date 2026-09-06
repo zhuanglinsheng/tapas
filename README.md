@@ -4,97 +4,133 @@
 
 简体中文 | [English](README_en.md) | [项目主页](README.md)
 
-Tapas 是一门以表达式为核心、注重程序可读性并具有结构化类型系统的编程语言，正在发展为面向复杂系统测试的可编程声明语言。
-它的目标是让领域规则成为可以动态构造、组合和解释的一等值，使验证器、生成器和其他解释器能够从同一份规则定义中派生合法状态、行为检查、边界场景、冲突解释和失败缩减。
+Tapas 是一个面向复杂业务的规则驱动测试系统。
+业务规则只需定义一次，就能用于生成测试输入和检查执行结果。
 
-Tapas 当前主要用于描述复杂有状态系统和 AI Agent 业务环境中的测试规则。
-它强调让代码直接对应业务概念和约束，使读者不必先了解规则如何执行、生成或求解，也能理解测试要验证什么。
+## 一个简单的例子
 
-## 语言特色
+**场景：** 仓库有 7 件商品，每笔订单最多购买 6 件。你准备测试“一笔订单清空库存”，这组要求能同时满足吗？
 
-- 业务规则可以像普通数据一样保存、传递和组合，同一份规则既可以直接用于检查，也可以交给不同工具分析和解释。
-- 灵活的类型系统可以在编译期发现错误，也允许程序在运行时读取和组合类型，便于描述复杂的业务状态。
-- 以表达式为核心的简洁语法支持一等函数、闭包、递归、常用容器和稠密数组。
-- 语言服务器和 Visual Studio Code 扩展提供实时诊断、补全、悬停信息和跨模块符号跳转。
+把限购规则和库存变化写下来，让 Tapas 检查这个测试场景是否可行：
 
-Tapas 使用 C23 实现，源码被编译为字节码并由栈式虚拟机执行。
-Tapas 程序可以作为脚本运行，也可以通过交互式 REPL 或 Markdown 代码块执行。
-公共 C API 用于将 Tapas 运行时嵌入其他程序。
+```tapas
+let StockChange = rule (
+        before: Int,   // 卖出前的库存
+        sold: Int,     // 本次卖出的数量
+        after: Int     // 卖出后的库存
+) {
+    "每笔订单可以购买 1 至 6 件":
+        sold in rules::range(1, 6)
 
-## 示例
+    "卖出数量不能超过当前库存":
+        sold <= before
 
-[Tapas 入门示例](docs/examples/Basics_zh.md)用一个短小且可执行的程序串联变量、列表、函数和控制流，直观呈现语言的基本风格。
-下面是一些完整示例，涵盖斐波那契数列、经典排序、图搜索和动态规划等常见问题：
+    "剩余库存必须等于原库存减去卖出数量":
+        after == before - sold
+}
+```
 
-| 示例 | 内容与展示重点 |
+这条规则描述了每次销售都要遵守的要求。接下来固定销售前后的库存，构造“一笔订单清空库存”的测试场景：
+
+```tapas
+// 要求：一笔订单清空库存
+let trial_1 = rules::restrict(StockChange, 'before': 7, 'after': 0)
+
+// 执行检测
+let test_result_1 = solve::hold(trial_1)
+
+// 查看查询结论和参与冲突的条件
+pprint('status    = ', test_result_1::status)
+pprint('conflicts = ', test_result_1::conflicts)
+```
+<pre class='Tapas-Return'>
+status    = unsat
+conflicts = [{
+    rule : Rule #2[Int, Int, Int],
+    condition : (sold in rules::range(1, 6))
+}, {
+    rule : Rule #2[Int, Int, Int],
+    condition : (after == (before - sold))
+}, {
+    rule : Rule #3[Int, Int, Int],
+    condition : (before == 7)
+}, {
+    rule : Rule #3[Int, Int, Int],
+    condition : (after == 0)
+}]
+</pre>
+
+查询结果是 **`unsat`（无解）**。清空库存需要卖出 7 件，但每笔订单最多购买 6 件，这两项要求发生了冲突。`conflicts` 会列出参与冲突的规则和条件，帮助定位原因。
+
+将目标改为剩下 1 件，就能找到卖出 **6 件**的输入。业务规则没有改变，只调整了本次测试的目标。这时再把输入交给库存系统执行，就可以用同一条规则检查实际结果。
+
+```tapas
+// 要求：库存还剩下 1 件
+let trial_2 = rules::restrict(StockChange, 'before': 7, 'after': 1)
+
+// 执行检测
+let test_result_2 = solve::hold(trial_2)
+
+// 查看查询结论和参与冲突的条件
+pprint('status    = ', test_result_2::status)
+pprint('conflicts = ', test_result_2::conflicts)
+```
+<pre class='Tapas-Return'>
+status    = sat
+conflicts = []
+</pre>
+
+## 系统特点
+
+- 同一份规则用于生成与检查。输入条件、成功与拒绝时的状态变化可以组合成一个业务模型，供不同测试复用。
+- 按测试目标寻找输入。可以要求“恰好清空库存”，也可以固定身份与确认信息，寻找“只因额度不足而被拒绝”的请求。
+- 场景通过限制来调整。固定值、整数区间和离散候选可以继续叠加；条件无法同时满足时，查询返回无解，并可列出相关 Rule 和冲突条件。
+
+Tapas 适用于订单、支付、权限和工作流等有状态业务，也面向 AI Agent 与仿真环境。当前示例由测试脚本连接输入生成、实际执行和结果检查，多步状态探索与失败缩减尚未实现。
+
+## 继续了解
+
+| 想了解的内容 | 从这里开始 |
 | --- | --- |
-| [Fibonacci](examples/general/fibonacci.tap) | 用递归和迭代生成 Fibonacci 数列，展示函数递归、循环与列表 |
-| [排序算法](examples/general/sorting.tap) | 实现冒泡、选择、插入、希尔、归并、快速和堆排序，展示切片、高阶函数与原地修改 |
-| [二分查找](examples/general/binary_search.tap) | 在有序列表中查找目标，展示循环边界和提前返回 |
-| [欧几里得算法](examples/general/euclidean_algorithm.tap) | 计算最大公约数、最小公倍数和 Bézout 系数，展示整数运算与多值结果 |
-| [埃氏筛](examples/general/sieve_of_eratosthenes.tap) | 筛选指定范围内的素数，展示布尔列表和嵌套循环 |
-| [广度优先搜索](examples/general/breadth_first_search.tap) | 遍历字典表示的图，展示队列、字典和成员判断 |
-| [最长公共子序列](examples/general/longest_common_subsequence.tap) | 用动态规划求两个字符串的公共子序列，展示二维数组与结果回溯 |
-| [牛顿法](examples/general/newton_method.tap) | 迭代求平方根和非线性方程的根，展示浮点计算与数学函数 |
-
-更多例子参见[语法示例集](docs/examples/syntax)；模块组织方式参见[模块与目录包](docs/examples/modules/README.md)。
+| 完整的业务测试如何编写 | [换货业务教程](examples/retail/README.md)：从订单建模到正确拒绝、缺陷检测和多变量输入生成 |
+| 怎样求解规则、读取失败原因 | [可行性示例](examples/solve/feasibility.tap)与[冲突诊断示例](examples/solve/diagnostics.tap)：两个可独立运行的小程序 |
+| 代码的基本写法 | [Tapas 入门](docs/examples/Basics_zh.md)：变量、函数和控制流；[模块与目录包](docs/examples/modules/README.md)：跨文件组织代码 |
+| 还有哪些可运行案例 | [示例目录](examples/README.md)：求解、业务测试与通用算法 |
 
 ## 构建、测试与安装
 
-Tapas 需要支持 C23 的编译器、CMake 3.21 或更高版本和 GNU Readline。
-在项目根目录构建并测试 Release 版本，然后安装到用户目录：
+准备支持 C23 的编译器、CMake 3.21 或更高版本、GNU Readline 和 Python 3，然后在仓库根目录构建并运行测试：
 
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 ctest --test-dir build --output-on-failure
+```
+
+将 Tapas 安装到用户目录：
+
+```sh
 cmake --install build --prefix "$HOME/.tapas"
-```
-
-将安装目录加入`PATH`后，可以验证版本并运行示例：
-
-```sh
 export PATH="$HOME/.tapas/bin:$PATH"
-tapas --version
-tapas examples/general/fibonacci.tap
 ```
 
-依赖安装、安装、REPL、字节码和模块等更多用法参见[使用说明](docs/Usage_zh.md)。
-
-## Visual Studio Code 扩展
-
-Tapas 提供独立的薄版 VS Code 扩展，支持语法高亮、实时诊断、悬停类型信息、代码补全、定义跳转、引用查找、重命名、工作区模块分析、运行和格式化。扩展不包含 Tapas Core。
-
-请先按上一节把 Tapas Core 安装到`$HOME/.tapas`。可以从 Visual Studio Code Marketplace 安装 [Tapas](https://marketplace.visualstudio.com/items?itemName=tapas-language.tapas-language)，也可以从 GitHub Release 下载独立 VSIX：
+运行求解功能前，请确保系统默认的 `python3` 已安装 OR-Tools。下面的命令会运行一个库存分配示例并打印求解结果：
 
 ```sh
-code --install-extension tapas-language.tapas-language
+tapas examples/solve/feasibility.tap
 ```
 
-扩展依次使用显式配置、`$HOME/.tapas/bin`和系统`PATH`查找`tapas`与`tapas-language-server`，不会执行当前工作区中的二进制。从源码调试扩展、开发目录安装、测试、打包及详细配置参见[VS Code 扩展文档](editors/vscode/README_zh.md)。
+构建工具的安装方法见[使用说明](docs/Usage_zh.md)，求解环境与支持范围见 [solve 包说明](src/stdlib/solve/README.md)。普通规则检查不需要 Python 或 OR-Tools。
 
-## 在 C 程序中嵌入 Tapas
+## 编辑与接入
 
-公共头文件位于 `include/tapas`。
-以下程序通过会话接口执行一段 Tapas 源码：
+[Visual Studio Code 扩展](https://marketplace.visualstudio.com/items?itemName=tapas-language.tapas-language)提供语法高亮、诊断、补全、类型悬停、跳转、运行和格式化。扩展需要单独安装 Tapas Core；安装与配置见[扩展文档](editors/vscode/README_zh.md)。
 
-```c
-#include "tapas/tapas.h"
-
-int main(void)
-{
-    tsession *session = tsession_new();
-
-    tsession_execute_str(session, "print(6 * 7)", 1);
-    tsession_free(session);
-    return 0;
-}
-```
-
-接口、链接方式和扩展类型说明参见 [C 交互](docs/Foreign_zh.md)。
+Tapas 可以作为脚本运行，也可以通过公共 C API 嵌入其他程序。会话创建、C 函数注册和业务数据接入见 [C 交互](docs/Foreign_zh.md)。
 
 ## 文档
 
+- [求解接口](src/stdlib/solve/README.md)：可行性查询、冲突诊断、支持范围和运行配置。
 - [使用说明](docs/Usage_zh.md)：构建、命令行选项、脚本、字节码、Markdown 执行和模块路径。
 - [语言规范](docs/Syntax_zh.md)：语法、值类别、运算符、语句、函数、模块和数组。
 - [标准库](docs/Stdlib_zh.md)：根内建函数、原生包和随发行版提供的源码包。
