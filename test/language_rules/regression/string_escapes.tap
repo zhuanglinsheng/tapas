@@ -1,0 +1,16 @@
+let controls = '\n\r\t'
+let quotes = '\'"\\'
+
+assert(rule {
+    controls.len() == 3
+    controls[0] == syntax::line_feed
+    controls[1] != syntax::line_feed
+    controls[2] == syntax::horizontal_tab
+    quotes.len() == 3
+    quotes[0] == '\''
+    quotes[1] == '"'
+    quotes[2] == '\\'
+})
+
+let escaped_key = {'line\nbreak': 42}
+assert(rule { escaped_key['line\nbreak'] == 42 })

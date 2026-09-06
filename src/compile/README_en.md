@@ -16,7 +16,7 @@ source -> frontend/{document, syntax, ast, parser, semantic, control_flow}
 `frontend/` and `types/` include no VM, bytecode, or runtime-object headers.
 The standard-enabled front-end target links `tapas_stdlib` so its Type metadata
 comes from the same descriptors as the implementations. `backend/` may depend
-on both the public front end and the runtime. CLI input state lives under
+on both the reusable front end and the runtime. CLI input state lives under
 `src/cli/`. This dependency direction is the main directory boundary; file
 count or line count alone is not a reason to add more top-level directories.
 
@@ -28,7 +28,10 @@ The `types` package constructor identities come from the same descriptor.
 
 ## Reusable front end
 
-Public interfaces live under `include/tapas/compile/`.
+Compiler interfaces are implementation-private and live beside their
+implementations under `src/compile/`. The external embedding API is provided
+by `include/tapas/tsession.h`; AST, semantic-model, and workspace layouts are
+not public ABI.
 
 - `frontend/document.c` owns immutable UTF-8 source, line indexes, and
   half-open source spans.

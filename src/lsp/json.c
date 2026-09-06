@@ -1,4 +1,5 @@
 #include "json.h"
+#include "tapas/dsa/tstring.h"
 
 #include <ctype.h>
 #include <stdlib.h>

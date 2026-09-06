@@ -1,5 +1,5 @@
-#include "tapas/compile/parser.h"
-#include "tapas/compile/diagnostic.h"
+#include "compile/frontend/parser.h"
+#include "compile/frontend/diagnostic.h"
 
 #include <stdlib.h>
 
@@ -257,6 +257,7 @@ static tast_id parse_sequence(tparser *parser, tsyntax_kind closing,
 	tast_id *children = nullptr;
 	uint32_t count = 0;
 	uint32_t capacity = 0;
+	int saw_named = 0;
 	const tsyntax_token *close = nullptr;
 	while (peek(parser)->kind != closing && peek(parser)->kind != tsyntax_eof) {
 		if (count >= capacity) {
@@ -266,7 +267,35 @@ static tast_id parse_sequence(tparser *parser, tsyntax_kind closing,
 			if (!children)
 				abort();
 		}
-		children[count++] = parse_bp(parser, 0);
+		tast_id value = parse_bp(parser, 0);
+		if (kind == tast_call && consume(parser, tsyntax_assign, nullptr)) {
+			const tast_node *name = tast_get(parser->arena, value);
+			int valid_name = name && name->kind == tast_name;
+			tsource_span name_span = name ? name->span : peek(parser)->span;
+			tast_id argument = parse_bp(parser, 0);
+			const tast_node *argument_node = tast_get(
+				parser->arena, argument);
+			tsource_span argument_span = argument_node ?
+				argument_node->span : name_span;
+			if (!valid_name) {
+				value = error_node(parser,
+					name_span,
+					"named argument requires an identifier");
+			} else {
+				value = tast_arena_add(parser->arena, (tast_node){
+					.kind = tast_named_field,
+					.span = { name_span.start,
+						  argument_span.end },
+					.named_field = { name_span, argument }
+				});
+			}
+			saw_named = 1;
+		} else if (kind == tast_call && saw_named) {
+			tdiagnostics_add(parser->diagnostics, tdiagnostic_error,
+				tast_get(parser->arena, value)->span,
+				"positional argument must precede named arguments");
+		}
+		children[count++] = value;
 		if (!consume(parser, tsyntax_comma, nullptr))
 			break;
 	}

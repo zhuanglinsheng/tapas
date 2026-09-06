@@ -1,10 +1,13 @@
 #include "tapas/textension.h"
+#include "tapas/dsa/tstring.h"
 #include "../arguments.h"
-#include "tapas/runtime/trule.h"
-#include "tapas/runtime/tlist.h"
-#include "tapas/runtime/tpair.h"
-#include "tapas/runtime/tstr.h"
-#include "tapas/runtime/tcfn.h"
+#include "tapas/objects/trule.h"
+#include "runtime/tenv.h"
+#include "tapas/objects/trule_ir.h"
+#include "tapas/objects/tlist.h"
+#include "tapas/objects/tpair.h"
+#include "tapas/objects/tstr.h"
+#include "tapas/objects/tcfn.h"
 #include "../function_metadata.h"
 #include <string.h>
 

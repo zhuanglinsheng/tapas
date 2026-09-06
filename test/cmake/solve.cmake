@@ -18,9 +18,9 @@ if(NOT source_result EQUAL 0 OR NOT bytecode_result EQUAL 0
    OR NOT source_output MATCHES "RuleInstance\\[#[0-9]+; quantity=3\\]"
    OR NOT source_output MATCHES "Requirement\\[Rule #[0-9]+\\[Int\\]"
    OR NOT source_output MATCHES "<address>"
-   OR NOT source_output MATCHES "Term Parameter\\[quantity: Int\\]"
-   OR NOT source_output MATCHES "Item Condition\\["
-   OR NOT source_output MATCHES "Item Requirement\\["
+   OR NOT source_output MATCHES "RuleTerm Parameter\\[quantity: Int\\]"
+   OR NOT source_output MATCHES "RuleItem Condition\\["
+   OR NOT source_output MATCHES "RuleItem Requirement\\["
    OR NOT source_output MATCHES "Function add\\[Int\\] -> Int"
    OR NOT source_output MATCHES "Function\\[Int\\] -> Int"
    OR NOT source_output MATCHES "Function\\[List\\[Int\\]\\] -> List\\[Int\\]"
@@ -81,6 +81,30 @@ foreach(mode IN ITEMS source bytecode)
     endif()
 endforeach()
 file(REMOVE "${source}c")
+
+set(sample "${SOURCE_ROOT}/test/solve/sample.tap")
+execute_process(COMMAND "${TAPAS}" -c "${sample}" RESULT_VARIABLE result
+	OUTPUT_VARIABLE output ERROR_VARIABLE error)
+if(NOT result EQUAL 0)
+	message(FATAL_ERROR
+		"solve sample bytecode compilation failed: ${output}${error}")
+endif()
+foreach(mode IN ITEMS source bytecode)
+	if(mode STREQUAL "source")
+		set(command "${sample}")
+	else()
+		set(command -e "${sample}c")
+	endif()
+	execute_process(COMMAND "${CMAKE_COMMAND}" -E env
+		"TAPAS_SOLVE_PYTHON=${SOLVE_PYTHON}"
+		"${TAPAS}" ${command} RESULT_VARIABLE result
+		OUTPUT_VARIABLE output ERROR_VARIABLE error)
+	if(NOT result EQUAL 0 OR NOT output STREQUAL "solve sample: ok\n")
+		message(FATAL_ERROR
+			"solve sample ${mode} failed: ${output}${error}")
+	endif()
+endforeach()
+file(REMOVE "${sample}c")
 # A backend claiming a bad, well-typed witness must be caught by the checker.
 set(fake "${CMAKE_CURRENT_BINARY_DIR}/solve_wrong_witness.py")
 file(WRITE "${fake}" "#!${SOLVE_PYTHON}\nimport sys\nsource = sys.stdin.buffer\nsize = int.from_bytes(source.read(4), 'big')\nsource.read(size)\nreply = b'TAPAS_SOLVE_3\\nsat\\nconfigured\\n\\n1\\ni9\\n0\\n'\nsys.stdout.buffer.write(len(reply).to_bytes(4, 'big') + reply)\nsys.stdout.buffer.flush()\n")
@@ -109,6 +133,17 @@ execute_process(COMMAND "${CMAKE_COMMAND}" -E env "TAPAS_SOLVE_PYTHON=${SOLVE_PY
     RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error)
 if(NOT result EQUAL 0 OR NOT output MATCHES "quantity=3" OR NOT output MATCHES "status: sat")
     message(FATAL_ERROR "solve example failed: ${output}${error}")
+endif()
+
+execute_process(COMMAND "${CMAKE_COMMAND}" -E env
+	"TAPAS_SOLVE_PYTHON=${SOLVE_PYTHON}"
+	"${TAPAS}" "${SOURCE_ROOT}/examples/solve/generate_violations.tap"
+	RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error)
+if(NOT result EQUAL 0
+   OR NOT output MATCHES "current_stock :"
+   OR NOT output MATCHES "status    = unsat")
+	message(FATAL_ERROR
+		"solve test-data example failed: ${output}${error}")
 endif()
 
 execute_process(COMMAND "${CMAKE_COMMAND}" -E env "TAPAS_SOLVE_PYTHON=${SOLVE_PYTHON}"

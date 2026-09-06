@@ -1,8 +1,8 @@
 #ifndef TAPAS_COMPILE_CONTROL_FLOW_INTERNAL_H
 #define TAPAS_COMPILE_CONTROL_FLOW_INTERNAL_H
 
-#include "tapas/compile/control_flow.h"
-#include "tapas/compile/semantic.h"
+#include "compile/frontend/control_flow.h"
+#include "compile/frontend/semantic.h"
 
 struct tcontrol_node {
 	tast_id parent;

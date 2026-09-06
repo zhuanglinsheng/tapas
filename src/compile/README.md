@@ -14,7 +14,7 @@ source -> frontend/{document, syntax, ast, parser, semantic, control_flow}
 
 `frontend/` 与 `types/` 不包含 VM、字节码或运行时对象头文件；启用标准环境的
 前端构建目标链接 `tapas_stdlib`，以消费与实现同源的 Type 描述。`backend/` 可以
-依赖公共前端和运行时。CLI 输入状态位于 `src/cli/`。这一依赖方向是目录划分的
+依赖可复用前端和运行时。CLI 输入状态位于 `src/cli/`。这一依赖方向是目录划分的
 主要约束，文件数量和行数不是继续拆目录的充分理由。
 
 标准库位于 `src/stdlib/`，根内建函数集中在 `builtins/`，语言包使用同名目录。
@@ -24,7 +24,8 @@ source -> frontend/{document, syntax, ast, parser, semantic, control_flow}
 
 ## 可复用前端
 
-公共接口位于 `include/tapas/compile/`。
+编译器接口是实现内部接口，头文件与实现共同位于 `src/compile/`。对外嵌入 API
+通过 `include/tapas/tsession.h` 提供，不公开 AST、语义模型和工作区布局。
 
 - `frontend/document.c` 管理不可变 UTF-8 源码、行索引和左闭右开源码范围。
 - `frontend/syntax.c` 生成保留空白、换行和注释的无损 Token。

@@ -1,5 +1,5 @@
-#include "tapas/compile/frontend.h"
-#include "tapas/compile/parser.h"
+#include "compile/frontend/frontend.h"
+#include "compile/frontend/parser.h"
 
 void tfrontend_init_with_environment(
 	tfrontend *frontend, const char *name, const char *source,

@@ -1,11 +1,12 @@
 #include "tapas/textension.h"
+#include "tapas/dsa/tstring.h"
 
-#include "tapas/compile/source.h"
-#include "tapas/compile/syntax.h"
-#include "tapas/runtime/tdict.h"
-#include "tapas/runtime/tlist.h"
-#include "tapas/runtime/tstr.h"
-#include "tapas/runtime/ttype.h"
+#include "compile/frontend/source.h"
+#include "compile/frontend/syntax.h"
+#include "tapas/objects/tdict.h"
+#include "tapas/objects/tlist.h"
+#include "tapas/objects/tstr.h"
+#include "tapas/objects/ttype.h"
 
 static void dictionary_set(tdict *dictionary, const char *name, const tobj *value)
 {
@@ -74,9 +75,9 @@ static void syntax_token_type(tobj *result)
 	tstring *start_name = tstring_new("start");
 	tstring *end_name = tstring_new("end");
 	ttype_field fields[] = {
-		{ kind_name, ttypeval_builtin(tbuiltin_string), 0 },
-		{ start_name, ttypeval_builtin(tbuiltin_int), 0 },
-		{ end_name, ttypeval_builtin(tbuiltin_int), 0 }
+		{ kind_name, ttypeval_builtin(tbuiltintype_string), 0 },
+		{ start_name, ttypeval_builtin(tbuiltintype_int), 0 },
+		{ end_name, ttypeval_builtin(tbuiltintype_int), 0 }
 	};
 	tobj_set_compo(result,
 		      (tcompo_v *)ttypeval_new_fields(fields, 3));
@@ -119,7 +120,7 @@ static const textension_symbol symbols[] = {
 	},
 	{
 		.name = "tokens",
-		.type = "Function[String] -> List",
+		.type = "Function[String] -> List[syntax::Token]",
 		.detail = "syntax::tokens(source: String) -> List[syntax::Token]",
 		.kind = textension_function,
 		.function = syntax_tokens,

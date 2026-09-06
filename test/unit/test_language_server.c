@@ -1,4 +1,4 @@
-#include "tapas/lsp/server.h"
+#include "lsp/server.h"
 #include "../../src/lsp/presentation.h"
 
 #include <assert.h>
@@ -34,7 +34,7 @@ static void test_presentation_categories(void)
         assert(tstring_eq(local,imported));
         tstring_free(imported); tstring_free(local);
     }
-    tstring *field=tlsp_present_field(&f.types.arena,"reason",tbuiltin_string);
+    tstring *field=tlsp_present_field(&f.types.arena,"reason",tbuiltintype_string);
     assert(tstring_eq_cstr(field,"reason: String")); tstring_free(field);
     tstandard_symbol standard=*tstandard_symbol_find("solve","hold");
     standard.detail="Misleading handwritten signature";
@@ -45,6 +45,19 @@ static void test_presentation_categories(void)
     assert(tstring_eq_cstr(description,"package solve")); tstring_free(description);
     description=tlsp_present_standard(tstandard_symbol_find("solve","HoldResult"));
     assert(strstr(tstring_cstr(description),"Type solve::HoldResult {status: String")); tstring_free(description);
+	description = tlsp_present_standard(
+		tstandard_symbol_find("solve", "sample"));
+	assert(strstr(tstring_cstr(description),
+		"Function solve::sample(rule: Rule, count: Int"));
+	assert(strstr(tstring_cstr(description),
+		"finite::Distribution] | finite::Distribution"));
+	assert(strstr(tstring_cstr(description),
+		"candidate_limit: Int = count * 1000"));
+	assert(strstr(tstring_cstr(description),
+		"generalization: String = 'online_mass_core'"));
+	assert(strstr(tstring_cstr(description),
+		"scheduler: String = 'mass_fair', trace: Bool = false)"));
+	tstring_free(description);
     tfrontend_free(&f);
 }
 

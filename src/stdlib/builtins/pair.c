@@ -2,7 +2,7 @@
 
 #include "../arguments.h"
 
-#include "tapas/runtime/tpair.h"
+#include "tapas/objects/tpair.h"
 
 
 static void builtin_pair(tobj *params, uint_regs len, tobj *result)

@@ -16,7 +16,10 @@ typedef enum {
 	ttype_constructor_rule = tnative_intrinsic_type_rule,
 	ttype_constructor_rule_instance = tnative_intrinsic_type_rule_instance,
 	ttype_constructor_enum = tnative_intrinsic_type_enum,
-	ttype_constructor_count = tnative_intrinsic_type_enum + 1,
+	ttype_constructor_parameter = tnative_intrinsic_type_parameter,
+	ttype_constructor_value_parameter = tnative_intrinsic_type_value_parameter,
+	ttype_constructor_template = tnative_intrinsic_type_template,
+	ttype_constructor_count = tnative_intrinsic_type_template + 1,
 	ttype_constructor_invalid = -1
 } ttype_constructor_id;
 

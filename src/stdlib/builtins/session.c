@@ -1,8 +1,9 @@
 #include "tapas/textension.h"
+#include "tapas/dsa/tstring.h"
 
-#include "tapas/tbycs.h"
-#include "tapas/tenv.h"
-#include "tapas/runtime/tlist.h"
+#include "tapas/basic_defs/tbycs.h"
+#include "runtime/tenv.h"
+#include "tapas/objects/tlist.h"
 
 #include <stdio.h>
 

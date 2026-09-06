@@ -71,31 +71,31 @@ endif()
 # ============================================================================
 
 set(TAPAS_RUNTIME_SOURCES
-    src/tbasis.c
-    src/tbycs.c
-    src/tval.c
-    src/tenv.c
-    src/tblas.c
-    src/textension.c
-    src/ds/tobj_vec.c
-    src/ds/tobj_array.c
-    src/ds/thashtbl.c
-    src/runtime/capability.c
-    src/runtime/tstr.c
-    src/runtime/tlist.c
-    src/runtime/tpair.c
-    src/runtime/tdict.c
-    src/runtime/tdomain.c
-    src/runtime/titer.c
-    src/runtime/tarray.c
-    src/runtime/ttime.c
-    src/runtime/tcfn.c
-    src/runtime/tfunction_metadata.c
-    src/runtime/ttype.c
-    src/runtime/trule_format.c
-    src/runtime/trule.c
-    src/runtime/trule_ir.c
-    src/runtime/tevaluator.c
+    src/basic_defs/tbasis.c
+    src/basic_defs/tbycs.c
+    src/runtime/tval.c
+    src/runtime/tformat.c
+    src/runtime/tenv.c
+    src/dsa/tblas.c
+    src/runtime/textension.c
+    src/dsa/tobj_vec.c
+    src/dsa/tobj_array.c
+    src/dsa/thashtbl.c
+    src/runtime/objects/capability.c
+    src/runtime/objects/tstr.c
+    src/runtime/objects/tlist.c
+    src/runtime/objects/tpair.c
+    src/runtime/objects/tdict.c
+    src/runtime/objects/titer.c
+    src/runtime/objects/tarray.c
+    src/runtime/objects/ttime.c
+    src/runtime/objects/tcfn.c
+    src/runtime/objects/tfunction_metadata.c
+    src/runtime/objects/ttype.c
+    src/runtime/objects/trule.c
+    src/runtime/objects/trule_ir.c
+    src/runtime/objects/trule_term.c
+    src/runtime/objects/trule_item.c
 )
 
 set(TAPAS_STDLIB_SOURCES
@@ -120,10 +120,23 @@ set(TAPAS_STDLIB_SOURCES
     src/stdlib/syntax/syntax.c
     src/stdlib/math/math.c
     src/stdlib/time/time.c
+    src/stdlib/random/random.c
+    src/stdlib/random/object.c
+	src/stdlib/finite/finite.c
+	src/stdlib/finite/object.c
+	src/dsa/third_party/pcg-c/src/pcg-advance-64.c
+	src/dsa/third_party/pcg-c/src/pcg-output-32.c
+	src/dsa/third_party/pcg-c/src/pcg-output-64.c
+	src/dsa/third_party/pcg-c/src/pcg-rngs-64.c
     src/stdlib/types/types.c
     src/stdlib/rules/rules.c
+    src/stdlib/rules/domain.c
+    src/stdlib/rules/hash.c
+    src/stdlib/rules/codec.c
     src/stdlib/solve/solve.c
+    src/stdlib/solve/sample.c
     src/stdlib/evaluators/evaluators.c
+    src/stdlib/evaluators/object.c
 )
 
 # Front-end sources do not include VM or runtime object headers. The target
@@ -157,7 +170,7 @@ set(TAPAS_BACKEND_SOURCES
     src/compile/backend/source.c
 )
 
-add_library(tapas_strings STATIC src/ds/tstring.c src/tbuiltin.c)
+add_library(tapas_strings STATIC src/dsa/tstring.c src/basic_defs/tbuiltintype.c)
 target_include_directories(tapas_strings PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 add_library(tapas_syntax STATIC
@@ -168,7 +181,9 @@ target_include_directories(tapas_syntax PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/inclu
 target_link_libraries(tapas_syntax PUBLIC tapas_strings)
 
 add_library(tapas_runtime STATIC ${TAPAS_RUNTIME_SOURCES})
-target_include_directories(tapas_runtime PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_include_directories(tapas_runtime
+    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
 target_link_libraries(tapas_runtime PUBLIC tapas_strings ${CMAKE_DL_LIBS})
 if(MATH_LIBRARY)
     target_link_libraries(tapas_runtime PUBLIC ${MATH_LIBRARY})
@@ -194,7 +209,8 @@ file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/generated/solve_backend.h"
     "static const unsigned char tapas_solve_backend[] = {${SOLVE_BACKEND_BYTES}0};\n")
 add_library(tapas_stdlib STATIC ${TAPAS_STDLIB_SOURCES})
 target_include_directories(tapas_stdlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include
-    PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/generated)
+    PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/generated
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/dsa/third_party/pcg-c/include)
 target_link_libraries(tapas_stdlib PUBLIC tapas_runtime tapas_syntax)
 
 add_library(tapas_frontend STATIC ${TAPAS_FRONTEND_SOURCES})
@@ -205,14 +221,14 @@ target_link_libraries(tapas_frontend PUBLIC tapas_strings tapas_syntax tapas_std
 # 5. Executables
 # ============================================================================
 
-# Main executable - compile tapas.c as the CLI entry point and link the C
+# Main executable - compile cli/main.c as the CLI entry point and link the C
 # implementation files under src/ against the public headers in include/tapas.
 add_executable(tapas
-    src/tapas.c
+    src/cli/main.c
     src/cli/input_state.c
     ${TAPAS_BACKEND_SOURCES}
-    src/tvm.c
-    src/tsess.c
+    src/runtime/tvm.c
+    src/runtime/tsess.c
 )
 target_include_directories(tapas PRIVATE ${READLINE_INCLUDE_DIR})
 target_link_libraries(tapas PRIVATE tapas_frontend ${READLINE_LIBRARY})
@@ -277,6 +293,18 @@ if(BUILD_TESTING)
             "TAPAS_BLAS_LIBRARY=$<TARGET_FILE:test_cblas>"
             $<TARGET_FILE:test_data_structures>
     )
+
+	add_executable(test_finite test/unit/test_finite.c)
+	target_link_libraries(test_finite PRIVATE tapas_stdlib)
+	tapas_enable_test_assertions(test_finite)
+	add_test(NAME finite COMMAND test_finite)
+	add_test(NAME finite_language COMMAND $<TARGET_FILE:tapas>
+		${CMAKE_CURRENT_SOURCE_DIR}/test/language_rules/regression/finite.tap)
+
+	add_test(NAME package_type_boundary
+		COMMAND ${CMAKE_COMMAND}
+			-DSOURCE_ROOT=${CMAKE_CURRENT_SOURCE_DIR}
+			-P ${CMAKE_CURRENT_SOURCE_DIR}/test/cmake/package_type_boundary.cmake)
 
     add_test(
         NAME language_rules
@@ -403,6 +431,7 @@ set(FORMAT_BUILD_DIR "${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_INSTALL_DATADIR}/tapas
 set(FORMAT_BYTECODE "${FORMAT_BUILD_DIR}/format.tapc")
 add_custom_command(
     OUTPUT "${FORMAT_BYTECODE}" "${FORMAT_BUILD_DIR}/__init__.tap"
+        "${FORMAT_BUILD_DIR}/edit.tap"
     COMMAND ${CMAKE_COMMAND} -E make_directory "${FORMAT_BUILD_DIR}"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "${CMAKE_CURRENT_SOURCE_DIR}/src/stdlib/format/format.tap"
@@ -410,14 +439,19 @@ add_custom_command(
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "${CMAKE_CURRENT_SOURCE_DIR}/src/stdlib/format/__init__.tap"
         "${FORMAT_BUILD_DIR}/__init__.tap"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/stdlib/format/edit.tap"
+        "${FORMAT_BUILD_DIR}/edit.tap"
     COMMAND $<TARGET_FILE:tapas> -c "${FORMAT_BUILD_DIR}/format.tap"
     DEPENDS tapas
         "${CMAKE_CURRENT_SOURCE_DIR}/src/stdlib/format/format.tap"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/stdlib/format/__init__.tap"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/stdlib/format/edit.tap"
     VERBATIM
 )
 add_custom_target(format_bytecode ALL DEPENDS
     "${FORMAT_BYTECODE}" "${FORMAT_BUILD_DIR}/__init__.tap"
+    "${FORMAT_BUILD_DIR}/edit.tap"
 )
 
 # ============================================================================

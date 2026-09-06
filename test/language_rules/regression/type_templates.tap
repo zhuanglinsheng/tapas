@@ -1,0 +1,27 @@
+let T = types::parameter('T')
+let N = types::value_parameter('N')
+
+let Box = types::template(
+    [T],
+    [],
+    types::make_type('value': T),
+)
+let boxed: Box[String] = {'value': 'hello'}
+print(boxed['value'] == 'hello')
+
+let Sized = types::template(
+    [T],
+    [N : types::Int],
+    types::make_type('value': T, 'size': N),
+)
+let sized: Sized[String; 3] = {'value': 'abc', 'size': 3}
+print(sized['size'] == 3)
+
+let Exact = types::template([], [N], N)
+let three: Exact[3] = 3
+print(three == 3)
+
+let S = types::value_parameter('S')
+let ExactText = types::template([], [S : types::String], S)
+let text: ExactText['same'] = "same"
+print(text == 'same')

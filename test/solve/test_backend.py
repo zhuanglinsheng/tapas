@@ -123,6 +123,18 @@ class TranslationTests(unittest.TestCase):
         self.assertEqual(process.returncode, 0, process.stderr)
         self.assertEqual(process.stdout[4:].decode().splitlines()[:3], ['TAPAS_SOLVE_3', 'unsat', 'configured'])
 
+    def test_quiet_query_skips_conflict_extraction(self):
+        g = Graph(['int'])
+        x = g.parameters[0]
+        g.condition(g.compare('==', x, g.constant(0)))
+        g.condition(g.compare('==', x, g.constant(1)))
+        request = g.request()
+        request['diagnostics'] = False
+        status, _, reason, _, conflicts = backend.solve(request)
+        self.assertEqual(status, 'unsat')
+        self.assertEqual(reason, '')
+        self.assertEqual(conflicts, [])
+
     def test_worker_applies_each_requests_domain_and_bound_instances(self):
         g = Graph(['int'])
         g.condition(g.compare('==', g.parameters[0], g.constant(4)))

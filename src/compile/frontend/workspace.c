@@ -1,4 +1,5 @@
-#include "tapas/compile/workspace.h"
+#include "compile/frontend/workspace.h"
+#include "tapas/dsa/tstring.h"
 #include "workspace_internal.h"
 
 #include <ctype.h>
@@ -289,8 +290,10 @@ static void collect_imports(tworkspace *workspace, tworkspace_document *document
 			.statement = statements[i],
 			.has_alias = node->import_statement.has_alias
 		};
-		imported->path = tsource_document_slice(&document->frontend.document,
-			node->import_statement.path);
+		imported->path = tast_string_contents_value(
+			&document->frontend.document, node->import_statement.path);
+		if (!imported->path)
+			imported->path = tstring_new_empty();
 		imported->alias = node->import_statement.has_alias ?
 			tsource_document_slice(&document->frontend.document,
 				node->import_statement.alias) : tstring_new_empty();
@@ -386,29 +389,45 @@ static tstatic_type_id copy_type(tstatic_type_arena *target,
 			copy_type(target, source, children[0], copies));
 		return copies[id];
 	}
-	if (type->kind == tstatic_type_fields || type->kind == tstatic_type_enum) {
+	if (type->kind == tstatic_type_fields || type->kind == tstatic_type_enum ||
+	    type->kind == tstatic_type_template ||
+	    (type->kind == tstatic_type_named && type->field_count)) {
 		const tstatic_field *fields = tstatic_type_field_items(source, type);
-		tstatic_field *cloned = calloc(type->field_count + 1, sizeof(*cloned));
-		if (!cloned) abort();
+		tstatic_field *cloned = type->field_count ?
+			calloc(type->field_count, sizeof(*cloned)) : nullptr;
+		if (type->field_count && !cloned) abort();
 		for (uint32_t i = 0; i < type->field_count; i++) {
 			cloned[i] = fields[i];
 			cloned[i].type = copy_type(target, source, fields[i].type, copies);
 		}
 		if (type->kind == tstatic_type_fields)
 			copies[id] = tstatic_type_make_fields(target, cloned, type->field_count);
-		else {
-			tstring **names = calloc(type->field_count + 1, sizeof(*names));
-			if (!names) abort();
+		else if (type->kind == tstatic_type_enum) {
+			tstring **names = type->field_count ?
+				calloc(type->field_count, sizeof(*names)) : nullptr;
+			if (type->field_count && !names) abort();
 			for (uint32_t i = 0; i < type->field_count; i++) names[i] = fields[i].name;
 			copies[id] = tstatic_type_make_enum(target, names, type->field_count);
 			free(names);
+		} else if (type->kind == tstatic_type_template) {
+			const tstatic_type_id *body = tstatic_type_children(source, type);
+			tstatic_type_id cloned_body = copy_type(target, source, body[0], copies);
+			copies[id] = tstatic_type_make_template(target, cloned,
+				type->template_type_parameter_count,
+				type->field_count - type->template_type_parameter_count,
+				cloned_body);
+		} else {
+			copies[id] = tstatic_type_make_named_application(target,
+				tstring_cstr(type->value_reference), cloned,
+				type->field_count, type->capabilities);
 		}
 		free(cloned);
 		return copies[id];
 	}
 	const tstatic_type_id *children = tstatic_type_children(source, type);
-	tstatic_type_id *cloned = calloc(type->child_count + 1, sizeof(*cloned));
-	if (!cloned) abort();
+	tstatic_type_id *cloned = type->child_count ?
+		calloc(type->child_count, sizeof(*cloned)) : nullptr;
+	if (type->child_count && !cloned) abort();
 	for (uint32_t i = 0; i < type->child_count; i++)
 		cloned[i] = copy_type(target, source, children[i], copies);
 	copies[id] = tstatic_type_make(target, type->kind, cloned, type->child_count, type->variadic);

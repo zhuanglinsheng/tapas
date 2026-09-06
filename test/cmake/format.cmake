@@ -38,6 +38,45 @@ if(NOT CHECK_RESULT EQUAL 1 OR NOT CHECK_OUTPUT STREQUAL "${SAMPLE}\n")
     message(FATAL_ERROR "format --check did not report the unformatted file")
 endif()
 
+set(EDITS_CHECK "${WORK_DIR}/edits.tap")
+file(WRITE "${EDITS_CHECK}" "import format as formatter
+
+let source = io::read_text('${SAMPLE}')
+let changes = formatter::edits(source)
+let output = ''
+let position = 0
+let valid = true
+for (let change in changes) {
+    if (types::matches(change, formatter::Edit) == false or
+        change['start'] < position or change['end'] < change['start']) {
+        valid = false
+    }
+    output.append(source[position:change['start']])
+    output.append(change['text'])
+    position = change['end']
+}
+output.append(source[position:source.len()])
+let formatted = formatter::source(source)
+print(valid and len(changes) > 0)
+print(output == formatted)
+let first = changes[0]
+let partial = source[0:first['start']]
+partial.append(first['text'])
+partial.append(source[first['end']:source.len()])
+print(len(changes) > 1 and partial != source and partial != formatted)
+print(len(formatter::edits(formatted)) == 0)
+")
+execute_process(
+    COMMAND "${TAPAS}" "${EDITS_CHECK}"
+    RESULT_VARIABLE EDITS_RESULT
+    OUTPUT_VARIABLE EDITS_OUTPUT
+)
+if(NOT EDITS_RESULT EQUAL 0 OR
+   NOT EDITS_OUTPUT STREQUAL "true\ntrue\ntrue\ntrue\n")
+    message(FATAL_ERROR
+        "format::edits returned invalid edits: ${EDITS_OUTPUT}")
+endif()
+
 execute_process(
     COMMAND "${TAPAS}" -m format "${SAMPLE}"
     RESULT_VARIABLE FORMAT_RESULT

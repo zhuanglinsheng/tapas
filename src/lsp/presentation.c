@@ -1,4 +1,6 @@
 #include "presentation.h"
+#include "tapas/dsa/tstring.h"
+
 #include <string.h>
 
 typedef enum { value_symbol, function_symbol, type_symbol, package_symbol } presentation_kind;
@@ -80,6 +82,22 @@ tstring *tlsp_present_standard(const tstandard_symbol *symbol)
         symbol->kind == tmodule_symbol_package ? package_symbol : value_symbol;
     tstatic_type_id id = tstandard_type_resolve(&arena,tstring_cstr(name),kind == type_symbol);
     if(kind == value_symbol && symbol->type) id = tstatic_type_parse(&arena,symbol->type,nullptr,nullptr);
+	const tstatic_type *function = tstatic_type_get(&arena, id);
+	size_t qualified_length = tstring_len(name);
+	/* A keyword-only signature carries information that Function[...] cannot
+	 * encode yet. Its qualified prefix makes it an explicit callable schema,
+	 * rather than ordinary descriptive prose. */
+	if (kind == function_symbol && function && function->variadic &&
+	    symbol->detail &&
+	    strncmp(symbol->detail, tstring_cstr(name), qualified_length) == 0 &&
+	    symbol->detail[qualified_length] == '(' &&
+	    strstr(symbol->detail, ", *, ")) {
+		tstring *result = tstring_new("Function ");
+		tstring_append(result, symbol->detail);
+		tstring_free(name);
+		tstatic_type_arena_free(&arena);
+		return result;
+	}
     tstring *result = present(kind,nullptr,tstring_cstr(name),&arena,id,
         kind == type_symbol ? id : TSTATIC_TYPE_UNKNOWN,
         symbol->result_from_argument ? (int)symbol->result_argument : -1);

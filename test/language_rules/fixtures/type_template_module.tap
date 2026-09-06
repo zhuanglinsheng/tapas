@@ -1,0 +1,15 @@
+let T = types::parameter('T')
+let N = types::value_parameter('N')
+
+let Box = types::template(
+    [T],
+    [],
+    types::make_type('value': T),
+)
+let Sized = types::template(
+    [T],
+    [N : types::Int],
+    types::make_type('value': T, 'size': N),
+)
+
+return {'Box': Box, 'Sized': Sized}

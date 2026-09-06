@@ -6,6 +6,7 @@ function observed(value: Int) -> Bool
 }
 let Contract = rule (amount: Int, label: String) { observed(amount) }
 let instance = Contract(-1, '未执行')
+let named_instance = Contract({'label': '具名绑定', 'amount': 2})
 let declarations = parameters(Contract)
 let instance_declarations = parameters(instance)
 let ir_declarations = parameters(rules::inspect(Contract))
@@ -21,6 +22,8 @@ assert(rule {
     ir_declarations[1][0] == 'label'
     bound_values[0] == -1
     bound_values[1] == '未执行'
+    arguments(named_instance)[0] == 2
+    arguments(named_instance)[1] == '具名绑定'
 })
 // 返回容器独立；修改它不替换实例的绑定。
 bound_values[0] = 100
@@ -35,9 +38,13 @@ let Payload = types::make_type('count': types::Int)
 let WithPayload = rule (payload: Payload) { payload::count >= 0 }
 let payload = {'count': 1}
 let bound = WithPayload(payload)
+let named_bound = WithPayload({'payload': payload})
 let extracted = arguments(bound)[0]
 extracted['count'] = 2
-assert(rule { arguments(bound)[0]::count == 2 })
+assert(rule {
+    arguments(bound)[0]::count == 2
+    arguments(named_bound)[0]::count == 2
+})
 let Empty = rule { true }
 assert(rule {
     len(parameters(Empty)) == 0

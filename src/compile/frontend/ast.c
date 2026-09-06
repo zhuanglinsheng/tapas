@@ -1,4 +1,5 @@
-#include "tapas/compile/ast.h"
+#include "compile/frontend/ast.h"
+#include "tapas/dsa/tstring.h"
 
 #include <stdlib.h>
 
@@ -69,13 +70,37 @@ const tast_id *tast_get_children(const tast_arena *arena,
 	return &arena->children[start];
 }
 
+tstring *tast_string_contents_value(const tsource_document *document,
+				    tsource_span contents)
+{
+	if (!document || contents.end < contents.start)
+		return nullptr;
+	tstring *encoded = tsource_document_slice(document, contents);
+	tstring *decoded = tstring_new_cap(tstring_len(encoded) + 1);
+	for (size_t i = 0; i < tstring_len(encoded); i++) {
+		char value = tstring_at(encoded, i);
+		if (value == '\\') {
+			if (++i >= tstring_len(encoded) ||
+			    !tsyntax_decode_escape(
+				    (unsigned char)tstring_at(encoded, i), &value)) {
+				tstring_free(encoded);
+				tstring_free(decoded);
+				return nullptr;
+			}
+		}
+		tstring_append_c(decoded, value);
+	}
+	tstring_free(encoded);
+	return decoded;
+}
+
 tstring *tast_string_value(const tsource_document *document,
 			   const tast_node *node)
 {
 	if (!node || node->kind != tast_string ||
 	    node->span.end < node->span.start + 2)
 		return nullptr;
-	return tsource_document_slice(document, (tsource_span){
+	return tast_string_contents_value(document, (tsource_span){
 		node->span.start + 1, node->span.end - 1
 	});
 }

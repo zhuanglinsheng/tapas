@@ -1,8 +1,9 @@
 #define _POSIX_C_SOURCE 200809L
 
 #include "tapas/textension.h"
+#include "tapas/dsa/tstring.h"
 
-#include "tapas/runtime/tstr.h"
+#include "tapas/objects/tstr.h"
 
 #include <stdio.h>
 #include <stdlib.h>

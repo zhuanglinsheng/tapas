@@ -1,15 +1,25 @@
+/**
+ * @file types.c
+ * @brief Implements the standard `types` package.
+ * @details Exposes Type construction, reflection, parameter placeholders, and
+ * user-defined Type templates through ordinary package functions.
+ * @note Package policy and public APIs belong here; the core Type object only
+ * supplies representation and generic operations used by every package.
+ */
 #include "tapas/textension.h"
-#include "tapas/runtime/tdomain.h"
+#include "tapas/dsa/tstring.h"
 
-#include "tapas/runtime/tdict.h"
-#include "tapas/runtime/tlist.h"
-#include "tapas/runtime/tpair.h"
-#include "tapas/runtime/tstr.h"
-#include "tapas/runtime/ttype.h"
-#include "tapas/runtime/trule_ir.h"
-#include "tapas/runtime/trule.h"
+#include "tapas/dsa/thashtbl.h"
+#include "tapas/objects/tdict.h"
+#include "tapas/objects/tlist.h"
+#include "tapas/objects/tpair.h"
+#include "tapas/objects/tstr.h"
+#include "tapas/objects/ttype.h"
+#include "tapas/objects/trule_ir.h"
+#include "tapas/objects/trule.h"
 
 #include <stdlib.h>
+#include <string.h>
 
 
 static void require_count(const char *name, uint_regs actual, uint_regs expected)
@@ -177,45 +187,130 @@ static void types_rule_instance_type(tobj *params, uint_regs len, tobj *result)
 	free(parameters);
 }
 
+static const char *require_string(const tobj *value, const char *operation)
+{
+	if (!value || value->type != tcompo ||
+	    tobj_compo_type(value) != compo_tstr)
+		twarn(ErrRuntime_ParamsType, operation, "String required");
+	return tstring_cstr(((const tstr *)value->val.v_tcompo)->data);
+}
+
+static void types_new_parameter(tobj *params, uint_regs len, tobj *result,
+	int value_parameter)
+{
+	const char *function = value_parameter ? "types::value_parameter" :
+		"types::parameter";
+	require_count(function, len, 1);
+	const char *name = require_string(&params[0], function);
+	return_type(result, value_parameter ? ttypeval_new_value_parameter(name) :
+		ttypeval_new_parameter(name));
+}
+
+static void types_parameter(tobj *params, uint_regs len, tobj *result)
+{
+	types_new_parameter(params, len, result, 0);
+}
+
+static void types_value_parameter(tobj *params, uint_regs len, tobj *result)
+{
+	types_new_parameter(params, len, result, 1);
+}
+
+static void types_template(tobj *params, uint_regs len, tobj *result)
+{
+	require_count("types::template", len, 3);
+	if (params[0].type != tcompo || tobj_compo_type(&params[0]) != compo_tlist ||
+	    params[1].type != tcompo || tobj_compo_type(&params[1]) != compo_tlist)
+		twarn(ErrRuntime_ParamsType, "types::template",
+		      "the first two arguments must be Lists");
+	tlist *types = (tlist *)params[0].val.v_tcompo;
+	tlist *values = (tlist *)params[1].val.v_tcompo;
+	tstring **type_names = types->items.len ?
+		calloc(types->items.len, sizeof(*type_names)) : nullptr;
+	ttype_value_parameter *value_specs = values->items.len ?
+		calloc(values->items.len, sizeof(*value_specs)) : nullptr;
+	if ((types->items.len && !type_names) || (values->items.len && !value_specs))
+		abort();
+	for (uint_objs i = 0; i < types->items.len; i++) {
+		ttypeval *parameter = require_type(&types->items.data[i],
+			"types::template");
+		if (parameter->kind != ttype_kind_parameter)
+			twarn(ErrRuntime_ParamsType, "types::template",
+			      "first List must contain types::parameter values");
+		type_names[i] = parameter->parameter_name;
+	}
+	for (uint_objs i = 0; i < values->items.len; i++) {
+		const tobj *entry = &values->items.data[i];
+		const tobj *parameter_value = entry;
+		ttypeval *constraint = ttypeval_builtin(tbuiltintype_any);
+		if (entry->type == tcompo && tobj_compo_type(entry) == compo_tpair) {
+			tpair *pair = (tpair *)entry->val.v_tcompo;
+			parameter_value = &pair->first;
+			constraint = require_type(&pair->second, "types::template");
+		}
+		ttypeval *parameter = require_type(parameter_value, "types::template");
+		if (parameter->kind != ttype_kind_value_parameter)
+			twarn(ErrRuntime_ParamsType, "types::template",
+			      "Value parameter key must come from types::value_parameter");
+		value_specs[i] = (ttype_value_parameter){
+			.name = parameter->parameter_name,
+			.type = constraint
+		};
+	}
+	ttypeval *body = require_type(&params[2], "types::template");
+	ttypeval *value = ttypeval_new_template(
+		(const tstring *const *)type_names, types->items.len,
+		value_specs, values->items.len, body);
+	free(type_names);
+	free(value_specs);
+	return_type(result, value);
+}
+
 static ttypeval *type_of_value(const tobj *value)
 {
 	switch (value->type) {
 	case tnil:
-		return ttypeval_builtin(tbuiltin_nil);
+		return ttypeval_builtin(tbuiltintype_nil);
 	case tbool:
-		return ttypeval_builtin(tbuiltin_bool);
+		return ttypeval_builtin(tbuiltintype_bool);
 	case tint:
-		return ttypeval_builtin(tbuiltin_int);
+		return ttypeval_builtin(tbuiltintype_int);
 	case tfloat:
-		return ttypeval_builtin(tbuiltin_float);
+		return ttypeval_builtin(tbuiltintype_float);
 	case tcompo:
 		break;
 	}
+	tobj reflected;
+	if (tcompo_runtime_type(value->val.v_tcompo, &reflected)) {
+		if (tobj_compo_type(&reflected) == compo_ttypeval)
+			return (ttypeval *)reflected.val.v_tcompo;
+		tobj_try_clear(&reflected);
+	}
 	switch (tobj_compo_type(value)) {
 	case compo_tstr:
-		return ttypeval_builtin(tbuiltin_string);
+		return ttypeval_builtin(tbuiltintype_string);
 	case compo_tlist:
-		return ttypeval_builtin(tbuiltin_list);
+		return ttypeval_builtin(tbuiltintype_list);
 	case compo_tpair:
-		return ttypeval_builtin(tbuiltin_pair);
+		return ttypeval_builtin(tbuiltintype_pair);
 	case compo_tdict:
-		return ttypeval_builtin(tbuiltin_dictionary);
+		return ttypeval_builtin(tbuiltintype_dictionary);
 	case compo_titer:
-		return ttypeval_builtin(tbuiltin_iterator);
+		return ttypeval_builtin(tbuiltintype_iterator);
 	case compo_tfunc:
 	case compo_cppfunc:
 	case compo_sessfunc:
-		return ttypeval_builtin(tbuiltin_function);
+		return ttypeval_builtin(tbuiltintype_function);
 	case compo_tlib:
-		return ttypeval_builtin(tbuiltin_library);
+		return ttypeval_builtin(tbuiltintype_library);
 	case compo_tdarr:
-		return ttypeval_builtin(tbuiltin_real_array);
+		return ttypeval_builtin(tbuiltintype_real_array);
 	case compo_tbarr:
-		return ttypeval_builtin(tbuiltin_bool_array);
+		return ttypeval_builtin(tbuiltintype_bool_array);
 	case compo_time:
-		return ttypeval_builtin(tbuiltin_time);
+		return ttypeval_builtin(tbuiltintype_time);
 	case compo_ttypeval:
-		return ttypeval_builtin(tbuiltin_type);
+		return ttypeval_builtin(tbuiltintype_type);
 	case compo_trule:
 	case compo_trule_instance: {
 		trule *rule = tobj_compo_type(value) == compo_trule ?
@@ -235,28 +330,27 @@ static ttypeval *type_of_value(const tobj *value)
 		return type;
 	}
 	case compo_trule_ir:
-		return ttypeval_builtin(tbuiltin_rule_ir);
+		return ttypeval_builtin(tbuiltintype_rule_ir);
 	case compo_trule_term: {
 		trule_term *term = (trule_term *)value->val.v_tcompo;
 		if (term->kind == trule_term_parameter)
-			return ttypeval_builtin(tbuiltin_rule_parameter);
+			return ttypeval_builtin(tbuiltintype_rule_parameter);
 		if (term->kind == trule_term_capture)
-			return ttypeval_builtin(tbuiltin_rule_capture);
-		return ttypeval_builtin(tbuiltin_rule_term);
+			return ttypeval_builtin(tbuiltintype_rule_capture);
+		return ttypeval_builtin(tbuiltintype_rule_term);
 	}
 	case compo_trule_item:
 		return ttypeval_builtin(
 			((trule_item *)value->val.v_tcompo)->kind ==
-			trule_item_condition ? tbuiltin_rule_condition :
-			tbuiltin_rule_requirement);
-	case compo_tpoints:
-	case compo_trange:
-		return ttypeval_new_domain(tobj_compo_type(value) == compo_trange, ((tdomain *)value->val.v_tcompo)->item_type);
-	case compo_tevaluator:
-		return ttypeval_builtin(tbuiltin_evaluator);
+			trule_item_condition ? tbuiltintype_rule_condition :
+			tbuiltintype_rule_requirement);
 	default:
-		twarn(ErrRuntime_ParamsType, "types::of", "unsupported value type");
+		break;
 	}
+	const char *identity = value->val.v_tcompo->vtable->get_type();
+	if (identity && strstr(identity, "::"))
+		return ttypeval_new_named(identity);
+	twarn(ErrRuntime_ParamsType, "types::of", "unsupported value type");
 	return nullptr;
 }
 
@@ -379,7 +473,13 @@ static void types_parameters(tobj *params, uint_regs len, tobj *result)
 	require_count("types::parameters", len, 1);
 	ttypeval *type = require_type(&params[0], "types::parameters");
 	tdict *parameters = tdict_new();
-	if (type->kind == ttype_kind_points || type->kind == ttype_kind_range || type->kind == ttype_kind_list || type->kind == ttype_kind_iterator)
+	if (type->named_parameter_count)
+		for (uint_objs i = 0; i < type->named_parameter_count; i++)
+			set_parameter(parameters,
+				tstring_cstr(type->named_parameter_names[i]),
+				ttypeval_parameter(type,
+					tstring_cstr(type->named_parameter_names[i])));
+	else if (type->kind == ttype_kind_list || type->kind == ttype_kind_iterator)
 		set_parameter(parameters, "item", ttypeval_parameter(type, "item"));
 	else if (type->kind == ttype_kind_pair) {
 		set_parameter(parameters, "first", ttypeval_parameter(type, "first"));
@@ -405,7 +505,7 @@ static void types_definition(tobj *params, uint_regs len, tobj *result)
 	static void create_##id(tobj *result) \
 	{ \
 		tobj_set_compo(result, \
-			(tcompo_v *)ttypeval_builtin(tbuiltin_##id)); \
+			(tcompo_v *)ttypeval_builtin(tbuiltintype_##id)); \
 	}
 
 DEFINE_TYPE_VALUE(any)
@@ -432,6 +532,9 @@ DEFINE_TYPE_VALUE(contains)
 DEFINE_TYPE_VALUE(iterable)
 DEFINE_TYPE_VALUE(rule)
 DEFINE_TYPE_VALUE(rule_instance)
+DEFINE_TYPE_VALUE(rule_ir)
+DEFINE_TYPE_VALUE(rule_term)
+DEFINE_TYPE_VALUE(rule_item)
 
 #undef DEFINE_TYPE_VALUE
 
@@ -605,6 +708,27 @@ static const textension_symbol symbols[] = {
 		.value_factory = create_rule_instance
 	},
 	{
+		.name = "RuleIR",
+		.type = "Type",
+		.detail = "types::RuleIR: Type",
+		.kind = textension_type,
+		.value_factory = create_rule_ir
+	},
+	{
+		.name = "RuleTerm",
+		.type = "Type",
+		.detail = "types::RuleTerm: Type",
+		.kind = textension_type,
+		.value_factory = create_rule_term
+	},
+	{
+		.name = "RuleItem",
+		.type = "Type",
+		.detail = "types::RuleItem: Type",
+		.kind = textension_type,
+		.value_factory = create_rule_item
+	},
+	{
 		.name = "make_type",
 		.type = "Function[...] -> Type",
 		.detail = "types::make_type(...fields: Pair[String, Type]) -> Type",
@@ -775,6 +899,36 @@ static const textension_symbol symbols[] = {
 		.function = types_definition,
 		.minimum_arguments = 1,
 		.maximum_arguments = 1
+	},
+	{
+		.name = "parameter",
+		.type = "Function[String] -> Type",
+		.detail = "types::parameter(name: String) -> Type",
+		.kind = textension_function,
+		.function = types_parameter,
+		.minimum_arguments = 1,
+		.maximum_arguments = 1,
+		.intrinsic = tnative_intrinsic_type_parameter
+	},
+	{
+		.name = "value_parameter",
+		.type = "Function[String] -> Type",
+		.detail = "types::value_parameter(name: String) -> Type",
+		.kind = textension_function,
+		.function = types_value_parameter,
+		.minimum_arguments = 1,
+		.maximum_arguments = 1,
+		.intrinsic = tnative_intrinsic_type_value_parameter
+	},
+	{
+		.name = "template",
+		.type = "Function[List, List, Type] -> Type",
+		.detail = "types::template(type_parameters, value_parameters, definition) -> Type",
+		.kind = textension_function,
+		.function = types_template,
+		.minimum_arguments = 3,
+		.maximum_arguments = 3,
+		.intrinsic = tnative_intrinsic_type_template
 	}
 };
 

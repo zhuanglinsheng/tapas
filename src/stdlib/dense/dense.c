@@ -2,8 +2,8 @@
 
 #include "../arguments.h"
 
-#include "tapas/runtime/tarray.h"
-#include "tapas/tblas.h"
+#include "tapas/objects/tarray.h"
+#include "dsa/tblas.h"
 
 
 static tcompo_v *array_value(const tobj *value, const char *where)

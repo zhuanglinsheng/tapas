@@ -1,5 +1,6 @@
 /** Compiler binding metadata, module interfaces, and Type assignability. */
 #include "internal.h"
+#include "tapas/dsa/tstring.h"
 
 #include <stdlib.h>
 #include <string.h>

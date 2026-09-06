@@ -23,12 +23,18 @@
         {
           "name": "string.quoted.double.tapas",
           "begin": "\"",
-          "end": "\""
+          "end": "\"",
+          "patterns": [
+            { "name": "constant.character.escape.tapas", "match": "\\\\[nrt\\\\'\\\"]" }
+          ]
         },
         {
           "name": "string.quoted.single.tapas",
           "begin": "'",
-          "end": "'"
+          "end": "'",
+          "patterns": [
+            { "name": "constant.character.escape.tapas", "match": "\\\\[nrt\\\\'\\\"]" }
+          ]
         }
       ]
     },
@@ -63,8 +69,8 @@
     },
     "types": {
       "patterns": [
-        { "name": "support.type.tapas", "match": "\\b(?:AnyType|Nil|Bool|Int|Float|String|List|Pair|Dictionary|Iterator|Function|Library|RealArray|BoolArray|Time|Type|Indexable|IndexSettable|Appendable|Deletable|Contains|Iterable|Rule|RuleInstance|RuleIR|Parameter|Capture|Item|Condition|Requirement|Term|Origin|CheckResult|Violation|RuleDiagnostic|Evaluator|Context|Result|EvaluatorDiagnostic|Union|InstanceOf|PointsOf|RangeOf)\\b" },
-        { "name": "support.namespace.tapas", "match": "\\b(?:dense|evaluators|io|math|rules|solve|optimize|syntax|time|types)\\b" }
+        { "name": "support.type.tapas", "match": "\\b(?:AnyType|Nil|Bool|Int|Float|String|List|Pair|Dictionary|Iterator|Function|Library|RealArray|BoolArray|Time|Type|Indexable|IndexSettable|Appendable|Deletable|Contains|Iterable|Rule|RuleInstance|RuleIR|RuleTerm|RuleItem|Parameter|Capture|Condition|Requirement|Origin|CheckResult|Violation|RuleDiagnostic|Evaluator|Context|Result|EvaluatorDiagnostic|Source|Generator|Index|Distribution|Union|InstanceOf|PointsOf|RangeOf)\\b" },
+        { "name": "support.namespace.tapas", "match": "\\b(?:dense|evaluators|finite|io|math|random|rules|solve|optimize|syntax|time|types)\\b" }
       ]
     },
     "operators": {

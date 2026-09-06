@@ -1,9 +1,14 @@
-#include "tapas/runtime/tsolve.h"
+#include "solve/solve.h"
+#include "tapas/dsa/tstring.h"
 #include "function_metadata.h"
 #include "modules.h"
-#include "tapas/runtime/tcfn.h"
-#include "tapas/runtime/trule.h"
+#include "evaluators/object.h"
+#include "finite/object.h"
+#include "random/object.h"
+#include "tapas/objects/tcfn.h"
+#include "tapas/objects/trule.h"
 #include "tapas/tstdlib.h"
+
 #include <string.h>
 #include <stdio.h>
 
@@ -31,6 +36,10 @@ static ttypeval *native_type_function(void);
 static ttypeval *native_type_evaluator(void);
 static ttypeval *native_type_rule(void);
 static ttypeval *native_type_hold_result(void) { return ttypeval_retain(tsolve_result_type()); }
+static ttypeval *native_type_sample_result(void)
+{
+	return ttypeval_retain(tsolve_sample_result_type());
+}
 static ttypeval *native_type_context(void);
 static ttypeval *native_type_parameter_int(void);
 static ttypeval *native_type_capture_int(void);
@@ -64,9 +73,97 @@ static ttypeval *native_type_item(void);
 static ttypeval *native_type_item_selector(void);
 static ttypeval *native_type_boolarray(void);
 static ttypeval *native_type_capture(void);
+static ttypeval *native_type_random_source(void);
+static ttypeval *native_type_random_generator(void);
+static ttypeval *native_type_finite_index(void);
+static ttypeval *native_type_finite_distribution(void);
+static ttypeval *native_type_list_finite_index(void);
+static ttypeval *native_type_dictionary_string_indexable(void);
+static ttypeval *native_type_dictionary_string_distribution(void);
+static ttypeval *native_type_float_nil(void);
 
-BUILTIN_TYPE(native_type_points, "PointsOf")
-static ttypeval *native_type_range_int(void) { return ttypeval_retain(ttypeval_new_domain(1, ttypeval_builtin(tbuiltin_int))); }
+static ttypeval *native_domain_type(const char *identity, ttypeval *item)
+{
+	tstring *name = tstring_new("item");
+	ttype_field parameter = {
+		.name = name,
+		.type = item
+	};
+	ttypeval *result = ttypeval_new_named_application(identity,
+		&parameter, 1,
+		textension_type_indexable | textension_type_contains);
+	tstring_free(name);
+	return ttypeval_retain(result);
+}
+
+static ttypeval *native_type_points(void)
+{
+	return native_domain_type("rules::PointsOf",
+		ttypeval_builtin(tbuiltintype_any));
+}
+static ttypeval *native_type_random_source(void)
+{
+	return ttypeval_retain(tstdlib_random_source_type());
+}
+
+static ttypeval *native_type_random_generator(void)
+{
+	return ttypeval_retain(tstdlib_random_generator_type());
+}
+
+static ttypeval *native_type_finite_index(void)
+{
+	return ttypeval_retain(tstdlib_finite_index_type());
+}
+
+static ttypeval *native_type_finite_distribution(void)
+{
+	return ttypeval_retain(tstdlib_finite_distribution_type());
+}
+
+static ttypeval *native_type_list_finite_index(void)
+{
+	ttypeval *item = native_type_finite_index();
+	ttypeval *result = ttypeval_new_list(item);
+	ttypeval_release(item);
+	return ttypeval_retain(result);
+}
+
+static ttypeval *native_dictionary(ttypeval *(*value_factory)(void))
+{
+	ttypeval *key = native_type_string();
+	ttypeval *value = value_factory();
+	ttypeval *result = ttypeval_new_dictionary(key, value);
+	ttypeval_release(key);
+	ttypeval_release(value);
+	return ttypeval_retain(result);
+}
+
+static ttypeval *native_type_dictionary_string_indexable(void)
+{
+	return native_dictionary(native_type_indexable);
+}
+
+static ttypeval *native_type_dictionary_string_distribution(void)
+{
+	return native_dictionary(native_type_finite_distribution);
+}
+
+static ttypeval *native_type_float_nil(void)
+{
+	ttypeval *number = native_type_float();
+	ttypeval *nil = native_type_nil();
+	ttypeval *members[] = { number, nil };
+	ttypeval *result = ttypeval_new_union(members, 2);
+	ttypeval_release(number);
+	ttypeval_release(nil);
+	return ttypeval_retain(result);
+}
+static ttypeval *native_type_range_int(void)
+{
+	return native_domain_type("rules::RangeOf",
+		ttypeval_builtin(tbuiltintype_int));
+}
 BUILTIN_TYPE(native_type_int, "Int")
 
 BUILTIN_TYPE(native_type_anytype, "AnyType")
@@ -150,11 +247,14 @@ static ttypeval *native_type_int_float(void)
 
 BUILTIN_TYPE(native_type_function, "Function")
 
-BUILTIN_TYPE(native_type_evaluator, "Evaluator")
+static ttypeval *native_type_evaluator(void)
+{
+	return ttypeval_retain(tstdlib_evaluator_type());
+}
 
 BUILTIN_TYPE(native_type_rule, "Rule")
 
-BUILTIN_TYPE(native_type_context, "Context")
+BUILTIN_TYPE(native_type_context, "Dictionary")
 
 static ttypeval *native_type_parameter_int(void)
 {
@@ -178,7 +278,7 @@ static ttypeval *native_type_capture_int(void)
     return ttypeval_retain(result);
 }
 
-BUILTIN_TYPE(native_type_term, "Term")
+BUILTIN_TYPE(native_type_term, "RuleTerm")
 
 BUILTIN_TYPE(native_type_requirement, "Requirement")
 
@@ -300,17 +400,17 @@ static ttypeval *native_type_list_string(void)
     return ttypeval_retain(result);
 }
 
-BUILTIN_TYPE(native_type_result, "Result")
+BUILTIN_TYPE(native_type_result, "Dictionary")
 
-BUILTIN_TYPE(native_type_checkresult, "CheckResult")
+BUILTIN_TYPE(native_type_checkresult, "Dictionary")
 
-BUILTIN_TYPE(native_type_origin, "Origin")
+BUILTIN_TYPE(native_type_origin, "Dictionary")
 
 BUILTIN_TYPE(native_type_parameter, "Parameter")
 
 BUILTIN_TYPE(native_type_condition, "Condition")
 
-BUILTIN_TYPE(native_type_item, "Item")
+BUILTIN_TYPE(native_type_item, "RuleItem")
 
 static ttypeval *native_type_item_selector(void)
 {
@@ -479,6 +579,16 @@ static const function_declaration declarations[] = {
     DECL(tstdlib_math_module, "isunordered", native_type_bool, {"left", native_type_union_int_float, 0, 0}, {"right", native_type_union_int_float, 0, 0}),
     DECL(tstdlib_rules_module, "term", native_type_type, {"type", native_type_type, 0, 0}),
     DECL(tstdlib_solve_module, "hold", native_type_hold_result, {"rule", native_type_ruleinstance_rule, 0, 0}),
+    DECL(tstdlib_solve_module, "sample", native_type_sample_result,
+	{"rule", native_type_rule, 0, 0},
+	{"count", native_type_int, 0, 0},
+	{"space", native_type_dictionary_string_indexable, 0, 0},
+	{"distributions", native_type_dictionary_string_distribution, 1, 0},
+	{"rng", native_type_random_generator, 1, 0},
+	{"candidate_limit", native_type_int, 1, 0},
+	{"time_limit", native_type_float_nil, 1, 0},
+	{"core_budget_factor", native_type_float, 1, 0},
+	{"fairness_interval", native_type_int, 1, 0}),
     DECL(tstdlib_rules_module, "check", native_type_checkresult, {"rule", native_type_ruleinstance_rule, 0, 0}),
     DECL(tstdlib_rules_module, "inspect", native_type_ruleir, {"rule", native_type_ruleinstance_rule, 0, 0}),
     DECL(tstdlib_rules_module, "parameters", native_type_list, {"ir", native_type_ruleir, 0, 0}),
@@ -513,6 +623,29 @@ static const function_declaration declarations[] = {
     DECL(tstdlib_time_module, "from_unix", native_type_time, {"seconds", native_type_int, 0, 0}),
     DECL(tstdlib_time_module, "unix", native_type_int, {"value", native_type_time, 0, 0}),
     DECL(tstdlib_time_module, "format", native_type_string, {"value", native_type_time, 0, 0}, {"pattern", native_type_string, 0, 0}),
+    DECL(tstdlib_random_module, "generator", native_type_random_generator, {"source", native_type_random_source, 0, 0}, {"seed", native_type_int, 0, 0}),
+    DECL(tstdlib_random_module, "next_int", native_type_int, {"rng", native_type_random_generator, 0, 0}, {"bound", native_type_int, 0, 0}),
+    DECL(tstdlib_random_module, "next_float", native_type_float, {"rng", native_type_random_generator, 0, 0}),
+    DECL(tstdlib_random_module, "next_bool", native_type_bool, {"rng", native_type_random_generator, 0, 0}),
+    DECL(tstdlib_random_module, "advance", native_type_nil, {"rng", native_type_random_generator, 0, 0}, {"steps", native_type_int, 0, 0}),
+    DECL(tstdlib_finite_module, "index", native_type_finite_index, {"coords", native_type_list, 0, 0}),
+    DECL(tstdlib_finite_module, "shape", native_type_finite_index, {"dist", native_type_finite_distribution, 0, 0}),
+    DECL(tstdlib_finite_module, "prob", native_type_float, {"dist", native_type_finite_distribution, 0, 0}, {"index", native_type_finite_index, 0, 0}),
+    DECL(tstdlib_finite_module, "mass", native_type_float, {"dist", native_type_finite_distribution, 0, 0}, {"indices", native_type_list_finite_index, 0, 0}),
+    DECL(tstdlib_finite_module, "samples", native_type_list_finite_index, {"dist", native_type_finite_distribution, 0, 0}, {"count", native_type_int, 0, 0}, {"rng", native_type_random_generator, 0, 0}),
+    DECL(tstdlib_finite_module, "uniform", native_type_finite_distribution, {"n", native_type_int, 0, 0}),
+    DECL(tstdlib_finite_module, "categorical", native_type_finite_distribution, {"weights", native_type_list, 0, 0}),
+    DECL(tstdlib_finite_module, "piecewise_constant", native_type_finite_distribution, {"n", native_type_int, 0, 0}, {"steps", native_type_list, 0, 0}),
+    DECL(tstdlib_finite_module, "piecewise_linear", native_type_finite_distribution, {"knots", native_type_list, 0, 0}),
+    DECL(tstdlib_finite_module, "product", native_type_finite_distribution, {"dists", native_type_list, 0, 0}),
+    DECL(tstdlib_finite_module, "mixture", native_type_finite_distribution, {"dists", native_type_list, 0, 0}, {"weights", native_type_list, 0, 0}),
+    DECL(tstdlib_finite_module, "conditional", native_type_finite_distribution, {"dist", native_type_finite_distribution, 0, 0}, {"indices", native_type_list_finite_index, 0, 0}),
+    DECL(tstdlib_finite_module, "map", native_type_finite_distribution, {"dist", native_type_finite_distribution, 0, 0}, {"shape", native_type_finite_index, 0, 0}, {"mapping", native_type_function, 0, 0}),
+    DECL(tstdlib_finite_module, "bernoulli", native_type_finite_distribution, {"p", native_type_float, 0, 0}),
+    DECL(tstdlib_finite_module, "binomial", native_type_finite_distribution, {"trials", native_type_int, 0, 0}, {"p", native_type_float, 0, 0}),
+    DECL(tstdlib_finite_module, "multinomial", native_type_finite_distribution, {"trials", native_type_int, 0, 0}, {"weights", native_type_list, 0, 0}),
+    DECL(tstdlib_finite_module, "hypergeometric", native_type_finite_distribution, {"population", native_type_int, 0, 0}, {"successes", native_type_int, 0, 0}, {"draws", native_type_int, 0, 0}),
+    DECL(tstdlib_finite_module, "zipf", native_type_finite_distribution, {"n", native_type_int, 0, 0}, {"exponent", native_type_float, 0, 0}),
     DECL(tstdlib_types_module, "make_type", native_type_type, {"fields", native_type_pair_string_type, 0, 1}),
     DECL(tstdlib_types_module, "union", native_type_type, {"members", native_type_type, 0, 1}),
     DECL(tstdlib_types_module, "enum", native_type_type, {"members", native_type_string, 0, 1}),
@@ -531,6 +664,9 @@ static const function_declaration declarations[] = {
     DECL(tstdlib_types_module, "base", native_type_type, {"value", native_type_type, 0, 0}),
     DECL(tstdlib_types_module, "parameters", native_type_dictionary, {"value", native_type_type, 0, 0}),
     DECL(tstdlib_types_module, "definition", native_type_dictionary, {"value", native_type_type, 0, 0}),
+    DECL(tstdlib_types_module, "parameter", native_type_type, {"name", native_type_string, 0, 0}),
+    DECL(tstdlib_types_module, "value_parameter", native_type_type, {"name", native_type_string, 0, 0}),
+    DECL(tstdlib_types_module, "template", native_type_type, {"type_parameters", native_type_list, 0, 0}, {"value_parameters", native_type_list, 0, 0}, {"definition", native_type_type, 0, 0}),
 };
 #undef DECL
 #undef EMPTY

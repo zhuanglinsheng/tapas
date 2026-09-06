@@ -1,5 +1,6 @@
-#include "tapas/compile/semantic.h"
-#include "tapas/compile/diagnostic.h"
+#include "compile/frontend/semantic.h"
+#include "tapas/dsa/tstring.h"
+#include "compile/frontend/diagnostic.h"
 
 #include <stdlib.h>
 

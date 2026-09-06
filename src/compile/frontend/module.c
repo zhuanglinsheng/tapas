@@ -1,5 +1,14 @@
-#include "tapas/compile/module.h"
-#include "tapas/compile/frontend.h"
+/**
+ * @file module.c
+ * @brief Resolves source-module exports and standard extension symbols.
+ * @details Converts declarative extension signatures and nominal template
+ * schemas into the compiler's package-neutral static Type representation.
+ * @note Resolution may know public package names and schemas, but never private
+ * package object structures or functions.
+ */
+#include "compile/frontend/module.h"
+#include "tapas/dsa/tstring.h"
+#include "compile/frontend/frontend.h"
 #include "tapas/tstdlib.h"
 
 #include <stdlib.h>
@@ -57,7 +66,16 @@ static void initialize_standard_symbols(void)
 					.kind = standard_kind(symbol),
 					.result_argument = symbol->result_argument,
 					.result_from_argument = symbol->result_relation ==
-						tnative_result_argument
+						tnative_result_argument,
+					.result_template_from_argument =
+						symbol->result_relation ==
+						tnative_result_template_argument,
+					.nominal_template = symbol->nominal_template,
+					.result_template = symbol->result_template,
+					.following_arguments_match_result_parameter =
+						symbol->following_arguments_match_result_parameter,
+					.compile_time_signature =
+						symbol->compile_time_signature
 				};
 		}
 	}
@@ -172,7 +190,8 @@ void tmodule_interface_extract(const tfrontend *frontend, const char *uri,
 		if (contents.end < contents.start + 2) continue;
 		contents.start++;
 		contents.end--;
-		tstring *name = tsource_document_slice(&frontend->document, contents);
+		tstring *name = tast_string_value(&frontend->document, key);
+		if (!name) continue;
 		tmodule_export *exported = put_export(interface, name);
 		exported->name_span = contents;
 		exported->definition_uri = tstring_new(uri ? uri : "");
@@ -244,31 +263,109 @@ const tstandard_symbol *tstandard_package(const char *name)
 }
 
 /* Resolve package signatures and named Type definitions without loading or executing values. */
-typedef struct { tstatic_type_arena *arena; unsigned depth; } standard_type_context;
+typedef struct {
+	tstatic_type_arena *arena;
+	unsigned depth;
+	const char *package;
+} standard_type_context;
 static tstatic_type_id resolve_standard_type(standard_type_context *, const char *, int);
 static tstatic_type_id standard_type_name(void *opaque, const char *name)
 {
     standard_type_context *context = opaque;
     return resolve_standard_type(context, name, 1);
 }
+
+static tstatic_type_id standard_nominal_template(
+	standard_type_context *context,
+	const textension_nominal_template *schema)
+{
+	uint32_t type_count = schema->type_parameter_count;
+	uint32_t value_count = schema->value_parameter_count;
+	uint32_t count = type_count + value_count;
+	if (!count || !schema->identity) return TSTATIC_TYPE_UNKNOWN;
+	tstatic_field *parameters = calloc(count, sizeof(*parameters));
+	tstatic_field *body_parameters = calloc(count, sizeof(*body_parameters));
+	if (!parameters || !body_parameters) abort();
+	for (uint32_t i = 0; i < type_count; i++) {
+		const textension_template_type_parameter *parameter =
+			&schema->type_parameters[i];
+		parameters[i] = (tstatic_field){
+			.name = tstring_new(parameter->name), .type = tbuiltintype_any };
+		body_parameters[i] = (tstatic_field){
+			.name = tstring_new(parameter->slot),
+			.type = tstatic_type_make_parameter(context->arena,
+				parameter->name, 0) };
+	}
+	for (uint32_t i = 0; i < value_count; i++) {
+		const textension_template_value_parameter *parameter =
+			&schema->value_parameters[i];
+		tstatic_type_id constraint = tstatic_type_parse(context->arena,
+			parameter->constraint, standard_type_name, context);
+		parameters[type_count + i] = (tstatic_field){
+			.name = tstring_new(parameter->name), .type = constraint };
+		body_parameters[type_count + i] = (tstatic_field){
+			.name = tstring_new(parameter->slot),
+			.type = tstatic_type_make_parameter(context->arena,
+				parameter->name, 1) };
+	}
+	tstatic_type_id body = tstatic_type_make_named_application(context->arena,
+		schema->identity, body_parameters, count, schema->capabilities);
+	tstatic_type_id result = tstatic_type_make_template(context->arena,
+		parameters, type_count, value_count, body);
+	for (uint32_t i = 0; i < count; i++) {
+		tstring_free(parameters[i].name);
+		tstring_free(body_parameters[i].name);
+	}
+	free(parameters);
+	free(body_parameters);
+	return result;
+}
+
 static tstatic_type_id resolve_standard_type(standard_type_context *context, const char *name, int static_value)
 {
     if (context->depth >= 32) return TSTATIC_TYPE_UNKNOWN;
     const char *separator = strstr(name, "::");
     tstring *package = separator ? tstring_new_len(name, separator-name) : nullptr;
-    const tstandard_symbol *symbol = tstandard_symbol_find(package ? tstring_cstr(package) : nullptr,
+	const char *package_name = package ? tstring_cstr(package) : context->package;
+    const tstandard_symbol *symbol = tstandard_symbol_find(package_name,
         separator ? separator+2 : name);
+	if (!symbol && !separator)
+		symbol = tstandard_symbol_find(nullptr, name);
     tstring_free(package);
-    if (!symbol) return TSTATIC_TYPE_UNKNOWN;
-    if (symbol->kind == tmodule_symbol_type && !static_value)
-        return tstatic_type_builtin_id(context->arena, tbuiltin_type);
-    if (symbol->kind == tmodule_symbol_type && !strcmp(symbol->type,"Type"))
-        return tstatic_type_builtin_named(context->arena, symbol->name);
-    if ((static_value && symbol->kind != tmodule_symbol_type) ||
-        (!static_value && symbol->kind != tmodule_symbol_function)) return TSTATIC_TYPE_UNKNOWN;
-    context->depth++;
+	if (!symbol) return TSTATIC_TYPE_UNKNOWN;
+	if (symbol->kind == tmodule_symbol_type && !static_value)
+		return tstatic_type_builtin_id(context->arena, tbuiltintype_type);
+	if (symbol->kind == tmodule_symbol_type && symbol->nominal_template)
+		return standard_nominal_template(context, symbol->nominal_template);
+	if (symbol->kind == tmodule_symbol_type && !strcmp(symbol->type, "Type")) {
+		tstatic_type_id builtin = tstatic_type_builtin_named(
+			context->arena, symbol->name);
+		if (builtin != TSTATIC_TYPE_UNKNOWN) return builtin;
+		if (!symbol->package) return TSTATIC_TYPE_UNKNOWN;
+		tstring *qualified = tstring_new(symbol->package);
+		tstring_append(qualified, "::");
+		tstring_append(qualified, symbol->name);
+		tstatic_type_id result = tstatic_type_make_named(
+			context->arena, tstring_cstr(qualified));
+		tstring_free(qualified);
+		return result;
+	}
+	const tstandard_symbol *value_type =
+		!static_value && symbol->kind == tmodule_symbol_value &&
+		symbol->package ?
+		tstandard_symbol_find(symbol->package, symbol->type) : nullptr;
+	int named_value = value_type &&
+		value_type->kind == tmodule_symbol_type;
+	if ((static_value && symbol->kind != tmodule_symbol_type) ||
+	    (!static_value && symbol->kind != tmodule_symbol_function &&
+	     !named_value))
+		return TSTATIC_TYPE_UNKNOWN;
+	const char *previous_package = context->package;
+	context->package = symbol->package;
+	context->depth++;
     tstatic_type_id result = tstatic_type_parse(context->arena,symbol->type,standard_type_name,context);
     context->depth--;
+	context->package = previous_package;
     return static_value ? tstatic_type_with_name(context->arena,result,name) : result;
 }
 tstatic_type_id tstandard_type_resolve(tstatic_type_arena *arena, const char *name, int static_value)

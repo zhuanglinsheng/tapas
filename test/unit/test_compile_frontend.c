@@ -1,8 +1,8 @@
-#include "tapas/compile/frontend.h"
-#include "tapas/compile/parser.h"
-#include "tapas/compile/semantic.h"
-#include "tapas/compile/module.h"
-#include "tapas/compile/workspace.h"
+#include "compile/frontend/frontend.h"
+#include "compile/frontend/parser.h"
+#include "compile/frontend/semantic.h"
+#include "compile/frontend/module.h"
+#include "compile/frontend/workspace.h"
 
 #include <assert.h>
 #include <string.h>
@@ -101,6 +101,31 @@ static void test_document_and_lossless_tokens(void)
 	parsed_free(&parsed);
 }
 
+static void test_string_escapes(void)
+{
+	parsed_expression parsed = parse("'\\n\\r\\t\\\\\\'\\\"'");
+	assert(parsed.diagnostics.count == 0);
+	assert(parsed.tokens.items[0].kind == tsyntax_string);
+	tstring *value = tast_string_value(&parsed.document,
+		node(&parsed, parsed.root));
+	assert(value && tstring_len(value) == 6);
+	assert(memcmp(tstring_cstr(value), "\n\r\t\\'\"", 6) == 0);
+	tstring_free(value);
+	parsed_free(&parsed);
+
+	const char *invalid[] = {
+		"'unknown\\qescape'",
+		"'trailing\\'",
+		"'physical\nnewline'",
+	};
+	for (size_t i = 0; i < sizeof(invalid) / sizeof(invalid[0]); i++) {
+		parsed = parse(invalid[i]);
+		assert(parsed.tokens.items[0].kind == tsyntax_invalid);
+		assert(parsed.diagnostics.count > 0);
+		parsed_free(&parsed);
+	}
+}
+
 static void test_logical_not(void)
 {
 	parsed_expression parsed = parse("not not x > 0 | false and true or false");
@@ -185,6 +210,26 @@ static void test_collections(void)
 		dictionary->aggregate.count);
 	assert(entries);
 	assert(node(&parsed, entries[1])->kind == tast_list);
+	parsed_free(&parsed);
+}
+
+static void test_named_call_arguments(void)
+{
+	parsed_expression parsed = parse(
+		"sample(rule_value, 2, space, rng = generator, "
+		"candidate_limit = 5)");
+	assert(parsed.diagnostics.count == 0);
+	const tast_node *call = node(&parsed, parsed.root);
+	assert(call->kind == tast_call && call->aggregate.count == 5);
+	const tast_id *arguments = tast_get_children(
+		&parsed.arena, call->aggregate.children, call->aggregate.count);
+	assert(node(&parsed, arguments[2])->kind == tast_name);
+	assert(node(&parsed, arguments[3])->kind == tast_named_field);
+	assert(node(&parsed, arguments[4])->kind == tast_named_field);
+	parsed_free(&parsed);
+
+	parsed = parse("sample(rule_value, rng = generator, space)");
+	assert(parsed.diagnostics.count == 1);
 	parsed_free(&parsed);
 }
 
@@ -698,7 +743,7 @@ static void test_dictionary_literals_are_not_field_constraints(void)
 	}
 	for (tast_id i = 0; i < frontend.arena.node_count; i++)
 		if (tast_get(&frontend.arena, i)->kind == tast_dictionary)
-			assert(ttype_info_node_id(&frontend.types, i) == tbuiltin_dictionary);
+			assert(ttype_info_node_id(&frontend.types, i) == tbuiltintype_dictionary);
 	tfrontend_free(&frontend);
 }
 
@@ -794,8 +839,8 @@ static tstatic_type_id test_external_type_resolver(
 	if (static_value || strcmp(qualified_name, "external") != 0)
 		return TSTATIC_TYPE_UNKNOWN;
 	tstatic_type_id signature[] = {
-		tstatic_type_builtin_id(arena, tbuiltin_int),
-		tstatic_type_builtin_id(arena, tbuiltin_string)
+		tstatic_type_builtin_id(arena, tbuiltintype_int),
+		tstatic_type_builtin_id(arena, tbuiltintype_string)
 	};
 	return tstatic_type_make(
 		arena, tstatic_type_function, signature, 2, 0);
@@ -958,9 +1003,9 @@ static void test_static_recursive_types(void)
 	tstatic_type_arena arena;
 	tstatic_type_arena_init(&arena);
 	tstatic_type_id int_type = tstatic_type_builtin_id(
-		&arena, tbuiltin_int);
+		&arena, tbuiltintype_int);
 	tstatic_type_id string_type = tstatic_type_builtin_id(
-		&arena, tbuiltin_string);
+		&arena, tbuiltintype_string);
 	tstatic_type_id first = make_static_tree_type(&arena, int_type);
 	tstatic_type_id second = make_static_tree_type(&arena, int_type);
 	tstatic_type_id different = make_static_tree_type(&arena, string_type);
@@ -1002,9 +1047,20 @@ static void test_module_interface_and_standard_environment(void)
                 tstring *qualified = tstring_new_empty();
                 if (symbol->package) tstring_append_fmt(qualified,"%s::",symbol->package);
                 tstring_append(qualified,symbol->name);
-                tstatic_type_id type = (symbol->kind == tmodule_symbol_function || symbol->kind == tmodule_symbol_type)
-                    ? tstandard_type_resolve(&signatures,tstring_cstr(qualified),symbol->kind == tmodule_symbol_type)
-                    : tstatic_type_parse(&signatures,symbol->type,nullptr,nullptr);
+                const tstandard_symbol *value_type =
+                    symbol->kind == tmodule_symbol_value && symbol->package ?
+                    tstandard_symbol_find(symbol->package, symbol->type) :
+                    nullptr;
+                int named_value = value_type &&
+                    value_type->kind == tmodule_symbol_type;
+                tstatic_type_id type =
+                    (symbol->kind == tmodule_symbol_function ||
+                     symbol->kind == tmodule_symbol_type || named_value)
+                    ? tstandard_type_resolve(
+                        &signatures, tstring_cstr(qualified),
+                        symbol->kind == tmodule_symbol_type)
+                    : tstatic_type_parse(
+                        &signatures, symbol->type, nullptr, nullptr);
                 /* Some legacy custom Type factories have no declared structure. */
                 if (symbol->kind != tmodule_symbol_type || strcmp(symbol->type,"Type")) assert(type != TSTATIC_TYPE_UNKNOWN);
                 tstring_free(qualified);
@@ -1154,7 +1210,7 @@ static void test_type_presentation_provenance(void)
 	tstatic_type_arena arena;
 	tstatic_type_arena_init(&arena);
 	tstring *field_name = tstring_new("count");
-	tstatic_field field = { .name = field_name, .type = tbuiltin_int };
+	tstatic_field field = { .name = field_name, .type = tbuiltintype_int };
 	tstatic_type_id definition = tstatic_type_make_fields(&arena, &field, 1);
 	tstring_free(field_name);
 	tstatic_type_id state = tstatic_type_with_name(&arena, definition, "State");
@@ -1183,11 +1239,13 @@ int main(void)
 	test_type_presentation_provenance();
 	test_annotation_reference_index();
 	test_document_and_lossless_tokens();
+	test_string_escapes();
 	test_logical_not();
 	test_precedence_and_postfix();
 	test_tunnel_call_is_distinct_from_member_call();
 	test_right_associativity();
 	test_collections();
+	test_named_call_arguments();
 	test_recoverable_errors();
 	test_basic_statements();
 	test_control_flow_blocks();

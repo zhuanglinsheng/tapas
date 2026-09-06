@@ -1,4 +1,5 @@
 #include "workspace_internal.h"
+#include "tapas/dsa/tstring.h"
 
 #include <stdlib.h>
 

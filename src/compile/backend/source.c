@@ -1,6 +1,7 @@
 /** Internal compiler implementation. */
 #include "internal.h"
-#include "tapas/compile/workspace.h"
+#include "tapas/dsa/tstring.h"
+#include "compile/frontend/workspace.h"
 
 #include <ctype.h>
 #include <errno.h>
@@ -232,7 +233,7 @@ void tcompile_emit_import(
 		cp->objctr.bindings[loc].module_interface = module_interface;
 		module_interface = nullptr;
 		tcompile_set_metadata(&cp->objctr, loc,
-			ttypeval_builtin(tbuiltin_library), nullptr, 0);
+			ttypeval_builtin(tbuiltintype_library), nullptr, 0);
 		cp->objctr.bindings[loc].initialized = 1;
 		tvmcmd_vect_append(
 			tcmds, tbycode_make_lr(OP_VCRT, (uint16_t)nameloc, 1));

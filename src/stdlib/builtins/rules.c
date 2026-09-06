@@ -1,6 +1,6 @@
 #include "tapas/textension.h"
 
-#include "tapas/runtime/trule.h"
+#include "tapas/objects/trule.h"
 
 static void create_assert(tobj *result)
 {

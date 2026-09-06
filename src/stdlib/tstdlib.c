@@ -21,6 +21,8 @@ static const textension_module *const modules[] = {
 	&tstdlib_io_module,
 	&tstdlib_syntax_module,
 	&tstdlib_time_module,
+	&tstdlib_random_module,
+	&tstdlib_finite_module,
 	&tstdlib_math_module,
 	&tstdlib_types_module,
 	&tstdlib_rules_module,

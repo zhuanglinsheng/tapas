@@ -2,9 +2,10 @@
 
 #include "../arguments.h"
 
-#include "tapas/runtime/tpair.h"
+#include "tapas/objects/tpair.h"
 
 #include <math.h>
+#include <stdlib.h>
 
 
 static double math_arg_double(const tobj *v, const char *fname)

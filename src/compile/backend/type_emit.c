@@ -1,4 +1,5 @@
 #include "ast_emit_internal.h"
+#include "tapas/dsa/tstring.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -246,7 +247,7 @@ ttypeval *tast_infer_expression_type(tast_emitter *emitter, tast_id id,
 	const tcompile_export *exported = module_member_export(emitter, node);
 	if (exported && exported->type) {
 		if (static_value) *static_value = ttypeval_retain(exported->type);
-		return ttypeval_retain(ttypeval_builtin(tbuiltin_type));
+		return ttypeval_retain(ttypeval_builtin(tbuiltintype_type));
 	}
 	if (node && node->kind == tast_rule) {
 		/* Imports are available now, but were not necessarily available when
@@ -276,7 +277,7 @@ ttypeval *tast_infer_expression_type(tast_emitter *emitter, tast_id id,
 			*static_value = type_value;
 		else
 			ttypeval_release(type_value);
-		return ttypeval_retain(ttypeval_builtin(tbuiltin_type));
+		return ttypeval_retain(ttypeval_builtin(tbuiltintype_type));
 	}
 	tstatic_type_id shared = ttype_info_node_id(
 		&emitter->frontend->types, id);

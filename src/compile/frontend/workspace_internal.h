@@ -1,7 +1,7 @@
 #ifndef TAPAS_COMPILE_WORKSPACE_INTERNAL_H
 #define TAPAS_COMPILE_WORKSPACE_INTERNAL_H
 
-#include "tapas/compile/workspace.h"
+#include "compile/frontend/workspace.h"
 
 void tworkspace_reference_index_free(tworkspace *workspace);
 void tworkspace_reference_remove(tworkspace *workspace,

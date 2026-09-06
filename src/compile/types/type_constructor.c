@@ -1,5 +1,4 @@
 #include "type_constructor.h"
-
 #include "tapas/tstdlib.h"
 
 #include <string.h>

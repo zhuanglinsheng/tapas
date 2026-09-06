@@ -2,7 +2,7 @@
 
 #include "../arguments.h"
 
-#include "tapas/runtime/tstr.h"
+#include "tapas/objects/tstr.h"
 
 
 static void builtin_len(tobj *params, uint_regs len, tobj *vre)

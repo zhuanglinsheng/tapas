@@ -1,0 +1,52 @@
+let u = finite::uniform(4)
+let i0 = finite::index([0])
+let i1 = finite::index([1])
+let i2 = finite::index([2])
+assert(rule {
+    finite::shape(u)[0] == 4
+    types::matches(i0, finite::Index)
+    types::matches(u, finite::Distribution)
+    finite::prob(u, i2) == 0.25
+    finite::mass(u, [i0, i1, i1]) == 0.5
+})
+
+let categorical = finite::categorical([1.0, 3.0])
+let constant = finite::piecewise_constant(5, [0 : 1.0, 2 : 3.0])
+let linear = finite::piecewise_linear([0 : 1.0, 2 : 3.0])
+assert(rule {
+    finite::prob(categorical, i1) == 0.75
+    finite::prob(constant, i2) > 0.27
+    finite::prob(linear, i2) == 0.5
+})
+
+let joint = finite::product([u, categorical])
+let joint_index = finite::index([2, 1])
+assert(rule { finite::prob(joint, joint_index) == 0.1875 })
+
+let mixed = finite::mixture([u, finite::uniform(4)], [1.0, 1.0])
+assert(rule { finite::prob(mixed, i0) == 0.25 })
+
+let conditioned = finite::conditional(categorical, [i0, i1, i1])
+assert(rule { finite::prob(conditioned, i1) == 0.75 })
+
+let mapped = finite::map(u, finite::index([2]), (source) {
+    return finite::index([source[0] % 2])
+})
+assert(rule { finite::prob(mapped, i0) == 0.5 })
+
+let binomial = finite::binomial(2, 0.5)
+let multinomial = finite::multinomial(2, [1.0, 1.0])
+let hypergeometric = finite::hypergeometric(10, 4, 3)
+let zipf = finite::zipf(2, 1.0)
+assert(rule {
+    math::fabs(finite::prob(binomial, i1) - 0.5) < 0.000000000001
+    math::fabs(finite::prob(
+        multinomial, finite::index([1, 1])) - 0.5) < 0.000000000001
+    math::fabs(finite::prob(
+        hypergeometric, i1) - 0.5) < 0.000000000001
+    finite::prob(zipf, i0) > 0.66
+})
+
+let rng = random::generator(random::pcg32_xsh_rr, 42)
+let draws = finite::samples(categorical, 10, rng)
+assert(rule { len(draws) == 10; len(draws[0]) == 1 })

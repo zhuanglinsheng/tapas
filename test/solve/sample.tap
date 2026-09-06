@@ -1,0 +1,238 @@
+let ValidOrder = rule(quantity: Int, stock: Int) {
+    'positive quantity': quantity > 0
+    'nonnegative stock': stock >= 0
+    'stock is sufficient': quantity <= stock
+}
+
+// Negate one named Rule Item while retaining all other validity conditions.
+let InsufficientStock = rules::violate(ValidOrder, 'stock is sufficient')
+let rng = random::generator(random::pcg32_xsh_rr, 42)
+let generated = solve::sample(
+    InsufficientStock,
+    6,
+    {
+        'quantity': rules::range(0, 9),
+        'stock': rules::range(0, 9)
+    },
+    distributions = {
+        'quantity': finite::categorical([
+            1.0, 1.0, 1.0, 1.0, 1.0,
+            1.0, 1.0, 1.0, 1.0, 4.0
+        ])
+    },
+    rng = rng,
+    candidate_limit = 100,
+    time_limit = 30.0,
+    core_budget_factor = 1.0,
+    fairness_interval = 2
+)
+
+assert(rule {
+    generated::status == 'complete'
+    len(generated::samples) == 6
+    generated::candidates >= 6
+    generated::solver_calls <= generated::candidates
+    generated::core_calls >= 0
+    generated::core_calls * generated::core_calls <= generated::candidates
+    generated::elapsed >= 0.0
+	generated::cache_hits >= 0
+	generated::cache_regions >= 0
+	len(generated::trace) == 0
+    types::matches(generated, solve::SampleResult)
+})
+
+for (let generated_case in generated::samples) {
+    assert(InsufficientStock(
+        generated_case['quantity'],
+        generated_case['stock']
+    ))
+}
+
+// Variables omitted from space are existential witnesses completed by solve.
+let completed = solve::sample(
+    InsufficientStock,
+    2,
+    {'quantity': [1, 2]},
+    rng = random::generator(random::pcg32_xsh_rr, 7),
+    candidate_limit = 20
+)
+assert(rule {
+    completed::status == 'complete'
+    len(completed::samples) == 2
+})
+for (let completed_case in completed::samples) {
+    assert(InsufficientStock(
+        completed_case['quantity'],
+        completed_case['stock']
+    ))
+}
+
+let EqualPair = rule(x: Int, y: Int) { x == y }
+let diagonal = finite::map(
+    finite::uniform(2),
+    finite::index([2, 2]),
+    (source) { return finite::index([source[0], source[0]]) }
+)
+let joint = solve::sample(
+    EqualPair,
+    4,
+    {'x': [0, 1], 'y': [0, 1]},
+    distributions = diagonal,
+    candidate_limit = 4
+)
+assert(rule {
+    joint::status == 'complete'
+    joint::candidates == 4
+    joint::solver_calls == 4
+})
+for (let joint_case in joint::samples) {
+    assert(EqualPair(joint_case))
+}
+
+let weighted_diagonal = finite::map(
+    finite::categorical([9.0, 1.0]),
+    finite::index([2, 2]),
+    (source) { return finite::index([source[0], source[0]]) }
+)
+let JointCore = rule(b: Int, a: Int) { a == 0 }
+let joint_core = solve::sample(
+    JointCore,
+    1,
+    {'b': [0, 1], 'a': [0, 1]},
+    distributions = weighted_diagonal,
+    rng = random::generator(random::pcg32_xsh_rr, 37),
+    candidate_limit = 2,
+    core_budget_factor = 2.0
+)
+assert(rule {
+    joint_core::status == 'incomplete'
+    joint_core::candidates == 2
+    joint_core::solver_calls == 1
+    joint_core::core_calls == 2
+})
+
+let Impossible = rule(x: Int) { x > 0; x < 0 }
+let exhausted = solve::sample(
+    Impossible, 1, {'x': [0]}, candidate_limit = 3
+)
+assert(rule {
+    exhausted::status == 'incomplete'
+    exhausted::reason == 'candidate_limit reached'
+    exhausted::candidates == 3
+    exhausted::solver_calls == 1
+    exhausted::core_calls == 0
+    len(exhausted::samples) == 0
+})
+
+let no_discovery_after_limit = solve::sample(
+    Impossible,
+    1,
+    {'x': [0]},
+    candidate_limit = 1,
+    core_budget_factor = 100.0
+)
+assert(rule {
+    no_discovery_after_limit::status == 'incomplete'
+    no_discovery_after_limit::candidates == 1
+    no_discovery_after_limit::solver_calls == 1
+    no_discovery_after_limit::core_calls == 0
+})
+
+// The (I, J) search follows exact uncovered mass, not parameter order.
+let MassChoice = rule(b: Int, a: Int) {
+    a == 0
+}
+let mass_guided = solve::sample(
+    MassChoice,
+    1,
+    {'b': [0, 1], 'a': [0, 1]},
+    distributions = {
+        'a': finite::categorical([9.0, 1.0])
+    },
+    rng = random::generator(random::pcg32_xsh_rr, 922),
+    candidate_limit = 2,
+    core_budget_factor = 2.0
+)
+assert(rule {
+    mass_guided::status == 'incomplete'
+    mass_guided::candidates == 2
+    mass_guided::solver_calls == 1
+    mass_guided::core_calls == 2
+    len(mass_guided::samples) == 0
+})
+
+print('solve sample: ok')
+
+// Experimental switches preserve semantics while exposing distinct baselines.
+let RejectA = rule(a: Int, b: Int) { a == 0 }
+let comparison_space = {'a': [1], 'b': [0, 1]}
+let no_cache = solve::sample(
+	RejectA, 1, comparison_space,
+	generalization = 'none',
+	rng = random::generator(random::pcg32_xsh_rr, 1),
+	candidate_limit = 3,
+	trace = true
+)
+assert(rule {
+	no_cache::solver_calls == 3
+	no_cache::core_calls == 0
+	no_cache::cache_hits == 0
+	no_cache::cache_regions == 0
+	len(no_cache::trace) == 3
+})
+
+let deletion = solve::sample(
+	RejectA, 1, comparison_space,
+	generalization = 'deletion_mus',
+	scheduler = 'fifo',
+	rng = random::generator(random::pcg32_xsh_rr, 1),
+	candidate_limit = 3,
+	core_budget_factor = 10.0,
+	trace = true
+)
+assert(rule {
+	deletion::solver_calls == 1
+	deletion::core_calls == 2
+	deletion::cache_hits == 2
+	deletion::trace[0]['cache_mass'] == 1.0
+})
+
+let raw = solve::sample(
+	RejectA, 1, comparison_space,
+	generalization = 'raw_core',
+	rng = random::generator(random::pcg32_xsh_rr, 1),
+	candidate_limit = 3,
+	trace = true
+)
+assert(rule {
+	raw::solver_calls == 1
+	raw::core_calls == 0
+	raw::cache_hits == 2
+	raw::trace[0]['outcome'] == 'unsat_raw_core'
+})
+
+let Box = types::make_type('value': types::Int)
+let BoxRule = rule(box: Box) { box::value == 0 }
+let structured_raw = solve::sample(
+	BoxRule, 1, {'box': [{'value': 1}]},
+	generalization = 'raw_core', candidate_limit = 2, trace = true
+)
+assert(rule {
+	structured_raw::solver_calls == 1
+	structured_raw::cache_hits == 1
+	structured_raw::trace[0]['outcome'] == 'unsat_raw_fallback'
+})
+
+let minimum = solve::sample(
+	RejectA, 1, comparison_space,
+	generalization = 'minimum_core',
+	scheduler = 'binding_count',
+	rng = random::generator(random::pcg32_xsh_rr, 1),
+	candidate_limit = 3,
+	core_budget_factor = 10.0
+)
+assert(rule {
+	minimum::solver_calls == 1
+	minimum::core_calls == 2
+	minimum::cache_hits == 2
+})

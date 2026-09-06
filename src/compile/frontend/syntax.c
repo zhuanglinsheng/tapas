@@ -1,4 +1,5 @@
-#include "tapas/compile/syntax.h"
+#include "compile/frontend/syntax.h"
+#include "tapas/dsa/tstring.h"
 
 #include <ctype.h>
 #include <stdlib.h>
@@ -105,6 +106,23 @@ static uint32_t scan_exponent(const char *text, uint32_t length, uint32_t at)
 	return cursor == digits ? at : cursor;
 }
 
+int tsyntax_decode_escape(unsigned char escaped, char *value)
+{
+	char decoded;
+	switch (escaped) {
+	case 'n': decoded = '\n'; break;
+	case 'r': decoded = '\r'; break;
+	case 't': decoded = '\t'; break;
+	case '\\': decoded = '\\'; break;
+	case '\'': decoded = '\''; break;
+	case '"': decoded = '"'; break;
+	default: return 0;
+	}
+	if (value)
+		*value = decoded;
+	return 1;
+}
+
 void tsyntax_lex(const tsource_document *document, tsyntax_tokens *tokens)
 {
 	tokens->count = 0;
@@ -166,14 +184,29 @@ void tsyntax_lex(const tsource_document *document, tsyntax_tokens *tokens)
 		}
 		if (c == '\'' || c == '"') {
 			unsigned char quote = c;
+			int valid = 1;
+			int closed = 0;
 			at++;
-			while (at < length && (unsigned char)text[at] != quote &&
-			       text[at] != '\r' && text[at] != '\n')
+			while (at < length && text[at] != '\r' && text[at] != '\n') {
+				if ((unsigned char)text[at] == quote) {
+					at++;
+					closed = 1;
+					break;
+				}
+				if (text[at] == '\\') {
+					at++;
+					if (at >= length || text[at] == '\r' ||
+					    text[at] == '\n')
+						break;
+					if (!tsyntax_decode_escape(
+						    (unsigned char)text[at], nullptr))
+						valid = 0;
+				}
 				at++;
-			if (at < length && (unsigned char)text[at] == quote) {
-				at++;
+			}
+			if (closed && valid)
 				tokens_push(tokens, tsyntax_string, start, at);
-			} else
+			else
 				tokens_push(tokens, tsyntax_invalid, start, at);
 			continue;
 		}

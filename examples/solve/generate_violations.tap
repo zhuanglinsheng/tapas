@@ -1,0 +1,42 @@
+/// generate_violations.tap
+///
+/// 派生库存不足场景，生成一份销售数据并检查它。
+
+let Sale = rule(
+    current_stock: Int,
+    sale_quantity: Int,
+    remaining_stock: Int
+) {
+    'each order may buy between 1 and 6 units':
+        sale_quantity in rules::range(1, 6)
+    'sale quantity cannot exceed current stock':
+        sale_quantity <= current_stock
+    'remaining stock equals current stock minus sale quantity':
+        remaining_stock == current_stock - sale_quantity
+}
+
+let InsufficientStockSale = rules::violate(
+    Sale,
+    'sale quantity cannot exceed current stock'
+)
+
+let generated = solve::sample(InsufficientStockSale, 1, {
+        'current_stock': rules::range(0, 7),
+        'sale_quantity': rules::range(1, 6)
+    },
+    rng = random::generator(random::pcg32_xsh_rr, 42),
+    candidate_limit = 1000,
+    time_limit = 30.0
+)
+
+assert(rule {
+    generated::status == 'complete'
+    len(generated::samples) == 1
+})
+
+let test_data = generated::samples[0]
+pprint('test data = ', test_data)
+
+let result = solve::hold(Sale(test_data))
+pprint('status    = ', result::status)
+pprint('conflicts = ', result::conflicts)

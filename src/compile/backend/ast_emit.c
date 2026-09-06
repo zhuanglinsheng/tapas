@@ -1,6 +1,7 @@
 /** Bytecode emission from the reusable expression AST. */
 #include "ast_emit_internal.h"
-#include "tapas/runtime/trule_ir.h"
+#include "tapas/dsa/tstring.h"
+#include "tapas/objects/trule_ir.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -85,12 +86,9 @@ static void emit_number(tast_emitter *emitter, const tast_node *node)
 
 static void emit_string(tast_emitter *emitter, const tast_node *node)
 {
-	tsource_span contents = node->span;
-	if (contents.end >= contents.start + 2) {
-		contents.start++;
-		contents.end--;
-	}
-	tstring *value = tast_emitter_text(emitter, contents);
+	tstring *value = tast_string_value(emitter->document, node);
+	if (!value)
+		twarn(ErrCompile_InvalidLiter, "emit_string", "invalid escape");
 	uint_csts index = tconsts_add_str_const(emitter->constants,
 					       tstring_cstr(value));
 	tvmcmd_vect_append(emitter->instructions,
@@ -191,8 +189,28 @@ static const tast_id *aggregate_children(const tast_emitter *emitter,
 static void emit_arguments(tast_emitter *emitter, const tast_node *node)
 {
 	const tast_id *children = aggregate_children(emitter, node);
-	for (uint32_t i = 0; i < node->aggregate.count; i++)
-		tast_emit_expression(emitter, children[i]);
+	for (uint32_t i = 0; i < node->aggregate.count; i++) {
+		const tast_node *argument = tast_get(emitter->arena, children[i]);
+		if (!argument || argument->kind != tast_named_field) {
+			tast_emit_expression(emitter, children[i]);
+			continue;
+		}
+		/* Named call arguments are an ABI-neutral name/value record. The
+		 * callee decides which names it accepts; source code never observes
+		 * the internal Pair representation. */
+		tast_emit_expression(emitter, argument->named_field.value);
+		tstring *name = tast_emitter_text(emitter,
+			argument->named_field.name);
+		uint_csts index = tconsts_add_str_const(emitter->constants,
+			tstring_cstr(name));
+		tvmcmd_vect_append(emitter->instructions,
+			tbycode_make_u(OP_PUSHS, index));
+		treg_ctr_add(&emitter->cp->regctr);
+		tstring_free(name);
+		tvmcmd_vect_append(emitter->instructions, tbycode_make(OP_PAIR));
+		treg_ctr_ddt_n(&emitter->cp->regctr, 2);
+		treg_ctr_add(&emitter->cp->regctr);
+	}
 }
 
 static void emit_member(tast_emitter *emitter, const tast_node *node)
@@ -336,7 +354,7 @@ static ttypeval *resolve_value_annotation(tast_emitter *emitter,
 			if (token->span.start < annotation.start ||
 			    token->kind != tsyntax_identifier) continue;
 			tstring *name = tast_emitter_text(emitter, token->span);
-			int value_bound = tstring_eq_cstr(name, "InstanceOf") || tstring_eq_cstr(name, "PointsOf") || tstring_eq_cstr(name, "RangeOf");
+			int value_bound = tstring_eq_cstr(name, "InstanceOf");
 			tstring_free(name);
 			if (value_bound) return tast_resolve_annotation(emitter, annotation);
 		}
@@ -713,7 +731,7 @@ static void append_rule_metadata(tast_emitter *emitter, tstring *metadata,
 	if (kind == 'C' && expression) {
 		ttypeval *type = tast_infer_expression_type(emitter, expression_id, nullptr);
 		if (type && (type->kind == ttype_kind_rule_instance || type->kind == ttype_kind_instance_of ||
-		    ttypeval_equal(type, ttypeval_builtin(tbuiltin_rule_instance)))) kind = 'R';
+		    ttypeval_equal(type, ttypeval_builtin(tbuiltintype_rule_instance)))) kind = 'R';
 		ttypeval_release(type);
 	}
 	tstring_append_c(metadata, has_logic ? kind + ('a' - 'A') : kind);
@@ -799,8 +817,8 @@ static void emit_rule(tast_emitter *emitter, const tast_node *node)
 					item->rule_implication.antecedent, nullptr);
 				if (!guard_type || !trule_antecedent_type(guard_type)) {
 					ttypeval_release(guard_type);
-					ttypeval *members[] = { ttypeval_builtin(tbuiltin_bool),
-						ttypeval_builtin(tbuiltin_rule_instance) };
+					ttypeval *members[] = { ttypeval_builtin(tbuiltintype_bool),
+						ttypeval_builtin(tbuiltintype_rule_instance) };
 					guard_type = ttypeval_new_union(members, 2);
 				}
 				append_metadata_field(item_metadata, tstring_cstr(guard_type->canonical));
@@ -876,7 +894,7 @@ static void emit_rule(tast_emitter *emitter, const tast_node *node)
 		if (!tobj_ctr_obj_addr(&rule_cp.objctr, symbol->name, &address) ||
 		    address.depth == 0) continue;
 		ttypeval *type = tast_infer_expression_type(emitter, id, nullptr);
-		if (!type) type = ttypeval_builtin(tbuiltin_any);
+		if (!type) type = ttypeval_builtin(tbuiltintype_any);
 		char depth[32];
 		char slot[32];
 		char start[32];

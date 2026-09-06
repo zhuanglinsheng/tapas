@@ -1,10 +1,11 @@
 #include "tapas/textension.h"
+#include "tapas/dsa/tstring.h"
 
 #include "../arguments.h"
 
-#include "tapas/runtime/tdict.h"
-#include "tapas/runtime/tlist.h"
-#include "tapas/runtime/tstr.h"
+#include "tapas/objects/tdict.h"
+#include "tapas/objects/tlist.h"
+#include "tapas/objects/tstr.h"
 
 #include <errno.h>
 #include <limits.h>

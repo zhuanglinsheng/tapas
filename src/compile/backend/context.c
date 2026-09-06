@@ -1,5 +1,6 @@
 /** Internal compiler implementation. */
 #include "internal.h"
+#include "tapas/dsa/tstring.h"
 
 #include <ctype.h>
 #include <errno.h>

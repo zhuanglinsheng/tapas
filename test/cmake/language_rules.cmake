@@ -43,6 +43,66 @@ foreach(mode IN ITEMS source bytecode)
 endforeach()
 file(REMOVE "${REGRESSION_DIR}/dictionary_mutation.tapc")
 
+foreach(mode IN ITEMS source bytecode)
+    if(mode STREQUAL "source")
+        set(string_escape_command "${REGRESSION_DIR}/string_escapes.tap")
+    else()
+        execute_process(
+            COMMAND "${TAPAS}" -c "${REGRESSION_DIR}/string_escapes.tap"
+            RESULT_VARIABLE string_escape_compile
+        )
+        if(NOT string_escape_compile EQUAL 0)
+            message(FATAL_ERROR "String escape bytecode compilation failed")
+        endif()
+        set(string_escape_command -e "${REGRESSION_DIR}/string_escapes.tapc")
+    endif()
+    execute_process(
+        COMMAND "${TAPAS}" ${string_escape_command}
+        RESULT_VARIABLE string_escape_result
+        OUTPUT_VARIABLE string_escape_output
+        ERROR_VARIABLE string_escape_error
+    )
+    if(NOT string_escape_result EQUAL 0 OR NOT string_escape_output STREQUAL "")
+        message(FATAL_ERROR
+            "String escape ${mode} failed: ${string_escape_output}${string_escape_error}")
+    endif()
+endforeach()
+file(REMOVE "${REGRESSION_DIR}/string_escapes.tapc")
+
+foreach(mode IN ITEMS source bytecode)
+    if(mode STREQUAL "source")
+        set(type_template_command "${REGRESSION_DIR}/type_templates.tap")
+    else()
+        execute_process(COMMAND "${TAPAS}" -c "${REGRESSION_DIR}/type_templates.tap"
+            RESULT_VARIABLE type_template_compile)
+        if(NOT type_template_compile EQUAL 0)
+            message(FATAL_ERROR "Type template bytecode compilation failed")
+        endif()
+        set(type_template_command -e "${REGRESSION_DIR}/type_templates.tapc")
+    endif()
+    execute_process(COMMAND "${TAPAS}" ${type_template_command}
+        RESULT_VARIABLE type_template_result OUTPUT_VARIABLE type_template_output
+        ERROR_VARIABLE type_template_error)
+    if(NOT type_template_result EQUAL 0 OR
+       NOT type_template_output STREQUAL "true\ntrue\ntrue\ntrue\n")
+        message(FATAL_ERROR
+            "Type template ${mode} failed: ${type_template_output}${type_template_error}")
+    endif()
+endforeach()
+file(REMOVE "${REGRESSION_DIR}/type_templates.tapc")
+
+execute_process(COMMAND "${TAPAS}" "${REGRESSION_DIR}/type_template_import.tap"
+    RESULT_VARIABLE type_template_import_result
+    OUTPUT_VARIABLE type_template_import_output
+    ERROR_VARIABLE type_template_import_error)
+if(NOT type_template_import_result EQUAL 0 OR
+   NOT type_template_import_output STREQUAL "true\ntrue\n")
+    message(FATAL_ERROR
+        "Imported Type template failed: ${type_template_import_output}${type_template_import_error}")
+endif()
+file(REMOVE "${REGRESSION_DIR}/type_template_import.tapc"
+    "${SUPPORT_FIXTURE_DIR}/type_template_module.tapc")
+
 include("${CMAKE_CURRENT_LIST_DIR}/logical_not.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/rule_not.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/rule_logic.cmake")
@@ -868,6 +928,8 @@ set(invalid_fixtures
     conditional_recursive_type.tap
     let_capture.tap
     time_from_unix_float.tap
+    string_escape_unknown.tap
+    type_template_value_mismatch.tap
 )
 
 list(APPEND invalid_fixtures
@@ -901,6 +963,9 @@ set(runtime_error_fixtures
     implies_dynamic_empty.tap
     implies_dynamic_type.tap
     rule_import_argument.tap
+    rule_dictionary_missing.tap
+    rule_dictionary_extra.tap
+    rule_dictionary_type.tap
     array_modulo_shape.tap
     array_unary_plus.tap
     boolean_logic_type.tap

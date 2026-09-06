@@ -1,8 +1,8 @@
 let Color = types::enum('red', 'green', 'blue')
-let points: PointsOf[Int] = rules::points(types::Int, 1, 4, 4, 9)
-let colors: PointsOf[Color] = rules::points(Color, 'red', 'blue')
-let span: RangeOf[Int] = rules::range(-2, 10)
-let empty: PointsOf[String] = rules::points(types::String)
+let points: rules::PointsOf[Int] = rules::points(types::Int, 1, 4, 4, 9)
+let colors: rules::PointsOf[Color] = rules::points(Color, 'red', 'blue')
+let span: rules::RangeOf[Int] = rules::range(-2, 10)
+let empty: rules::PointsOf[String] = rules::points(types::String)
 let singleton = rules::range(4, 4)
 assert(rule {
     1 in points; 4 in points; not (2 in points)
@@ -27,14 +27,14 @@ let records = rules::points(types::dictionary(types::String, types::Int), record
 let type_points = rules::points(types::Type, types::Int, Color)
 let Child = rule (x: Int) { x > 0 }
 let instance = Child(1)
-let instances: PointsOf[RuleInstance[Int]] = rules::points(types::of(instance), instance)
+let instances: rules::PointsOf[RuleInstance[Int]] = rules::points(types::of(instance), instance)
 let functions = rules::points(types::Function, (x) { return x })
 assert(rule {
     1.5 in floats; false in bools; not (1 in nils)
     [1, 2] in lists; record in records; types::Int in type_points
     instance in instances
 })
-function accept(value: PointsOf[Color]) -> Bool { return 'red' in value }
+function accept(value: rules::PointsOf[Color]) -> Bool { return 'red' in value }
 assert(rule { accept(colors) })
 let Member = rule (x: Int) { x in points }
 assert(Member(4))
@@ -80,7 +80,7 @@ assert(symbolic(4))
 assert(rule { not symbolic(2) })
 // Stored functions retain runtime validation when dependent inference is unavailable.
 let build_points = rules::points
-let indirect: PointsOf[Int] = build_points(types::Int, 2, 8)
+let indirect: rules::PointsOf[Int] = build_points(types::Int, 2, 8)
 assert(rule { 8 in indirect })
 var order = []
 function make_domain() { order.append(1); return rules::range(0, 4) }

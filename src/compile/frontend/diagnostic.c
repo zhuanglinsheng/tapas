@@ -1,4 +1,5 @@
-#include "tapas/compile/diagnostic.h"
+#include "compile/frontend/diagnostic.h"
+#include "tapas/dsa/tstring.h"
 
 #include <stdlib.h>
 

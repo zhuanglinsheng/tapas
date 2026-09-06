@@ -1,7 +1,7 @@
 #ifndef TAPAS_LSP_JSON_H
 #define TAPAS_LSP_JSON_H
 
-#include "tapas/ds/tstring.h"
+#include "tapas/dsa/tstring.h"
 
 typedef enum {
 	tjson_null, tjson_boolean, tjson_number, tjson_string,

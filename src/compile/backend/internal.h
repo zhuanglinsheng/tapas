@@ -2,7 +2,7 @@
 #define TAPAS_COMPILE_INTERNAL_H
 
 #include "context_internal.h"
-#include "tapas/compile/frontend.h"
+#include "compile/frontend/frontend.h"
 
 int str_to_long_int(const tstring *literal, long *value);
 int str_to_float(const tstring *literal, double *value);

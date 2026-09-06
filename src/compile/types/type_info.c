@@ -1,7 +1,16 @@
-#include "tapas/compile/type_info.h"
-#include "tapas/compile/diagnostic.h"
-#include "tapas/compile/module.h"
-#include "tapas/compile/semantic.h"
+/**
+ * @file type_info.c
+ * @brief Infers expression Types and compile-time Type values.
+ * @details Recognizes the public `types` constructors and records their
+ * package-neutral static Type representation for later annotation resolution.
+ * @note This layer recognizes generic Type-construction intrinsics, not
+ * package-owned C object types or package-specific template names.
+ */
+#include "compile/types/type_info.h"
+#include "tapas/dsa/tstring.h"
+#include "compile/frontend/diagnostic.h"
+#include "compile/frontend/module.h"
+#include "compile/frontend/semantic.h"
 #include "type_constructor.h"
 
 #include <stdlib.h>
@@ -33,10 +42,25 @@ static int tunnel_member(const type_analyzer *analyzer, tast_id id)
 }
 
 static const tstandard_symbol *standard_callee(type_analyzer *analyzer,
-						tast_id id)
+					tast_id id)
 {
 	const tast_node *node = tast_get(analyzer->ast, id);
 	if (!node) return nullptr;
+	if (node->kind == tast_member && node->member.op == tsyntax_scope) {
+		const tast_node *receiver = tast_get(analyzer->ast,
+			node->member.receiver);
+		if (!receiver || receiver->kind != tast_name) return nullptr;
+		const tsemantic_symbol *package = tsemantic_resolved_symbol(
+			analyzer->semantic, node->member.receiver);
+		if (!package || !package->external) return nullptr;
+		tstring *name = tsource_document_slice(analyzer->document,
+			node->member.name);
+		const tstandard_symbol *result = tstandard_symbol_find(
+			tstring_cstr(package->name), tstring_cstr(name));
+		tstring_free(name);
+		return result && result->kind == tmodule_symbol_function ?
+			result : nullptr;
+	}
 	if (node->kind == tast_name) {
 		const tsemantic_symbol *symbol = tsemantic_resolved_symbol(
 			analyzer->semantic, id);
@@ -149,7 +173,7 @@ static tstatic_type_id parse_annotation(type_analyzer *analyzer,
 	tstatic_type_id result = tstatic_type_parse_with_values(&analyzer->model->arena,
 		tstring_cstr(text), resolve_annotation_name, resolve_annotation_value, analyzer);
 	tstring_free(text);
-	return result == TSTATIC_TYPE_INVALID_NAME ? TSTATIC_TYPE_UNKNOWN : result;
+	return result;
 }
 
 static tstatic_type_id resolved_name(type_analyzer *analyzer, tast_id id)
@@ -182,6 +206,52 @@ static tstring *types_member_name(type_analyzer *analyzer,
 		analyzer->document, analyzer->ast, node, "types");
 }
 
+static int template_parameter_list(type_analyzer *analyzer, tast_id id,
+	int value_parameters, tstatic_field **items, uint32_t *count)
+{
+	const tast_node *list = tast_get(analyzer->ast, id);
+	if (!list || list->kind != tast_list) return 0;
+	const tast_id *elements = tast_get_children(analyzer->ast,
+		list->aggregate.children, list->aggregate.count);
+	tstatic_field *result = list->aggregate.count ?
+		calloc(list->aggregate.count, sizeof(*result)) : nullptr;
+	if (list->aggregate.count && !result) abort();
+	for (uint32_t i = 0; i < list->aggregate.count; i++) {
+		tstatic_type_id parameter = TSTATIC_TYPE_UNKNOWN;
+		tstatic_type_id constraint = tbuiltintype_any;
+		if (value_parameters) {
+			const tast_node *pair = tast_get(analyzer->ast, elements[i]);
+			if (pair && pair->kind == tast_binary &&
+			    pair->binary.op == tsyntax_colon) {
+				parameter = static_value(analyzer, pair->binary.left);
+				constraint = static_value(analyzer, pair->binary.right);
+			} else {
+				parameter = static_value(analyzer, elements[i]);
+			}
+		} else {
+			parameter = static_value(analyzer, elements[i]);
+		}
+		const tstatic_type *type = tstatic_type_get(
+			&analyzer->model->arena, parameter);
+		if (!type || type->kind != (value_parameters ?
+			tstatic_type_value_parameter : tstatic_type_parameter) ||
+		    constraint == TSTATIC_TYPE_UNKNOWN) goto invalid;
+		result[i] = (tstatic_field){
+			.name = type->value_reference,
+			.type = constraint
+		};
+		for (uint32_t j = 0; j < i; j++)
+			if (tstring_eq(result[j].name, result[i].name)) goto invalid;
+	}
+	*items = result;
+	*count = list->aggregate.count;
+	return 1;
+
+invalid:
+	free(result);
+	return 0;
+}
+
 static tstatic_type_id static_type_call(type_analyzer *analyzer,
 					const tast_node *node)
 {
@@ -200,7 +270,43 @@ static tstatic_type_id static_type_call(type_analyzer *analyzer,
 		tstring_free(member);
 		return result;
 	}
-	if ((constructor == ttype_constructor_list ||
+	if (constructor == ttype_constructor_parameter ||
+	    constructor == ttype_constructor_value_parameter) {
+		tstring *parameter_name = literal_string(analyzer,
+			tast_get(analyzer->ast, arguments[0]));
+		if (parameter_name) result = tstatic_type_make_parameter(
+			&analyzer->model->arena, tstring_cstr(parameter_name),
+			constructor == ttype_constructor_value_parameter);
+		tstring_free(parameter_name);
+	} else if (constructor == ttype_constructor_template) {
+		tstatic_field *type_parameters = nullptr;
+		tstatic_field *value_parameters = nullptr;
+		uint32_t type_count = 0, value_count = 0;
+		int valid = template_parameter_list(analyzer, arguments[0], 0,
+			&type_parameters, &type_count) &&
+			template_parameter_list(analyzer, arguments[1], 1,
+				&value_parameters, &value_count);
+		for (uint32_t i = 0; valid && i < type_count; i++)
+			for (uint32_t j = 0; j < value_count; j++)
+				if (tstring_eq(type_parameters[i].name,
+				    value_parameters[j].name)) valid = 0;
+		tstatic_type_id body = valid ? static_value(analyzer, arguments[2]) :
+			TSTATIC_TYPE_UNKNOWN;
+		if (valid && body != TSTATIC_TYPE_UNKNOWN &&
+		    (type_count || value_count)) {
+			tstatic_field *parameters = realloc(type_parameters,
+				(type_count + value_count) * sizeof(*parameters));
+			if (!parameters) abort();
+			type_parameters = nullptr;
+			if (value_count) memcpy(parameters + type_count, value_parameters,
+				value_count * sizeof(*parameters));
+			result = tstatic_type_make_template(&analyzer->model->arena,
+				parameters, type_count, value_count, body);
+			free(parameters);
+		}
+		free(type_parameters);
+		free(value_parameters);
+	} else if ((constructor == ttype_constructor_list ||
 	     constructor == ttype_constructor_iterator)) {
 		tstatic_type_id item = static_value(analyzer, arguments[0]);
 		if (item != TSTATIC_TYPE_UNKNOWN)
@@ -529,7 +635,7 @@ static tstatic_type_id infer_index(type_analyzer *analyzer,
 	const tstatic_type *receiver = tstatic_type_get(
 		&analyzer->model->arena, receiver_id);
 	if (receiver && receiver->kind == tstatic_type_builtin &&
-	    receiver->builtin == tbuiltin_type) {
+	    receiver->builtin == tbuiltintype_type) {
 		receiver_id = static_value(analyzer, node->aggregate.receiver);
 		receiver = tstatic_type_get(&analyzer->model->arena, receiver_id);
 	}
@@ -570,11 +676,11 @@ static tstatic_type_id infer(type_analyzer *analyzer, tast_id id)
 	if (!node) return TSTATIC_TYPE_UNKNOWN;
 	tstatic_type_id result = TSTATIC_TYPE_UNKNOWN;
 	switch (node->kind) {
-	case tast_nil: result = tbuiltin_nil; break;
-	case tast_bool: result = tbuiltin_bool; break;
-	case tast_integer: result = tbuiltin_int; break;
-	case tast_float: result = tbuiltin_float; break;
-	case tast_string: result = tbuiltin_string; break;
+	case tast_nil: result = tbuiltintype_nil; break;
+	case tast_bool: result = tbuiltintype_bool; break;
+	case tast_integer: result = tbuiltintype_int; break;
+	case tast_float: result = tbuiltintype_float; break;
+	case tast_string: result = tbuiltintype_string; break;
 	case tast_name: {
 		tstring *name = tsource_document_slice(analyzer->document, node->span);
 		result = tstring_eq_cstr(name, "this") ? infer(analyzer,
@@ -591,19 +697,19 @@ static tstatic_type_id infer(type_analyzer *analyzer, tast_id id)
 	case tast_rule_implication:
 		infer(analyzer, node->rule_implication.antecedent);
 		infer(analyzer, node->rule_implication.consequent);
-		result = tbuiltin_bool;
+		result = tbuiltintype_bool;
 		break;
 	case tast_group: result = infer(analyzer, node->group.value); break;
 	case tast_unary:
 		result = infer(analyzer, node->unary.operand);
-		if (node->unary.op == tsyntax_kw_not) result = tbuiltin_bool;
+		if (node->unary.op == tsyntax_kw_not) result = tbuiltintype_bool;
 		break;
 	case tast_binary:
         if (node->binary.op == tsyntax_kw_in) {
             tstatic_type_id left = infer(analyzer, node->binary.left), right = infer(analyzer, node->binary.right);
-            int symbolic = left == tbuiltin_rule_term || left == tbuiltin_rule_parameter || left == tbuiltin_rule_capture ||
-                right == tbuiltin_rule_term || right == tbuiltin_rule_parameter || right == tbuiltin_rule_capture;
-            result = symbolic ? tbuiltin_rule_term : tbuiltin_bool;
+            int symbolic = left == tbuiltintype_rule_term || left == tbuiltintype_rule_parameter || left == tbuiltintype_rule_capture ||
+                right == tbuiltintype_rule_term || right == tbuiltintype_rule_parameter || right == tbuiltintype_rule_capture;
+            result = symbolic ? tbuiltintype_rule_term : tbuiltintype_bool;
             break;
         }
 		if (node->binary.op == tsyntax_colon) {
@@ -619,17 +725,17 @@ static tstatic_type_id infer(type_analyzer *analyzer, tast_id id)
 			node->binary.op == tsyntax_gt || node->binary.op == tsyntax_ge ||
 			node->binary.op == tsyntax_lt || node->binary.op == tsyntax_le ||
 			node->binary.op == tsyntax_kw_in || node->binary.op == tsyntax_kw_and ||
-			node->binary.op == tsyntax_kw_or) result = tbuiltin_bool;
+			node->binary.op == tsyntax_kw_or) result = tbuiltintype_bool;
 		else if (node->binary.op == tsyntax_kw_to) {
-			tstatic_type_id item = tbuiltin_int;
+			tstatic_type_id item = tbuiltintype_int;
 			result = tstatic_type_make(&analyzer->model->arena,
 				tstatic_type_iterator, &item, 1, 0);
 		}
 		else {
 			tstatic_type_id left = infer(analyzer, node->binary.left);
 			tstatic_type_id right = infer(analyzer, node->binary.right);
-			if (left == tbuiltin_float || right == tbuiltin_float)
-				result = tbuiltin_float;
+			if (left == tbuiltintype_float || right == tbuiltintype_float)
+				result = tbuiltintype_float;
 			else if (tstatic_type_equal(&analyzer->model->arena, left, right))
 				result = left;
 		}
@@ -637,7 +743,7 @@ static tstatic_type_id infer(type_analyzer *analyzer, tast_id id)
 	case tast_list: {
 		const tast_id *items = tast_get_children(analyzer->ast,
 			node->aggregate.children, node->aggregate.count);
-		if (!node->aggregate.count) { result = tbuiltin_list; break; }
+		if (!node->aggregate.count) { result = tbuiltintype_list; break; }
 		tstatic_type_id *types = (tstatic_type_id *)calloc(
 			node->aggregate.count, sizeof(*types));
 		if (!types) abort();
@@ -645,14 +751,14 @@ static tstatic_type_id infer(type_analyzer *analyzer, tast_id id)
 			types[i] = infer(analyzer, items[i]);
 		tstatic_type_id item = union_of(analyzer, types, node->aggregate.count);
 		free(types);
-		result = item == TSTATIC_TYPE_UNKNOWN ? tbuiltin_list :
+		result = item == TSTATIC_TYPE_UNKNOWN ? tbuiltintype_list :
 			tstatic_type_make(&analyzer->model->arena,
 				tstatic_type_list, &item, 1, 0);
 	} break;
 	case tast_dictionary:
 		/* Literal entries are data, not declared field constraints. A dictionary
 		 * may gain or lose keys and change value Types after initialization. */
-		result = tbuiltin_dictionary;
+		result = tbuiltintype_dictionary;
 		break;
 	case tast_index: result = infer_index(analyzer, node); break;
 	case tast_call: {
@@ -669,26 +775,25 @@ static tstatic_type_id infer(type_analyzer *analyzer, tast_id id)
 			result = function->child_count ?
 				signature[function->child_count - 1] : TSTATIC_TYPE_UNKNOWN;
 		}
-        const tast_node *domain_callee = tast_get(analyzer->ast, node->aggregate.receiver);
-        if (domain_callee && domain_callee->kind == tast_member && domain_callee->member.op == tsyntax_scope) {
-            const tast_node *receiver = tast_get(analyzer->ast, domain_callee->member.receiver);
-            const tsemantic_symbol *symbol = receiver && receiver->kind == tast_name ?
-                tsemantic_resolved_symbol(analyzer->semantic, domain_callee->member.receiver) : nullptr;
-            if (symbol && symbol->external && tstring_eq_cstr(symbol->name, "rules")) {
-                tstring *member = tsource_document_slice(analyzer->document, domain_callee->member.name);
-                if (tstring_eq_cstr(member, "points") && node->aggregate.count >= 1) {
-                    tstatic_type_id item = static_value(analyzer, arguments[0]);
-                    result = item == TSTATIC_TYPE_UNKNOWN ? TSTATIC_TYPE_UNKNOWN :
-                        tstatic_type_make(&analyzer->model->arena, tstatic_type_points, &item, 1, 0);
-                } else if (tstring_eq_cstr(member, "range") && node->aggregate.count == 2) {
-                    tstatic_type_id item = tstatic_type_builtin_id(&analyzer->model->arena, tbuiltin_int);
-                    result = tstatic_type_make(&analyzer->model->arena, tstatic_type_range, &item, 1, 0);
-                }
-                tstring_free(member);
-            }
-        }
 		const tstandard_symbol *standard = standard_callee(
 			analyzer, node->aggregate.receiver);
+		if (standard && standard->result_template_from_argument) {
+			tstatic_type_id argument = standard->result_argument <
+				node->aggregate.count ? static_value(analyzer,
+				arguments[standard->result_argument]) : TSTATIC_TYPE_UNKNOWN;
+			tstatic_type_id template_id = standard->result_template ?
+				tstandard_type_resolve(&analyzer->model->arena,
+					standard->result_template->identity, 1) : result;
+			const tstatic_type *template_type = tstatic_type_get(
+				&analyzer->model->arena, template_id);
+			if (argument != TSTATIC_TYPE_UNKNOWN && template_type &&
+			    template_type->kind == tstatic_type_template)
+				result = tstatic_type_apply_template(
+					&analyzer->model->arena, template_id, &argument, 1,
+					nullptr, 0);
+			else
+				result = TSTATIC_TYPE_UNKNOWN;
+		}
 		if (standard && standard->result_from_argument) {
 			const tast_node *callee = tast_get(
 				analyzer->ast, node->aggregate.receiver);
@@ -709,14 +814,14 @@ static tstatic_type_id infer(type_analyzer *analyzer, tast_id id)
 				tstatic_type_children(&analyzer->model->arena, function),
 				function->child_count, 0);
 		else if (function && function->kind == tstatic_type_builtin &&
-			 function->builtin == tbuiltin_rule)
-			result = tbuiltin_rule_instance;
+			 function->builtin == tbuiltintype_rule)
+			result = tbuiltintype_rule_instance;
 	} break;
 	case tast_member: {
 		tstring *member = types_member_name(analyzer, node);
 		if (member && tstatic_type_builtin_named(&analyzer->model->arena,
 		    tstring_cstr(member)) != TSTATIC_TYPE_UNKNOWN)
-			result = tbuiltin_type;
+			result = tbuiltintype_type;
 		tstring_free(member);
 		if (result == TSTATIC_TYPE_UNKNOWN) {
 			tstatic_type_id receiver_id = infer(
@@ -737,6 +842,16 @@ static tstatic_type_id infer(type_analyzer *analyzer, tast_id id)
 			}
 		}
 		const tstandard_symbol *standard = standard_callee(analyzer, id);
+		if (result == TSTATIC_TYPE_UNKNOWN && standard &&
+		    standard->compile_time_signature) {
+			tstring *qualified = tstring_new_empty();
+			if (standard->package)
+				tstring_append_fmt(qualified, "%s::", standard->package);
+			tstring_append(qualified, standard->name);
+			result = tstandard_type_resolve(&analyzer->model->arena,
+				tstring_cstr(qualified), 0);
+			tstring_free(qualified);
+		}
 		if (result == TSTATIC_TYPE_UNKNOWN && standard &&
 		    standard->result_from_argument && analyzer->external_resolver) {
 			tstring *name = tsource_document_slice(
@@ -785,10 +900,10 @@ static void analyze_declarations(type_analyzer *analyzer)
 			continue;
 		tstatic_type_id annotation = parse_annotation(
 			analyzer, node->declaration_statement.annotation);
-		if (annotation != tbuiltin_type) continue;
+		if (annotation != tbuiltintype_type) continue;
 		uint32_t sid = symbol_for_declaration(analyzer, declarations[i].id);
 		if (sid < analyzer->model->symbol_count) {
-			analyzer->model->symbol_type_ids[sid] = tbuiltin_type;
+			analyzer->model->symbol_type_ids[sid] = tbuiltintype_type;
 			analyzer->model->symbol_static_values[sid] =
 				tstatic_type_make_recursive(&analyzer->model->arena);
 		}
@@ -847,7 +962,7 @@ static void analyze_recursive_assignments(type_analyzer *analyzer)
 			tstatic_type_define_recursive(
 				&analyzer->model->arena, recursive, body);
 		else if (analyzer->model->symbol_type_ids[sid] ==
-			 tbuiltin_type)
+			 tbuiltintype_type)
 			analyzer->model->symbol_static_values[sid] = body;
 	}
 }
@@ -864,7 +979,7 @@ static void analyze_iteration_symbols(type_analyzer *analyzer)
 		const tstatic_type *iterable = tstatic_type_get(
 			&analyzer->model->arena, iterable_id);
 		if (iterable && iterable->kind == tstatic_type_builtin &&
-		    iterable->builtin == tbuiltin_type) {
+		    iterable->builtin == tbuiltintype_type) {
 			iterable_id = static_value(
 				analyzer, loop->for_statement.iterable);
 			iterable = tstatic_type_get(
@@ -913,7 +1028,7 @@ void ttype_info_analyze_with_resolver(
 	}
 	for (uint32_t i = 0; i < model->symbol_count; i++) {
 		model->symbol_type_ids[i] = semantic->symbols[i].kind ==
-			tsemantic_symbol_import ? tbuiltin_library : TSTATIC_TYPE_UNKNOWN;
+			tsemantic_symbol_import ? tbuiltintype_library : TSTATIC_TYPE_UNKNOWN;
 		model->symbol_static_values[i] = TSTATIC_TYPE_UNKNOWN;
 	}
 	type_analyzer analyzer = {

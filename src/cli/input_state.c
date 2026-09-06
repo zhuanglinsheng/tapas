@@ -1,4 +1,12 @@
-#include "tapas/cli/input_state.h"
+/**
+ * @file input_state.c
+ * @brief Implements incremental delimiter tracking for the Tapas CLI.
+ * @details Tracks brackets and quoted strings so the interactive reader can
+ * decide whether a multiline command is complete.
+ * @note This implementation is private to the command-line program and does
+ * not perform full Tapas lexical analysis.
+ */
+#include "input_state.h"
 
 void tinput_state_init(tinput_state *state)
 {

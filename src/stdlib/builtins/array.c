@@ -2,8 +2,8 @@
 
 #include "../arguments.h"
 
-#include "tapas/runtime/tarray.h"
-#include "tapas/runtime/tlist.h"
+#include "tapas/objects/tarray.h"
+#include "tapas/objects/tlist.h"
 
 #include <stdint.h>
 

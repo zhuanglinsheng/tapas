@@ -1,9 +1,9 @@
 #ifndef TAPAS_COMPILE_CONTEXT_INTERNAL_H
 #define TAPAS_COMPILE_CONTEXT_INTERNAL_H
 
-#include "tapas/compile/compiler.h"
-#include "tapas/tenv.h"
-#include "tapas/runtime/ttype.h"
+#include "compile/compiler.h"
+#include "runtime/tenv.h"
+#include "tapas/objects/ttype.h"
 
 typedef struct {
 	uint_regs reg_ctr;

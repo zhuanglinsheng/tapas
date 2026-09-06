@@ -2,7 +2,7 @@
 
 #include "../arguments.h"
 
-#include "tapas/runtime/tlist.h"
+#include "tapas/objects/tlist.h"
 
 
 static void builtin_list(tobj *params, uint_regs len, tobj *result)

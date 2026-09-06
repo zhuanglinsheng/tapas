@@ -2,9 +2,10 @@
 
 #include "../arguments.h"
 
-#include "tapas/runtime/tdict.h"
-#include "tapas/runtime/tlist.h"
-#include "tapas/runtime/ttype.h"
+#include "tapas/dsa/thashtbl.h"
+#include "tapas/objects/tdict.h"
+#include "tapas/objects/tlist.h"
+#include "tapas/objects/ttype.h"
 
 
 static void append_key(const tobj *key, const tobj *value, void *context)

@@ -1,6 +1,16 @@
-#include "tapas/compile/type_info.h"
-#include "tapas/compile/diagnostic.h"
-#include "tapas/compile/semantic.h"
+/**
+ * @file type_check.c
+ * @brief Validates Tapas expressions against inferred and annotated Types.
+ * @details Checks Type constructors, user template declarations, instantiated
+ * exact-value constraints, assignments, calls, and control-flow narrowing.
+ * @note Package-defined templates are checked through static Type IR and do
+ * not create compiler dependencies on their owning package implementations.
+ */
+#include "compile/types/type_info.h"
+#include "tapas/dsa/tstring.h"
+#include "compile/frontend/diagnostic.h"
+#include "compile/frontend/module.h"
+#include "compile/frontend/semantic.h"
 #include "type_constructor.h"
 
 #include <stdlib.h>
@@ -32,7 +42,7 @@ static int antecedent_type(const type_checker *checker, tstatic_type_id id)
 	if (!type) return id == TSTATIC_TYPE_UNKNOWN;
 	if (type->kind == tstatic_type_rule_instance || type->kind == tstatic_type_instance_of) return 1;
 	if (type->kind == tstatic_type_builtin)
-		return type->builtin == tbuiltin_bool || type->builtin == tbuiltin_rule_instance;
+		return type->builtin == tbuiltintype_bool || type->builtin == tbuiltintype_rule_instance;
 	if (type->kind != tstatic_type_union) return 0;
 	const tstatic_type_id *children = tstatic_type_children(&checker->types->arena, type);
 	for (uint32_t i = 0; i < type->child_count; i++)
@@ -93,16 +103,65 @@ static int recursive_definition_reference(const type_checker *checker,
 	return 0;
 }
 
+static tstring *exact_string_value(const char *literal)
+{
+	size_t length = literal ? strlen(literal) : 0;
+	if (length < 2 || (literal[0] != '\'' && literal[0] != '"') ||
+	    literal[length - 1] != literal[0]) return nullptr;
+	tstring *value = tstring_new_empty();
+	for (size_t i = 1; i + 1 < length; i++) {
+		char decoded = literal[i];
+		if (decoded == '\\' &&
+		    (++i + 1 >= length || !tsyntax_decode_escape(
+			(unsigned char)literal[i], &decoded))) {
+			tstring_free(value);
+			return nullptr;
+		}
+		tstring_append_c(value, decoded);
+	}
+	return value;
+}
+
 static int assignable(type_checker *checker, tast_id expression,
 		      tstatic_type_id target)
 {
 	if (target == TSTATIC_TYPE_UNKNOWN) return 1;
 	tstatic_type_id actual = node_type(checker, expression);
+	const tast_node *node = tast_get(checker->ast, expression);
+	const tstatic_type *expected = type_of(checker, target);
+	if (node && expected && expected->kind == tstatic_type_exact_value) {
+		if (node->kind == tast_group)
+			return assignable(checker, node->group.value, target);
+		if (node->kind == tast_nil || node->kind == tast_bool ||
+		    node->kind == tast_integer || node->kind == tast_float ||
+		    node->kind == tast_string ||
+		    (node->kind == tast_unary &&
+		     (node->unary.op == tsyntax_plus ||
+		      node->unary.op == tsyntax_minus) &&
+		     (tast_get(checker->ast, node->unary.operand)->kind == tast_integer ||
+		      tast_get(checker->ast, node->unary.operand)->kind == tast_float))) {
+			int same;
+			if (node->kind == tast_string) {
+				tstring *actual_string = tast_string_value(
+					checker->document, node);
+				tstring *expected_string = exact_string_value(
+					tstring_cstr(expected->value_reference));
+				same = actual_string && expected_string &&
+					tstring_eq(actual_string, expected_string);
+				tstring_free(actual_string);
+				tstring_free(expected_string);
+			} else {
+				tstring *literal = tsource_document_slice(checker->document,
+					node->span);
+				same = tstring_eq(literal, expected->value_reference);
+				tstring_free(literal);
+			}
+			return same;
+		}
+	}
 	if (actual != TSTATIC_TYPE_UNKNOWN &&
 	    tstatic_type_assignable(&checker->types->arena, actual, target))
 		return 1;
-	const tast_node *node = tast_get(checker->ast, expression);
-	const tstatic_type *expected = type_of(checker, target);
 	if (!node || !expected) return actual == TSTATIC_TYPE_UNKNOWN;
 	if (node->kind == tast_group)
 		return assignable(checker, node->group.value, target);
@@ -209,7 +268,7 @@ static int assignable(type_checker *checker, tast_id expression,
 	 * Non-literal contents are unknown here; runtime contracts (such as Rule
 	 * parameters) validate them. Direct literals were checked above so definite
 	 * mismatches still receive static diagnostics. */
-	if (actual == tbuiltin_dictionary &&
+	if (actual == tbuiltintype_dictionary &&
 	    (expected->kind == tstatic_type_dictionary ||
 	     expected->kind == tstatic_type_fields)) return 1;
 	return actual == TSTATIC_TYPE_UNKNOWN;
@@ -227,7 +286,7 @@ static void validate_index(type_checker *checker, const tast_node *node,
 	tstatic_type_id receiver_id = node_type(checker, node->aggregate.receiver);
 	const tstatic_type *receiver = type_of(checker, receiver_id);
 	if (receiver && receiver->kind == tstatic_type_builtin &&
-	    receiver->builtin == tbuiltin_type) {
+	    receiver->builtin == tbuiltintype_type) {
 		receiver_id = ttype_info_node_static_value(
 			checker->types, node->aggregate.receiver);
 		receiver = type_of(checker, receiver_id);
@@ -245,7 +304,7 @@ static void validate_index(type_checker *checker, const tast_node *node,
 		}
 		tstring *member = literal_string(checker, indices[0]);
 		if (!member) {
-			if (!assignable(checker, indices[0], tbuiltin_string))
+			if (!assignable(checker, indices[0], tbuiltintype_string))
 				report(checker, index ? index->span : node->span,
 				       "enum index must have Type String");
 			return;
@@ -259,7 +318,7 @@ static void validate_index(type_checker *checker, const tast_node *node,
 	}
 	if (receiver->kind == tstatic_type_list && receiver->child_count == 1) {
 		if (!index || index->kind != tast_slice) {
-			if (!assignable(checker, indices[0], tbuiltin_int))
+			if (!assignable(checker, indices[0], tbuiltintype_int))
 				report(checker, index ? index->span : node->span,
 				       "List index must have Type Int");
 			if (writing && !assignable(checker, value, parameters[0]))
@@ -364,6 +423,71 @@ static ttype_constructor_id types_constructor(type_checker *checker, tast_id id)
 	return result;
 }
 
+static const tstatic_type *static_value_type(type_checker *checker, tast_id id)
+{
+	return tstatic_type_get(&checker->types->arena,
+		ttype_info_node_static_value(checker->types, id));
+}
+
+static const tstandard_symbol *standard_function(type_checker *checker,
+	tast_id id)
+{
+	const tast_node *node = tast_get(checker->ast, id);
+	if (!node) return nullptr;
+	if (node->kind == tast_member && node->member.op == tsyntax_scope) {
+		const tast_node *receiver = tast_get(checker->ast,
+			node->member.receiver);
+		if (!receiver || receiver->kind != tast_name) return nullptr;
+		const tsemantic_symbol *package = tsemantic_resolved_symbol(
+			checker->semantic, node->member.receiver);
+		if (!package || !package->external) return nullptr;
+		tstring *name = tsource_document_slice(checker->document,
+			node->member.name);
+		const tstandard_symbol *result = tstandard_symbol_find(
+			tstring_cstr(package->name), tstring_cstr(name));
+		tstring_free(name);
+		return result && result->kind == tmodule_symbol_function ?
+			result : nullptr;
+	}
+	return nullptr;
+}
+
+static void validate_template_parameter_list(type_checker *checker,
+	 tast_id list_id, int value_parameters)
+{
+	const tast_node *list = tast_get(checker->ast, list_id);
+	if (!list || list->kind != tast_list) {
+		report(checker, tast_get(checker->ast, list_id)->span,
+			value_parameters ? "template Value parameters must be a List" :
+			"template Type parameters must be a List");
+		return;
+	}
+	const tast_id *items = tast_get_children(checker->ast,
+		list->aggregate.children, list->aggregate.count);
+	for (uint32_t i = 0; i < list->aggregate.count; i++) {
+		tast_id parameter_id = items[i];
+		const tast_node *pair = value_parameters ?
+			tast_get(checker->ast, parameter_id) : nullptr;
+		if (pair && pair->kind == tast_binary &&
+		    pair->binary.op == tsyntax_colon) {
+			parameter_id = pair->binary.left;
+			if (!static_value_type(checker, pair->binary.right))
+				report(checker,
+					tast_get(checker->ast, pair->binary.right)->span,
+					"template Value constraint must be a static Type");
+		}
+		const tstatic_type *parameter = static_value_type(checker,
+			parameter_id);
+		tstatic_type_kind expected = value_parameters ?
+			tstatic_type_value_parameter : tstatic_type_parameter;
+		if (!parameter || parameter->kind != expected)
+			report(checker, tast_get(checker->ast, parameter_id)->span,
+				value_parameters ?
+				"template Value parameter must come from types::value_parameter" :
+				"template Type parameter must come from types::parameter");
+	}
+}
+
 static void validate_type_constructor(type_checker *checker,
 				      const tast_node *call,
 				      ttype_constructor_id constructor)
@@ -398,6 +522,24 @@ static void validate_type_constructor(type_checker *checker,
 		}
 		for (uint32_t i = 0; i < count; i++) tstring_free(members[i]);
 		free(members);
+		return;
+	}
+	if (constructor == ttype_constructor_parameter ||
+	    constructor == ttype_constructor_value_parameter) {
+		tstring *parameter_name = literal_string(checker, arguments[0]);
+		if (!parameter_name)
+			report(checker, tast_get(checker->ast, arguments[0])->span,
+			       "parameter name must be a String literal");
+		tstring_free(parameter_name);
+		return;
+	}
+	if (constructor == ttype_constructor_template) {
+		validate_template_parameter_list(checker, arguments[0], 0);
+		validate_template_parameter_list(checker, arguments[1], 1);
+		if (ttype_info_node_static_value(checker->types, arguments[2]) ==
+		    TSTATIC_TYPE_UNKNOWN)
+			report(checker, tast_get(checker->ast, arguments[2])->span,
+			       "template body must be a static Type");
 		return;
 	}
 	if (constructor != ttype_constructor_make_type &&
@@ -471,7 +613,7 @@ static void validate_mutation(type_checker *checker, const tast_node *call)
 		&checker->types->arena, container);
 	if (container->kind == tstatic_type_list && container->child_count == 1) {
 		if (delete_value) {
-			if (!assignable(checker, args[1], tbuiltin_int))
+			if (!assignable(checker, args[1], tbuiltintype_int))
 				report(checker, tast_get(checker->ast, args[1])->span,
 				       "List index must have Type Int");
 			return;
@@ -483,7 +625,7 @@ static void validate_mutation(type_checker *checker, const tast_node *call)
 				       "List element Type mismatch");
 		}
 		if (insert && call->aggregate.count >= 3 &&
-		    !assignable(checker, args[2], tbuiltin_int))
+		    !assignable(checker, args[2], tbuiltintype_int))
 			report(checker, tast_get(checker->ast, args[2])->span,
 			       "List index must have Type Int");
 		return;
@@ -563,11 +705,20 @@ static void validate_node(type_checker *checker, tast_id id)
 	    node->declaration_statement.has_initializer &&
 	    node->declaration_statement.has_annotation) {
 		const tsemantic_symbol *symbol = symbol_for_declaration(checker, id);
+		if (symbol_type(checker, symbol) == TSTATIC_TYPE_INVALID_APPLICATION)
+			report(checker, node->declaration_statement.annotation,
+			       "invalid Type annotation");
 		if (!assignable(checker, node->declaration_statement.initializer,
 				symbol_type(checker, symbol)))
 			report(checker, tast_get(checker->ast,
 				node->declaration_statement.initializer)->span,
 			       "initializer Type mismatch");
+	}
+	if (node->kind == tast_parameter && node->parameter.has_annotation) {
+		const tsemantic_symbol *symbol = symbol_for_declaration(checker, id);
+		if (symbol_type(checker, symbol) == TSTATIC_TYPE_INVALID_APPLICATION)
+			report(checker, node->parameter.annotation,
+			       "invalid Type annotation");
 	}
 	if (node->kind == tast_assignment_statement) {
 		const tast_node *target = tast_get(checker->ast,
@@ -594,7 +745,7 @@ static void validate_node(type_checker *checker, tast_id id)
 			validate_index(checker, node, 0, TAST_INVALID_ID);
 	}
 	if (node->kind == tast_for_statement &&
-	    !assignable(checker, node->for_statement.iterable, tbuiltin_iterable))
+	    !assignable(checker, node->for_statement.iterable, tbuiltintype_iterable))
 		report(checker, tast_get(checker->ast,
 			node->for_statement.iterable)->span,
 		       "for-loop value is not Iterable");
@@ -617,21 +768,23 @@ static void validate_node(type_checker *checker, tast_id id)
 				report(checker, node->span,
 				       "types::optional is only valid inside types::make_type");
 		}
-        const tstatic_type *domain_result = type_of(checker, node_type(checker, id));
-        const tast_node *domain_callee = tast_get(checker->ast, node->aggregate.receiver);
-        if (domain_result && domain_result->kind == tstatic_type_points && domain_callee && domain_callee->kind == tast_member) {
-            const tast_node *receiver = tast_get(checker->ast, domain_callee->member.receiver);
-            const tsemantic_symbol *symbol = receiver && receiver->kind == tast_name ?
-                tsemantic_resolved_symbol(checker->semantic, domain_callee->member.receiver) : nullptr;
-            tstring *name = tsource_document_slice(checker->document, domain_callee->member.name);
-            if (symbol && symbol->external && tstring_eq_cstr(symbol->name, "rules") && tstring_eq_cstr(name, "points")) {
-                const tast_id *args = tast_get_children(checker->ast, node->aggregate.children, node->aggregate.count);
-                tstatic_type_id item = tstatic_type_children(&checker->types->arena, domain_result)[0];
-                for (uint32_t i = 1; i < node->aggregate.count; i++)
-                    if (!assignable(checker, args[i], item)) report(checker, tast_get(checker->ast, args[i])->span, "point does not match declared element Type");
-            }
-            tstring_free(name);
-        }
+		const tstandard_symbol *standard = standard_function(checker,
+			node->aggregate.receiver);
+		if (standard &&
+		    standard->following_arguments_match_result_parameter &&
+		    standard->result_argument < node->aggregate.count) {
+			const tast_id *arguments = tast_get_children(checker->ast,
+				node->aggregate.children, node->aggregate.count);
+			tstatic_type_id expected = ttype_info_node_static_value(
+				checker->types, arguments[standard->result_argument]);
+			if (expected != TSTATIC_TYPE_UNKNOWN)
+				for (uint32_t i = standard->result_argument + 1;
+				     i < node->aggregate.count; i++)
+					if (!assignable(checker, arguments[i], expected))
+						report(checker,
+							tast_get(checker->ast, arguments[i])->span,
+							"value does not match the declared element Type");
+		}
 		validate_mutation(checker, node);
 		tstatic_type_id callee_id = node_type(checker, node->aggregate.receiver);
 		const tstatic_type *callee = type_of(checker, callee_id);
@@ -662,13 +815,18 @@ static void validate_node(type_checker *checker, tast_id id)
 		if (callee && callee->kind == tstatic_type_rule) {
 			const tast_id *args = tast_get_children(checker->ast,
 				node->aggregate.children, node->aggregate.count);
+			uint32_t parameter_count = callee->child_count;
+			int named = node->aggregate.count == 1 &&
+				assignable(checker, args[0], tbuiltintype_dictionary);
+			callee = type_of(checker, callee_id);
 			const tstatic_type_id *parameters = tstatic_type_children(
 				&checker->types->arena, callee);
-			if (node->aggregate.count != callee->child_count)
+			if (!named && node->aggregate.count != parameter_count)
 				report(checker, node->span,
 				       "argument count does not match Rule signature");
-			uint32_t checked = node->aggregate.count < callee->child_count ?
-				node->aggregate.count : callee->child_count;
+			uint32_t checked = named ? 0 :
+				node->aggregate.count < parameter_count ?
+				node->aggregate.count : parameter_count;
 			for (uint32_t i = 0; i < checked; i++)
 				if (!assignable(checker, args[i], parameters[i]))
 					report(checker, tast_get(checker->ast, args[i])->span,
@@ -680,9 +838,9 @@ static void validate_node(type_checker *checker, tast_id id)
 			tcontrol_enclosing_function(checker->flow, id));
 		int in_rule = owner && owner->kind == tast_rule;
 		tstatic_type_id operand = node_type(checker, node->unary.operand);
-		if (operand != tbuiltin_any &&
+		if (operand != tbuiltintype_any &&
 		    !(in_rule && antecedent_type(checker, operand)) &&
-		    !assignable(checker, node->unary.operand, tbuiltin_bool))
+		    !assignable(checker, node->unary.operand, tbuiltintype_bool))
 			report(checker, node->span, in_rule ?
 				"not operand must have Type Bool or RuleInstance inside Rule" :
 				"not operand must have Type Bool");
@@ -695,22 +853,22 @@ static void validate_node(type_checker *checker, tast_id id)
 		tast_id operands[] = {node->binary.left, node->binary.right};
 		for (unsigned i = 0; i < 2; i++) {
 			tstatic_type_id type = node_type(checker, operands[i]);
-			if (type != tbuiltin_any && !(in_rule && antecedent_type(checker, type)) &&
-			    !assignable(checker, operands[i], tbuiltin_bool))
+			if (type != tbuiltintype_any && !(in_rule && antecedent_type(checker, type)) &&
+			    !assignable(checker, operands[i], tbuiltintype_bool))
 				report(checker, node->span, in_rule ?
 					"and/or operands must have Type Bool or RuleInstance inside Rule" :
 					"and/or operands must have Type Bool");
 		}
 	}
 	if (node->kind == tast_rule_condition &&
-	    node_type(checker, node->rule_condition.value) != tbuiltin_any &&
+	    node_type(checker, node->rule_condition.value) != tbuiltintype_any &&
 	    !antecedent_type(checker, node_type(checker, node->rule_condition.value)) &&
-	    !assignable(checker, node->rule_condition.value, tbuiltin_bool))
+	    !assignable(checker, node->rule_condition.value, tbuiltintype_bool))
 		report(checker, node->span, "Rule item must have Type Bool or RuleInstance");
 	if (node->kind == tast_rule_implication) {
 		if (!antecedent_type(checker, node_type(checker, node->rule_implication.antecedent)) &&
-		    !assignable(checker, node->rule_implication.antecedent, tbuiltin_bool) &&
-		    !assignable(checker, node->rule_implication.antecedent, tbuiltin_rule_instance))
+		    !assignable(checker, node->rule_implication.antecedent, tbuiltintype_bool) &&
+		    !assignable(checker, node->rule_implication.antecedent, tbuiltintype_rule_instance))
 			report(checker, node->span, "implies antecedent must have Type Bool or RuleInstance");
 		const tast_node *body = tast_get(checker->ast, node->rule_implication.consequent);
 		if (body && body->kind == tast_block) {
@@ -719,10 +877,10 @@ static void validate_node(type_checker *checker, tast_id id)
 			for (uint32_t i = 0; i < body->aggregate.count; i++) {
 				const tast_node *item = tast_get(checker->ast, items[i]);
 				if (item && item->kind == tast_expression_statement &&
-				    !assignable(checker, item->expression_statement.value, tbuiltin_bool))
+				    !assignable(checker, item->expression_statement.value, tbuiltintype_bool))
 					report(checker, item->span, "implies consequent must have Type Bool");
 			}
-		} else if (!assignable(checker, node->rule_implication.consequent, tbuiltin_bool))
+		} else if (!assignable(checker, node->rule_implication.consequent, tbuiltintype_bool))
 			report(checker, node->span, "implies consequent must have Type Bool");
 	}
 	if (node->kind == tast_return_statement) {
@@ -735,7 +893,7 @@ static void validate_node(type_checker *checker, tast_id id)
 			tstatic_type_id result = signature[function->child_count - 1];
 			int ok = node->return_statement.value == TAST_INVALID_ID ?
 				tstatic_type_assignable(&checker->types->arena,
-					tbuiltin_nil, result) :
+					tbuiltintype_nil, result) :
 				assignable(checker, node->return_statement.value, result);
 			if (!ok) report(checker, node->span, "result Type mismatch");
 		}
@@ -750,7 +908,7 @@ static void validate_node(type_checker *checker, tast_id id)
 			tstatic_type_id result = signature[function->child_count - 1];
 			if (result != TSTATIC_TYPE_UNKNOWN &&
 			    !tstatic_type_assignable(&checker->types->arena,
-					tbuiltin_nil, result))
+					tbuiltintype_nil, result))
 				report(checker, node->span,
 				       "not every path returns the annotated Type");
 		}

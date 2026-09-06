@@ -1,9 +1,11 @@
-#include "tapas/lsp/server.h"
+#include "lsp/server.h"
+#include "tapas/dsa/tstring.h"
+#include "tapas/version.h"
 #include "presentation.h"
 
 #include "json.h"
-#include "tapas/compile/workspace.h"
-#include "tapas/tbuiltin.h"
+#include "compile/frontend/workspace.h"
+#include "tapas/basic_defs/tbuiltintype.h"
 #include "tapas/version.h"
 
 #include <ctype.h>
@@ -173,13 +175,13 @@ static int semantic_name_priority(uint8_t type)
 
 static void init_semantic_names(tlsp_server *server)
 {
-	uint32_t capacity = (uint32_t)tbuiltin_count + 2 +
+	uint32_t capacity = (uint32_t)tbuiltintype_count + 2 +
 		tstandard_symbol_count();
 	server->semantic_names = capacity ? calloc(capacity,
 		sizeof(*server->semantic_names)) : nullptr;
 	if (capacity && !server->semantic_names) abort();
-	for (int i = 0; i < tbuiltin_count; i++)
-		add_semantic_name(server, tbuiltin_name((tbuiltin_id)i), semantic_type);
+	for (int i = 0; i < tbuiltintype_count; i++)
+		add_semantic_name(server, tbuiltintype_name((tbuiltintype_id)i), semantic_type);
 	add_semantic_name(server, "Union", semantic_type);
 	add_semantic_name(server, "InstanceOf", semantic_type);
 	for (uint32_t i = 0; i < tstandard_symbol_count(); i++) {
@@ -337,8 +339,8 @@ static void handle_syntax_catalog(tlsp_server *server,
 		append_catalog_names(result, &first, tsyntax_keyword_at(i));
 	tstring_append(result, "],\"types\":[");
 	first = 1;
-	for (int i = 0; i < tbuiltin_count; i++)
-		append_catalog_names(result, &first, tbuiltin_name((tbuiltin_id)i));
+	for (int i = 0; i < tbuiltintype_count; i++)
+		append_catalog_names(result, &first, tbuiltintype_name((tbuiltintype_id)i));
 	append_catalog_names(result, &first, "Union");
 	append_catalog_names(result, &first, "InstanceOf");
 	tstring_append(result, "],\"packages\":[");

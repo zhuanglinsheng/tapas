@@ -2,7 +2,7 @@
 
 #include "../arguments.h"
 
-#include "tapas/runtime/ttime.h"
+#include "tapas/objects/ttime.h"
 
 #include <limits.h>
 #include <time.h>

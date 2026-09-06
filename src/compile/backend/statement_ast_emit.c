@@ -1,7 +1,8 @@
 /** Migration adapter from reusable statement AST nodes to compiler actions. */
 #include "ast_emit_internal.h"
-#include "tapas/compile/module.h"
-#include "tapas/runtime/trule_ir.h"
+#include "tapas/dsa/tstring.h"
+#include "compile/frontend/module.h"
+#include "tapas/objects/trule_ir.h"
 
 #include <stdlib.h>
 
@@ -387,7 +388,7 @@ static void emit_declaration(tast_emitter *emitter,
 	}
 	if (!has_initializer && !is_mutable && annotation &&
 	    ttypeval_equal(annotation,
-		ttypeval_builtin(tbuiltin_type)))
+		ttypeval_builtin(tbuiltintype_type)))
 		static_value = ttypeval_new_recursive();
 	tstring **field_order = nullptr;
 	uint_objs field_order_count = 0;
@@ -458,7 +459,7 @@ static void emit_declaration(tast_emitter *emitter,
 		emitter->pending_function_type = saved_pending;
 		emitter->pending_display_name = saved_name;
 	}
-	if (annotation && (annotation->contains_instance || annotation->contains_domain)) {
+	if (annotation && (annotation->contains_instance || annotation->contains_custom)) {
 		tast_emit_bound_type(emitter, annotation);
 		tvmcmd_vect_append(emitter->instructions, tbycode_make(OP_CHECKTYPE));
 		treg_ctr_ddt(&emitter->cp->regctr);
@@ -497,7 +498,10 @@ static void emit_return(tast_emitter *emitter, const tast_node *statement)
 static void emit_import(tast_emitter *emitter, const tast_node *statement,
 			int inblk)
 {
-	tstring *path = tast_emitter_text(emitter, statement->import_statement.path);
+	tstring *path = tast_string_contents_value(
+		emitter->document, statement->import_statement.path);
+	if (!path)
+		twarn(ErrCompile_InvalidLiter, "emit_import", "invalid escape");
 	tstring *alias = statement->import_statement.has_alias ?
 		tast_emitter_text(emitter, statement->import_statement.alias) : nullptr;
 	tcompile_emit_import(emitter->cp, path, alias, emitter->instructions,
@@ -578,7 +582,7 @@ static void emit_assignment(tast_emitter *emitter, const tast_node *statement,
 		} else if (owner && !defines_recursive &&
 			   owner->bindings[owner_slot].value_type &&
 			   ttypeval_equal(owner->bindings[owner_slot].value_type,
-				ttypeval_builtin(tbuiltin_type))) {
+				ttypeval_builtin(tbuiltintype_type))) {
 			tcompile_set_metadata(owner, owner_slot,
 				owner->bindings[owner_slot].value_type,
 				inblk ? nullptr : assigned_static, 1);
@@ -600,7 +604,7 @@ static void emit_assignment(tast_emitter *emitter, const tast_node *statement,
 				emitter, statement->assignment_statement.value);
 		}
         if (owner && owner->bindings[owner_slot].has_annotation &&
-            owner->bindings[owner_slot].value_type && owner->bindings[owner_slot].value_type->contains_domain) {
+            owner->bindings[owner_slot].value_type && owner->bindings[owner_slot].value_type->contains_custom) {
             tast_emit_bound_type(emitter, owner->bindings[owner_slot].value_type);
             tvmcmd_vect_append(emitter->instructions, tbycode_make(OP_CHECKTYPE));
             treg_ctr_ddt(&emitter->cp->regctr);

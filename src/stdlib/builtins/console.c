@@ -1,6 +1,7 @@
 #include "tapas/textension.h"
+#include "tapas/dsa/tstring.h"
 
-#include "tapas/runtime/tstr.h"
+#include "tapas/objects/tstr.h"
 
 #include <stdio.h>
 

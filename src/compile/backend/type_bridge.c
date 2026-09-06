@@ -1,13 +1,78 @@
-/** Conversion boundary between shared static Type IR and runtime Type values. */
+/**
+ * @file type_bridge.c
+ * @brief Converts between static Type IR and runtime Type objects.
+ * @details Preserves recursive Types, templates, placeholders, constraints,
+ * and exact scalar values across compiler metadata and module boundaries.
+ * @note This is a representation bridge only; it must not encode knowledge of
+ * package-owned object implementations or specific package template names.
+ */
 #include "internal.h"
-
-#include "tapas/runtime/tdict.h"
-#include "tapas/runtime/tstr.h"
-#include "tapas/compile/static_type.h"
-#include "tapas/compile/module.h"
+#include "tapas/dsa/tstring.h"
+#include "tapas/objects/tdict.h"
+#include "tapas/objects/tstr.h"
+#include "compile/types/static_type.h"
+#include "compile/frontend/module.h"
 
 #include <stdlib.h>
 #include <string.h>
+
+static tstring *exact_literal(const tobj *value)
+{
+	tstring *literal = tstring_new_empty();
+	switch (value->type) {
+	case tnil: tstring_append(literal, "nil"); break;
+	case tbool: tstring_append(literal, value->val.v_tbool ? "true" : "false"); break;
+	case tint: tstring_append_fmt(literal, "%ld", value->val.v_tint); break;
+	case tfloat: tstring_append_fmt(literal, "%.17g", value->val.v_tfloat); break;
+	case tcompo: {
+		tstring_append_c(literal, '\'');
+		const tstring *text = ((const tstr *)value->val.v_tcompo)->data;
+		for (size_t i = 0; i < tstring_len(text); i++) {
+			char c = tstring_at(text, i);
+			if (c == '\\' || c == '\'') tstring_append_c(literal, '\\');
+			tstring_append_c(literal, c);
+		}
+		tstring_append_c(literal, '\'');
+	} break;
+	}
+	return literal;
+}
+
+static int exact_object(const char *literal, tobj *value)
+{
+	tobj_set_nil(value);
+	if (strcmp(literal, "nil") == 0) return 1;
+	if (strcmp(literal, "true") == 0 || strcmp(literal, "false") == 0) {
+		tobj_set_bool(value, literal[0] == 't');
+		return 1;
+	}
+	size_t length = strlen(literal);
+	if (length >= 2 && (literal[0] == '\'' || literal[0] == '"') &&
+	    literal[length - 1] == literal[0]) {
+		tstring *text = tstring_new_empty();
+		for (size_t i = 1; i + 1 < length; i++) {
+			char c = literal[i];
+			if (c == '\\' && i + 2 < length) {
+				c = literal[++i];
+				c = c == 'n' ? '\n' : c == 'r' ? '\r' :
+					c == 't' ? '\t' : c;
+			}
+			tstring_append_c(text, c);
+		}
+		tobj_set_compo(value, (tcompo_v *)tstr_new(tstring_cstr(text)));
+		tstring_free(text);
+		return 1;
+	}
+	char *end = nullptr;
+	if (strchr(literal, '.') || strchr(literal, 'e') || strchr(literal, 'E')) {
+		double number = strtod(literal, &end);
+		if (end && *end == 0) { tobj_set_float(value, number); return 1; }
+	} else {
+		long number = strtol(literal, &end, 10);
+		if (end && *end == 0) { tobj_set_int(value, number); return 1; }
+	}
+	return 0;
+}
 
 typedef struct {
 	tcp *cp;
@@ -55,10 +120,65 @@ static tstatic_type_id runtime_to_static(to_static_context *context,
 		return result;
 	}
 	if (type->kind == ttype_kind_any)
-		return tstatic_type_builtin_id(context->arena, tbuiltin_any);
+		return tstatic_type_builtin_id(context->arena, tbuiltintype_any);
 	if (type->kind == ttype_kind_builtin)
 		return tstatic_type_builtin_id(
-			context->arena, (tbuiltin_id)type->builtin);
+			context->arena, (tbuiltintype_id)type->builtin);
+	if (type->kind == ttype_kind_named) {
+		if (!type->named_parameter_count)
+			return tstatic_type_make_named(context->arena,
+				tstring_cstr(type->named_identity));
+		tstatic_field *parameters = calloc(type->named_parameter_count,
+			sizeof(*parameters));
+		if (!parameters) abort();
+		for (uint_objs i = 0; i < type->named_parameter_count; i++) {
+			parameters[i].name = type->named_parameter_names[i];
+			parameters[i].type = runtime_to_static(context,
+				type->named_parameter_types[i]);
+		}
+		tstatic_type_id result = tstatic_type_make_named_application(
+			context->arena, tstring_cstr(type->named_identity), parameters,
+			type->named_parameter_count, type->capabilities);
+		free(parameters);
+		return result;
+	}
+	if (type->kind == ttype_kind_parameter ||
+	    type->kind == ttype_kind_value_parameter)
+		return tstatic_type_make_parameter(context->arena,
+			tstring_cstr(type->parameter_name),
+			type->kind == ttype_kind_value_parameter);
+	if (type->kind == ttype_kind_exact_value) {
+		const tobj *value = ttypeval_exact_value(type);
+		tstring *literal = exact_literal(value);
+		tstatic_type_id underlying = runtime_to_static(context,
+			ttypeval_base(type));
+		tstatic_type_id result = tstatic_type_make_exact_literal(context->arena,
+			tstring_cstr(literal), underlying);
+		tstring_free(literal);
+		return result;
+	}
+	if (type->kind == ttype_kind_template) {
+		uint32_t type_count = (uint32_t)type->template_type_parameter_count;
+		uint32_t value_count = (uint32_t)type->template_value_parameter_count;
+		tstatic_field *parameters = calloc(type_count + value_count,
+			sizeof(*parameters));
+		if (!parameters) abort();
+		for (uint32_t i = 0; i < type_count; i++) {
+			parameters[i].name = type->template_type_parameters[i];
+			parameters[i].type = tbuiltintype_any;
+		}
+		for (uint32_t i = 0; i < value_count; i++) {
+			parameters[type_count + i].name =
+				type->template_value_parameters[i].name;
+			parameters[type_count + i].type = runtime_to_static(context,
+				type->template_value_parameters[i].type);
+		}
+		tstatic_type_id body = runtime_to_static(context, type->template_body);
+		tstatic_type_id result = tstatic_type_make_template(context->arena,
+			parameters, type_count, value_count, body);
+		free(parameters);
+		return result;
+	}
 	if (type->kind == ttype_kind_enum) {
 		uint32_t count = (uint32_t)ttypeval_enum_member_count(type);
 		tstring **members = (tstring **)calloc(count, sizeof(*members));
@@ -69,10 +189,6 @@ static tstatic_type_id runtime_to_static(to_static_context *context,
 			context->arena, members, count);
 		free(members);
 		return result;
-	}
-	if (type->kind == ttype_kind_points || type->kind == ttype_kind_range) {
-		tstatic_type_id item = runtime_to_static(context, ttypeval_parameter(type, "item"));
-		return tstatic_type_make(context->arena, type->kind == ttype_kind_range ? tstatic_type_range : tstatic_type_points, &item, 1, 0);
 	}
 	if (type->kind == ttype_kind_list || type->kind == ttype_kind_iterator ||
 	    type->kind == ttype_kind_pair ||
@@ -177,7 +293,73 @@ static ttypeval *static_to_runtime(to_runtime_context *context,
 	const tstatic_type *type = tstatic_type_get(context->arena, id);
 	if (!type) return nullptr;
 	if (type->kind == tstatic_type_builtin)
-		return ttypeval_retain(ttypeval_builtin((tbuiltin_id)type->builtin));
+		return ttypeval_retain(ttypeval_builtin((tbuiltintype_id)type->builtin));
+	if (type->kind == tstatic_type_named) {
+		if (!type->field_count)
+			return ttypeval_retain(ttypeval_new_named(
+				tstring_cstr(type->value_reference)));
+		const tstatic_field *items = tstatic_type_field_items(context->arena,
+			type);
+		ttype_field *parameters = calloc(type->field_count,
+			sizeof(*parameters));
+		if (!parameters) abort();
+		for (uint32_t i = 0; i < type->field_count; i++) {
+			parameters[i].name = items[i].name;
+			parameters[i].type = static_to_runtime(context, items[i].type);
+		}
+		ttypeval *result = ttypeval_new_named_application(
+			tstring_cstr(type->value_reference), parameters,
+			type->field_count, type->capabilities);
+		for (uint32_t i = 0; i < type->field_count; i++)
+			ttypeval_release(parameters[i].type);
+		free(parameters);
+		return ttypeval_retain(result);
+	}
+	if (type->kind == tstatic_type_parameter ||
+	    type->kind == tstatic_type_value_parameter) {
+		ttypeval *result = type->kind == tstatic_type_parameter ?
+			ttypeval_new_parameter(tstring_cstr(type->value_reference)) :
+			ttypeval_new_value_parameter(tstring_cstr(type->value_reference));
+		return ttypeval_retain(result);
+	}
+	if (type->kind == tstatic_type_exact_value) {
+		tobj value;
+		if (!exact_object(tstring_cstr(type->value_reference), &value))
+			return nullptr;
+		ttypeval *result = ttypeval_new_exact_value(&value);
+		tobj_try_clear(&value);
+		return ttypeval_retain(result);
+	}
+	if (type->kind == tstatic_type_template) {
+		const tstatic_field *specs = tstatic_type_field_items(context->arena,
+			type);
+		uint32_t type_count = type->template_type_parameter_count;
+		uint32_t value_count = type->field_count - type_count;
+		const tstring **type_parameters = type_count ? calloc(type_count,
+			sizeof(*type_parameters)) : nullptr;
+		ttype_value_parameter *value_parameters = value_count ? calloc(
+			value_count, sizeof(*value_parameters)) : nullptr;
+		if ((type_count && !type_parameters) ||
+		    (value_count && !value_parameters)) abort();
+		for (uint32_t i = 0; i < type_count; i++)
+			type_parameters[i] = specs[i].name;
+		for (uint32_t i = 0; i < value_count; i++) {
+			value_parameters[i].name = specs[type_count + i].name;
+			value_parameters[i].type = static_to_runtime(context,
+				specs[type_count + i].type);
+		}
+		const tstatic_type_id *body_id = tstatic_type_children(context->arena,
+			type);
+		ttypeval *body = static_to_runtime(context, body_id[0]);
+		ttypeval *result = body ? ttypeval_new_template(type_parameters,
+			type_count, value_parameters, value_count, body) : nullptr;
+		for (uint32_t i = 0; i < value_count; i++)
+			ttypeval_release(value_parameters[i].type);
+		ttypeval_release(body);
+		free(type_parameters);
+		free(value_parameters);
+		return ttypeval_retain(result);
+	}
 	if (type->kind == tstatic_type_recursive) {
 		for (uint32_t i = 0; i < context->count; i++)
 			if (context->ids[i] == id)
@@ -214,9 +396,7 @@ static ttypeval *static_to_runtime(to_runtime_context *context,
 		}
 	}
 	ttypeval *result = nullptr;
-	if ((type->kind == tstatic_type_points || type->kind == tstatic_type_range) && type->child_count == 1)
-		result = ttypeval_new_domain(type->kind == tstatic_type_range, children[0]);
-	else if (type->kind == tstatic_type_list && type->child_count == 1)
+	if (type->kind == tstatic_type_list && type->child_count == 1)
 		result = ttypeval_new_list(children[0]);
 	else if (type->kind == tstatic_type_iterator && type->child_count == 1)
 		result = ttypeval_new_iterator(children[0]);
@@ -256,7 +436,7 @@ static ttypeval *static_to_runtime(to_runtime_context *context,
 			fields[i].name = source[i].name;
 			fields[i].type = static_to_runtime(context, source[i].type);
             /* Unknown fields stay dynamically checked at runtime, like unknown function parameters. */
-            if (!fields[i].type) fields[i].type = ttypeval_retain(ttypeval_builtin(tbuiltin_any));
+            if (!fields[i].type) fields[i].type = ttypeval_retain(ttypeval_builtin(tbuiltintype_any));
 			fields[i].optional = source[i].optional;
 		}
 		result = ttypeval_new_fields(fields, type->field_count);
@@ -299,7 +479,7 @@ static tstatic_type_id external_binding_type(
 				owner->bindings[slot].module_interface, scope + 2);
 			if (exported)
 				resolved = static_value ? exported->type :
-					ttypeval_builtin(tbuiltin_type);
+					ttypeval_builtin(tbuiltintype_type);
 		}
 		tstring_free(owner_name);
 	} else if (!scope) {

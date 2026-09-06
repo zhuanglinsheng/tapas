@@ -1,10 +1,23 @@
-#include "tapas/runtime/tsolve.h"
-#include "tapas/runtime/tdict.h"
-#include "tapas/runtime/tdomain.h"
-#include "tapas/runtime/tlist.h"
-#include "tapas/runtime/tstr.h"
-#include "tapas/runtime/tcfn.h"
+/**
+ * @file solve.c
+ * @brief Implements the solve standard package.
+ * @details The package owns solver translation, worker lifetime, result Types,
+ * and hold behavior. Candidate verification calls the core Rule-check service
+ * exposed through the active execution environment.
+ * @note Solver state is package state and must never be stored in tvm.
+ */
+#include "solve.h"
+#include "tapas/dsa/tstring.h"
+#include "tapas/dsa/thashtbl.h"
+#include "tapas/objects/tdict.h"
+#include "tapas/objects/tlist.h"
+#include "tapas/objects/trule_ir.h"
+#include "tapas/objects/tstr.h"
+#include "tapas/objects/tcfn.h"
+#include "tapas/vm_service.h"
 #include "tapas/textension.h"
+#include "runtime/tenv.h"
+#include "runtime/objects/tfunction_metadata.h"
 #include "../modules.h"
 #include "solve_backend.h"
 
@@ -57,9 +70,9 @@ static void export_type(export_context *ctx, const ttypeval *type)
 {
     const char *kind = type->kind == ttype_kind_fields ? "record" :
         type->kind == ttype_kind_enum ? "enum" :
-        ttypeval_equal(type, ttypeval_builtin(tbuiltin_int)) ? "int" :
-        ttypeval_equal(type, ttypeval_builtin(tbuiltin_bool)) ? "bool" :
-        ttypeval_equal(type, ttypeval_builtin(tbuiltin_string)) ? "string" : "unsupported";
+        ttypeval_equal(type, ttypeval_builtin(tbuiltintype_int)) ? "int" :
+        ttypeval_equal(type, ttypeval_builtin(tbuiltintype_bool)) ? "bool" :
+        ttypeval_equal(type, ttypeval_builtin(tbuiltintype_string)) ? "string" : "unsupported";
     tstring_append(ctx->out, "{\"kind\":");
     json_string(ctx->out, kind);
     if (type->kind == ttype_kind_fields && ctx->depth < 32) {
@@ -100,6 +113,45 @@ static int register_rule(export_context *ctx, trule *rule)
 }
 
 static void export_value(export_context *ctx, const tobj *value);
+
+typedef enum {
+	solve_extension_unknown,
+	solve_extension_points,
+	solve_extension_range
+} solve_extension_kind;
+
+/* Package objects expose their language-level nominal Type through the generic
+ * runtime capability. This consumes no rules C representation or header. */
+static solve_extension_kind object_domain_kind(const tobj *value)
+{
+	if (!value || value->type != tcompo || !value->val.v_tcompo)
+		return solve_extension_unknown;
+	tobj reflected;
+	if (!tcompo_runtime_type(value->val.v_tcompo, &reflected))
+		return solve_extension_unknown;
+	solve_extension_kind kind = solve_extension_unknown;
+	if (tobj_compo_type(&reflected) == compo_ttypeval) {
+		const ttypeval *type = (const ttypeval *)reflected.val.v_tcompo;
+		const char *identity = type->named_identity ?
+			tstring_cstr(type->named_identity) : nullptr;
+		if (identity && !strcmp(identity, "rules::PointsOf"))
+			kind = solve_extension_points;
+		else if (identity && !strcmp(identity, "rules::RangeOf"))
+			kind = solve_extension_range;
+	}
+	tobj_try_clear(&reflected);
+	return kind;
+}
+
+static void object_field(const tobj *object, const char *name, tobj *result)
+{
+	tobj key;
+	tobj_set_nil(&key);
+	tobj_set_nil(result);
+	tobj_set_compo(&key, (tcompo_v *)tstr_new(name));
+	tcompo_index(object->val.v_tcompo, &key, 1, result);
+	tobj_try_clear(&key);
+}
 
 static void export_field(const tobj *key, const tobj *value, void *opaque)
 {
@@ -164,20 +216,44 @@ static void export_value(export_context *ctx, const tobj *value)
             tstring_append(ctx->out, "{\"type\":"); export_type(ctx, (ttypeval *)value->val.v_tcompo);
             tstring_append_c(ctx->out, '}');
             break;
-        case compo_trange: {
-            tdomain *domain = (tdomain *)value->val.v_tcompo;
-            tstring_append_fmt(ctx->out, "{\"range\":[%ld,%ld]}", domain->start, domain->end);
-        } break;
-        case compo_tpoints: {
-            tdomain *domain = (tdomain *)value->val.v_tcompo;
-            tstring_append(ctx->out, "{\"points\":[");
-            for (uint_objs i = 0; i < domain->values.len; i++) {
-                if (i)
-                    tstring_append_c(ctx->out, ',');
-                export_value(ctx, &domain->values.data[i]);
+        case compo_extension: {
+            solve_extension_kind kind = object_domain_kind(value);
+            if (kind == solve_extension_range) {
+                tobj start, end;
+                object_field(value, "start", &start);
+                object_field(value, "end", &end);
+                if (start.type == tint && end.type == tint)
+                    tstring_append_fmt(ctx->out,
+                        "{\"range\":[%ld,%ld]}",
+                        start.val.v_tint, end.val.v_tint);
+                else
+                    tstring_append(ctx->out,
+                        "{\"unsupported\":\"invalid RangeOf object\"}");
+                tobj_try_clear(&start);
+                tobj_try_clear(&end);
+            } else if (kind == solve_extension_points) {
+                tobj values;
+                object_field(value, "values", &values);
+                if (values.type != tcompo ||
+                    tobj_compo_type(&values) != compo_tlist) {
+                    tstring_append(ctx->out,
+                        "{\"unsupported\":\"invalid PointsOf object\"}");
+                } else {
+                    tlist *items = (tlist *)values.val.v_tcompo;
+                    tstring_append(ctx->out, "{\"points\":[");
+                    for (uint_objs i = 0; i < tlist_size(items); i++) {
+                        if (i) tstring_append_c(ctx->out, ',');
+                        export_value(ctx, tlist_at(items, i));
+                    }
+                    tstring_append(ctx->out, "]}");
+                }
+                tobj_try_clear(&values);
+            } else {
+                tstring_append(ctx->out,
+                    "{\"unsupported\":\"extension object\"}");
             }
-            tstring_append(ctx->out, "]}");
-        } break;
+            break;
+        }
         case compo_tlist: {
             tlist *list = (tlist *)value->val.v_tcompo;
             tstring_append(ctx->out, "{\"list\":[");
@@ -431,7 +507,10 @@ static int decode_argument(const char *line, tobj *argument)
 void tsolve_worker_free(tsolve_worker *worker) { (void)worker; }
 #endif
 
-static void hold_configured(tsolve_worker **worker, const tobj *input, tobj *result, long integer_min, long integer_max)
+static void hold_configured(tsolve_worker **worker, const tobj *input,
+			    tobj *result, long integer_min,
+			    long integer_max, long timeout_ms,
+			    int diagnostics, int binding_core)
 {
     result_set(result, "error", "configured", "invalid solve input");
     if (input->type != tcompo || (tobj_compo_type(input) != compo_trule && tobj_compo_type(input) != compo_trule_instance)) return;
@@ -441,7 +520,11 @@ static void hold_configured(tsolve_worker **worker, const tobj *input, tobj *res
     trule_instance *instance = tobj_compo_type(input) == compo_trule_instance ? (trule_instance *)input->val.v_tcompo : nullptr;
     trule *rule = instance ? (trule *)instance->rule.val.v_tcompo : (trule *)input->val.v_tcompo;
     export_context ctx = {.out = tstring_new_empty()}; register_rule(&ctx, rule);
-    tstring_append_fmt(ctx.out, "{\"version\":3,\"integer_min\":%ld,\"integer_max\":%ld,\"bindings\":", integer_min, integer_max);
+    tstring_append_fmt(ctx.out,
+        "{\"version\":3,\"integer_min\":%ld,\"integer_max\":%ld,"
+        "\"diagnostics\":%s,\"binding_core\":%s,\"bindings\":",
+        integer_min, integer_max, diagnostics ? "true" : "false",
+        binding_core ? "true" : "false");
     if (instance) {
         tstring_append_c(ctx.out, '[');
         for (uint_objs i = 0; i < instance->arguments.len; i++) {
@@ -470,7 +553,7 @@ static void hold_configured(tsolve_worker **worker, const tobj *input, tobj *res
     }
     size_t size = tstring_len(ctx.out);
     unsigned char frame[4] = {size >> 24, size >> 16, size >> 8, size};
-    int64_t deadline = milliseconds() + 15000;
+    int64_t deadline = milliseconds() + timeout_ms;
     int ok = transfer((*worker)->fd, frame, 4, 1, deadline);
     if (ok == 1) ok = transfer((*worker)->fd, (void *)tstring_cstr(ctx.out), size, 1, deadline);
     tstring_free(ctx.out);
@@ -513,6 +596,8 @@ static void hold_configured(tsolve_worker **worker, const tobj *input, tobj *res
     }
     tobj conflicts; tobj_set_nil(&conflicts);
     tobj_set_compo(&conflicts, (tcompo_v *)tlist_new());
+    tobj binding_names; tobj_set_nil(&binding_names);
+    tobj_set_compo(&binding_names, (tcompo_v *)tlist_new());
     if (valid) valid = read_line(&response, line, sizeof(line));
     end = nullptr; errno = 0;
     long conflict_count = valid ? strtol(line, &end, 10) : -1;
@@ -522,10 +607,15 @@ static void hold_configured(tsolve_worker **worker, const tobj *input, tobj *res
         valid = read_line(&response, line, sizeof(line));
         end = nullptr; errno = 0;
         long index = valid ? strtol(line, &end, 10) : -1;
-        valid = valid && !errno && end != line && !*end && index >= 0 && index < ctx.count;
+        valid = valid && !errno && end != line && !*end &&
+            ((index >= 0 && index < ctx.count) ||
+             (binding_core && index == -1));
         tobj condition; tobj_set_nil(&condition);
         if (valid) valid = read_line(&response, line, sizeof(line)) && line[0] == 's' && decode_argument(line, &condition);
-        if (valid) {
+        if (valid && index == -1) {
+            tobj_vec_push(&((tlist *)binding_names.val.v_tcompo)->items,
+                &condition);
+        } else if (valid) {
             tobj entry, origin; tobj_set_nil(&entry); tobj_set_nil(&origin);
             tdict *dict = tdict_new(); tobj_set_compo(&entry, (tcompo_v *)dict);
             tobj_set_compo(&origin, (tcompo_v *)ctx.rules[index]);
@@ -541,6 +631,9 @@ static void hold_configured(tsolve_worker **worker, const tobj *input, tobj *res
     if (valid) {
         result_set(result, code, scope, reason);
         field((tdict *)result->val.v_tcompo, "conflicts", &conflicts);
+        if (binding_core)
+            field((tdict *)result->val.v_tcompo, "binding_core",
+                &binding_names);
         if (sat) {
             tobj witness; tobj_set_nil(&witness);
             if (instance) { tobj_copy(&witness, input); }
@@ -550,6 +643,7 @@ static void hold_configured(tsolve_worker **worker, const tobj *input, tobj *res
         }
     } else result_set(result, "error", "configured", "invalid solver response");
     tobj_try_clear(&conflicts);
+    tobj_try_clear(&binding_names);
     for (unsigned i = 0; i < UINT8_MAX; i++) tobj_try_clear(&arguments[i]);
 #endif
 }
@@ -626,17 +720,27 @@ static void prepare_fixed_instance(const tobj *input, tobj *prepared)
     tobj_set_compo(prepared, (tcompo_v *)trule_bind(rule, arguments, (uint_regs)rule->ir->parameters.len));
 }
 
-void tsolve_hold(tsolve_worker **worker, const tobj *input, tobj *result)
+static void hold_timed(tsolve_worker **worker, const tobj *input,
+		       tobj *result, long timeout_ms, int diagnostics,
+		       int binding_core)
 {
+	if (timeout_ms <= 0) {
+		result_set(result, "unknown", "configured",
+			   "solver process timed out");
+		return;
+	}
     long minimum = -SOLVE_INT_BOUND, maximum = SOLVE_INT_BOUND;
     if (!read_integer_setting("TAPAS_SOLVE_INT_MIN", -SOLVE_INT_BOUND, &minimum) ||
         !read_integer_setting("TAPAS_SOLVE_INT_MAX", SOLVE_INT_BOUND, &maximum) || minimum > maximum) {
         result_set(result, "error", "configured", "invalid TAPAS_SOLVE_INT_MIN/MAX: expected ordered integer bounds within backend limits");
         return;
     }
-    tobj prepared; prepare_fixed_instance(input, &prepared);
+    tobj prepared; tobj_set_nil(&prepared);
+    if (!binding_core)
+        prepare_fixed_instance(input, &prepared);
     const tobj *query_input = prepared.type == tnil ? input : &prepared;
-    hold_configured(worker, query_input, result, minimum, maximum);
+	hold_configured(worker, query_input, result, minimum, maximum,
+		    timeout_ms, diagnostics, binding_core);
     tobj value; tobj_set_nil(&value);
     tobj_set_int(&value, minimum); field((tdict *)result->val.v_tcompo, "integer_min", &value);
     tobj_set_int(&value, maximum); field((tdict *)result->val.v_tcompo, "integer_max", &value);
@@ -659,12 +763,36 @@ void tsolve_hold(tsolve_worker **worker, const tobj *input, tobj *result)
     tobj_try_clear(&prepared);
 }
 
+void tsolve_hold_timed(tsolve_worker **worker, const tobj *input,
+		       tobj *result, long timeout_ms)
+{
+	hold_timed(worker, input, result, timeout_ms, 1, 0);
+}
+
+void tsolve_hold_timed_quiet(tsolve_worker **worker, const tobj *input,
+			     tobj *result, long timeout_ms)
+{
+	hold_timed(worker, input, result, timeout_ms, 0, 0);
+}
+
+void tsolve_hold_timed_binding_core(tsolve_worker **worker,
+				    const tobj *input, tobj *result,
+				    long timeout_ms)
+{
+	hold_timed(worker, input, result, timeout_ms, 0, 1);
+}
+
+void tsolve_hold(tsolve_worker **worker, const tobj *input, tobj *result)
+{
+	tsolve_hold_timed(worker, input, result, TSOLVE_QUERY_TIMEOUT_MS);
+}
+
 ttypeval *tsolve_result_type(void)
 {
     tstring *rule_name = tstring_new("rule"), *condition_name = tstring_new("condition");
     ttype_field row_fields[] = {
-        {.name = rule_name, .type = ttypeval_builtin(tbuiltin_rule)},
-        {.name = condition_name, .type = ttypeval_builtin(tbuiltin_string)}
+        {.name = rule_name, .type = ttypeval_builtin(tbuiltintype_rule)},
+        {.name = condition_name, .type = ttypeval_builtin(tbuiltintype_string)}
     };
     ttypeval *row = ttypeval_new_fields(row_fields, 2);
     ttypeval *list = ttypeval_new_list(row);
@@ -672,7 +800,7 @@ ttypeval *tsolve_result_type(void)
     ttype_field fields[8]; tstring *strings[8];
     for (unsigned i = 0; i < 8; i++) {
         strings[i] = tstring_new(names[i]);
-        fields[i] = (ttype_field){.name = strings[i], .type = i == 7 ? ttypeval_builtin(tbuiltin_dictionary) : i == 6 ? list : ttypeval_builtin(i < 3 ? tbuiltin_string : i == 3 ? tbuiltin_any : tbuiltin_int)};
+        fields[i] = (ttype_field){.name = strings[i], .type = i == 7 ? ttypeval_builtin(tbuiltintype_dictionary) : i == 6 ? list : ttypeval_builtin(i < 3 ? tbuiltintype_string : i == 3 ? tbuiltintype_any : tbuiltintype_int)};
     }
     ttypeval *type = ttypeval_new_fields(fields, 8);
     for (unsigned i = 0; i < 8; i++) tstring_free(strings[i]);
@@ -681,19 +809,119 @@ ttypeval *tsolve_result_type(void)
     return type;
 }
 
+static tsolve_worker *solve_worker;
+
+static void solve_worker_cleanup(void)
+{
+	tsolve_worker_free(solve_worker);
+	solve_worker = nullptr;
+}
+
+static void solve_hold(tobj *params, uint_regs count, tobj *result,
+		       tcompo_env *environment)
+{
+	if (count != 1)
+		twarn(ErrRuntime_ParamsCtr, "solve::hold",
+		      "one argument required");
+	static int cleanup_registered;
+	if (!cleanup_registered) {
+		atexit(solve_worker_cleanup);
+		cleanup_registered = 1;
+	}
+	/* VM callbacks may use the VM result register internally. Keep the package
+	 * result separate until candidate verification has finished. */
+	tobj held;
+	tobj_set_nil(&held);
+	tsolve_hold(&solve_worker, &params[0], &held);
+
+	tobj key;
+	tobj candidate;
+	tobj_set_nil(&key);
+	tobj_set_nil(&candidate);
+	tobj_set_compo(&key, (tcompo_v *)tstr_new("witness"));
+	tdict_get((tdict *)held.val.v_tcompo, &key, &candidate);
+	tobj_try_clear(&key);
+	if (candidate.type == tcompo &&
+	    tobj_compo_type(&candidate) == compo_trule_instance) {
+		tobj checked;
+		tobj passed;
+		tobj_set_nil(&checked);
+		tobj_set_nil(&passed);
+		tvm_services_check_rule(environment, &candidate, &checked);
+		tobj_set_compo(&key, (tcompo_v *)tstr_new("passed"));
+		tdict_get((tdict *)checked.val.v_tcompo, &key, &passed);
+		if (passed.type != tbool || !passed.val.v_tbool)
+			tsolve_reject_witness(&held,
+				"solver witness failed the Rule checker");
+		tobj_try_clear(&key);
+		tobj_try_clear(&passed);
+		tobj_try_clear(&checked);
+	}
+	tobj_ddc_ref_clear(&candidate);
+	tobj_copy(result, &held);
+	tobj_try_clear(&held);
+}
+
+static void solve_sample(tobj *params, uint_regs count, tobj *result,
+			 tcompo_env *environment)
+{
+	static int cleanup_registered;
+
+	if (!cleanup_registered) {
+		atexit(solve_worker_cleanup);
+		cleanup_registered = 1;
+	}
+	tsolve_sample(&solve_worker, params, count, result, environment);
+}
+
 static void create_hold(tobj *result)
 {
-    trule_builtin *hold = trule_builtin_new(trule_builtin_hold);
-    ttypeval *members[] = {ttypeval_builtin(tbuiltin_rule), ttypeval_builtin(tbuiltin_rule_instance)};
-    ttypeval *parameter = ttypeval_new_union(members, 2);
-    ttypeval *signature = ttypeval_retain(ttypeval_new_function(&parameter, 1, tsolve_result_type(), 0));
-    hold->metadata = tfunction_metadata_from_type("solve::hold\x1e" "rule", signature);
-    ttypeval_release(signature);
-    tobj_set_compo(result, (tcompo_v *)hold);
+	tcfn_descriptor descriptor = {
+		.name = "solve::hold",
+		.session_function = solve_hold,
+		.signature = {
+			.type = "Function[Rule | RuleInstance] -> solve::HoldResult",
+			.minimum_parameters = 1,
+			.maximum_parameters = 1
+		}
+	};
+	tcppsessf *hold = tcppsessf_new_descriptor(&descriptor);
+	ttypeval *members[] = {
+		ttypeval_builtin(tbuiltintype_rule),
+		ttypeval_builtin(tbuiltintype_rule_instance)
+	};
+	ttypeval *parameter = ttypeval_new_union(members, 2);
+	ttypeval *signature = ttypeval_retain(ttypeval_new_function(
+		&parameter, 1, tsolve_result_type(), 0));
+	hold->metadata = tfunction_metadata_from_type(
+		"solve::hold\x1e" "rule", signature);
+	ttypeval_release(signature);
+	tobj_set_compo(result, (tcompo_v *)hold);
+}
+
+static void create_sample(tobj *result)
+{
+	tcfn_descriptor descriptor = {
+		.name = "solve::sample",
+		.session_function = solve_sample,
+		.signature = {
+			.type = "Function[...] -> "
+				"solve::SampleResult",
+			.minimum_parameters = 3,
+			.maximum_parameters = 12
+		}
+	};
+	tcppsessf *sample = tcppsessf_new_descriptor(&descriptor);
+	tobj_set_compo(result, (tcompo_v *)sample);
 }
 
 static void create_result(tobj *result) {
     tobj_set_compo(result, (tcompo_v *)tsolve_result_type());
+}
+
+static void create_sample_result(tobj *result)
+{
+	tobj_set_compo(result, (tcompo_v *)tsolve_sample_result_type());
 }
 
 static const textension_symbol symbols[] = {
@@ -710,13 +938,41 @@ static const textension_symbol symbols[] = {
         .detail = "Feasibility status, scope, witness and diagnostics",
         .kind = textension_type,
         .value_factory = create_result
+    },
+    {
+	.name = "sample",
+	.type = "Function[...] -> "
+		"solve::SampleResult",
+	.detail = "solve::sample(rule: Rule, count: Int, "
+		"space: Dictionary[String, Indexable], *, "
+		"distributions: Dictionary[String, finite::Distribution] | "
+		"finite::Distribution = {}, "
+		"rng: random::Generator = random::generator("
+		"random::pcg32_xsh_rr, 0), candidate_limit: Int = count * 1000, "
+		"time_limit: Float | Nil = nil, core_budget_factor: Float = 1.0, "
+		"fairness_interval: Int = 4, "
+		"generalization: String = 'online_mass_core', "
+		"scheduler: String = 'mass_fair', trace: Bool = false) -> "
+		"solve::SampleResult",
+	.kind = textension_value,
+	.value_factory = create_sample
+    },
+    {
+	.name = "SampleResult",
+	.type = "{status: String, reason: String, samples: List[Dictionary], "
+		"candidates: Int, solver_calls: Int, core_calls: Int, "
+		"cache_hits: Int, cache_regions: Int, trace: List[Dictionary], "
+		"elapsed: Float}",
+	.detail = "Finite-domain sampling results and execution statistics",
+	.kind = textension_type,
+	.value_factory = create_sample_result
     }
 };
 
 const textension_module tstdlib_solve_module = {
     .scope = textension_package,
     .name = "solve",
-    .detail = "Rule feasibility queries using CP-SAT",
+    .detail = "Rule feasibility queries and finite-domain sampling",
     .symbols = symbols,
     .symbol_count = sizeof(symbols) / sizeof(symbols[0])
 };

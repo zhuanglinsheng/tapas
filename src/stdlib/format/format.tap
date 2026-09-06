@@ -1,12 +1,11 @@
-let Edit = types::make_type(
-    'end': types::Int,
-    'text': types::String,
-)
+import edit.tap as model
 
-function is_trivia(kind: String) -> Bool
-{
-    return kind == 'whitespace' or kind == 'newline' or kind == 'comment'
-}
+let Edit = model::Edit
+
+let MappedSource = types::make_type(
+    'source': types::String,
+    'origins': types::list(types::Int),
+)
 
 function expand_indentation(indentation: String) -> String
 {
@@ -23,9 +22,9 @@ function expand_indentation(indentation: String) -> String
 
 function whitespace_edits(
         source: String,
-        tokens: List,
-) -> Dictionary {
-    let edits: Dictionary = {}
+        tokens: List[syntax::Token],
+) -> Dictionary[Int, Dictionary] {
+    let edits: Dictionary[Int, Dictionary] = {}
     let line_start = true
     for (let index in 0 to tokens.len()) {
         let token = tokens[index]
@@ -60,9 +59,9 @@ function lexical_view(
         clean_before: List[Bool],
         indents     : List[String],
         lines       : List[Int],
-) -> List {
+) -> List[syntax::Token] {
     let tokens = syntax::tokens(source)
-    let significant: List = []
+    let significant: List[syntax::Token] = []
     let clean = true
     let line_start = 0
     let indentation_end = 0
@@ -106,7 +105,7 @@ function lexical_view(
 }
 
 function parenthesis_matches(
-        tokens: List,
+        tokens: List[syntax::Token],
 ) -> Dictionary[Int, Int] {
     let matches: Dictionary[Int, Int] = {}
     let stack: List[Int] = []
@@ -115,15 +114,14 @@ function parenthesis_matches(
         if (kind == '(') {
             stack.append(index)
         } elif (kind == ')' and stack.len() > 0) {
-            let opening = stack[stack.len() - 1]
-            pop_back(stack)
+            let opening = int(pop_back(stack))
             matches[opening] = index
         }
     }
     return matches.copy()
 }
 
-function block_after(tokens: List, start: Int) -> Int
+function block_after(tokens: List[syntax::Token], start: Int) -> Int
 {
     let square_depth = 0
     let parenthesis_depth = 0
@@ -165,9 +163,9 @@ function is_function_prefix(kind: String) -> Bool
 }
 
 function put_edit(
-        edits       : Dictionary,
+        edits       : Dictionary[Int, Dictionary],
         clean_before: List[Bool],
-        tokens      : List,
+        tokens      : List[syntax::Token],
         left        : Int,
         right       : Int,
         text        : String,
@@ -182,7 +180,8 @@ function put_edit(
 
 function parameter_indentation(
         source: String,
-        edits: Dictionary,
+        tokens: List[syntax::Token],
+        edits: Dictionary[Int, Dictionary],
         opening: Int,
         closing: Int,
         indentation: String,
@@ -192,7 +191,7 @@ function parameter_indentation(
     continuation.append('        ')
     let line_start = 0
     let first = true
-    for (let token in syntax::tokens(source)) {
+    for (let token in tokens) {
         let kind = token['kind']
         if (kind == 'newline') {
             line_start = token['end']
@@ -215,13 +214,14 @@ function parameter_indentation(
 
 function structural_edits(
         source      : String,
-        tokens      : List,
+        all_tokens  : List[syntax::Token],
+        tokens      : List[syntax::Token],
         clean_before: List[Bool],
         indents     : List[String],
         lines       : List[Int],
         line_break  : String,
-) -> Dictionary {
-    let edits: Dictionary = {}
+) -> Dictionary[Int, Dictionary] {
+    let edits: Dictionary[Int, Dictionary] = {}
     let matches = parenthesis_matches(tokens)
     let function_braces: Dictionary[Int, Int] = {}
     let parameter_headers: Dictionary[Int, Int] = {}
@@ -308,7 +308,7 @@ function structural_edits(
     }
 
     for (let opening in keys(parameter_headers)) {
-        parameter_indentation(source, edits,
+        parameter_indentation(source, all_tokens, edits,
             tokens[opening]['start'], tokens[matches[opening]]['start'],
             indents[parameter_headers[opening]])
     }
@@ -328,7 +328,7 @@ function structural_edits(
     return edits.copy()
 }
 
-function apply_edits(source: String, edits: Dictionary) -> String
+function apply_edits(source: String, edits: Dictionary[Int, Dictionary]) -> String
 {
     let output = ''
     let position = 0
@@ -346,16 +346,92 @@ function apply_edits(source: String, edits: Dictionary) -> String
     return output.copy()
 }
 
+function source_origins(source: String) -> List[Int]
+{
+    let origins: List[Int] = []
+    for (let index in 0 to source.len()) {
+        origins.append(index)
+    }
+    return origins.copy()
+}
+
+function apply_mapped_edits(
+        source: String,
+        origins: List[Int],
+        edits: Dictionary[Int, Dictionary],
+) -> MappedSource {
+    let output = ''
+    let output_origins: List[Int] = []
+    let position = 0
+    while (position < source.len()) {
+        if (position in edits) {
+            let edit = edits[position]
+            delete(edits, position)
+            output.append(edit['text'])
+            for (let index in 0 to edit['text'].len()) {
+                output_origins.append(-1)
+            }
+            position = edit['end']
+        } else {
+            output.append(source[position])
+            output_origins.append(origins[position])
+            position = position + 1
+        }
+    }
+    return {
+        'source': output.copy(),
+        'origins': output_origins.copy(),
+    }
+}
+
+function mapped_edits(
+        original: String,
+        formatted: String,
+        origins: List[Int],
+) -> List[model::Edit] {
+    let result: List[model::Edit] = []
+    let original_start = 0
+    let formatted_start = 0
+    for (let formatted_index in 0 to formatted.len()) {
+        let origin = origins[formatted_index]
+        if (origin >= 0) {
+            let replacement = formatted[formatted_start:formatted_index]
+            if (origin > original_start or replacement.len() > 0) {
+                if (replacement != original[original_start:origin]) {
+                    result.append({
+                        'start': original_start,
+                        'end': origin,
+                        'text': replacement.copy(),
+                    })
+                }
+            }
+            original_start = origin + 1
+            formatted_start = formatted_index + 1
+        }
+    }
+    let replacement = formatted[formatted_start:formatted.len()]
+    if (original_start < original.len() or replacement.len() > 0) {
+        if (replacement != original[original_start:original.len()]) {
+            result.append({
+                'start': original_start,
+                'end': original.len(),
+                'text': replacement.copy(),
+            })
+        }
+    }
+    return result.copy()
+}
+
 function implication_edits(
         source: String,
         line_break: String,
-) -> Dictionary {
+) -> Dictionary[Int, Dictionary] {
     let clean: List[Bool] = []
     let indents: List[String] = []
     let lines: List[Int] = []
     let tokens = lexical_view(source, clean, indents, lines)
     let matches = parenthesis_matches(tokens)
-    let edits: Dictionary = {}
+    let edits: Dictionary[Int, Dictionary] = {}
     for (let index in 0 to tokens.len()) {
         if (tokens[index]['kind'] != 'implies' or index == 0 or
             index + 1 >= tokens.len()) {
@@ -468,7 +544,8 @@ function source(source_text: String) -> String
     }
     let edits = whitespace_edits(source_text, all_tokens)
     let structure = structural_edits(
-        source_text, tokens, clean_before, indents, lines, line_break)
+        source_text, all_tokens, tokens,
+        clean_before, indents, lines, line_break)
     for (let start in keys(structure)) {
         edits[start] = structure[start]
     }
@@ -476,6 +553,37 @@ function source(source_text: String) -> String
         source_text, edits)
     let implications = implication_edits(formatted, line_break)
     return apply_edits(formatted, implications)
+}
+
+function edits(source_text: String) -> List[model::Edit]
+{
+    let all_tokens = syntax::tokens(source_text)
+    let clean_before: List[Bool] = []
+    let indents: List[String] = []
+    let lines: List[Int] = []
+    let tokens = lexical_view(
+        source_text, clean_before, indents, lines)
+    let line_break = syntax::line_feed
+    for (let token in all_tokens) {
+        if (token['kind'] == 'newline') {
+            line_break = source_text[token['start']:token['end']]
+            break
+        }
+    }
+
+    let first_edits = whitespace_edits(source_text, all_tokens)
+    let structure = structural_edits(
+        source_text, all_tokens, tokens,
+        clean_before, indents, lines, line_break)
+    for (let start in keys(structure)) {
+        first_edits[start] = structure[start]
+    }
+    let first = apply_mapped_edits(
+        source_text, source_origins(source_text), first_edits)
+    let second_edits = implication_edits(first['source'], line_break)
+    let second = apply_mapped_edits(
+        first['source'], first['origins'], second_edits)
+    return mapped_edits(source_text, second['source'], second['origins'])
 }
 
 function is_formatted(source_text: String) -> Bool
@@ -523,6 +631,7 @@ function main(arguments: List[String]) -> Int
 
 return {
     'Edit'         : Edit,
+    'edits'        : edits,
     'source'       : source,
     'is_formatted' : is_formatted,
     'file'         : file,

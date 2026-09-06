@@ -1,4 +1,4 @@
-#include "tapas/lsp/server.h"
+#include "lsp/server.h"
 
 int main(void)
 {
