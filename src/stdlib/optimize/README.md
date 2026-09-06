@@ -1,15 +1,72 @@
-# Tapas `optimize` 包设计
+# optimize：基于 Rule 的约束传播与目标优化
 
-简体中文 | [English](README_en.md) | [项目主页](../../../README.md)
+`optimize` 计划基于 Rule 基础设施提供变量传播、可行性搜索和目标优化。Variable 作为普通 Term 参与表达式，Condition 表示必须成立的硬约束，Requirement 表示规则组合；优化目标由 evaluator 配置提供，不写入 RuleIR。
 
-> 状态：设计阶段。
-> `optimize` 尚未实现，也不属于当前对外公开的标准库 API。
-> 本目录只保存设计文档，当前构建和安装不会提供可导入的 `optimize` 包。
+`optimize` 当前处于设计阶段，尚未实现，也不属于对外公开的标准库 API。当前构建和安装不会提供可导入的 `optimize` 包。
 
-`optimize` 基于 Rule 基础设施提供变量传播、可行性搜索和目标优化。
-它不增加 Tapas 语法，也不定义另一套公共表达式 IR。
+## 支持范围
 
-```text
+### 类型
+
+```tap
+optimize::Variable: Type
+optimize::Domain: Type
+optimize::Assignment: Type
+optimize::Propagation: Type
+optimize::Feasibility: Type
+optimize::Optimality: Type
+optimize::Direction: Type
+optimize::Backend: Type
+```
+
+`Variable` 表示具有稳定身份和值 Type 的待求变量，并同时匹配 `types::Term` 与对应的 `types::term(value_type)`。`Domain` 表示 Variable 的取值范围，`Assignment` 按 Variable 身份保存具体赋值。
+
+`Propagation`、`Feasibility` 和 `Optimality` 分别表示传播、可行性与目标优化的结果。`Direction` 表示最小化或最大化方向，`Backend` 表示优化后端配置。
+
+### 通用操作
+
+```tap
+optimize::variable(name: String, value_type: Type) -> Variable
+optimize::variable_in(name: String, value_type: Type, domain: Domain) -> Variable
+optimize::domain(result: Propagation, variable: Variable) -> Domain
+optimize::value(assignment: Assignment, variable: Variable) -> AnyType
+```
+
+`variable` 创建具有新身份的不可变 Variable。`name` 只用于诊断和展示，不参与身份比较。
+
+`variable_in` 创建带有初始 Domain 的 Variable。Domain 必须与 `value_type` 相容。
+
+`domain` 返回传播结果中指定 Variable 的 Domain。`value` 返回 Assignment 中指定 Variable 的赋值；查询按 Variable 身份而不是显示名称匹配。
+
+### Evaluator
+
+```tap
+optimize::propagator: evaluators::Evaluator
+optimize::find_feasible_assignment: evaluators::Evaluator
+optimize::find_optimal(target: types::Term, direction: Direction) -> evaluators::Evaluator
+optimize::minimize: Direction
+optimize::maximize: Direction
+```
+
+`propagator` 传播 Condition 对 Variable Domain 的约束，并在 `evaluators::Result.value` 中返回 Propagation。
+
+`find_feasible_assignment` 搜索满足全部 Condition 的赋值，并返回 Feasibility。不可行是正常的求解结论，不是 evaluator 执行失败。
+
+`find_optimal` 使用 `target` 和 `direction` 创建目标优化 evaluator，并返回 Optimality。目标可以是 Variable，也可以是后端支持的数值 Term；同一 RuleInstance 可以使用不同目标、方向和后端，而不改变 RuleIR。
+
+### 限制
+
+`optimize` 不增加关键词、专用 AST、字节码、RuleItem 或与 RuleIR 并列的公共 Optimization IR。普通 Call 和其他 Extension 只有在 evaluator、Provider 或后端提供明确 lowering 时才受支持；优化器不得从函数实现猜测数学语义。
+
+所有 evaluator 只接受签名及约束明确允许的输入。不受支持但合法的 Type、Term 或 Provider 返回 `Unsupported`；参数、Capture、身份、循环、资源、后端或内部执行错误返回 `Failed`。实现不得忽略 Condition，也不得使用语义不同的近似操作替代不支持的节点。
+
+## 设计说明
+
+以下内容说明拟议接口的使用方式、RuleIR 接入方式、执行协议与实现约束；所有接口均尚未实现。
+
+### 使用示例
+
+```tap
 var quantity = optimize::variable(
     "quantity",
     types::Int,
@@ -45,8 +102,6 @@ let optimal = evaluators::eval(
 )
 ```
 
-本文描述的是拟议的包设计，所有接口均尚未实现。
-
 ## 1. 设计边界
 
 `optimize` 计划作为普通源码包实现。
@@ -73,7 +128,7 @@ Variable、方向、evaluator 和后端都通过普通包接口提供。
 
 ### 2.1 创建
 
-```text
+```tap
 var quantity = optimize::variable(
     "quantity",
     types::Int,
@@ -85,7 +140,7 @@ var quantity = optimize::variable(
 
 Variable 同时匹配：
 
-```text
+```tap
 optimize::Variable
 types::Term
 types::term(variable_value_type)
@@ -93,7 +148,7 @@ types::term(variable_value_type)
 
 因此 Variable 直接使用 Term 运算：
 
-```text
+```tap
 let next = quantity + 1
 let positive = quantity > 0
 ```
@@ -136,7 +191,7 @@ Assignment、Domain 和目标引用都按 Variable 身份匹配。
 | Capture | evaluator 执行时从 Rule 闭包环境读取 |
 | Variable | 由优化 evaluator 传播、搜索或决定 |
 
-```text
+```tap
 let Plan = rule (limit: Int) {
     quantity >= 0
     quantity <= limit
@@ -174,7 +229,7 @@ RuleIR 是优化包唯一的公共表达式 IR：
 
 每个 Condition 都解释为必须成立的硬约束：
 
-```text
+```tap
 let Allocation = rule (capacity: Int) {
     quantity >= 0
     quantity <= capacity
@@ -204,7 +259,7 @@ ConditionView 只在一次 evaluator 执行中存在，不复制 RuleIR，也不
 
 Requirement 按 RuleIR.items 顺序在当前位置展开：
 
-```text
+```tap
 let NonNegative = rule (value: Int) {
     value >= 0
 }
@@ -278,7 +333,7 @@ RuleInstance
 
 ## 5. 传播
 
-```text
+```tap
 let result = evaluators::eval(
     Plan(10),
     optimize::propagator,
@@ -297,7 +352,7 @@ Propagation {
 `consistent` 为 `false` 表示当前 Condition 不能同时成立。
 Variable Domain 通过接口查询：
 
-```text
+```tap
 let domain = optimize::domain(
     result.value,
     quantity,
@@ -311,7 +366,7 @@ Bool Domain 表示允许的布尔值集合；Int Domain 可以表示区间和离
 
 ## 6. 可行赋值
 
-```text
+```tap
 let result = evaluators::eval(
     Plan(10),
     optimize::find_feasible_assignment,
@@ -332,7 +387,7 @@ Feasibility {
 
 Assignment 按 Variable 身份索引：
 
-```text
+```tap
 let value = optimize::value(
     result.value.assignment,
     quantity,
@@ -343,7 +398,7 @@ let value = optimize::value(
 
 目标保存在 evaluator 配置中，不写入 RuleIR：
 
-```text
+```tap
 let evaluator = optimize::find_optimal(
     cost,
     optimize::minimize,
@@ -357,7 +412,7 @@ let result = evaluators::eval(
 
 目标可以是 Variable，也可以是 evaluator 支持的数值 Term：
 
-```text
+```tap
 let evaluator = optimize::find_optimal(
     quantity * 3,
     optimize::minimize,

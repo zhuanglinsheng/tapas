@@ -1,8 +1,150 @@
-# solve 包：接口、配置与实现
+# solve：规则求解与概率采样
 
-`solve::hold(Rule | RuleInstance)` 查询是否存在满足规则的实例。入门程序见[求解示例](../../../examples/solve/README.md)。以下命令从仓库根目录执行。
+`solve` 提供 Rule 与 RuleInstance 的可满足性查询，以及有限定义域上保持输入分布的规则采样。`hold` 在本次查询配置的整数参数域内搜索满足规则的实例，并返回状态、witness、查询范围和诊断信息；返回结论只针对该配置域，不表示整个 Int 类型上的全局结论。`sample` 从用户指定的采样变量中产生候选输入，由 solver 判断是否存在满足 Rule 的补全，并使接受的采样变量保持可行域上的条件分布。
 
-## 依赖
+## 支持范围
+
+### 类型
+
+```tap
+solve::HoldResult: Type
+solve::SampleResult: Type
+```
+
+`HoldResult` 是具有以下字段的结构值：
+
+| 字段 | 类型 | 含义 |
+|---|---|---|
+| `status` | `String` | `sat`、`unsat`、`unknown`、`unsupported` 或 `error` |
+| `scope` | `String` | 当前固定为 `configured`，表示结论针对原 Rule 与本次配置的整数参数域 |
+| `reason` | `String` | 不支持、错误、未决、绑定越界或诊断不可用的原因；普通冲突列表可用时为空字符串 |
+| `witness` | `Unknown` | `sat` 时为输入 Rule 的实例，其他状态为 Nil |
+| `integer_min` | `Int` | 本次查询采用的整数参数域下界；presolve 可以进一步收紧变量范围 |
+| `integer_max` | `Int` | 本次查询采用的整数参数域上界；presolve 可以进一步收紧变量范围 |
+| `conflicts` | `List[{rule: Rule, condition: String}]` | 在配置域与绑定背景下不能同时成立的条件集合，不保证最小 |
+| `bindings` | `Dictionary` | 已绑定实例的参数字典；未绑定 Rule 查询为空字典 |
+
+`SampleResult` 是具有以下字段的结构值：
+
+| 字段 | 类型 | 含义 |
+|---|---|---|
+| `status` | `String` | `complete`、`incomplete`、`unknown`、`unsupported` 或 `error` |
+| `reason` | `String` | 未完成、未决、不支持或错误的原因；完成时为空字符串 |
+| `samples` | `List[Dictionary]` | 按接受顺序返回的完整参数赋值，键为 Rule 形参名，允许重复 |
+| `candidates` | `Int` | 已产生的原始候选数 |
+| `solver_calls` | `Int` | 候选可行性查询次数 |
+| `core_calls` | `Int` | 用于 core 泛化的额外 solver 查询次数 |
+| `cache_hits` | `Int` | 命中安全不可行区域、未提交 solver 的候选数 |
+| `cache_regions` | `Int` | 返回时缓存中未被其他区域包含的区域数 |
+| `trace` | `List[Dictionary]` | 启用 trace 时按候选记录的实验数据；默认是空列表 |
+| `elapsed` | `Float` | 本次调用的墙钟运行时间，单位为秒 |
+
+### 通用操作
+
+```tap
+solve::hold(rule: Rule | RuleInstance) -> solve::HoldResult
+```
+
+`hold` 查询是否存在满足 `rule` 的实例。传入 Rule 时，它搜索未绑定参数；传入 RuleInstance 时，它保留已有绑定并检查其余约束。`sat` 表示找到了配置域内且通过 VM checker 复核的实例，`unsat` 表示配置域内无解，`unknown` 表示超时等原因导致结论未决。
+
+`unsupported` 表示规则使用了当前后端无法翻译的合法结构，`error` 表示配置、依赖、通信、模型或 witness 复核失败。业务代码必须先检查 `status`，不能根据 `witness` 或 `conflicts` 字段是否存在推断结果。
+
+### 概率采样
+
+```tap
+solve::sample(
+    rule: Rule,
+    count: Int,
+    space: Dictionary[String, Indexable],
+    *,
+    distributions: Dictionary[String, finite::Distribution]
+        | finite::Distribution = {},
+    rng: random::Generator =
+        random::generator(random::pcg32_xsh_rr, 0),
+    candidate_limit: Int = count * 1000,
+    time_limit: Float | Nil = nil,
+    core_budget_factor: Float = 1.0,
+    fairness_interval: Int = 4,
+    generalization: String = 'online_mass_core',
+    scheduler: String = 'mass_fair',
+    trace: Bool = false
+) -> solve::SampleResult
+```
+
+`rule`、`count` 和 `space` 是必填位置参数。`*` 之后的参数均可省略，传入时必须使用参数名。`count` 是需要返回的样本数，必须为非负整数。
+
+`space` 将 Rule 形参名映射到完整的有限定义域。键必须精确匹配 Rule 形参名，值必须支持 `index -> value` 读取并提供有限长度。出现在 `space` 中的形参是采样变量；其他形参是由 solver 补全、不承诺概率分布的 existential witness。
+
+`distributions` 可以按形参名为采样变量指定一维有限分布。未出现的采样变量在其定义域上使用均匀分布；指定的分布必须满足 `finite::shape(distribution) == finite::index([len(domain)])`。这些一维分布按 Rule 形参顺序组成独立联合分布。
+
+需要相关先验时，`distributions` 也可以直接传入一个联合 `finite::Distribution`。其 rank 必须等于采样变量数，第 `i` 个 shape 分量必须等于第 `i` 个采样变量的定义域长度，维度顺序采用 Rule 形参顺序。独立先验的缓存并集质量使用结构化划分计算；一般联合先验使用有限索引空间枚举精确计算，其时间与联合索引空间大小成正比，适用于能够完整枚举的小域。从分布得到坐标后，`sample` 使用每个 `domain[i]` 取得传给 Rule 的真实值。
+
+`rng` 提供可重现的随机状态，采样会推进传入 Generator 的状态。省略时，每次调用使用由 `random::pcg32_xsh_rr` 和 seed `0` 新建的 Generator。
+
+`candidate_limit` 是本次调用最多产生的原始候选数。被接受、被 solver 拒绝和命中已缓存不可行区域的候选都计入该上限。达到上限但尚未得到 `count` 个样本时，返回已产生的前缀并将结果标记为未完成。
+
+`time_limit` 是整个 `sample` 调用的墙钟时间上限，单位为秒。`nil` 表示不增加总时间限制，但单次 solver 查询仍遵守求解后端的超时。达到总时限时返回已产生的前缀并标记为未完成。
+
+`core_budget_factor` 是 core 泛化的额外求解预算系数 `β`。处理 `t` 个原始候选后，累计最多执行 `floor(β * sqrt(t))` 次额外 solver 查询。这些查询只用于将已证明不可行的具体输入泛化成更大的安全不可行区域，不包括对原始候选的可行性查询。`core_budget_factor` 必须大于零。
+
+`fairness_interval` 控制多个未完成 core 泛化节点之间的调度。节点 `(I, J)` 表示所有满足 `I ⊆ C ⊆ I ∪ J` 的候选绑定集，其优先级是 `π(G(I) \ U)`：最小端区域相对于当前安全缓存并集 `U` 的未覆盖质量。该质量按照所选的独立或相关联合分布精确计算。一般查询选择优先级最大的节点；每第 `fairness_interval` 次额外查询改为推进创建时间最早的未完成节点。`fairness_interval` 必须大于等于 `2`。
+
+`generalization` 选择失败候选的处理方式：
+
+- `none` 不建立缓存，是纯 rejection 基线；
+- `full` 只缓存完整失败赋值；
+- `raw_core` 将采样绑定作为 CP-SAT assumptions，在同一次业务求解中缓存求解器直接返回的充分绑定 core；不支持 assumption core 的查询按安全契约退化为完整赋值，trace 分别记为 `unsat_raw_core` 和 `unsat_raw_fallback`；
+- `deletion_mus` 按形参顺序逐项尝试删除绑定，完成后得到包含关系最小的 core；
+- `minimum_core` 按绑定数从少到多枚举子集，第一个经证明 UNSAT 的子集具有最小基数；该模式具有指数级最坏查询数，只适合小维度实验；
+- `online_mass_core` 使用可暂停的 `(I, J)` 分支定界搜索，也是默认生产模式。
+
+`scheduler` 选择额外查询在未完成搜索之间的顺序：`mass_fair` 采用未覆盖质量优先并按 `fairness_interval` 公平轮转，`mass` 只按未覆盖质量，`fifo` 按创建顺序，`binding_count` 优先推进当前候选绑定较少的搜索。它不改变缓存安全性或输出分布，只改变有限预算投向哪里。
+
+`trace` 为 `true` 时，`SampleResult.trace` 按候选顺序记录 `outcome`、累计调用数、缓存命中数、缓存区域数、活动搜索数和精确 `cache_mass`。一般联合分布的质量需要枚举整个有限索引空间，因此 trace 会增加运行时间；性能实验应同时报告关闭 trace 的端到端时间。
+
+`SampleResult` 除样本和原有计数外，还返回 `cache_hits`、最终 `cache_regions` 与 `trace`。总 solver 调用数为 `solver_calls + core_calls`；`solver_calls` 只计原始候选查询，缓存命中不计入其中。
+
+`sample` 只将经过完整求解并确认存在合法补全的候选加入结果。只有可靠的 UNSAT 结论才能产生缓存区域；UNKNOWN、超时和不支持的规则不得当作 UNSAT 并跳过，而应结束本次调用并在结果中报告原因。失败候选创建可暂停、恢复的 `(I, J)` 分支搜索；每个已经查询并证明 UNSAT 的端点立即加入安全缓存，较大的安全区域会删除被其包含的旧缓存区域。分支、继承已知端点、零质量剪枝和缓存整理不消耗 solver 预算。第一版固定串行处理候选且 solver 使用单 worker，不提供 `workers` 参数。
+
+例如：
+
+```tap
+let R = rule (size: String, quantity: Int, discount: Int) {
+    discount <= quantity * 10
+}
+
+let result = solve::sample(
+    R,
+    100,
+    {
+        'size': ['small', 'medium', 'large'],
+        'quantity': [1, 2, 3, 4]
+    },
+    distributions = {
+        'size': finite::categorical([1.0, 2.0, 7.0])
+    },
+    candidate_limit = 10000,
+    time_limit = 30.0
+)
+```
+
+`size` 和 `quantity` 是采样变量；`discount` 由 solver 补全。`size` 使用指定权重，`quantity` 使用均匀分布。每个接受的 assignment 都是包含三个形参完整赋值的 Dictionary；概率保证只适用于 `size` 和 `quantity`。
+
+### 支持的规则
+
+`hold` 支持 Int、Bool、有限字符串 Enum 参数及具体值绑定，支持整数线性算术、标量比较、布尔组合、整数区间与点集，以及 `restrict`、动态 Rule 和非递归嵌套 Rule。已绑定的固定字段结构参数，以及由标量参数构造并传给子 Rule 的固定字段记录，也可以参与受支持的字段读取、算术和条件。
+
+### 限制
+
+`hold` 不执行任意用户函数来探测约束，不支持浮点、变量乘变量、除法、未绑定结构参数搜索、符号索引、递归 Rule、匿名词法作用域或未知 Extension。规则包含当前源码 IR 未记录的完全未使用局部初始化表达式时，查询返回 `unsupported`。
+
+默认整数参数域为闭区间 `[-10¹², 10¹²]`。该域约束输入 Rule 的未绑定 Int 参数和 RuleInstance 已绑定的 Int 参数，但不改变 Tapas Int、普通 checker、捕获常量或中间算术结果的语义。所有函数只接受签名及约束明确允许的输入；配置或模型不合法时返回 `error`，不会静默回退。
+
+## 使用说明
+
+入门程序见[求解示例](../../../examples/solve/README.md)。以下命令从仓库根目录执行。
+
+### 依赖
 
 Tapas 构建不依赖 Python 或 OR-Tools；调用求解需要 Python 3 和本目录的依赖：
 
@@ -14,9 +156,9 @@ TAPAS_SOLVE_PYTHON="$PWD/.venv-solve/bin/python" build/bin/tapas examples/solve/
 
 若默认 `python3` 已安装依赖，可省略 `TAPAS_SOLVE_PYTHON`。它接受解释器路径，不接受带参数的 shell 命令。
 
-## 接口
+### 基本查询
 
-```tapas
+```tap
 let R = rule (x: Int, y: Int) {
     x in rules::range(0, 10)
     y in rules::range(0, 10)
@@ -30,16 +172,6 @@ if (result::status == 'sat') {
     assert(result::witness)
 }
 ```
-
-| 字段 | 含义 |
-|---|---|
-| `status` | `sat`、`unsat`、`unknown`、`unsupported` 或 `error` |
-| `witness` | `sat` 时是输入 Rule 的实例；其他状态为 Nil |
-| `scope` | `configured`：结论针对原 Rule 加上本次配置的整数参数域，不表示整个 Int 类型上的全局结论 |
-| `conflicts` | 冲突列表，每项为 `{rule: Rule, condition: String}`；说明这些条件在配置域与绑定背景下不能同时成立，不保证最小集合 |
-| `bindings` | 已绑定实例的参数字典；未绑定 Rule 查询为空字典 |
-| `reason` | `unsupported/error/unknown` 的原因，或绑定越界、冲突详情不可用等补充说明；普通冲突列表可用时为空字符串 |
-| `integer_min` / `integer_max` | 本次查询实际采用的整数参数域端点，presolve 可进一步收紧 |
 
 ## 配置整数参数域
 
@@ -87,7 +219,7 @@ TAPAS_SOLVE_INT_MIN=0 TAPAS_SOLVE_INT_MAX=1000 build/bin/tapas examples/solve/fe
 
 `HoldResult.conflicts` 是列表，每一项包含实际的 Rule 对象和可读的条件字符串。直接使用通用打印即可：
 
-```tapas
+```tap
 pprint(result::conflicts)
 ```
 
