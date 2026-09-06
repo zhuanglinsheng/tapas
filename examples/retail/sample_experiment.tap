@@ -1,0 +1,118 @@
+/// sample_experiment.tap
+///
+/// 在同一组 retail 候选流上比较 sample 的泛化与调度策略。
+
+import model.tap as model
+import simulation.tap as simulation
+
+let initial_state = simulation::initial_state('keyboard-clicky-plain')
+let exchange_parameters = simulation::exchange_parameters(
+    'keyboard-clicky-plain')
+let Authentication = types::enum(
+    '', 'yusuf_rossi_9620', 'another_user')
+let Confirmation = types::enum(
+    '', 'keyboard-clicky-plain', 'thermostat-google-home')
+
+// 只把会随业务请求变化的三个字段作为概率输入；其余背景保持固定。
+let AcceptedExchange = rule(
+        payment_capacity: Int,
+        authenticated_user_id: Authentication,
+        confirmed_target_id: Confirmation,
+) {
+    let previous_state = {
+        'order_id': initial_state::order_id,
+        'user_id': initial_state::user_id,
+        'status': initial_state::status,
+        'item_id': initial_state::item_id,
+        'payment_method_id': initial_state::payment_method_id,
+        'payment_capacity': payment_capacity,
+        'authenticated_user_id': authenticated_user_id,
+        'confirmed_target_id': confirmed_target_id,
+    }
+    model::ExchangeAllowed(previous_state, exchange_parameters)
+}
+
+let experiment_space = {
+    'payment_capacity': rules::range(90, 109),
+    'authenticated_user_id': [
+        '', 'yusuf_rossi_9620', 'another_user'],
+    'confirmed_target_id': [
+        '', 'keyboard-clicky-plain', 'thermostat-google-home'],
+}
+
+// 低额度、未认证和未确认更常见；可行输入的先验质量为 4%。
+let experiment_distributions = {
+    'payment_capacity': finite::categorical([
+        2.0, 2.0, 2.0, 2.0, 2.0,
+        2.0, 2.0, 2.0, 2.0, 2.0,
+        1.0, 1.0, 1.0, 1.0, 1.0,
+        1.0, 1.0, 1.0, 1.0, 1.0,
+    ]),
+    'authenticated_user_id': finite::categorical([6.0, 3.0, 1.0]),
+    'confirmed_target_id': finite::categorical([5.0, 4.0, 1.0]),
+}
+
+let seeds = [11, 29, 47, 71, 97]
+let configurations = [
+    {'mode': 'none', 'scheduler': 'mass_fair'},
+    {'mode': 'full', 'scheduler': 'mass_fair'},
+    {'mode': 'raw_core', 'scheduler': 'mass_fair'},
+    {'mode': 'deletion_mus', 'scheduler': 'mass_fair'},
+    {'mode': 'minimum_core', 'scheduler': 'mass_fair'},
+    {'mode': 'online_mass_core', 'scheduler': 'mass_fair'},
+    {'mode': 'online_mass_core', 'scheduler': 'mass'},
+    {'mode': 'online_mass_core', 'scheduler': 'fifo'},
+    {'mode': 'online_mass_core', 'scheduler': 'binding_count'},
+]
+for (let seed in seeds) {
+    for (let configuration in configurations) {
+        let mode = configuration::mode
+        let scheduler = configuration::scheduler
+        let result = solve::sample(
+            AcceptedExchange,
+            10,
+            experiment_space,
+            distributions = experiment_distributions,
+            rng = random::generator(random::pcg32_xsh_rr, seed),
+            candidate_limit = 2000,
+            time_limit = 60.0,
+            core_budget_factor = 4.0,
+            fairness_interval = 4,
+            generalization = mode,
+            scheduler = scheduler,
+            trace = true
+        )
+        let final_trace = result::trace[len(result::trace) - 1]
+        print(
+            'RESULT|', mode,
+            '|', scheduler,
+            '|', seed,
+            '|', result::status,
+            '|', len(result::samples),
+            '|', result::candidates,
+            '|', result::solver_calls,
+            '|', result::core_calls,
+            '|', result::cache_hits,
+            '|', result::cache_regions,
+            '|', final_trace['cache_mass'],
+            '|', result::elapsed
+        )
+    }
+}
+
+// 可行域中只有额度 100--109 会被接受，且条件分布在这十点上均匀。
+for (let seed in seeds) {
+    let distribution_check = solve::sample(
+        AcceptedExchange,
+        200,
+        experiment_space,
+        distributions = experiment_distributions,
+        rng = random::generator(random::pcg32_xsh_rr, seed + 1000),
+        candidate_limit = 20000,
+        time_limit = 60.0,
+        generalization = 'raw_core'
+    )
+    for (let test_data in distribution_check::samples) {
+        print('DISTRIBUTION|', seed, '|', test_data['payment_capacity'])
+    }
+}

@@ -525,3 +525,5 @@ let impossible = solve::hold(incompatible)
 如果出现 `unsupported`、`unknown` 或 `error`，分别表示查询尚不支持、未能判定或执行出错，不能当作业务通过或违规。具体配置与支持范围见 solve 包说明。
 
 本例只模拟单商品订单的一步换货，不连接真实支付，也不扣减库存。业务背景参考 [Retail Policy](https://github.com/sierra-research/tau2-bench/blob/main/data/tau2/domains/retail/policy.md) 和 [task 0](https://github.com/sierra-research/tau2-bench/blob/main/data/tau2/domains/retail/tasks.json)，数据和流程均经过简化。
+
+采样算法的可重复消融、置信区间和条件分布检查见 [Retail 概率采样数值实验](SamplingExperiment.md)。
