@@ -1,0 +1,70 @@
+function myfn(x: Int) -> Int
+{
+	return x
+}
+print(myfn)
+pprint(myfn)
+
+// No solver or OR-Tools required. print = abbreviated; pprint = full.
+var calls = [0]
+function effect() -> Bool { calls[0] = calls[0] + 1; return true }
+let Source = rule(quantity: Int) { quantity >= 2; effect() }
+print('[Source Rule: abbreviated / full]')
+print(Source)
+pprint(Source)
+
+let Dynamic = rules::restrict(Source, 'quantity': rules::points(types::Int, 3, 5))
+print('[Dynamic Rule: abbreviated / full]')
+print(Dynamic)
+pprint(Dynamic)
+
+let instance = Source(3)
+print('[RuleInstance: abbreviated / full; no checker execution]')
+print(instance)
+pprint(instance)
+
+let ir = rules::inspect(Dynamic)
+print('[RuleIR: abbreviated / full]')
+print(ir)
+pprint(ir)
+print('[Terms and items: abbreviated / full]')
+for (let term in rules::terms(Dynamic)) { print(term); pprint(term) }
+for (let item in rules::items(Dynamic)) { print(item); pprint(item) }
+print('[Domains: abbreviated / full]')
+let points = rules::points(types::String, 'red', 'blue')
+print(points)
+pprint(points)
+print(rules::range(1, 10))
+pprint(rules::range(1, 10))
+print('[Rule function: abbreviated / full]')
+print(rules::check)
+pprint(rules::check)
+print('[Generic nested container]')
+pprint([{'rule': Source, 'condition': 'quantity >= 2'}])
+assert(rule { calls[0] == 0 })
+print('No checker or captured function was executed.')
+
+// Declaration names survive aliases and closure capture. Anonymous literals stay unnamed.
+function make_adder(offset: Int) -> Function[Int] -> Int {
+    function add(value: Int) -> Int { return value + offset }
+    var retained = add
+    return retained
+}
+let saved_adder = make_adder(2)
+let alias_adder = saved_adder
+pprint(alias_adder)
+assert(rule { alias_adder(3) == 5 })
+let anonymous_function = (value: Int) -> Int { return value }
+pprint(anonymous_function)
+pprint(rule(value: Int) { value > 0 })
+let alias_rule = Source
+pprint(alias_rule)
+let anonymous_list_function = (items: List[Int]) -> List[Int] { return items }
+pprint(anonymous_list_function)
+
+// Explicit runtime names are supported before named Rule syntax is introduced.
+let parameter = rules::parameter('value', types::Int)
+let named_rule = rules::make('Positive', [parameter], [rules::condition(parameter > rules::constant(0))])
+pprint(named_rule)
+pprint(rules::inspect(named_rule))
+pprint(named_rule(3))

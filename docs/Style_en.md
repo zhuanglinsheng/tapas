@@ -35,25 +35,23 @@ signature line instead of adding another line:
 
 ```text
 function structural_edits(
-        source      : String,
-        tokens      : List,
+        source: String,
+        tokens: List,
         clean_before: List[Bool],
-        indents     : List[String],
-        line_break  : String,
+        indents: List[String],
+        line_break: String,
 ) -> Dictionary {
     return {}
 }
 ```
 
-Continuation parameters are indented eight spaces from the function
-declaration. When a function or Rule parameter list spans multiple lines, align
-all parameter `:` characters vertically. The alignment column immediately
-follows the longest parameter name: that name has no space before `:`, while
-shorter names are padded with spaces. Keep one space between `:` and the Type.
-A single-line parameter list retains the compact `name: Type` form. This rule
-depends on whether the parameter list crosses a physical line, not on a
-line-length threshold. A return type split across lines also forms a multiline
-signature.
+Continuation parameters for both functions and Rules are indented eight spaces
+from the declaration line; a closing parenthesis on its own line aligns with that line.
+All parameter lists default to `name: Type`: no space before `:` and one space
+after it. Neither single-line nor multiline lists require vertical alignment.
+Manual colon alignment is optional, not a formatting check requirement; the
+formatter neither adds alignment padding nor removes existing manual alignment.
+A return type split across lines also forms a multiline signature.
 
 ## Control Flow
 
@@ -84,6 +82,8 @@ parenthesis line.
 
 ## Rule Literals
 
+For `implies`, omit antecedent parentheses only for a single Bool or RuleInstance variable; omit consequent braces only for a single Bool variable, as in `a implies b`. Use parentheses around calls and other antecedents and braces around other consequents; multiple consequents require a block. The formatter applies this recommendation while preserving comments it cannot safely relocate.
+
 Write a Rule used by only one assertion directly inside `assert`, without an
 otherwise unused local name:
 
@@ -99,12 +99,12 @@ let Positive = rule (value: Int) {
 }
 ```
 
-For a multiline Rule parameter list, use the same alignment as for function
-parameters:
+For a multiline Rule parameter list, use the same indentation and default
+spacing as for function parameters:
 
 ```text
 let WithinRange = rule (
-        value  : Int,
+        value: Int,
         minimum: Int,
         maximum: Int,
 ) {

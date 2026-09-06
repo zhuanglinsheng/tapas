@@ -337,7 +337,8 @@ static int execute_block_capture(
 		uint_cmds ncmd_old = tvmcmd_vect_size32(tcmds);
 		terror_set_source_context(tstring_cstr(code));
 		terror_set_file_context(file, start_line, 0);
-		*info = parse_unit(syner, code, tcmds, consts, paths, npaths, 1, 0);
+		/* A Markdown fence contains a sequence of statements. */
+		*info = parse_sequence(syner, code, tcmds, consts, paths, npaths);
 		twrapper *wrapper = tanalyser_wrap(tcmds, consts, info);
 		if (wrapper) {
 			tlib_set_wrapper(sess->lib, wrapper);

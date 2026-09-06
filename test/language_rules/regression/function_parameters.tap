@@ -1,0 +1,73 @@
+import ../fixtures/reflected_functions.tap as imported
+
+var reflection_calls = [0]
+function reflected(amount: Int, label: String) -> Int
+{
+    reflection_calls[0] = reflection_calls[0] + 1
+    return amount
+}
+let signature_info = parameters(reflected)
+let anonymous = (flag: Bool) -> Bool
+{ return flag }
+let unannotated = (item)
+{ return item }
+let no_parameters = ()
+{ return 1 }
+let variadic = (...)
+{ return __nparam__() }
+function factory(offset: Int)
+{
+    return (value: Int) -> Int
+    { return value + offset }
+}
+let closure = factory(2)
+let duplicate = reflected.copy()
+let Record = types::make_type('count': types::Int)
+function structured(record: Record)
+{ return record::count }
+function typed_factory()
+{
+    return (record: Record)
+    { return record::count }
+}
+let first_closure = typed_factory()
+let second_closure = typed_factory()
+let copied_structured = structured.copy()
+let native_info = parameters(len)
+assert(rule {
+    reflection_calls[0] == 0
+    len(signature_info) == 2
+    signature_info[0][0] == 'amount'
+    signature_info[1][0] == 'label'
+    types::matches(1, signature_info[0][1])
+    types::matches('a', signature_info[1][1])
+    parameters(anonymous)[0][0] == 'flag'
+    types::matches(true, parameters(anonymous)[0][1])
+    parameters(unannotated)[0][0] == 'item'
+    types::matches('anything', parameters(unannotated)[0][1])
+    len(parameters(no_parameters)) == 0
+    len(parameters(variadic)) == 0
+    parameters(closure)[0][0] == 'value'
+    closure(3) == 5
+    parameters(duplicate)[1][0] == 'label'
+    types::matches({'count': 1}, parameters(structured)[0][1])
+    native_info[0][0] == 'value'
+    types::matches(1, native_info[0][1])
+    parameters(math::sqrt)[0][0] == 'value'
+    parameters(print)[0][0] == 'values'
+    parameters(assert)[0][0] == 'rule'
+    parameters(rules::check)[0][0] == 'rule'
+    parameters(input)[0][0] == 'prompt'
+    types::matches('prompt', parameters(input)[0][1])
+    types::matches(42, parameters(input)[0][1]) == false
+    types::matches(1.5, parameters(math::sqrt)[0][1])
+    types::matches('wrong', parameters(math::sqrt)[0][1]) == false
+    len(parameters(iter)) == 3
+    identical(parameters(math::sqrt)[0][1], parameters(math::sqrt)[0][1])
+    identical(parameters(structured)[0][1], parameters(copied_structured)[0][1])
+    identical(parameters(first_closure)[0][1], parameters(second_closure)[0][1])
+    parameters(imported::read_count)[0][0] == 'payload'
+    types::matches({'count': 3}, parameters(imported::read_count)[0][1])
+})
+signature_info[0] = parameters(unannotated)[0]
+assert(rule { parameters(reflected)[0][0] == 'amount' })

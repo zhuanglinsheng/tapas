@@ -1,0 +1,59 @@
+/// diagnostics.tap
+///
+/// 求解失败时的冲突诊断。
+///
+/// 展示条件矛盾、变量关系矛盾、附加限制冲突、绑定值违规和不支持的表达式。
+/// 这些失败是预期结果；通过 status 区分无解与不支持，再查看 bindings、conflicts 和 reason。
+
+
+function show_result(label: String, result: solve::HoldResult)
+{
+    print(label)
+    print('status: ', result::status)
+
+    if (len(result::bindings) > 0) {
+        print('bindings:')
+        pprint(result::bindings)
+    }
+    if (len(result::conflicts) > 0) {
+        print('conflicts:')
+        pprint(result::conflicts)
+    }
+    if (result::reason != '') {
+        print('reason: ', result::reason)
+    }
+    print('')
+}
+
+
+let ConflictingBounds = rule (quantity: Int) {
+    quantity >= 8
+    quantity <= 4
+    quantity != -1
+}
+let bounds = solve::hold(ConflictingBounds)
+show_result('[1] Incompatible conditions', bounds)
+
+let ConflictingRelations = rule (x: Int, y: Int, z: Int) {
+    x == y
+    y == z
+    x != z
+}
+show_result('[2] Incompatible relations', solve::hold(ConflictingRelations))
+
+let Package = rule (size: Int) {
+    size in rules::points(types::Int, 2, 4, 8)
+}
+let Trial = rules::restrict(Package, 'size': rules::points(types::Int, 3, 5))
+show_result('[3] Restriction excludes every allowed choice', solve::hold(Trial))
+
+let Small = rule (count: Int) {
+    count <= 4
+}
+show_result('[4] Bound value violates a condition', solve::hold(Small(5)))
+
+// Unsupported does not mean that the Rule has no solution.
+let Nonlinear = rule (x: Int) {
+    x * x == 4
+}
+show_result('[5] Unsupported expression', solve::hold(Nonlinear))

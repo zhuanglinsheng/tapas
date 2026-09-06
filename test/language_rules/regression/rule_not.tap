@@ -1,0 +1,109 @@
+var not_calls = [0, 0]
+function counted_positive(x: Int) -> Bool
+{
+    not_calls[0] = not_calls[0] + 1
+    return x > 0
+}
+var Positive = rule (x: Int) { counted_positive(x) }
+function premise(x: Int) -> RuleInstance[Int]
+{
+    not_calls[1] = not_calls[1] + 1
+    return Positive(x)
+}
+function unavailable() -> Bool
+{ return [][0] }
+let Negative = rule (x: Int) { 'must not be positive': not premise(x) }
+let bound = Negative(-1)
+assert(rule { not_calls[0] == 0; not_calls[1] == 0 })
+let negative = rules::check(bound)
+assert(rule { negative['passed']; not_calls[0] == 1; not_calls[1] == 1 })
+let positive = rules::check(Negative(1))
+assert(rule {
+    not positive['passed']
+    len(positive['violations']) == 1
+    positive['violations'][0]['description'] == 'must not be positive'
+})
+let Guard = rule (x: Int) { (not premise(x)) implies { x > -10 } }
+let guard_skipped = rules::check(Guard(1))
+let after_guard = not_calls[0]
+assert(rule { guard_skipped['passed']; not guard_skipped['implications'][0]['triggered']; after_guard == 3 })
+let guard_failed = rules::check(Guard(-20))
+assert(rule { not guard_failed['passed']; guard_failed['implications'][0]['triggered'] })
+let Twice = rule (p: RuleInstance[Int]) { not not p }
+assert(Twice(Positive(1)))
+let Combined = rule (p: RuleInstance[Int]) {
+    let rejected = not p
+    rejected
+    not p and true
+    false or not p
+    (true) implies {
+        not p
+    }
+    (not p) implies {
+        true
+    }
+    true or not Positive(1)
+    true or not unavailable()
+}
+assert(Combined(Positive(-1)))
+let Union = rule (p: Bool | RuleInstance[Int]) { not p }
+assert(Union(false))
+assert(Union(Positive(-1)))
+let Any = rule (p: AnyType) { not p }
+assert(Any(false))
+assert(Any(Positive(-1)))
+let Conjunction = rule (x: Int) { x > 0; x < 10 }
+let Outside = rule (x: Int) { not Conjunction(x) }
+let Required = rule (x: Int) { Conjunction(x) }
+let NotRequired = rule (x: Int) { not Required(x) }
+assert(NotRequired(-1))
+assert(Outside(-1))
+assert(Outside(20))
+assert(rule { not rules::check(Outside(5))['passed'] })
+
+// Inspect the original instance operand, without converting its Type to Bool.
+let negative_ir = rules::inspect(Negative)
+let guard_ir = rules::inspect(Guard)
+assert(rule {
+    negative_ir['version'] == 7
+    negative_ir['items'][0]['term']['kind'] == 'Not'
+    negative_ir['items'][0]['term']['arguments'][0]['type'] == types::rule_instance(types::Int)
+    guard_ir['items'][0]['antecedent']['kind'] == 'Not'
+    rules::inspect(Twice)['items'][0]['term']['arguments'][0]['kind'] == 'Not'
+})
+let reader = evaluators::make('not-reader', 1, (context)
+{
+    let term = context['ir']['items'][0]['term']
+    return {'status': 'Success', 'value': evaluators::value(context, term['arguments'][0]), 'violations': [], 'diagnostics': []}
+})
+let raw = evaluators::eval(Negative(-1), reader)
+assert(rule { types::matches(raw['value'], types::RuleInstance) })
+let reader_value = evaluators::make('not-value-reader', 1, (context)
+{
+    return {'status': 'Success', 'value': evaluators::value(context, context['ir']['items'][0]['term']), 'violations': [], 'diagnostics': []}
+})
+let before_read = not_calls[0]
+let read_value = evaluators::eval(Negative(-1), reader_value)
+let after_read = not_calls[0]
+assert(rule { read_value['value']; after_read == before_read + 1 })
+let restored = rules::deserialize(rules::serialize(Guard))
+assert(restored(-1))
+assert(rule { rules::semantic_hash(restored) == rules::semantic_hash(Guard) })
+
+let p = rules::parameter('p', types::rule_instance(types::Int))
+let n = rules::negation(p)
+let Dynamic = rules::make('DynamicNot', [p], [rules::condition(n, 'must not hold')])
+let DynamicGuard = rules::make('DynamicNotGuard', [p], [rules::implication(n, [rules::constant(false)])])
+let DynamicTwice = rules::make('DynamicDoubleNot', [p], [rules::condition(rules::negation(n))])
+assert(Dynamic(Positive(-1)))
+assert(DynamicTwice(Positive(1)))
+assert(DynamicGuard(Positive(1)))
+assert(rule { not rules::check(DynamicGuard(Positive(-1)))['passed'] })
+let dynamic_restored = rules::deserialize(rules::serialize(Dynamic))
+assert(dynamic_restored(Positive(-1)))
+assert(rule {
+    rules::inspect(dynamic_restored)['version'] == 4
+    rules::semantic_hash(dynamic_restored) == rules::semantic_hash(Dynamic)
+    rules::content_hash(dynamic_restored) == rules::content_hash(Dynamic)
+})
+print('rule not: ok')

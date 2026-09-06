@@ -14,9 +14,10 @@ static const keyword_entry keywords[] = {
 	{ "for", tsyntax_kw_for }, { "function", tsyntax_kw_function },
 	{ "if", tsyntax_kw_if }, { "import", tsyntax_kw_import },
 	{ "in", tsyntax_kw_in }, { "let", tsyntax_kw_let },
-	{ "nil", tsyntax_kw_nil }, { "of", tsyntax_kw_of },
+	{ "nil", tsyntax_kw_nil }, { "not", tsyntax_kw_not }, { "of", tsyntax_kw_of },
 	{ "or", tsyntax_kw_or }, { "return", tsyntax_kw_return },
-	{ "rule", tsyntax_kw_rule }, { "require", tsyntax_kw_require },
+	{ "rule", tsyntax_kw_rule },
+	{ "implies", tsyntax_kw_implies },
 	{ "this", tsyntax_kw_this }, { "to", tsyntax_kw_to },
 	{ "true", tsyntax_kw_true }, { "var", tsyntax_kw_var },
 	{ "while", tsyntax_kw_while }
@@ -228,8 +229,8 @@ const char *tsyntax_kind_name(tsyntax_kind kind)
 		"eof", "invalid", "whitespace", "newline", "comment",
 		"identifier", "integer", "float", "string", "and", "as",
 		"base", "break", "continue", "elif", "else", "false", "for",
-		"function", "if", "import", "in", "let", "nil", "of", "or",
-		"return", "rule", "require", "this", "to", "true", "var", "while", "(", ")",
+		"function", "if", "import", "in", "let", "nil", "not", "of", "or",
+		"return", "rule", "implies", "this", "to", "true", "var", "while", "(", ")",
 		"[", "]", "{", "}", ",", ":", ";", ".", "::", "...", "->",
 		"=", "==", "!=", ">", ">=", "<", "<=", "+", "-", "*",
 		"/", "%", "^", "@", "&", "|"

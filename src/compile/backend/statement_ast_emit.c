@@ -1,6 +1,7 @@
 /** Migration adapter from reusable statement AST nodes to compiler actions. */
 #include "ast_emit_internal.h"
 #include "tapas/compile/module.h"
+#include "tapas/runtime/trule_ir.h"
 
 #include <stdlib.h>
 
@@ -53,15 +54,61 @@ static void emit_rule_condition(tast_emitter *emitter,
 			tast_emit_expression(
 				emitter, statement->expression_statement.value);
 			tvmcmd_vect_append(emitter->instructions,
-				tbycode_make_u(OP_RULECOND, description_id));
+				tbycode_make_u(OP_RULEITEM, description_id));
 			treg_ctr_ddt(&emitter->cp->regctr);
 		}
 		return;
 	}
 	tast_emit_expression(emitter, condition->rule_condition.value);
 	tvmcmd_vect_append(emitter->instructions,
-		tbycode_make_u(OP_RULECOND, description_id));
+		tbycode_make_u(OP_RULEITEM, description_id));
 	treg_ctr_ddt(&emitter->cp->regctr);
+}
+
+static void emit_rule_implication(tast_emitter *emitter, const tast_node *node)
+{
+	const tast_node *body = tast_get(emitter->arena, node->rule_implication.consequent);
+	uint32_t count = body->kind == tast_block ? body->aggregate.count : 1;
+	const tast_id *items = body->kind == tast_block ? tast_get_children(
+		emitter->arena, body->aggregate.children, count) : nullptr;
+	tstring *description;
+	if (node->rule_implication.has_description) {
+		tast_node literal = { .kind = tast_string,
+			.span = node->rule_implication.description };
+		description = tast_string_value(emitter->document, &literal);
+	} else description = tast_emitter_text(emitter, node->span);
+	uint_csts label = tconsts_add_str_const(emitter->constants, tstring_cstr(description));
+	tstring_free(description);
+	tvmcmd_vect *code = emitter->instructions;
+	tast_emit_expression(emitter, node->rule_implication.antecedent);
+	tvmcmd_vect_append(code, tbycode_make_u(OP_RULECOND, TRULE_ANTECEDENT_RECORD));
+	uint_cmds branch = tvmcmd_vect_size32(code);
+	tvmcmd_vect_append(code, tbycode_make_u(OP_CJPFPOP, 0));
+	treg_ctr_ddt(&emitter->cp->regctr);
+	/* One guard record and one record per consequent, on either branch. */
+	tvmcmd_vect_append(code, tbycode_make_u(OP_PUSHB, 1));
+	treg_ctr_add(&emitter->cp->regctr);
+	tvmcmd_vect_append(code, tbycode_make_u(OP_RULECOND, label));
+	treg_ctr_ddt(&emitter->cp->regctr);
+	for (uint32_t i = 0; i < count; i++) {
+		tast_id value = items ? tast_get(emitter->arena, items[i])->expression_statement.value :
+			node->rule_implication.consequent;
+		tast_emit_expression(emitter, value);
+		tvmcmd_vect_append(code, tbycode_make_u(OP_RULECOND, label));
+		treg_ctr_ddt(&emitter->cp->regctr);
+	}
+	uint_cmds end_jump = tvmcmd_vect_size32(code);
+	tvmcmd_vect_append(code, tbycode_make_u(OP_JPF, 0));
+	code->data[branch] = tbycode_make_u(OP_CJPFPOP,
+		tvmcmd_vect_size32(code) - branch - 1);
+	for (uint32_t i = 0; i <= count; i++) {
+		tvmcmd_vect_append(code, tbycode_make_u(OP_PUSHB, i ? 1 : 0));
+		treg_ctr_add(&emitter->cp->regctr);
+		tvmcmd_vect_append(code, tbycode_make_u(OP_RULECOND, label));
+		treg_ctr_ddt(&emitter->cp->regctr);
+	}
+	code->data[end_jump] = tbycode_make_u(OP_JPF,
+		tvmcmd_vect_size32(code) - end_jump - 1);
 }
 
 static uint_objs field_order_index(tstring *const *order, uint_objs count,
@@ -401,12 +448,20 @@ static void emit_declaration(tast_emitter *emitter,
 			       field_order, field_order_count);
 	else {
 		const ttypeval *saved_pending = emitter->pending_function_type;
+		const char *saved_name = emitter->pending_display_name;
+		emitter->pending_display_name = (initializer->kind == tast_function && declaration->declaration_statement.is_function_declaration) ? tstring_cstr(name) : nullptr;
 		if (initializer->kind == tast_function && inferred &&
 		    inferred->kind == ttype_kind_function)
 			emitter->pending_function_type = inferred;
 		tast_emit_expression(
 			emitter, declaration->declaration_statement.initializer);
 		emitter->pending_function_type = saved_pending;
+		emitter->pending_display_name = saved_name;
+	}
+	if (annotation && (annotation->contains_instance || annotation->contains_domain)) {
+		tast_emit_bound_type(emitter, annotation);
+		tvmcmd_vect_append(emitter->instructions, tbycode_make(OP_CHECKTYPE));
+		treg_ctr_ddt(&emitter->cp->regctr);
 	}
 	tvmcmd_vect_append(emitter->instructions,
 		tbycode_make_lr(OP_POPCOV, (uint16_t)location,
@@ -482,6 +537,11 @@ static void emit_assignment(tast_emitter *emitter, const tast_node *statement,
 			tcompile_find_binding(
 				&emitter->cp->objctr, name, &owner, &owner_slot);
 		}
+		if (owner && owner->bindings[owner_slot].has_annotation &&
+		    owner->bindings[owner_slot].value_type &&
+		    owner->bindings[owner_slot].value_type->contains_instance)
+			twarn(ErrCompile_Other, "InstanceOf",
+			      "reassignment of a value-bound annotation is not supported");
 		const tast_node *value = tast_get(
 			emitter->arena, statement->assignment_statement.value);
 		ttypeval *assigned_static = nullptr;
@@ -539,6 +599,12 @@ static void emit_assignment(tast_emitter *emitter, const tast_node *statement,
 			tast_emit_expression(
 				emitter, statement->assignment_statement.value);
 		}
+        if (owner && owner->bindings[owner_slot].has_annotation &&
+            owner->bindings[owner_slot].value_type && owner->bindings[owner_slot].value_type->contains_domain) {
+            tast_emit_bound_type(emitter, owner->bindings[owner_slot].value_type);
+            tvmcmd_vect_append(emitter->instructions, tbycode_make(OP_CHECKTYPE));
+            treg_ctr_ddt(&emitter->cp->regctr);
+        }
 		tvmcmd_vect_append(emitter->instructions,
 			defines_recursive ?
 				tbycode_make_lr(OP_TYPEDEFINE, (uint16_t)location,
@@ -615,13 +681,10 @@ static void emit_statement(tast_emitter *emitter, tast_id id,
 	case tast_rule_condition:
 		emit_rule_condition(emitter, statement);
 		break;
-	case tast_rule_requirement:
-		tast_emit_expression(
-			emitter, statement->expression_statement.value);
-		tvmcmd_vect_append(emitter->instructions,
-			tbycode_make(OP_RULEREQ));
-		treg_ctr_ddt(&emitter->cp->regctr);
+	case tast_rule_implication:
+		emit_rule_implication(emitter, statement);
 		break;
+
 	case tast_declaration_statement:
 		emit_declaration(emitter, statement, inblk);
 		break;
@@ -673,7 +736,8 @@ static void emit_statement(tast_emitter *emitter, tast_id id,
 static void compile_ast_source(
 	tcp *cp, const tstring *source, tfrontend_mode mode,
 	tvmcmd_vect *tcmds, tconsts *consts,
-	tstring **paths, uint_lexs npaths, int cleanstk, int inblk)
+	tstring **paths, uint_lexs npaths, int cleanstk, int inblk,
+	int keep_bindings)
 {
 	tfrontend frontend;
 	const char *name = mode == tfrontend_statement ?
@@ -698,7 +762,17 @@ static void compile_ast_source(
 	};
 	if (mode == tfrontend_statement)
 		emit_statement(&emitter, frontend.root, cleanstk, inblk);
-	else
+	else if (keep_bindings) {
+		const tast_node *block = tast_get(&frontend.arena, frontend.root);
+		const tast_id *statements = tast_get_children(&frontend.arena,
+			block->aggregate.children, block->aggregate.count);
+		/* Each fence continues the session, including its local bindings. */
+		for (uint32_t i = 0; i < block->aggregate.count; i++) {
+			uint_regs original = treg_ctr_get(&cp->regctr);
+			emit_statement(&emitter, statements[i], 1, inblk);
+			clean_stk(cp, tcmds, 1, original);
+		}
+	} else
 		tast_emit_block(&emitter,
 			tast_get(&frontend.arena, frontend.root), inblk);
 	sync_initialization(&emitter);
@@ -711,7 +785,7 @@ void tcompile_ast_statement(tcp *cp, const tstring *source,
 			       int cleanstk, int inblk)
 {
 	compile_ast_source(cp, source, tfrontend_statement,
-		tcmds, consts, paths, npaths, cleanstk, inblk);
+		tcmds, consts, paths, npaths, cleanstk, inblk, 0);
 }
 
 void tcompile_ast_module(tcp *cp, const tstring *source,
@@ -720,7 +794,15 @@ void tcompile_ast_module(tcp *cp, const tstring *source,
 			    int inblk)
 {
 	compile_ast_source(cp, source, tfrontend_module,
-		tcmds, consts, paths, npaths, 1, inblk);
+		tcmds, consts, paths, npaths, 1, inblk, 0);
+}
+
+void tcompile_ast_sequence(tcp *cp, const tstring *source,
+                          tvmcmd_vect *tcmds, tconsts *consts,
+                          tstring **paths, uint_lexs npaths)
+{
+	compile_ast_source(cp, source, tfrontend_module,
+		tcmds, consts, paths, npaths, 1, 0, 1);
 }
 
 tcompile_module_interface *tcompile_extract_module_interface(

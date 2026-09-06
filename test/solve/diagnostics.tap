@@ -1,0 +1,10 @@
+let R = rule(quantity: Int) { quantity >= 8; quantity <= 4; quantity != -1 }
+let result = solve::hold(R)
+for (let conflict in result::conflicts) { print(conflict::condition) }
+let C = rule(x: Int, y: Int, z: Int) { x == y; y == z; x != z }
+let relations = solve::hold(C)
+for (let conflict in relations::conflicts) { print(conflict::condition) }
+let Bound = rule(count: Int) { true }
+print(solve::hold(Bound(1000000000001))::reason)
+let Unsupported = rule(x: Int) { x * x == 4 }
+print(solve::hold(Unsupported)::reason)

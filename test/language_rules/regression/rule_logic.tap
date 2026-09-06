@@ -1,0 +1,110 @@
+var checks = [0, 0]
+var builds = [0, 0]
+function counted(which: Int, answer: Bool) -> Bool
+{
+    checks[which] = checks[which] + 1
+    return answer
+}
+var Child = rule (which: Int, answer: Bool) { counted(which, answer) }
+function instance(which: Int, answer: Bool) -> RuleInstance[Int, Bool]
+{
+    builds[which] = builds[which] + 1
+    return Child(which, answer)
+}
+function unavailable() -> Bool
+{ return [][0] }
+let Either = rule { instance(0, true) or instance(1, false) }
+let bound = Either()
+assert(rule { checks[0] == 0; builds[0] == 0 })
+let either = rules::check(bound)
+assert(rule { either['passed']; checks[0] == 1; builds[0] == 1; checks[1] == 0; builds[1] == 0 })
+let Both = rule { instance(0, false) and instance(1, true) }
+let both = rules::check(Both())
+assert(rule { not both['passed']; checks[0] == 2; checks[1] == 0; builds[1] == 0; len(both['violations']) == 1 })
+let FallThrough = rule { instance(0, false) or instance(1, true) }
+assert(FallThrough())
+assert(rule { checks[0] == 3; checks[1] == 1; builds[1] == 1 })
+let Independent = rule {
+    instance(0, false)
+    instance(1, false)
+}
+let independent = rules::check(Independent())
+assert(rule {
+    len(independent['violations']) == 2
+    len(independent['violations'][0]['requirement_path']) == 1
+    independent['violations'][0]['requirement_path'][0]['kind'] == 'Requirement'
+    rules::inspect(Independent)['items'][0]['kind'] == 'Requirement'
+    checks[0] == 4
+    checks[1] == 2
+})
+let Guard = rule { (instance(0, true) and instance(1, true)) implies {
+    true
+} }
+let before_guard = checks[0] + checks[1]
+assert(Guard())
+let after_guard = checks[0] + checks[1]
+assert(rule { after_guard == before_guard + 2 })
+let Mixed = rule (p: Bool | RuleInstance[Int, Bool], q: AnyType) {
+    let allowed = p or q
+    allowed
+    not (p and false)
+    true or unavailable()
+    (false and unavailable()) == false
+    (true) implies {
+        (p or q)
+    }
+}
+assert(Mixed(false, Child(0, true)))
+let Bare = rule (p: RuleInstance[Int, Bool]) { 'child': p }
+assert(Bare(Child(0, true)))
+assert(rule { rules::inspect(Bare)['items'][0]['description'] == 'child' })
+let DynamicBare = rule (p: AnyType) { p }
+let dynamic_bare_result = rules::check(DynamicBare(Child(0, false)))
+assert(rule { not dynamic_bare_result['passed']; dynamic_bare_result['violations'][0]['requirement_path'][0]['kind'] == 'Requirement' })
+let precedence = rule { false and Child(0, true) or Child(1, true) }
+assert(precedence())
+let reader = evaluators::make('logic-reader', 1, (context)
+{
+    return {'status': 'Success', 'value': evaluators::value(context, context['ir']['items'][0]['term']), 'violations': [], 'diagnostics': []}
+})
+let before_read = checks[0]
+let read = evaluators::eval(Either(), reader)
+let after_read = checks[0]
+assert(rule { read['value']; after_read == before_read + 1 })
+let raw_reader = evaluators::make('logic-operand-reader', 1, (context)
+{
+    return {'status': 'Success', 'value': evaluators::value(context, context['ir']['items'][0]['term']['arguments'][0]), 'violations': [], 'diagnostics': []}
+})
+let raw = evaluators::eval(Either(), raw_reader)
+assert(rule { types::matches(raw['value'], types::RuleInstance) })
+assert(rule {
+    rules::inspect(Either)['version'] == 7
+    rules::inspect(Either)['items'][0]['term']['kind'] == 'Or'
+    rules::inspect(Both)['items'][0]['term']['kind'] == 'And'
+    rules::inspect(Guard)['items'][0]['antecedent']['kind'] == 'And'
+})
+let restored = rules::deserialize(rules::serialize(Either))
+assert(restored())
+
+let p = rules::parameter('p', types::RuleInstance)
+let q = rules::parameter('q', types::RuleInstance)
+let conjunction = rules::conjunction(p, q)
+let disjunction = rules::disjunction(p, q)
+let DynamicAnd = rules::make('And', [p, q], [rules::condition(conjunction)])
+let DynamicOr = rules::make('Or', [p, q], [rules::condition(disjunction)])
+let TrueRule = rule { true }
+let FalseRule = rule { false }
+let ErrorRule = rule { unavailable() }
+assert(DynamicOr(TrueRule(), ErrorRule()))
+assert(rule { not rules::check(DynamicAnd(FalseRule(), ErrorRule()))['passed'] })
+assert(DynamicOr(FalseRule(), TrueRule()))
+assert(DynamicAnd(TrueRule(), TrueRule()))
+let Portable = rules::deserialize(rules::serialize(DynamicOr))
+assert(Portable(FalseRule(), TrueRule()))
+assert(rule {
+    rules::semantic_hash(Portable) == rules::semantic_hash(DynamicOr)
+    rules::content_hash(Portable) == rules::content_hash(DynamicOr)
+})
+let require = true // The retired keyword is now an ordinary identifier.
+assert(rule { require })
+print('rule logic: ok')

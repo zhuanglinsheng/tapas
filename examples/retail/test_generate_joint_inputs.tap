@@ -1,0 +1,112 @@
+/// test_generate_joint_inputs.tap
+///
+/// 多变量关联实验：同时搜索支付额度、认证用户、确认目标。
+///
+/// 通过同一个输入 Rule 限制允许或拒绝，并将 witness 交给模拟与顶层模型。
+/// 有限枚举类型限定字符串候选，不把身份或确认关系简化成布尔开关。
+
+import model.tap as model
+import simulation.tap as simulation
+
+let initial_state = simulation::initial_state('keyboard-clicky-plain')
+let exchange_parameters = simulation::exchange_parameters('keyboard-clicky-plain')
+let Authentication = types::enum('', 'yusuf_rossi_9620', 'another_user')
+let Confirmation = types::enum('', 'keyboard-clicky-plain', 'thermostat-google-home')
+
+// 参数描述本次实验的可变部分；其相互关系由原有模型决定。
+let ExchangeInputs = rule (
+        payment_capacity: Int,
+        authenticated_user_id: Authentication,
+        confirmed_target_id: Confirmation,
+        allowed: Bool,
+) {
+    let previous_state = {
+        'order_id': initial_state::order_id,
+        'user_id': initial_state::user_id,
+        'status': initial_state::status,
+        'item_id': initial_state::item_id,
+        'payment_method_id': initial_state::payment_method_id,
+        'payment_capacity': payment_capacity,
+        'authenticated_user_id': authenticated_user_id,
+        'confirmed_target_id': confirmed_target_id,
+    }
+    model::ExchangeInput(previous_state, exchange_parameters)
+    // allowed 是本次查询选择的行为分支，不替代模型中的任何业务判断。
+    ((allowed and model::ExchangeAllowed(previous_state, exchange_parameters)) or
+        (not allowed and not model::ExchangeAllowed(previous_state, exchange_parameters)))
+}
+
+let accepted = rules::restrict(ExchangeInputs,
+    'payment_capacity': rules::range(0, 100),
+    'allowed': true,
+)
+
+// 每组实验只改变限制；同一个模型关联认证、确认和额度。
+let experiments = [
+    { 'name': '联合生成合法输入', 'rule': accepted },
+    { 'name': '认证确认正确，生成不足额度', 'rule': rules::restrict(ExchangeInputs,
+        'payment_capacity': rules::range(99, 100),
+        'authenticated_user_id': initial_state::user_id,
+        'confirmed_target_id': exchange_parameters::target_item_id,
+        'allowed': false,
+    ) },
+    { 'name': '认证额度正确，生成错误确认目标', 'rule': rules::restrict(ExchangeInputs,
+        'payment_capacity': 100,
+        'authenticated_user_id': initial_state::user_id,
+        'confirmed_target_id': rules::points(Confirmation,
+            'keyboard-clicky-plain', 'thermostat-google-home'),
+        'allowed': false,
+    ) },
+    { 'name': '确认额度正确，生成错误认证用户', 'rule': rules::restrict(ExchangeInputs,
+        'payment_capacity': 100,
+        'authenticated_user_id': rules::points(Authentication,
+            'yusuf_rossi_9620', 'another_user'),
+        'confirmed_target_id': exchange_parameters::target_item_id,
+        'allowed': false,
+    ) },
+]
+
+for (let experiment in experiments) {
+    let generated = solve::hold(experiment::rule)
+    print(experiment::name, '：', generated::status)
+    if (generated::status == 'sat') {
+        let values = arguments(generated::witness)
+        print('支付额度：', values[0], '；认证用户：', values[1], '；确认目标：', values[2])
+        let previous_state = initial_state.copy()
+        previous_state['payment_capacity'] = values[0]
+        previous_state['authenticated_user_id'] = values[1]
+        previous_state['confirmed_target_id'] = values[2]
+        let exchange_result = simulation::exchange(previous_state.copy(), exchange_parameters.copy())
+        let transition_model = rules::restrict(model::ExchangeModel,
+            'previous_state': previous_state,
+            'action_parameters': exchange_parameters,
+            'exchange_output': exchange_result::output,
+            'next_state': exchange_result::after,
+        )
+        let checked = solve::hold(transition_model)
+        print('模拟结果：', exchange_result::output::decision, '；实际转移：', checked::status)
+        if (len(checked::conflicts) > 0) {
+            pprint(checked::conflicts)
+        }
+        if (checked::reason != '') {
+            print(checked::reason)
+        }
+    }
+    if (len(generated::conflicts) > 0) {
+        pprint(generated::conflicts)
+    }
+    if (generated::reason != '') {
+        print(generated::reason)
+    }
+}
+
+// 固定错误身份后，提高额度或改变确认目标也不能使请求被允许。
+let incompatible = rules::restrict(accepted, 'authenticated_user_id': 'another_user')
+let impossible = solve::hold(incompatible)
+print('错误身份仍要求允许换货：', impossible::status)
+if (len(impossible::conflicts) > 0) {
+    pprint(impossible::conflicts)
+}
+if (impossible::reason != '') {
+    print(impossible::reason)
+}

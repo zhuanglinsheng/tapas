@@ -5,7 +5,7 @@
 本文说明 Tapas 当前支持的类型标注、Type 值、静态检查以及`types`包，并补充[语言规范](Syntax_zh.md)中的类型系统定义。
 涉及这些内容时，以本文规则为准；Rule 的精确 Type 及其构造形式另见[Rule 文档](Rules_zh.md)。
 
-类型标注只参与编译期分析，不改变值的运行时表示，也不会自动插入检查或转换。
+普通类型标注主要参与编译期分析，不执行隐式转换。`InstanceOf[R]` 例外：它绑定运行时规则身份，并在声明初始化、函数参数/返回以及 Rule 参数边界检查身份。
 Type 本身也可以作为普通值保存、传递、返回和导出，本文将这样的值称为 Type 值。
 用户定义的 Type 不可修改，而且完整定义必须在编译期可见。
 编译器无法确定一个值的 Type 时仍允许它进入带标注的位置；如果程序需要在动态边界确认其实际结构，应显式调用`types::matches`。
@@ -61,6 +61,8 @@ Type 值是程序可以保存和传递的值，例如`types::Int`；运行时 Ty
 `Indexable`、`Appendable`等能力 Type 只要求值支持相应操作，不约束操作参数和返回值的 Type。
 各值类别支持的具体操作详见[标准库](Stdlib_zh.md)；Rule 及 RuleInstance 的精确 Type 详见[Rule 文档](Rules_zh.md)。
 
+RuleInstance 不是 Bool，也不存在通用隐式转换。仅在 `implies` 前件位置，Bool、RuleInstance 及两者的联合 Type 被接受；实例按规则检查的成立性解释。后件仍必须是 Bool，裸 Rule 必须先绑定为实例。这不改变 `if`、`and`、`or` 的 Bool 使用要求。
+
 ### 1.3 静态 Type 表达式
 
 一个表达式在运行时产生 Type 值，并不意味着它可以用于类型标注。
@@ -72,7 +74,7 @@ Type 值是程序可以保存和传递的值，例如`types::Int`；运行时 Ty
 4. 符合第 2 节要求的 Type 构造形式，以及 Rule 文档定义的精确 Rule Type 构造形式。
 
 类型标注还可以使用第 3.1 节定义的参数化 Type 应用。
-该语法只在类型标注中构造 Type，不是普通索引表达式，也不会执行运行时代码。
+该语法只在类型标注中构造 Type，不是普通索引表达式；`InstanceOf` 在运行时绑定指定的规则引用，不执行任意用户表达式。
 
 静态 Type 可以通过`let`建立任意层别名：
 
@@ -241,7 +243,60 @@ let canonical_identifier_b = types::union(types::String, types::Int)
 
 `types::union(T, T)`合法，结果为`T`；公开调用的原始参数少于两个则属于编译错误。
 
-### 2.4 递归 Type
+### 2.4 枚举 Type
+
+`types::enum`从一个或多个直接写出的 String 字面量建立有限值 Type：
+
+```tapas
+let OrderStatus = types::enum(
+    'Pending',
+    'Shipped',
+    'Delivered',
+    'Cancelled',
+)
+```
+
+枚举是以 String 为底层表示的结构化精化 Type，不建立新的运行时值类别。
+成员名称区分大小写，同一个构造中不能重复；参数不能来自变量、List 或其他运行时表达式。
+成员顺序不参与 Type 等价和哈希，因此成员集合相同、书写顺序不同的两个枚举等价。
+反射和遍历仍保留各自构造时的书写顺序。
+
+枚举 Type 可以用 String 成员索引，索引结果的静态 Type 是该枚举，运行时值是对应的普通 String：
+
+```tapas
+let delivered: OrderStatus = OrderStatus['Delivered']
+print(delivered == 'Delivered') // true
+```
+
+编译器在索引是 String 字面量时检查成员是否存在；String 表达式也可作为动态索引，不属于成员时产生运行时索引错误。
+枚举不可通过索引修改。
+
+String 字面量在枚举目标上下文中按成员集合检查，因此可以直接用于初始化、赋值、容器元素、函数参数和返回值：
+
+```text
+let status: OrderStatus = 'Delivered'
+let invalid: OrderStatus = 'Unknown' // 编译错误
+```
+
+枚举与 String 字面量进行`==`或`!=`比较时也检查成员，防止条件表达式中的拼写错误；与动态 String 表达式比较仍然合法。
+
+普通 String 表达式不能隐式缩窄为枚举；动态边界应先使用`types::matches`，成功分支中的名称会被收窄：
+
+```text
+let input: String = read_status()
+if (types::matches(input, OrderStatus)) {
+    let checked: OrderStatus = input
+}
+```
+
+枚举采用集合包含可赋值关系：成员集合较小的枚举可以赋值给包含其全部成员的枚举；任意枚举可以赋值给`String`，反向不成立。
+因此`Enum['Delivered']`是`Enum['Pending', 'Delivered']`的子 Type，而后者又是`String`的子 Type。
+
+`types::of`观察擦除后的运行时表示，所以枚举成员的结果是`types::String`。
+`types::matches(value, E)`则检查值是 String 且属于`E`的成员集合。
+第一版枚举只支持 String 成员，不提供整数编码、名称和值分离或名义枚举身份；需要外部编码时应使用独立 Dictionary 映射。
+
+### 2.5 递归 Type
 
 递归 Type 使用无初始值、显式标注为`Type`的`let`声明建立定义位置，再由一次静态 Type 赋值完成定义：
 
@@ -274,10 +329,10 @@ Type 变量以后重新赋值不会修改已经封闭的递归图，已有回引
 打印只显示有限的递归标识，不尝试展开整个图。
 模块接口保存结构化定义，而不是依赖展开后的显示文本。
 
-### 2.5 Type 等价与字段构造顺序
+### 2.6 Type 等价与字段构造顺序
 
 Type 的绑定名称、声明位置和对象地址都不决定 Type 是否等价。
-预定义 Type 按自身类别比较，联合在展开和去重后比较成员，参数化 Type 比较基 Type 及其参数，字段 Type 比较字段名称、字段 Type 和可选状态。
+预定义 Type 按自身类别比较，联合在展开和去重后比较成员，枚举比较 String 成员集合，参数化 Type 比较基 Type 及其参数，字段 Type 比较字段名称、字段 Type 和可选状态。
 递归 Type 作为带回引用的有限图进行比较，因此比较过程不会无限展开。
 
 等价 Type 具有相同的哈希值，可以作为同一个 Dictionary 键使用；不同 Type 仍可能偶然具有相同哈希值。
@@ -291,6 +346,54 @@ Type 别名和模块导入会保留原 Type 的构造顺序。
 ## 3. 类型标注与值构造
 
 ### 3.1 标注语法与名称解析
+
+#### 统一模板
+
+编辑器显示类型时，优先保留标注中命名结构的引用，例如 `Rule[State]`，而不是
+总是展开成 `Rule[{...}]`。名称是展示来源，不是名义类型身份；结构相等与赋值规则
+不受影响。查看 Type 值本身时仍可看到完整定义，匿名结构继续展开，内建 Type 使用标准名称。
+
+类型标注采用以下统一设计模板：
+
+```text
+Constructor[Type, Type, ...; Value, Value, ...]
+Function[Type, Type, ...; Value, Value, ...] -> ResultType
+```
+
+分号前是类型参数，分号后是值参数；返回类型仍是类型表达式，可以继续嵌套。
+`Constructor` 必须是已知类型构造器，各构造器分别声明允许的参数类别、数量及
+是否支持返回箭头，模板不允许任意组合，例如 `List[Int] -> String` 仍非法。
+
+省略由构造器签名决定，不根据实参外观猜测：
+
+- 仅接受类型参数时，省略空值参数区：`List[Int;]` 简写为 `List[Int]`。
+- 仅接受值参数时，允许省略前导分号：`InstanceOf[; Exchange]`
+  简写为 `InstanceOf[Exchange]`。
+- 同时接受两类参数的构造器使用分号明确分区。
+- `A | B` 是 `Union[A, B]` 的语法糖，不引入另一种参数机制。
+- 原始类型与零参数签名不同：`Rule` 不等于 `Rule[]`；`Function` 不等于
+  `Function[] -> AnyType`。不能机械地删除空括号或精确签名的返回类型。
+
+当前支持下表中的类型参数构造器（含显式空值参数区），以及值参数构造器
+`InstanceOf[R]`，等价于 `InstanceOf[; R]`。`R` 是规则值的名称或限定成员引用，
+例如 `model::Exchange`；暂不接受任意表达式，也不开放用户自定义泛型构造器。
+
+`InstanceOf[R]` 表示由**同一个运行时 Rule 对象**绑定产生的实例；参数签名从 R 推导，
+无论 R 有零个、一个还是多个参数，都不需要在标注里重复。它不表示实例的约束成立，
+仍需 `assert(action)` 或 `rules::check(action)`。同名、同签名、同源码和同语义哈希均不能代替身份。
+
+函数或 Rule 创建时，在其定义环境中求取并保留 R；声明初始化时绑定该声明的 R。
+后续修改 R 的名称绑定不会改变已创建签名。别名指向同一个对象时匹配；工厂重复创建、
+Rule 的 `.copy()`、重复执行模块导入产生的新对象不匹配。Retail 使用 `runner::model`
+共享 runner 所绑定的规则对象，不依赖模块单例。
+
+身份检查支持嵌套的容器和联合类型。首版不支持对含此标注的绑定重新赋值，也不支持
+含运行时身份的递归类型；容器通过别名修改不受持续监控。函数类型匹配仍不负责包装并
+强制执行任意回调的完整签名。`parameters(function)` 可取到实际绑定后的参数 Type，
+用于 `types::matches`；不会把规则是否成立混入类型匹配。
+
+字节码保存名称模板，在加载执行时重新绑定；绑定后的身份 Type 不能通过 Rule IR
+序列化跨进程搬运。现有 `RuleInstance[T, ...]` 仍表示参数签名约束，不限定规则身份。
 
 类型标注写在声明名称或函数参数之后，也可以用在函数返回值上：
 
@@ -313,11 +416,11 @@ type-expression  = union-type ;
 union-type       = primary-type, { "|", primary-type } ;
 primary-type     = function-type | type-application | qualified-type-name ;
 function-type    = function-constructor, "[",
-                   [ type-arguments, [ "," ] | "..." ], "]",
+                   [ type-arguments, [ "," ] | "..." ], [ ";" ], "]",
                    "->", type-expression ;
 function-constructor = "Function" | "types::Function" ;
 type-application = qualified-type-name,
-                   "[", [ type-arguments, [ "," ] ], "]" ;
+                   "[", [ type-arguments, [ "," ] ], [ ";" ], "]" ;
 type-arguments   = type-expression, { ",", type-expression } ;
 qualified-type-name = IDENTIFIER, { "::", IDENTIFIER } ;
 ```
@@ -445,8 +548,8 @@ let formatter: Function[Int] -> String = (value: Int) -> String
 无法证明所有路径返回时，结果中因此包含`Nil`。
 显式的返回值 Type 标注使递归调用的返回值可以在分析函数体之前确定；没有返回值标注时，函数返回值为`Unknown`，当前设计不要求自动推断。
 
-参数标注只提供编译期约束。
-实参或调用目标为`Unknown`时允许编译，编译器不在函数入口自动插入运行时检查。
+普通参数标注提供编译期约束；含 `InstanceOf` 的标注另外执行身份检查。
+实参或调用目标为`Unknown`时允许编译；除上述身份类型外，编译器不在函数入口自动插入运行时检查。
 动态边界需要保证值满足更具体条件时，应显式使用`types::matches`或内联的`assert(rule { ... })`。
 变参函数的`...`不能携带参数标注，但可以在参数列表之后使用返回值标注。
 
@@ -511,6 +614,7 @@ let named_origin: Point = {x=0.0, y=0.0}
 8. `A` 与 `B` 都是字段 Type，`A` 满足 `B` 对必需字段、可选字段及对应字段 Type 的要求；
 9. `A` 与 `B` 是精确函数 Type，并满足第 3.2 节定义的参数逆变和结果协变规则；
 10. `A` 与 `B` 是 Rule 相关 Type，并满足 Rule 文档定义的可赋值规则。
+11. `A` 是枚举、`B` 是`String`；或者`A`与`B`都是枚举，且`A`的成员集合是`B`的子集。
 
 字段 Type 与统一键值 Dictionary Type 之间不能互相赋值。
 除上述规则外，两个已知 Type 之间不能赋值；不存在 Int 到 Float 等隐式转换。
@@ -536,7 +640,7 @@ let numbers: NumberList = ints // 编译错误
 赋值给原始容器或`types::AnyType`会丢失部分静态约束；值通过较宽别名修改后，编译器不保证原有标注仍然成立，也不会插入运行时检查。
 
 编译器无法确定表达式的 Type 时，会在静态分析中使用内部状态`Unknown`。
-`Unknown`不是程序可见的 Type 值，也不能写在类型标注中；它可以进入任何目标位置，但不会触发隐式运行时检查：
+`Unknown`不是程序可见的 Type 值，也不能写在类型标注中；它可以进入任何目标位置，但普通目标类型不会因此触发隐式运行时检查（`InstanceOf` 边界除外）：
 
 ```text
 var amount: Int = 1
@@ -545,7 +649,7 @@ amount = 'three'          // 编译错误
 amount = foreign_value()  // Unknown，允许编译
 ```
 
-`let`和`var`都沿用当前语言的赋值规则；只要绑定带有标注，后续每次可静态分析的赋值都按原标注检查。
+`let`和`var`都沿用当前语言的赋值规则；普通标注的后续可静态分析赋值按原标注检查。含 `InstanceOf` 标注的绑定首版禁止重新赋值。
 未标注的静态 Type 绑定被重新赋值后，不再作为静态 Type 名称使用，即使新值在运行时仍是 Type。
 名称解析、参数数量、重复字段和删除必需字段等错误由各自规则检查，不属于可赋值关系。
 
@@ -572,6 +676,7 @@ let number_values: NumberList = [1, 2.5]
 ```
 
 新鲜字面量可以直接赋值给较宽的目标容器；已经保存到变量中的可变容器必须遵守不变规则。
+String 字面量具有枚举目标 Type 时还必须是已声明成员；没有目标 Type 时仍推断为普通`String`。
 
 没有目标 Type 时，容器字面量按以下规则推断：
 
@@ -606,6 +711,7 @@ person['nickname'] = 'Ada'  // 编译错误：Person 未声明 nickname
 |---|---|
 | `types::make_type(...Pair(String, Type)) -> Type` | 建立非空字段 Type |
 | `types::union(Type, Type, ...) -> Type` | 建立联合 |
+| `types::enum(String, ...) -> Type` | 从直接 String 字面量建立非空枚举 |
 | `types::list(Type) -> Type` | 建立参数化 List Type |
 | `types::iterator(Type) -> Type` | 建立参数化 Iterator Type |
 | `types::pair(Type, Type) -> Type` | 建立参数化 Pair Type |
@@ -629,8 +735,8 @@ Rule 相关构造形式由[Rule 文档](Rules_zh.md)定义。
 |---|---|
 | `types::fields(Type) -> Dictionary` | 返回字段 Type 的用户字段副本 |
 | `types::optional_fields(Type) -> List` | 返回字段 Type 的可选字段名 |
-| `types::members(Type) -> List` | 返回联合成员 |
-| `types::base(Type) -> Type` | 返回参数化容器的原始容器 Type |
+| `types::members(Type) -> List` | 返回联合成员 Type 或枚举成员 String |
+| `types::base(Type) -> Type` | 返回参数化 Type 或枚举的底层 Type |
 | `types::parameters(Type) -> Dictionary` | 返回参数化容器的参数副本 |
 | `types::definition(Type) -> Dictionary` | 返回仅供调试的定义副本 |
 
@@ -670,13 +776,14 @@ let incomplete_person_does_not_match = types::matches({'name' : 'Ada'}, Person)
 
 1. `expected` 是 `types::AnyType` 时返回 `true`，包括 Nil；
 2. `expected` 是联合时，任一成员匹配即返回 `true`；
-3. `expected` 是参数化 List 时，值必须是 List，且每个元素匹配 Item；
-4. `expected` 是参数化 Iterator 时，值必须是 Iterator，且其元素 Type 匹配 Item；
-5. `expected` 是参数化 Pair 时，值必须是 Pair，两个成员分别匹配 First 和 Second；
-6. `expected` 是参数化 Dictionary 时，值必须是 Dictionary，且每个键和值分别匹配 Key 和 Value；
-7. `expected` 是字段 Type 时，值必须是 Dictionary、包含全部必需字段，而且每个已有的声明字段都匹配对应 Type；
-8. `expected` 是精确 Rule、RuleInstance 或 RuleTerm Type 时，按 Rule 文档定义的签名或求值结果 Type 进行匹配；
-9. 其他情况按第 4.1 节判断 `types::of(value)` 是否可以赋值给 `expected`。
+3. `expected` 是枚举时，值必须是 String 且等于一个枚举成员；
+4. `expected` 是参数化 List 时，值必须是 List，且每个元素匹配 Item；
+5. `expected` 是参数化 Iterator 时，值必须是 Iterator，且其元素 Type 匹配 Item；
+6. `expected` 是参数化 Pair 时，值必须是 Pair，两个成员分别匹配 First 和 Second；
+7. `expected` 是参数化 Dictionary 时，值必须是 Dictionary，且每个键和值分别匹配 Key 和 Value；
+8. `expected` 是字段 Type 时，值必须是 Dictionary、包含全部必需字段，而且每个已有的声明字段都匹配对应 Type；
+9. `expected` 是精确 Rule、RuleInstance 或 RuleTerm Type 时，按 Rule 文档定义的签名或求值结果 Type 进行匹配；
+10. 其他情况按第 4.1 节判断 `types::of(value)` 是否可以赋值给 `expected`。
 
 空 List 和空 Dictionary 满足相应参数化容器 Type。
 容器检查需要遍历当前内容，时间复杂度与成员数量成正比。
@@ -685,9 +792,9 @@ let incomplete_person_does_not_match = types::matches({'name' : 'Ada'}, Person)
 ### 5.3 反射、相等与错误
 
 `types::fields(T)`对字段 Type 返回用户字段副本，对其他 Type 返回空 Dictionary。
-`types::members(T)`对联合返回规范顺序的成员，对其他 Type 返回只含`T`的 List。
+`types::members(T)`对联合返回规范顺序的成员 Type，对枚举按构造顺序返回成员 String，对其他 Type 返回只含`T`的 List。
 `types::base(T)`对参数化容器返回对应的`types::List`、`types::Iterator`、`types::Pair`或`types::Dictionary`。
-它对精确 Rule 和 RuleInstance Type 返回相应的原始 Type，对其他 Type 返回`T`自身。
+它对枚举返回`types::String`，对精确 Rule 和 RuleInstance Type 返回相应的原始 Type，对其他 Type 返回`T`自身。
 
 `types::parameters(T)`对参数化容器返回普通 Dictionary 副本，键固定为：
 
@@ -707,11 +814,13 @@ Type 的普通只读操作只观察用户字段：
 - `keys(T)` 和遍历只返回用户字段；
 - 预定义 Type、参数化容器和联合的用户字段数量均为零。
 
+枚举是例外：`E['Member']`返回对应 String 成员，`len(E)`返回成员数量，遍历`E`按构造顺序产生成员；这些操作都不能修改枚举。
+
 `types::definition(T)`每次返回新的普通 Dictionary。
 结果可以包含内部编码，不保证跨版本稳定，也不能传回`types::make_type`。
 Type 的打印结果同样只用于诊断。
 
-非递归 Type 的`==`按第 2.5 节的等价规则比较；递归 Type 的`==`比较有限 Type 图，`!=`是其否定。
+非递归 Type 的`==`按第 2.6 节的等价规则比较；递归 Type 的`==`比较有限 Type 图，`!=`是其否定。
 Type 与非 Type 比较时，`==`返回`false`，`!=`返回`true`。
 `identical(A, B)`只判断两个值是否引用同一 Type 对象；等价 Type 可能共享对象，也可能不共享，程序不能依赖其中一种情况。
 

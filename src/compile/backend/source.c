@@ -307,6 +307,15 @@ void clean_stk(tcp *cp, tvmcmd_vect *tcmds, int isroot, uint_regs regs_ori)
 }
 
 
+tcinfo parse_sequence(tcp *cp, const tstring *source,
+                      tvmcmd_vect *instructions, tconsts *constants,
+                      tstring **paths, uint_lexs path_count)
+{
+	tcompile_ast_sequence(cp, source, instructions, constants, paths, path_count);
+	return tcp_get_compile_info(cp);
+}
+
+
 tcinfo parse_unit(
 		tcp *cp,
 		const tstring *src,

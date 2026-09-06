@@ -32,6 +32,9 @@ void tcompile_frontend_init(tcp *cp, tfrontend *frontend,
 			    const char *name, const char *source,
 			    tfrontend_mode mode);
 
+void tcompile_ast_sequence(tcp *cp, const tstring *source,
+                          tvmcmd_vect *tcmds, tconsts *consts,
+                          tstring **paths, uint_lexs npaths);
 void tcompile_ast_statement(tcp *cp, const tstring *source,
 			    tvmcmd_vect *instructions, tconsts *constants,
 			    tstring **paths, uint_lexs path_count,

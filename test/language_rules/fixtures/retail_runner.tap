@@ -1,0 +1,86 @@
+// 示例专用单步适配，不是已实现的通用 testing 包。
+// 返回类型错误会保留为失败记录；实现抛出的异常仍由运行时报告。
+
+import ../../../examples/retail/model.tap as model
+import ../../../examples/retail/model_defs.tap as defs
+
+
+function step(
+        current_state: defs::State,
+        action: InstanceOf[model::Exchange],
+        execute: Function[defs::State, defs::ExchangeParameters] -> AnyType,
+) {
+    assert(model::StateSpace(current_state))
+    assert(action)
+
+    let action_parameters = arguments(action)[0]
+
+    // 用副本隔离实现的修改，保留检查所需的原始输入；本例字段均为标量。
+    let state_snapshot = current_state.copy()
+    let execution_result = execute(state_snapshot.copy(), action_parameters.copy())
+
+    // 类型不符的返回也保留在记录中，作为失败证据。
+    let result_type_valid = (
+        types::matches(execution_result, types::Dictionary) and
+        'output' in execution_result and
+        'after' in execution_result and
+        types::matches(execution_result::output, defs::ExchangeOutput) and
+        types::matches(execution_result::after, defs::State)
+    )
+    var step_record = {
+        'before': state_snapshot,
+        'action': action,
+        'parameters': action_parameters,
+        'execution': execution_result,
+        'output': {},
+        'after': {},
+        'well_typed': result_type_valid,
+        'verdict': '类型错误',
+        'passed': false,
+        'violations': [],
+        'implications': [],
+    }
+    // 先检查容器与字段存在性，再读取；缺字段和非字典返回也可报告。
+    if (types::matches(execution_result, types::Dictionary)) {
+        if ('output' in execution_result) {
+            step_record['output'] = execution_result['output']
+        }
+        if ('after' in execution_result) {
+            step_record['after'] = execution_result['after']
+        }
+    }
+
+    // 业务契约只检查类型正确的结果。
+    if (result_type_valid) {
+        let contract_check = rules::check(model::ExchangeModel(
+            state_snapshot,
+            action_parameters,
+            execution_result::output,
+            execution_result::after,
+        ))
+        step_record['passed'] = contract_check::passed
+        step_record['violations'] = contract_check::violations
+        step_record['implications'] = contract_check::implications
+        step_record['verdict'] = '违反契约'
+        if (contract_check::passed) {
+            step_record['verdict'] = '满足契约'
+        }
+    }
+    return step_record
+}
+
+// 用例入口验证 I；后续步骤只要求 S，不再错误地要求返回初始集合。
+function run(
+        initial_state: defs::State,
+        action: InstanceOf[model::Exchange],
+        execute: Function[defs::State, defs::ExchangeParameters] -> AnyType,
+) {
+    assert(model::InitialState(initial_state))
+    return step(initial_state, action, execute)
+}
+
+return {
+    'model': model,
+    'run': run,
+    'step': step
+}

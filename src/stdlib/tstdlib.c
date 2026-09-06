@@ -13,6 +13,7 @@ static const textension_module *const modules[] = {
 	&tstdlib_dict_functions,
 	&tstdlib_sort_functions,
 	&tstdlib_object_functions,
+	&tstdlib_reflection_functions,
 	&tstdlib_time_functions,
 	&tstdlib_session_functions,
 	&tstdlib_rule_functions,
@@ -23,7 +24,8 @@ static const textension_module *const modules[] = {
 	&tstdlib_math_module,
 	&tstdlib_types_module,
 	&tstdlib_rules_module,
-	&tstdlib_evaluators_module
+	&tstdlib_evaluators_module,
+	&tstdlib_solve_module
 };
 
 const textension_descriptor *tstdlib_descriptor(void)

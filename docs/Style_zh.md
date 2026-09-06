@@ -32,22 +32,20 @@ function add(left: Int, right: Int) -> Int
 
 ```text
 function structural_edits(
-        source      : String,
-        tokens      : List,
+        source: String,
+        tokens: List,
         clean_before: List[Bool],
-        indents     : List[String],
-        line_break  : String,
+        indents: List[String],
+        line_break: String,
 ) -> Dictionary {
     return {}
 }
 ```
 
-续行参数相对函数声明缩进八个空格。
-函数或 Rule 的参数列表跨行书写时，所有参数的`:`纵向对齐。
-对齐列紧跟最长参数名；最长参数名与`:`之间不留空格，较短参数名用空格补齐。
-`:`与类型之间保留一个空格。
-单行参数列表仍采用紧凑的`name: Type`形式。
-这条规则以函数参数列表是否跨越物理行判断，而不是以签名长度判断。
+函数和 Rule 的续行参数均相对声明所在行缩进八个空格，单独成行的右括号与声明行对齐。
+所有参数列表默认采用`name: Type`形式：`:`前不留空格，后保留一个空格，
+单行和多行参数列表均不要求纵向对齐。手工对齐`:`是可选的排版方式，
+不是格式检查要求；格式化器不自动添加对齐填充，也不移除已有的手工对齐。
 返回类型跨行书写时也视为多行签名。
 
 ## 控制流
@@ -78,6 +76,8 @@ for (let value in values) {
 
 ## Rule 字面量
 
+`implies` 前件仅为单个 Bool 或 RuleInstance 变量时省略 `()`；后件仅为单个 Bool 变量时省略 `{}`，例如 `a implies b`。调用前件如 `(Allowed(state, parameters))` 推荐保留 `()`，复杂后件使用 `{}`，多个后件必须使用块。格式化器会应用这个推荐风格，但保留不便安全移动的注释。
+
 只用于一次断言的 Rule 默认直接写在`assert`内，不引入无意义的局部名称：
 
 ```text
@@ -92,11 +92,11 @@ let Positive = rule (value: Int) {
 }
 ```
 
-Rule 的参数列表跨行时，使用与函数参数相同的对齐规则：
+Rule 的参数列表跨行时，使用与函数参数相同的缩进和默认间距：
 
 ```text
 let WithinRange = rule (
-        value  : Int,
+        value: Int,
         minimum: Int,
         maximum: Int,
 ) {

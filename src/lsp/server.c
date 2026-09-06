@@ -1,4 +1,5 @@
 #include "tapas/lsp/server.h"
+#include "presentation.h"
 
 #include "json.h"
 #include "tapas/compile/workspace.h"
@@ -172,7 +173,7 @@ static int semantic_name_priority(uint8_t type)
 
 static void init_semantic_names(tlsp_server *server)
 {
-	uint32_t capacity = (uint32_t)tbuiltin_count + 1 +
+	uint32_t capacity = (uint32_t)tbuiltin_count + 2 +
 		tstandard_symbol_count();
 	server->semantic_names = capacity ? calloc(capacity,
 		sizeof(*server->semantic_names)) : nullptr;
@@ -180,6 +181,7 @@ static void init_semantic_names(tlsp_server *server)
 	for (int i = 0; i < tbuiltin_count; i++)
 		add_semantic_name(server, tbuiltin_name((tbuiltin_id)i), semantic_type);
 	add_semantic_name(server, "Union", semantic_type);
+	add_semantic_name(server, "InstanceOf", semantic_type);
 	for (uint32_t i = 0; i < tstandard_symbol_count(); i++) {
 		const tstandard_symbol *symbol = tstandard_symbol_at(i);
 		int type = symbol->kind == tmodule_symbol_package ? semantic_namespace :
@@ -338,6 +340,7 @@ static void handle_syntax_catalog(tlsp_server *server,
 	for (int i = 0; i < tbuiltin_count; i++)
 		append_catalog_names(result, &first, tbuiltin_name((tbuiltin_id)i));
 	append_catalog_names(result, &first, "Union");
+	append_catalog_names(result, &first, "InstanceOf");
 	tstring_append(result, "],\"packages\":[");
 	first = 1;
 	for (uint32_t i = 0; i < tstandard_symbol_count(); i++) {
@@ -381,6 +384,7 @@ static void send_hover(tlsp_server *server, const tjson_value *id,
 	tstring_free(result);
 }
 
+
 static void handle_hover(tlsp_server *server, const tjson_value *message,
 			 const tjson_value *id)
 {
@@ -395,15 +399,27 @@ static void handle_hover(tlsp_server *server, const tjson_value *message,
 		&document->frontend.document, line, character);
 	tworkspace_member_resolution member;
 	if (tworkspace_resolve_member(&server->workspace, document, offset, &member)) {
-		const char *name = member.exported ? tstring_cstr(member.exported->name) :
-			member.standard->name;
-		const char *detail = member.exported ? tstring_cstr(member.exported->detail) :
-			member.standard->detail;
-		tstring *description = tstring_new_empty();
-		tstring_append_fmt(description, "%s: %s", name,
-			detail ? detail : "AnyType");
+        tstring *description = member.standard ? tlsp_present_standard(member.standard) :
+            tlsp_present_export(member.document ? &member.document->frontend : nullptr,member.exported);
 		send_hover(server, id, document, member.reference_span,
 			tstring_cstr(description));
+		tstring_free(description);
+		return;
+	}
+	/* Member names are not lexical symbols. Reuse the expression Type instead
+	 * of attempting to resolve them as local variables. */
+	for (tast_id i = 0; i < document->frontend.arena.node_count; i++) {
+		const tast_node *node = tast_get(&document->frontend.arena, i);
+		if (node->kind != tast_member || offset < node->member.name.start ||
+		    offset >= node->member.name.end) continue;
+		const char *type = ttype_info_for_node(&document->frontend.types, i);
+		if (!type) continue;
+		tstring *name = tsource_document_slice(
+			&document->frontend.document, node->member.name);
+        tstring *description = tlsp_present_field(&document->frontend.types.arena,
+            tstring_cstr(name),ttype_info_node_id(&document->frontend.types,i));
+		send_hover(server, id, document, node->member.name, tstring_cstr(description));
+		tstring_free(name);
 		tstring_free(description);
 		return;
 	}
@@ -417,17 +433,16 @@ static void handle_hover(tlsp_server *server, const tjson_value *message,
 			send_result(server, id, "null");
 			return;
 		}
-		send_hover(server, id, document, span,
-			standard->detail ? standard->detail : standard->name);
+        tstring *description = tlsp_present_standard(standard);
+        send_hover(server, id, document, span,tstring_cstr(description));
+        tstring_free(description);
 		return;
 	}
-	tstring *description = tstring_new_empty();
-	const char *type = ttype_info_for_symbol(&document->frontend.types,
-		&document->frontend.semantic, symbol);
-	tstring_append_fmt(description, "%s %s%s%s",
-		tsemantic_symbol_kind_name(symbol->kind), tstring_cstr(symbol->name),
-		type ? ": " : "", type ? type : "");
-	send_hover(server, id, document, symbol->span, tstring_cstr(description));
+	tstring *description = tlsp_present_source(&document->frontend, symbol);
+	const tannotation_reference *annotation = tannotation_reference_at(
+		&document->frontend.semantic.annotations, offset);
+	send_hover(server, id, document, annotation ? annotation->span : symbol->span,
+		tstring_cstr(description));
 	tstring_free(description);
 }
 
@@ -561,6 +576,13 @@ static void handle_references(tlsp_server *server, const tjson_value *message,
 		if (!node) continue;
 		if (!first) tstring_append_c(result, ',');
 		append_location(result, uri, &document->frontend.document, node->span);
+		first = 0;
+	}
+	const tannotation_index *annotations = &document->frontend.semantic.annotations;
+	for (uint32_t i = 0; i < annotations->count; i++) {
+		if (annotations->items[i].symbol != symbol_id) continue;
+		if (!first) tstring_append_c(result, ',');
+		append_location(result, uri, &document->frontend.document, annotations->items[i].span);
 		first = 0;
 	}
 	tstring_append_c(result, ']');
@@ -767,6 +789,37 @@ static tast_id dictionary_expression(const tlsp_document *document,
 	return TAST_INVALID_ID;
 }
 
+/* A trailing '::' can leave its containing expression outside the recovered
+ * AST. Recover name/member chains from source using scoped, analyzed Types. */
+static tstatic_type_id completion_receiver_type(const tlsp_document *document,
+					       uint32_t end, uint32_t depth)
+{
+	if (depth > 32) return TSTATIC_TYPE_UNKNOWN;
+	const char *source = tstring_cstr(document->frontend.document.text);
+	while (end && isspace((unsigned char)source[end - 1])) end--;
+	uint32_t start = end;
+	while (start && identifier_byte((unsigned char)source[start - 1])) start--;
+	if (start == end) return TSTATIC_TYPE_UNKNOWN;
+	uint32_t separator = start;
+	while (separator && isspace((unsigned char)source[separator - 1])) separator--;
+	const ttype_info_model *types = &document->frontend.types;
+	if (separator >= 2 && source[separator - 1] == ':' && source[separator - 2] == ':') {
+		tstatic_type_id parent = completion_receiver_type(document, separator - 2, depth + 1);
+		const tstatic_type *type = tstatic_type_get(&types->arena, parent);
+		if (!type || type->kind != tstatic_type_fields) return TSTATIC_TYPE_UNKNOWN;
+		const tstatic_field *fields = tstatic_type_field_items(&types->arena, type);
+		for (uint32_t i = 0; i < type->field_count; i++) {
+			const char *name = tstring_cstr(fields[i].name);
+			if (strlen(name) == end - start && !strncmp(name, source + start, end - start))
+				return fields[i].type;
+		}
+		return TSTATIC_TYPE_UNKNOWN;
+	}
+	const tsemantic_symbol *symbol = visible_symbol_named(document, start, end, end);
+	return symbol ? ttype_info_symbol_id(types, &document->frontend.semantic, symbol) :
+		TSTATIC_TYPE_UNKNOWN;
+}
+
 static int append_dictionary_completions(const tlsp_document *document,
 					 uint32_t receiver_start,
 					 uint32_t receiver_end,
@@ -776,6 +829,37 @@ static int append_dictionary_completions(const tlsp_document *document,
 	tast_id receiver = tcontrol_find_node_at(&document->frontend.flow,
 		&document->frontend.arena, document->frontend.root,
 		receiver_end - 1);
+	/* Select the complete receiver, including chained members/calls/indexes,
+	 * rather than the innermost expression under the last character. */
+	uint32_t start = receiver_end;
+	for (tast_id i = 0; i < document->frontend.arena.node_count; i++) {
+		const tast_node *candidate = tast_get(&document->frontend.arena, i);
+		if (candidate->kind != tast_name && candidate->kind != tast_member &&
+		    candidate->kind != tast_call && candidate->kind != tast_index &&
+		    candidate->kind != tast_group) continue;
+		if (candidate->span.end == receiver_end && candidate->span.start < start) {
+			receiver = i;
+			start = candidate->span.start;
+		}
+	}
+	const ttype_info_model *types = &document->frontend.types;
+	tstatic_type_id type_id = ttype_info_node_id(types, receiver);
+	if (type_id == TSTATIC_TYPE_UNKNOWN) {
+		type_id = completion_receiver_type(document, receiver_end, 0);
+	}
+	const tstatic_type *type = tstatic_type_get(&types->arena, type_id);
+	if (type && type->kind == tstatic_type_fields) {
+		const tstatic_field *fields = tstatic_type_field_items(&types->arena, type);
+		for (uint32_t i = 0; i < type->field_count; i++) {
+			const char *name = tstring_cstr(fields[i].name);
+			if (!valid_identifier(name) || !starts_with(name, tstring_cstr(prefix)))
+				continue;
+			tstring *detail = tlsp_present_field(&types->arena, name, fields[i].type);
+			append_completion(result, first, name, 5, tstring_cstr(detail));
+			tstring_free(detail);
+		}
+		return 1;
+	}
 	tast_id dictionary = dictionary_expression(document, receiver, 0);
 	if (dictionary == TAST_INVALID_ID) {
 		const tsemantic_symbol *symbol = visible_symbol_named(
@@ -812,7 +896,10 @@ static int append_dictionary_completions(const tlsp_document *document,
 				&document->frontend.types, items[i + 1]);
 			int kind = detail && strcmp(detail, "Function") == 0 ? 3 :
 				detail && strcmp(detail, "Type") == 0 ? 7 : 6;
-			append_completion(result, first, tstring_cstr(key), kind, detail);
+            tstring *presentation = tlsp_present_field(&document->frontend.types.arena,tstring_cstr(key),
+                ttype_info_node_id(&document->frontend.types,items[i+1]));
+            append_completion(result, first, tstring_cstr(key), kind, tstring_cstr(presentation));
+            tstring_free(presentation);
 			appended = 1;
 		}
 		tstring_free(key);
@@ -906,22 +993,25 @@ static void handle_completion(tlsp_server *server, const tjson_value *message,
 			if (namespace.document) {
 				for (uint32_t i = 0; i < namespace.document->interface.export_count; i++) {
 					const tmodule_export *exported = &namespace.document->interface.exports[i];
-					if (starts_with(tstring_cstr(exported->name), tstring_cstr(prefix)))
-						append_completion(result, &first, tstring_cstr(exported->name),
-							module_completion_kind(exported->kind),
-							tstring_cstr(exported->detail));
+                    if (starts_with(tstring_cstr(exported->name), tstring_cstr(prefix))) {
+                        tstring *detail = tlsp_present_export(&namespace.document->frontend,exported);
+                        append_completion(result,&first,tstring_cstr(exported->name),module_completion_kind(exported->kind),tstring_cstr(detail));
+                        tstring_free(detail);
+                    }
 				}
 			} else if (namespace.standard_package) {
 				for (uint32_t i = 0; i < tstandard_symbol_count(); i++) {
 					const tstandard_symbol *standard = tstandard_symbol_at(i);
 					if (standard->package &&
 					    strcmp(standard->package, namespace.standard_package) == 0 &&
-					    starts_with(standard->name, tstring_cstr(prefix)))
-						append_completion(result, &first, standard->name,
-							module_completion_kind(standard->kind), standard->detail);
+                        starts_with(standard->name, tstring_cstr(prefix))) {
+                        tstring *detail = tlsp_present_standard(standard);
+                        append_completion(result,&first,standard->name,module_completion_kind(standard->kind),tstring_cstr(detail));
+                        tstring_free(detail);
+                    }
 				}
 			}
-		} else if (receiver_start < receiver_end) {
+		} else if (receiver_end) {
 			append_dictionary_completions(document, receiver_start,
 				receiver_end, prefix, result, &first);
 		}
@@ -937,10 +1027,9 @@ static void handle_completion(tlsp_server *server, const tjson_value *message,
 		    name_already_emitted(&document->frontend.semantic, i, symbol,
 			scope, offset)) continue;
 		if (!starts_with(tstring_cstr(symbol->name), tstring_cstr(prefix))) continue;
-		const char *type = ttype_info_for_symbol(&document->frontend.types,
-			&document->frontend.semantic, symbol);
-		append_completion(result, &first, tstring_cstr(symbol->name),
-			completion_kind(document, symbol), type);
+        tstring *detail = tlsp_present_source(&document->frontend,symbol);
+        append_completion(result,&first,tstring_cstr(symbol->name),completion_kind(document,symbol),tstring_cstr(detail));
+        tstring_free(detail);
 	}
 	for (uint32_t i = 0; i < tstandard_symbol_count(); i++) {
 		const tstandard_symbol *standard = tstandard_symbol_at(i);
@@ -951,8 +1040,11 @@ static void handle_completion(tlsp_server *server, const tjson_value *message,
 			if (tstring_eq_cstr(document->frontend.semantic.symbols[j].name,
 				standard->name) && document->frontend.semantic.symbols[j].span.start <= offset)
 				shadowed = 1;
-		if (!shadowed) append_completion(result, &first, standard->name,
-			module_completion_kind(standard->kind), standard->detail);
+        if (!shadowed) {
+            tstring *detail = tlsp_present_standard(standard);
+            append_completion(result,&first,standard->name,module_completion_kind(standard->kind),tstring_cstr(detail));
+            tstring_free(detail);
+        }
 	}
 	tstring_append_c(result, ']');
 	send_result(server, id, tstring_cstr(result));
@@ -1004,7 +1096,9 @@ static void handle_prepare_rename(tlsp_server *server,
 		&document->frontend.semantic, &document->frontend.arena, offset, nullptr);
 	if (!symbol) { send_result(server, id, "null"); return; }
 	tstring *result = tstring_new("{\"range\":");
-	append_range(result, &document->frontend.document, symbol->span);
+	const tannotation_reference *annotation = tannotation_reference_at(
+		&document->frontend.semantic.annotations, offset);
+	append_range(result, &document->frontend.document, annotation ? annotation->span : symbol->span);
 	tstring_append(result, ",\"placeholder\":");
 	tjson_append_escaped(result, tstring_cstr(symbol->name));
 	tstring_append_c(result, '}');
@@ -1097,6 +1191,12 @@ static void handle_rename(tlsp_server *server, const tjson_value *message,
 		if (!node) continue;
 		tstring_append_c(result, ',');
 		append_text_edit(result, &document->frontend.document, node->span, new_name);
+	}
+	const tannotation_index *annotations = &document->frontend.semantic.annotations;
+	for (uint32_t i = 0; i < annotations->count; i++) {
+		if (annotations->items[i].symbol != symbol_id) continue;
+		tstring_append_c(result, ',');
+		append_text_edit(result, &document->frontend.document, annotations->items[i].span, new_name);
 	}
 	tstring_append(result, "]}}");
 	send_result(server, id, tstring_cstr(result));

@@ -1,0 +1,31 @@
+/// feasibility.tap
+///
+/// 库存分配的可行性查询。
+///
+/// 将七个库存单位分配给新订单和已有预留，固定预留数量为四，再求解其余参数。
+/// 预期得到 quantity=3、reserved=4、confirmed=true，并用 assert 检查求出的 Rule 实例。
+
+
+let Allocation = rule (quantity: Int, reserved: Int, confirmed: Bool) {
+    quantity in rules::range(1, 7)
+    reserved in rules::points(types::Int, 0, 2, 4)
+    quantity + reserved == 7
+    confirmed
+}
+
+
+let Trial = rules::restrict(Allocation, 'reserved': 4)
+let answer = solve::hold(Trial)
+print('status: ', answer::status)
+
+if (answer::status == 'sat') {
+    pprint(answer::witness)
+    assert(answer::witness)
+} else {
+    if (len(answer::conflicts) > 0) {
+        pprint(answer::conflicts)
+    }
+    if (answer::reason != '') {
+        print(answer::reason)
+    }
+}

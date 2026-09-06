@@ -85,11 +85,14 @@ set(TAPAS_RUNTIME_SOURCES
     src/runtime/tlist.c
     src/runtime/tpair.c
     src/runtime/tdict.c
+    src/runtime/tdomain.c
     src/runtime/titer.c
     src/runtime/tarray.c
     src/runtime/ttime.c
     src/runtime/tcfn.c
+    src/runtime/tfunction_metadata.c
     src/runtime/ttype.c
+    src/runtime/trule_format.c
     src/runtime/trule.c
     src/runtime/trule_ir.c
     src/runtime/tevaluator.c
@@ -97,6 +100,7 @@ set(TAPAS_RUNTIME_SOURCES
 
 set(TAPAS_STDLIB_SOURCES
     src/stdlib/tstdlib.c
+    src/stdlib/function_metadata.c
     src/stdlib/builtins/console.c
     src/stdlib/builtins/conversion.c
     src/stdlib/builtins/list.c
@@ -107,6 +111,7 @@ set(TAPAS_STDLIB_SOURCES
     src/stdlib/builtins/dict.c
     src/stdlib/builtins/sort.c
     src/stdlib/builtins/objects.c
+    src/stdlib/builtins/reflection.c
     src/stdlib/builtins/time.c
     src/stdlib/builtins/session.c
     src/stdlib/builtins/rules.c
@@ -117,6 +122,7 @@ set(TAPAS_STDLIB_SOURCES
     src/stdlib/time/time.c
     src/stdlib/types/types.c
     src/stdlib/rules/rules.c
+    src/stdlib/solve/solve.c
     src/stdlib/evaluators/evaluators.c
 )
 
@@ -168,8 +174,27 @@ if(MATH_LIBRARY)
     target_link_libraries(tapas_runtime PUBLIC ${MATH_LIBRARY})
 endif()
 
+# Bundle dependency-ordered Python modules in memory: installed executables do
+# not import project files or extract an intermediate Python package to disk.
+set(SOLVE_BACKEND_SOURCE "import sys, types\n")
+foreach(SOLVE_MODULE IN ITEMS model_ir lowering presolve cp_sat diagnostics backend)
+    set(SOLVE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/src/stdlib/solve/${SOLVE_MODULE}.py")
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${SOLVE_MODULE_PATH}")
+    file(READ "${SOLVE_MODULE_PATH}" SOLVE_MODULE_HEX HEX)
+    if(SOLVE_MODULE STREQUAL "backend")
+        string(APPEND SOLVE_BACKEND_SOURCE "exec(compile(bytes.fromhex('${SOLVE_MODULE_HEX}'), '<solve.backend>', 'exec'))\n")
+    else()
+        string(APPEND SOLVE_BACKEND_SOURCE
+            "m = types.ModuleType('${SOLVE_MODULE}')\nsys.modules['${SOLVE_MODULE}'] = m\nexec(compile(bytes.fromhex('${SOLVE_MODULE_HEX}'), '<solve.${SOLVE_MODULE}>', 'exec'), m.__dict__)\n")
+    endif()
+endforeach()
+string(HEX "${SOLVE_BACKEND_SOURCE}" SOLVE_BACKEND_HEX)
+string(REGEX REPLACE "(..)" "0x\\1," SOLVE_BACKEND_BYTES "${SOLVE_BACKEND_HEX}")
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/generated/solve_backend.h"
+    "static const unsigned char tapas_solve_backend[] = {${SOLVE_BACKEND_BYTES}0};\n")
 add_library(tapas_stdlib STATIC ${TAPAS_STDLIB_SOURCES})
-target_include_directories(tapas_stdlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_include_directories(tapas_stdlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include
+    PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/generated)
 target_link_libraries(tapas_stdlib PUBLIC tapas_runtime tapas_syntax)
 
 add_library(tapas_frontend STATIC ${TAPAS_FRONTEND_SOURCES})
@@ -199,6 +224,7 @@ add_executable(tapas-language-server
     src/lsp/main.c
     src/lsp/json.c
     src/lsp/server.c
+    src/lsp/presentation.c
 )
 target_link_libraries(tapas-language-server PRIVATE tapas_frontend)
 set_target_properties(tapas-language-server PROPERTIES
@@ -228,6 +254,7 @@ if(BUILD_TESTING)
         test/unit/test_language_server.c
         src/lsp/json.c
         src/lsp/server.c
+        src/lsp/presentation.c
     )
     target_link_libraries(test_language_server PRIVATE tapas_frontend)
     tapas_enable_test_assertions(test_language_server)
@@ -261,6 +288,13 @@ if(BUILD_TESTING)
             -P ${CMAKE_CURRENT_SOURCE_DIR}/test/cmake/language_rules.cmake
     )
 
+    add_test(NAME solve_hold
+        COMMAND ${CMAKE_COMMAND}
+            -DTAPAS=$<TARGET_FILE:tapas>
+            -DSOURCE_ROOT=${CMAKE_CURRENT_SOURCE_DIR}
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/test/cmake/solve.cmake)
+    set_tests_properties(solve_hold PROPERTIES TIMEOUT 90 RESOURCE_LOCK solve_bytecode)
+
     add_test(
         NAME format_package
         COMMAND ${CMAKE_COMMAND}
@@ -287,6 +321,50 @@ if(BUILD_TESTING)
             WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
         )
     endforeach()
+
+    foreach(RETAIL_EXAMPLE IN ITEMS test_valid_exchange test_rejected_exchange test_invalid_transition
+            test_generate_valid_exchange test_generate_rejected_exchange test_generate_joint_inputs)
+        add_test(
+            NAME "example_retail_${RETAIL_EXAMPLE}"
+            COMMAND ${CMAKE_COMMAND} -E env
+                "TAPAS_BLAS_LIBRARY=$<TARGET_FILE:test_cblas>"
+                $<TARGET_FILE:tapas>
+                "${CMAKE_CURRENT_SOURCE_DIR}/examples/retail/${RETAIL_EXAMPLE}.tap"
+        )
+        set_tests_properties("example_retail_${RETAIL_EXAMPLE}" PROPERTIES
+            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+            RESOURCE_LOCK retail_bytecode
+        )
+    endforeach()
+
+    add_test(NAME retail_partial_queries
+        COMMAND ${CMAKE_COMMAND}
+            -DTAPAS=$<TARGET_FILE:tapas>
+            -DSOURCE_ROOT=${CMAKE_CURRENT_SOURCE_DIR}
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/test/cmake/retail_partial.cmake)
+    set_tests_properties(retail_partial_queries PROPERTIES
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+        RESOURCE_LOCK retail_bytecode)
+
+    add_test(NAME retail_state_model
+        COMMAND $<TARGET_FILE:tapas>
+            "${CMAKE_CURRENT_SOURCE_DIR}/test/language_rules/regression/retail_state_model.tap")
+    set_tests_properties(retail_state_model PROPERTIES
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+        RESOURCE_LOCK retail_bytecode)
+
+    add_test(NAME retail_contract_detection
+        COMMAND $<TARGET_FILE:tapas>
+            "${CMAKE_CURRENT_SOURCE_DIR}/test/language_rules/regression/retail_contract_detection.tap")
+    set_tests_properties(retail_contract_detection PROPERTIES
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+        RESOURCE_LOCK retail_bytecode)
+
+    add_test(NAME markdown_update
+        COMMAND ${CMAKE_COMMAND}
+            -DTAPAS=$<TARGET_FILE:tapas>
+            -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/test_markdown_update
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/test/cmake/markdown_update.cmake)
 
     # Markdown documentation is executable: all `tapas` fences in one file are
     # compiled and run in document order. The archived C++ implementation is

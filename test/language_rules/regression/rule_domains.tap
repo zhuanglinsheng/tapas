@@ -1,0 +1,95 @@
+let Color = types::enum('red', 'green', 'blue')
+let points: PointsOf[Int] = rules::points(types::Int, 1, 4, 4, 9)
+let colors: PointsOf[Color] = rules::points(Color, 'red', 'blue')
+let span: RangeOf[Int] = rules::range(-2, 10)
+let empty: PointsOf[String] = rules::points(types::String)
+let singleton = rules::range(4, 4)
+assert(rule {
+    1 in points; 4 in points; not (2 in points)
+    'red' in colors; not ('green' in colors)
+    -2 in span; 10 in span; not (11 in span)
+    4 in singleton; not (5 in singleton)
+    not ('anything' in empty)
+    len(points::values) == 3
+    span::start == -2; span::end == 10
+    identical(types::parameters(types::of(points))::item, types::Int)
+    identical(types::parameters(types::of(colors))::item, Color)
+    identical(types::parameters(types::of(span))::item, types::Int)
+    types::matches(points, types::of(points))
+    not types::matches(points, types::of(rules::points(types::Bool)))
+})
+let floats = rules::points(types::Float, 1.5, 3.25)
+let bools = rules::points(types::Bool, false, true)
+let nils = rules::points(types::Nil)
+let lists = rules::points(types::list(types::Int), [1, 2], [3])
+let record = {'x': 1}
+let records = rules::points(types::dictionary(types::String, types::Int), record)
+let type_points = rules::points(types::Type, types::Int, Color)
+let Child = rule (x: Int) { x > 0 }
+let instance = Child(1)
+let instances: PointsOf[RuleInstance[Int]] = rules::points(types::of(instance), instance)
+let functions = rules::points(types::Function, (x) { return x })
+assert(rule {
+    1.5 in floats; false in bools; not (1 in nils)
+    [1, 2] in lists; record in records; types::Int in type_points
+    instance in instances
+})
+function accept(value: PointsOf[Color]) -> Bool { return 'red' in value }
+assert(rule { accept(colors) })
+let Member = rule (x: Int) { x in points }
+assert(Member(4))
+assert(rule { not Member(5) })
+let ir = rules::inspect(Member)
+assert(rule {
+    ir::version == 7
+    ir::items[0]::term::kind == 'In'
+    len(ir::items[0]::term::arguments) == 2
+})
+let restored = rules::deserialize(rules::serialize(Member))
+assert(restored(4))
+let reader = evaluators::make('membership-reader', 1, (context) {
+    return {'status': 'Success', 'value': evaluators::value(context, context::ir::items[0]::term), 'violations': [], 'diagnostics': []}
+})
+assert(rule { evaluators::eval(Member(4), reader)::value })
+let operand_reader = evaluators::make('membership-domain', 1, (context) {
+    return {'status': 'Success', 'value': evaluators::value(context, context::ir::items[0]::term::arguments[1]), 'violations': [], 'diagnostics': []}
+})
+assert(rule { 4 in evaluators::eval(Member(4), operand_reader)::value })
+let Combined = rule (x: Int) {
+    (x in span and x in points) or x == 100
+    not (x in empty)
+    (x in span) implies { x <= 10 }
+    let allowed = x in points
+    allowed or x == 100
+}
+assert(Combined(4)); assert(Combined(100))
+function broken() { return [][0] }
+assert(rule { true or (1 in broken()); not (false and (1 in broken())) })
+let p = rules::parameter('x', types::Int)
+let dynamic = rules::make('DynamicMember', [p], [rules::condition(rules::membership(p, rules::constant(points)))])
+assert(dynamic(4))
+assert(rule { not dynamic(5) })
+let reloaded = rules::deserialize(rules::serialize(dynamic))
+assert(reloaded(4))
+let dynamic_range = rules::make('DynamicRange', [p], [rules::condition(rules::membership(p, rules::constant(span)))])
+assert(rules::deserialize(rules::serialize(dynamic_range))(10))
+print('rule domains: ok')
+// Existing in syntax also constructs an In Term for dynamic rules.
+let symbolic = rules::make('SymbolicMembership', [p], [rules::condition(p in points)])
+assert(symbolic(4))
+assert(rule { not symbolic(2) })
+// Stored functions retain runtime validation when dependent inference is unavailable.
+let build_points = rules::points
+let indirect: PointsOf[Int] = build_points(types::Int, 2, 8)
+assert(rule { 8 in indirect })
+var order = []
+function make_domain() { order.append(1); return rules::range(0, 4) }
+function make_value() { order.append(2); return 2 }
+let Once = rule { make_value() in make_domain() }
+assert(Once())
+assert(rule { len(order) == 2; order[0] == 1; order[1] == 2 })
+let before = len(order)
+let checked = evaluators::eval(Once(), reader)
+assert(rule { checked::value; len(order) == before + 2 })
+let extremes = rules::range(-9223372036854775807, 9223372036854775807)
+assert(rule { -9223372036854775807 in extremes; 9223372036854775807 in extremes })

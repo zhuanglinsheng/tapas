@@ -5,6 +5,14 @@
 本扩展将 Visual Studio Code 直接连接到 C 实现的
 `tapas-language-server`，识别 `.tap` 文件，并且没有 npm 运行时依赖。
 
+Rule 表达式中的 `not`、`and`、`or` 支持 `Bool` 和 `RuleInstance` 操作数，
+其中 `and`、`or` 短路求值。Rule 依赖直接写为 `Valid(x)` 等实例表达式；
+`require` 已不再是关键字。Rule 表达式之外，这些逻辑运算符仅接受 `Bool`。
+
+请使用同一 Core 构建提供的 `tapas-language-server`、`tapas` 和 `format` 包。
+仅更新扩展会更新静态高亮，不会更新诊断、执行或格式化行为：
+扩展调用外部 Core 工具，并不内置这些工具。
+
 ## 当前能力
 
 ### 编辑功能
@@ -25,6 +33,17 @@
   和包成员详情。
 - 当前局部推导覆盖字面量、函数、算术表达式、Pair、列表、字典、导入和带标注
   的绑定。
+- `state::status` 等固定成员读取支持成员 Type 悬停；`state::` 根据结构 Type
+  补全字段并显示类型，包括函数／Rule 参数、嵌套成员和导入的 `model::State`。
+  AST 和类型分析已经支持成员访问，服务器直接复用这些事实，不运行用户代码。
+- 类型展示保留命名结构引用，例如 `Rule[State]`、`Function[State] -> List[State]`，
+  支持别名与嵌套标注。悬停和补全共用此视图；悬停 Type 值本身时展示定义。
+  显式匿名结构 Type 仍完整展开；字典字面量推断为 `Dictionary`，不声明字段约束。
+  内建 Type 使用标准名称。
+- 参数、返回值和变量的类型标注通过独立引用索引支持名称与 `::` 成员的悬停、
+  定义跳转、引用查找和重命名，包括 `InstanceOf[model::Exchange]` 内的规则引用。
+  参数标注使用定义环境，即使参数与类型或模块同名，
+  也不会改变标注中的引用目标。
 
 ### 导航和重构
 
@@ -75,7 +94,8 @@
 
 模块公开接口取自模块最后一条 `return` 返回的字典。跨模块查询目前针对使用
 `::` 访问的公开成员；普通局部符号仍按文件和词法作用域解析。签名帮助、语义
-Token 增量响应、增量文本同步和完整结构 Type 悬停信息仍属于后续工作。
+Token 增量响应和增量文本同步仍属于后续工作。结构字段的跳转／重命名，以及
+联合或递归结构的成员补全尚未提供；无法静态确定的成员不保证有类型提示。
 当前运行命令不提供断点、单步执行、变量查看或调用栈；这些能力需要单独实现
 Tapas Debug Adapter。
 
@@ -128,6 +148,12 @@ editors/vscode/install.sh
 扩展不会自动执行当前工作区中的 Language Server。
 
 自动发现不适用时，可以把 `tapas.languageServer.path` 设置为绝对路径。
+
+如果命令行可运行的 `rule` 或 `types::enum` 在编辑器里报语法错误，请检查
+是否仍在使用旧扩展内打包的服务器。开发 Tapas 本身时，在工作区设置里将
+`tapas.languageServer.path` 和 `tapas.runtime.path` 分别指向同一构建目录下
+的 `build/bin/tapas-language-server` 和 `build/bin/tapas`（使用绝对路径），
+重新构建后执行 VS Code 的 `Developer: Reload Window`。仅更新源码不会更新已运行的服务器。
 
 扩展按以下顺序寻找 Tapas 运行器：
 

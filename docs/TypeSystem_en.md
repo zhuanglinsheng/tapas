@@ -8,8 +8,9 @@ definition in the [Language Reference](Syntax_en.md). The rules here are
 normative for those features; exact Rule Types and their constructors are
 defined separately in the [Rule documentation](Rules_en.md).
 
-Type annotations participate only in compile-time analysis. They do not change
-a value's runtime representation or insert implicit checks or conversions. A
+Ordinary Type annotations primarily participate in compile-time analysis without
+implicit conversions. `InstanceOf[R]` additionally binds runtime Rule identity and
+checks declaration initialization, function parameters/results, and Rule arguments. A
 Type can also be stored, passed, returned, and exported as an ordinary value;
 this document calls such a value a Type value. User-defined Types are immutable,
 and their complete definitions must be visible at compile time.
@@ -81,6 +82,11 @@ operation without constraining its parameter or result Types. See the
 [Standard Library](Stdlib_en.md) for the operations supported by each value
 category and the [Rule documentation](Rules_en.md) for exact Rule and
 RuleInstance Types.
+
+RuleInstance is not Bool and has no general implicit conversion. Only the
+antecedent position of `implies` accepts Bool, RuleInstance, or their union;
+instances are interpreted by checking their satisfaction. Consequents remain
+Bool, and bare Rules must first be bound. This does not extend `if`, `and`, or `or`.
 
 ### 1.3 Static Type expressions
 
@@ -290,7 +296,74 @@ let canonical_identifier_b = types::union(types::String, types::Int)
 `types::union(T, T)` is valid and produces `T`. A source-level call with fewer
 than two arguments is a compile error.
 
-### 2.4 Recursive Types
+### 2.4 Enum Types
+
+`types::enum` constructs a finite-value Type from one or more directly written
+String literals:
+
+```tapas
+let OrderStatus = types::enum(
+    'Pending',
+    'Shipped',
+    'Delivered',
+    'Cancelled',
+)
+```
+
+An enum is a structural, String-backed refinement Type; it does not introduce
+a new runtime value category. Members are case-sensitive and may not be
+duplicated. Arguments cannot come from variables, Lists, or other runtime
+expressions. Member order does not affect Type equivalence or hashing, although
+reflection and iteration preserve each construction's source order.
+
+Indexing an enum Type with a String member produces a value whose static Type
+is that enum and whose runtime value is the corresponding ordinary String:
+
+```tapas
+let delivered: OrderStatus = OrderStatus['Delivered']
+print(delivered == 'Delivered') // true
+```
+
+The compiler verifies a literal index. A String expression may be used as a
+dynamic index and reports a runtime indexing error if it is not a member. Enum
+members cannot be modified through indexing.
+
+A String literal in an enum target context is checked against the member set,
+so literals may be used directly in initializers, assignments, container
+elements, function arguments, and return values:
+
+```text
+let status: OrderStatus = 'Delivered'
+let invalid: OrderStatus = 'Unknown' // Compile error
+```
+
+An `==` or `!=` comparison between an enum and a String literal also checks the
+member set, preventing spelling mistakes in conditions. Comparison with a
+dynamic String expression remains valid.
+
+An ordinary String expression is not implicitly narrowed to an enum. Validate
+a dynamic boundary with `types::matches`; the tested name is narrowed in the
+successful branch:
+
+```text
+let input: String = read_status()
+if (types::matches(input, OrderStatus)) {
+    let checked: OrderStatus = input
+}
+```
+
+Enum assignability follows set inclusion: an enum with fewer members is
+assignable to an enum containing all of them, and every enum is assignable to
+`String`, but not conversely. Thus `Enum['Delivered']` is a subtype of
+`Enum['Pending', 'Delivered']`, which is itself a subtype of `String`.
+
+Because the runtime representation is erased, `types::of` reports
+`types::String` for enum values. `types::matches(value, E)` checks that the
+value is a String in `E`'s member set. The first version supports only String
+members and has no integer encoding, separate symbolic/value names, or nominal
+enum identity; use a separate Dictionary when an external encoding is needed.
+
+### 2.5 Recursive Types
 
 A recursive Type first declares an uninitialized `let` explicitly annotated
 as `Type`, then completes it with one static Type assignment:
@@ -328,12 +401,13 @@ cycle indefinitely. Display uses a finite recursion marker rather than trying
 to print the whole graph. Module interfaces preserve the structured graph
 rather than depending on expanded display text.
 
-### 2.5 Type equivalence and field construction order
+### 2.6 Type equivalence and field construction order
 
 Binding names, declaration locations, and object addresses do not determine
 Type equivalence. Predefined Types compare by category; unions compare their
-flattened, deduplicated members; parameterized Types compare their base and
-parameters; and field Types compare field names, field Types, and optional
+flattened, deduplicated members; enums compare their String member sets;
+parameterized Types compare their base and parameters; and field Types compare
+field names, field Types, and optional
 status. Recursive Types compare as finite graphs with back references, so the
 comparison never expands indefinitely.
 
@@ -355,6 +429,63 @@ construction order.
 ## 3. Type Annotations and Value Construction
 
 ### 3.1 Annotation syntax and name resolution
+
+#### Unified template
+
+Editor Type presentation preserves named structural references from annotations,
+such as `Rule[State]`, rather than always expanding them to `Rule[{...}]`.
+Names are presentation provenance, not nominal identity: structural equality and
+assignability are unchanged. Hovering a Type value still reveals its definition;
+anonymous structures remain expanded and builtin Types use canonical names.
+
+The general design template is:
+
+```text
+Constructor[Type, Type, ...; Value, Value, ...]
+Function[Type, Type, ...; Value, Value, ...] -> ResultType
+```
+
+Type parameters precede the semicolon; value parameters follow it.
+The result is itself a Type expression. Each constructor specifies its parameter
+categories, arity, and whether it supports a result arrow; `List[Int] -> String`
+remains invalid.
+
+Omission is determined by the constructor signature, not by guessing the argument:
+
+- Type-only constructors omit the empty value section: `List[Int;]` becomes `List[Int]`.
+- Value-only constructors may omit the leading semicolon:
+  `InstanceOf[; Exchange]` becomes `InstanceOf[Exchange]`.
+- Constructors accepting both categories retain the separator.
+- `A | B` is sugar for `Union[A, B]`.
+- Raw Types and zero-parameter signatures remain distinct: `Rule` is not `Rule[]`,
+  and `Function` is not `Function[] -> AnyType`.
+
+The Type-only constructors below support explicit empty value sections.
+`InstanceOf[R]`, equivalent to `InstanceOf[; R]`, accepts a Rule name or qualified
+member reference such as `model::Exchange`, not arbitrary expressions.
+User-defined generic constructors are not supported.
+
+Membership requires the **same runtime Rule object**. Its zero, one, or multiple
+parameter Types are inferred from R and need not be repeated. Membership does not
+assert satisfaction: use `assert(action)` or `rules::check(action)` separately.
+Names, signatures, source locations, and semantic hashes do not establish identity.
+
+Function and Rule creation capture R in the defining environment; declaration
+initialization binds its own R. Later rebinding of the name does not change existing
+signatures. Aliases to the same object match; repeated factory calls, Rule `.copy()`,
+and repeated module executions create distinct objects. Retail uses `runner::model`
+to share the runner's bound Rule, without assuming singleton imports.
+
+Nested containers and unions support identity checks. This first version rejects
+reassignment of bindings with value-bound annotations and does not support recursive
+Types containing runtime identities. Mutation through container aliases is not
+continuously monitored. Function matching does not wrap arbitrary callbacks to
+enforce their full signatures. `parameters(function)` exposes the bound parameter
+Type for `types::matches`, independently of Rule satisfaction.
+
+Bytecode stores reference templates and binds them during execution; bound identity
+Types cannot be transported across processes through Rule IR serialization.
+`RuleInstance[T, ...]` remains a signature constraint without Rule identity.
 
 Annotations follow declaration names and function parameters, and may also
 describe function results:
@@ -378,11 +509,11 @@ type-expression  = union-type ;
 union-type       = primary-type, { "|", primary-type } ;
 primary-type     = function-type | type-application | qualified-type-name ;
 function-type    = function-constructor, "[",
-                   [ type-arguments, [ "," ] | "..." ], "]",
+                   [ type-arguments, [ "," ] | "..." ], [ ";" ], "]",
                    "->", type-expression ;
 function-constructor = "Function" | "types::Function" ;
 type-application = qualified-type-name,
-                   "[", [ type-arguments, [ "," ] ], "]" ;
+                   "[", [ type-arguments, [ "," ] ], [ ";" ], "]" ;
 type-arguments   = type-expression, { ",", type-expression } ;
 qualified-type-name = IDENTIFIER, { "::", IDENTIFIER } ;
 ```
@@ -540,9 +671,10 @@ recursive call known before the body is analyzed. Without a result annotation,
 the function result is `Unknown`; this design does not require automatic
 inference.
 
-Parameter annotations provide compile-time constraints only. Compilation is
+Ordinary parameter annotations provide compile-time constraints. Compilation is
 accepted when an argument or call target is `Unknown`, and the compiler does
-not insert an implicit check at function entry. Use `types::matches` or an
+not insert an implicit check at function entry, except for Types containing
+`InstanceOf` as described above. Use `types::matches` or an
 inline `assert(rule { ... })` when a dynamic boundary must enforce a more specific
 condition. The variadic `...` form cannot carry a parameter annotation, but a
 result annotation may follow its parameter list.
@@ -628,7 +760,9 @@ of these rules applies:
 9. `A` and `B` are exact function Types satisfying the parameter-contravariance
    and result-covariance rules in Section 3.2;
 10. `A` and `B` are Rule-related Types satisfying the assignability rules in
-    the Rule documentation.
+    the Rule documentation;
+11. `A` is an enum and `B` is `String`, or both are enums and `A`'s member set
+    is a subset of `B`'s member set.
 
 A field Type and a uniform-key/value Dictionary Type are not assignable to one
 another. Apart from the rules above, two known Types are not assignable. There
@@ -666,7 +800,7 @@ not insert a runtime check.
 When the compiler cannot determine an expression's Type, static analysis uses
 the internal state `Unknown`. `Unknown` is not a program-visible Type value and
 cannot appear in an annotation. It may enter any target position without
-causing an implicit runtime check:
+causing an implicit runtime check, except at `InstanceOf` boundaries:
 
 ```text
 var amount: Int = 1
@@ -677,7 +811,8 @@ amount = foreign_value()  // Unknown; accepted by the compiler
 
 Both `let` and `var` retain the assignment behavior of the current language.
 When a binding is annotated, every subsequent assignment that can be analyzed
-statically is checked against the original annotation. An unannotated static
+statically is checked against the original annotation. Bindings annotated with
+Types containing `InstanceOf` reject reassignment in this first version. An unannotated static
 Type binding ceases to be usable as a static Type name after reassignment, even
 if its new runtime value is also a Type. Errors involving name resolution,
 argument counts, duplicate fields, or deletion of required fields are governed
@@ -713,6 +848,8 @@ let number_values: NumberList = [1, 2.5]
 
 A fresh literal may be assigned directly to a wider container target. A
 mutable container already stored in a variable must follow the invariant rule.
+A String literal with an enum target Type must also be a declared member;
+without a target Type it is still inferred as ordinary `String`.
 
 Without a target Type, container literals are inferred as follows:
 
@@ -759,6 +896,7 @@ The compile-time Type construction forms are:
 |---|---|
 | `types::make_type(...Pair(String, Type)) -> Type` | Construct a non-empty field Type |
 | `types::union(Type, Type, ...) -> Type` | Construct a union |
+| `types::enum(String, ...) -> Type` | Construct a non-empty enum from direct String literals |
 | `types::list(Type) -> Type` | Construct a parameterized List Type |
 | `types::iterator(Type) -> Type` | Construct a parameterized Iterator Type |
 | `types::pair(Type, Type) -> Type` | Construct a parameterized Pair Type |
@@ -784,8 +922,8 @@ The read-only reflection interfaces are:
 |---|---|
 | `types::fields(Type) -> Dictionary` | Return a copy of the user fields of a field Type |
 | `types::optional_fields(Type) -> List` | Return the optional field names of a field Type |
-| `types::members(Type) -> List` | Return the members of a union |
-| `types::base(Type) -> Type` | Return the raw Type of a parameterized container |
+| `types::members(Type) -> List` | Return union member Types or enum member Strings |
+| `types::base(Type) -> Type` | Return the underlying Type of a parameterized Type or enum |
 | `types::parameters(Type) -> Dictionary` | Return a copy of a parameterized container's parameters |
 | `types::definition(Type) -> Dictionary` | Return a diagnostic copy of the definition |
 
@@ -826,19 +964,20 @@ let incomplete_person_does_not_match = types::matches({'name' : 'Ada'}, Person)
 
 1. if `expected` is `types::AnyType`, return `true`, including for Nil;
 2. if `expected` is a union, return `true` when any member matches;
-3. if `expected` is a parameterized List, the value must be a List and every
+3. if `expected` is an enum, the value must be a String equal to one member;
+4. if `expected` is a parameterized List, the value must be a List and every
    element must match Item;
-4. if `expected` is a parameterized Iterator, the value must be an Iterator and
+5. if `expected` is a parameterized Iterator, the value must be an Iterator and
    its intrinsic element Type must match Item;
-5. if `expected` is a parameterized Pair, the value must be a Pair and its two
+6. if `expected` is a parameterized Pair, the value must be a Pair and its two
    members must match First and Second respectively;
-6. if `expected` is a parameterized Dictionary, the value must be a Dictionary
+7. if `expected` is a parameterized Dictionary, the value must be a Dictionary
    and every key and value must match Key and Value respectively;
-7. if `expected` is a field Type, the value must be a Dictionary containing
+8. if `expected` is a field Type, the value must be a Dictionary containing
    every required field, and every declared field that is present must match;
-8. if `expected` is an exact Rule, RuleInstance, or RuleTerm Type, matching
+9. if `expected` is an exact Rule, RuleInstance, or RuleTerm Type, matching
    follows the signature or result-Type rules in the Rule documentation;
-9. otherwise, use the assignability rules in Section 4.1 to determine whether
+10. otherwise, use the assignability rules in Section 4.1 to determine whether
    `types::of(value)` is assignable to `expected`.
 
 An empty List or Dictionary matches the corresponding parameterized container
@@ -849,12 +988,13 @@ the value.
 ### 5.3 Reflection, equality, and errors
 
 `types::fields(T)` returns a copy of the user fields for a field Type and an
-empty Dictionary for any other Type. `types::members(T)` returns union members
-in canonical order, or a one-element List containing `T` for any non-union.
+empty Dictionary for any other Type. `types::members(T)` returns union member
+Types in canonical order, enum member Strings in construction order, or a
+one-element List containing `T` for any other Type.
 `types::base(T)` returns the corresponding `types::List`, `types::Iterator`,
 `types::Pair`, or `types::Dictionary` for a parameterized container. It returns
-the corresponding raw Type for an exact Rule or RuleInstance Type, and returns
-`T` itself for other Types.
+`types::String` for an enum, the corresponding raw Type for an exact Rule or
+RuleInstance Type, and `T` itself for other Types.
 
 For a parameterized container, `types::parameters(T)` returns a copy in an
 ordinary Dictionary with these fixed keys:
@@ -878,12 +1018,16 @@ Ordinary read-only operations on a Type expose only its user fields:
 - predefined Types, parameterized containers, and unions all have zero user
   fields.
 
+Enums are the exception: `E['Member']` returns the corresponding String member,
+`len(E)` returns the member count, and iteration yields members in construction
+order. None of these operations can modify the enum.
+
 `types::definition(T)` returns a new ordinary Dictionary on every call. The
 result may contain internal encodings, is not stable across versions, and
 cannot be passed back to `types::make_type`. A Type's printed representation is
 likewise intended only for diagnostics.
 
-For non-recursive Types, `==` follows the equivalence rules in Section 2.5; for
+For non-recursive Types, `==` follows the equivalence rules in Section 2.6; for
 recursive Types, it compares finite Type graphs. `!=` is its negation. Between a
 Type and a non-Type, `==` returns `false` and `!=` returns `true`.
 `identical(A, B)` tests only whether both values refer to the same Type object.

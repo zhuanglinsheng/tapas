@@ -57,8 +57,8 @@ set(EXPECTED [=[function compact(value: Int) -> Int
 }
 
 function expanded(
-    left: Int,
-    right: Int,
+        left: Int,
+        right: Int,
 ) -> Int {
     return left + right
 }

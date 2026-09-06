@@ -1,0 +1,97 @@
+let Record = types::make_type('quantity': types::Int, 'confirmed': types::Bool)
+let Quantity = rule (record: Record) {
+    record::quantity >= 2
+    record::quantity <= 5
+    record::confirmed
+}
+let accepted = { 'quantity': 3, 'confirmed': true }
+let rejected = { 'quantity': 8, 'confirmed': true }
+let fixed = rules::restrict(Quantity, 'record': accepted)
+let good = solve::hold(fixed)
+let bad = solve::hold(rules::restrict(Quantity, 'record': rejected))
+let bound = solve::hold(Quantity(accepted))
+let chained = solve::hold(rules::restrict(fixed))
+let other = { 'quantity': 3, 'confirmed': true }
+let conflicting = solve::hold(rules::restrict(fixed, 'record': other))
+let unknown = solve::hold(Quantity)
+assert(rule {
+    good::status == 'sat'
+    bound::status == 'sat'
+    chained::status == 'sat'
+    bad::status == 'unsat'
+    len(bad::conflicts) > 0
+    conflicting::status == 'unsat'
+    unknown::status == 'unsupported'
+})
+assert(good::witness)
+assert(chained::witness)
+
+// Contradictory scalar equalities must not disappear during specialization.
+let Number = rule (value: Int) { value >= 0 }
+let contradiction = solve::hold(rules::restrict(Number, 'value': 2, 'value': 3))
+assert(rule { contradiction::status == 'unsat' })
+
+// Never infer a fixed value from a disjunction.
+let Choice = rule (value: Int) { value == 1 or value == 2 }
+let second = solve::hold(rules::restrict(Choice, 'value': 2))
+assert(rule { second::status == 'sat' })
+
+// A restriction stores its value snapshot; changing the source does not rewrite it.
+accepted['quantity'] = 9
+let changed = solve::hold(fixed)
+assert(rule { changed::status == 'sat' })
+var minimum = 2
+let Captured = rule (record: Record) { record::quantity >= minimum }
+let captured = rules::restrict(Captured, 'record': other)
+let before_change = solve::hold(captured)
+minimum = 4
+let after_change = solve::hold(captured)
+assert(rule { before_change::status == 'sat'; after_change::status == 'unsat' })
+print('solve records: ok')
+
+let Nested = types::make_type('detail': Record)
+let NestedRule = rule (record: Nested) { record::detail::quantity >= 0 }
+let nested = solve::hold(rules::restrict(NestedRule,
+    'record': { 'detail': { 'quantity': 3, 'confirmed': true } }))
+let out_of_domain = solve::hold(rules::restrict(NestedRule,
+    'record': { 'detail': { 'quantity': 1000000000001, 'confirmed': true } }))
+assert(rule {
+    nested::status == 'sat'
+    out_of_domain::status == 'unsat'
+})
+assert(nested::witness)
+
+// Symbolic fields in a constructed record retain their original solver variables.
+let GeneratedRecord = rule (quantity: Int, confirmed: Bool) {
+    let record = { 'quantity': quantity, 'confirmed': confirmed }
+    Quantity(record)
+}
+let generated_record = solve::hold(rules::restrict(GeneratedRecord,
+    'quantity': rules::range(0, 2), 'confirmed': true))
+let denied_record = solve::hold(rules::restrict(GeneratedRecord,
+    'quantity': rules::range(0, 2), 'confirmed': false))
+assert(rule {
+    generated_record::status == 'sat'
+    arguments(generated_record::witness)[0] == 2
+    arguments(generated_record::witness)[1]
+    denied_record::status == 'unsat'
+})
+assert(generated_record::witness)
+
+// Finite string Enum variables may flow through String fields and parameters.
+let User = types::enum('owner', 'other')
+let Identity = types::make_type('user': types::String)
+let Owner = rule (name: String) { name == 'owner' }
+let IdentityRule = rule (identity: Identity) { Owner(identity::user) }
+let SelectOwner = rule (user: User) {
+    let identity = { 'user': user }
+    IdentityRule(identity)
+}
+let owner = solve::hold(SelectOwner)
+let other_user = solve::hold(rules::restrict(SelectOwner, 'user': 'other'))
+assert(rule {
+    owner::status == 'sat'
+    arguments(owner::witness)[0] == 'owner'
+    other_user::status == 'unsat'
+})
+assert(owner::witness)

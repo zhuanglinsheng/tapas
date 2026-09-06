@@ -41,6 +41,8 @@ typedef enum {
 	tbuiltin_evaluator_context,
 	tbuiltin_evaluator_result,
 	tbuiltin_evaluator_diagnostic,
+	tbuiltin_points,
+	tbuiltin_range,
 	tbuiltin_count
 } tbuiltin_id;
 

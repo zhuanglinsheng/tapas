@@ -1,4 +1,6 @@
+#include "tapas/runtime/trule_format.h"
 #include "tapas/runtime/trule_ir.h"
+#include "tapas/runtime/tdomain.h"
 
 #include "tapas/runtime/tstr.h"
 #include "tapas/runtime/trule.h"
@@ -24,9 +26,9 @@ const char *trule_term_kind_name(trule_term_kind kind)
 {
 	static const char *const names[] = {
 		"Constant", "Parameter", "Capture", "Intrinsic", "Call",
-		"Construct", "Convert", "Extension"
+		"Construct", "Convert", "Extension", "Not", "And", "Or", "In"
 	};
-	return kind >= trule_term_constant && kind <= trule_term_extension ?
+	return kind >= trule_term_constant && kind <= trule_term_in ?
 		names[kind] : "Invalid";
 }
 
@@ -52,6 +54,8 @@ static ttypeval *value_type(const tobj *value)
 	case tcompo:
 		if (!value->val.v_tcompo) return ttypeval_builtin(tbuiltin_nil);
 		switch (tobj_compo_type(value)) {
+		case compo_tpoints:
+		case compo_trange: return ttypeval_new_domain(tobj_compo_type(value) == compo_trange, ((tdomain *)value->val.v_tcompo)->item_type);
 		case compo_tstr: return ttypeval_builtin(tbuiltin_string);
 		case compo_tlist: {
 			tlist *list = (tlist *)value->val.v_tcompo;
@@ -134,14 +138,7 @@ static void term_free(void *self)
 	free(term);
 }
 
-static tstring *term_string(void *self)
-{
-	trule_term *term = self;
-	tstring *result = tstring_new("Term[");
-	tstring_append(result, trule_term_kind_name(term->kind));
-	tstring_append_fmt(result, "#%llu]", (unsigned long long)term->id);
-	return result;
-}
+
 
 static const char *index_name(const tobj *arguments, uint_regs count,
 			      const char *owner)
@@ -226,7 +223,12 @@ static void term_binary(void *self, const tobj *other, int is_rhs,
 		tobj_set_compo(&owner, (tcompo_v *)owned);
 		tobj_try_clear(&owner);
 	}
-	tobj_set_compo(result, (tcompo_v *)term);
+	/* Operator results occupy an owned stack slot (possibly an operand).
+	 * Retain the new DAG root and release the replaced slot's reference. */
+	tobj output;
+	tobj_set_nil(&output);
+	tobj_set_compo(&output, (tcompo_v *)term);
+	tobj_copy(result, &output);
 }
 
 #define TERM_BINARY(name, text, comparison) \
@@ -258,8 +260,11 @@ static void term_neg(void *self, tobj *result)
 	tobj_set_nil(&payload);
 	tobj_set_compo(&argument, (tcompo_v *)term);
 	tobj_set_compo(&payload, (tcompo_v *)tstr_new("neg"));
-	tobj_set_compo(result, (tcompo_v *)trule_term_new(
+	tobj output;
+	tobj_set_nil(&output);
+	tobj_set_compo(&output, (tcompo_v *)trule_term_new(
 		trule_term_intrinsic, term->type, &payload, &argument, 1));
+	tobj_copy(result, &output);
 	tobj_try_clear(&payload);
 }
 
@@ -288,12 +293,7 @@ static void item_free(void *self)
 	free(item);
 }
 
-static tstring *item_string(void *self)
-{
-	trule_item *item = self;
-	return tstring_new(item->kind == trule_item_condition ?
-		"Condition" : "Requirement");
-}
+
 
 static void item_index(void *self, const tobj *arguments, uint_regs count,
 		       tobj *result)
@@ -303,7 +303,11 @@ static void item_index(void *self, const tobj *arguments, uint_regs count,
 	if (strcmp(name, "kind") == 0)
 		tobj_set_compo(result, (tcompo_v *)tstr_new(
 			item->kind == trule_item_condition ? "Condition" :
-			"Requirement"));
+			item->kind == trule_item_implication ? "Implication" : "Requirement"));
+	else if (strcmp(name, "antecedent") == 0 && item->kind == trule_item_implication)
+		tobj_copy(result, &(tobj){ .type = tcompo, .val.v_tcompo = (tcompo_v *)item->term });
+	else if (strcmp(name, "consequents") == 0 && item->kind == trule_item_implication)
+		tobj_set_compo(result, (tcompo_v *)vector_snapshot(&item->arguments));
 	else if (strcmp(name, "term") == 0 && item->term)
 		tobj_copy(result, &(tobj){ .type = tcompo,
 			.val.v_tcompo = (tcompo_v *)item->term });
@@ -337,14 +341,7 @@ static void ir_free(void *self)
 	free(ir);
 }
 
-static tstring *ir_string(void *self)
-{
-	trule_ir *ir = self;
-	tstring *result = tstring_new("RuleIR[");
-	tstring_append_ts(result, ir->display_name);
-	tstring_append_c(result, ']');
-	return result;
-}
+
 
 static void ir_index(void *self, const tobj *arguments, uint_regs count,
 		     tobj *result)
@@ -400,8 +397,8 @@ static const tcompo_capabilities ir_capabilities = { .indexable = ir_index };
 tcompo_vtable trule_term_vtable = {
 	.get_type = term_type, .get_compo_type_code = term_code,
 	.len = empty_len, .copy = term_copy, .free = term_free,
-	.identical = pointer_identical, .tostring_abbr = term_string,
-	.tostring_full = term_string, .op_neg = term_neg, .op_add = term_add,
+	.identical = pointer_identical, .tostring_abbr = trule_format_abbr,
+	.tostring_full = trule_format_full, .op_neg = term_neg, .op_add = term_add,
 	.op_sub = term_sub, .op_mul = term_mul, .op_div = term_div,
 	.op_mod = term_mod, .op_pow = term_pow, .op_mmul = term_mmul,
 	.op_eq = term_eq, .op_ne = term_ne, .op_sg = term_sg,
@@ -413,15 +410,15 @@ tcompo_vtable trule_term_vtable = {
 tcompo_vtable trule_item_vtable = {
 	.get_type = item_type, .get_compo_type_code = item_code,
 	.len = empty_len, .copy = item_copy, .free = item_free,
-	.identical = pointer_identical, .tostring_abbr = item_string,
-	.tostring_full = item_string, .capabilities = &item_capabilities
+	.identical = pointer_identical, .tostring_abbr = trule_format_abbr,
+	.tostring_full = trule_format_full, .capabilities = &item_capabilities
 };
 
 tcompo_vtable trule_ir_vtable = {
 	.get_type = ir_type, .get_compo_type_code = ir_code,
 	.len = empty_len, .copy = ir_copy, .free = ir_free,
-	.identical = pointer_identical, .tostring_abbr = ir_string,
-	.tostring_full = ir_string, .capabilities = &ir_capabilities
+	.identical = pointer_identical, .tostring_abbr = trule_format_abbr,
+	.tostring_full = trule_format_full, .capabilities = &ir_capabilities
 };
 
 trule_term *trule_term_new(trule_term_kind kind, ttypeval *type,
@@ -444,6 +441,41 @@ trule_term *trule_term_new(trule_term_kind kind, ttypeval *type,
 	term->origin_start = -1;
 	term->origin_end = -1;
 	return term;
+}
+
+trule_term *trule_term_logic_new(trule_term_kind kind, trule_term *left, trule_term *right)
+{
+	if (kind != trule_term_and && kind != trule_term_or)
+		twarn(ErrRuntime_ParamsType, "Rule logic", "And or Or required");
+	trule_term *operands[] = {left, right};
+	tobj arguments[2];
+	for (unsigned i = 0; i < 2; i++) {
+		if (!operands[i] || (!trule_antecedent_type(operands[i]->type) &&
+		    !ttypeval_equal(operands[i]->type, ttypeval_builtin(tbuiltin_any))))
+			twarn(ErrRuntime_ParamsType, "Rule logic", "Bool or RuleInstance Terms required");
+		arguments[i] = (tobj){.type = tcompo, .val.v_tcompo = (tcompo_v *)operands[i]};
+	}
+	return trule_term_new(kind, ttypeval_builtin(tbuiltin_bool), nullptr, arguments, 2);
+}
+
+trule_term *trule_term_in_new(trule_term *value, trule_term *domain)
+{
+    if (!value || !domain) twarn(ErrRuntime_ParamsType, "rules::membership", "two Terms required");
+    tobj arguments[] = {
+        {.type = tcompo, .val.v_tcompo = (tcompo_v *)value},
+        {.type = tcompo, .val.v_tcompo = (tcompo_v *)domain}
+    };
+    return trule_term_new(trule_term_in, ttypeval_builtin(tbuiltin_bool), nullptr, arguments, 2);
+}
+
+trule_term *trule_term_not_new(trule_term *operand)
+{
+	if (!operand || (!trule_antecedent_type(operand->type) &&
+	    !ttypeval_equal(operand->type, ttypeval_builtin(tbuiltin_any))))
+		twarn(ErrRuntime_ParamsType, "negation", "Bool or RuleInstance Term required");
+	tobj argument = { .type = tcompo, .val.v_tcompo = (tcompo_v *)operand };
+	return trule_term_new(trule_term_not, ttypeval_builtin(tbuiltin_bool),
+		nullptr, &argument, 1);
 }
 
 trule_term *trule_term_parameter_new(const char *name, ttypeval *type)
@@ -511,6 +543,37 @@ trule_item *trule_condition_new(trule_term *term, const char *description)
 	return item;
 }
 
+int trule_antecedent_type(const ttypeval *type)
+{
+	if (!type) return 0;
+	if (ttypeval_equal(type, ttypeval_builtin(tbuiltin_bool)) ||
+	    type->kind == ttype_kind_rule_instance ||
+	    (type->kind == ttype_kind_builtin && type->builtin == tbuiltin_rule_instance)) return 1;
+	if (type->kind != ttype_kind_union) return 0;
+	uint_objs count = ttypeval_member_count(type);
+	for (uint_objs i = 0; i < count; i++)
+		if (!trule_antecedent_type(ttypeval_member_at(type, i))) return 0;
+	return count != 0;
+}
+
+trule_item *trule_implication_new(trule_term *antecedent,
+	const tobj *consequents, uint_regs count, const char *description)
+{
+	if (!antecedent || !trule_antecedent_type(antecedent->type) || !count)
+		twarn(ErrRuntime_ParamsType, "implication", "Bool or RuleInstance antecedent and nonempty consequents required");
+	trule_item *item = trule_condition_new(antecedent, description);
+	item->kind = trule_item_implication;
+	for (uint_regs i = 0; i < count; i++) {
+		trule_term *term = as_term(&consequents[i]);
+		if (!term || !ttypeval_equal(term->type, ttypeval_builtin(tbuiltin_bool)))
+			twarn(ErrRuntime_ParamsType, "implication", "Bool consequent Terms required");
+		trule_term *copy = term_detach(term);
+		tobj value = { .type = tcompo, .val.v_tcompo = (tcompo_v *)copy };
+		tobj_vec_push(&item->arguments, &value);
+	}
+	return item;
+}
+
 trule_item *trule_requirement_new(trule_term *rule,
 				  const tobj *arguments,
 				  uint_regs argument_count)
@@ -546,8 +609,16 @@ trule_ir *trule_ir_new(const char *display_name, const char *source)
 
 void trule_ir_collect_term(trule_ir *ir, trule_term *term)
 {
+	if (term->type->contains_domain && ir->version < 6) ir->version = 6;
+	if (term->payload.type == tcompo && (tobj_compo_type(&term->payload) == compo_tpoints || tobj_compo_type(&term->payload) == compo_trange) && ir->version < 6) ir->version = 6;
+	if (term->kind == trule_term_in && ir->version < 6) ir->version = 6;
+	if (term->kind == trule_term_not && ir->version < 4) ir->version = 4;
+	if ((term->kind == trule_term_and || term->kind == trule_term_or) && ir->version < 5) ir->version = 5;
 	for (uint_objs i = 0; i < ir->terms.len; i++)
-		if (ir->terms.data[i].val.v_tcompo == (tcompo_v *)term) return;
+		if (ir->terms.data[i].val.v_tcompo == (tcompo_v *)term ||
+		    (term->kind == trule_term_parameter &&
+		     ((trule_term *)ir->terms.data[i].val.v_tcompo)->kind == trule_term_parameter &&
+		     ((trule_term *)ir->terms.data[i].val.v_tcompo)->id == term->id)) return;
 	for (uint_objs i = 0; i < term->arguments.len; i++) {
 		trule_term *argument = as_term(&term->arguments.data[i]);
 		if (argument) trule_ir_collect_term(ir, argument);
@@ -582,6 +653,10 @@ void trule_ir_add_capture(trule_ir *ir, trule_term *capture)
 
 void trule_ir_add_item(trule_ir *ir, trule_item *item)
 {
+	if (item->kind == trule_item_implication) {
+		long required = ttypeval_equal(item->term->type, ttypeval_builtin(tbuiltin_bool)) ? 2 : 3;
+		if (ir->version < required) ir->version = required;
+	}
 	if (item->term) trule_ir_collect_term(ir, item->term);
 	if (item->rule) trule_ir_collect_term(ir, item->rule);
 	for (uint_objs i = 0; i < item->arguments.len; i++) {
@@ -620,10 +695,15 @@ uint64_t trule_ir_semantic_hash(const trule_ir *ir)
 		    term->kind == trule_term_construct ||
 		    term->kind == trule_term_convert ||
 		    term->kind == trule_term_extension) {
-			tstring *payload = tobj_tostring_full(&term->payload);
-			hash = hash_bytes(hash, tstring_cstr(payload),
-				tstring_len(payload));
-			tstring_free(payload);
+            if (term->kind == trule_term_call && as_term(&term->payload)) {
+                long target = serial_term_index(ir, as_term(&term->payload));
+                hash ^= (uint64_t)target + 1;
+                hash *= 1099511628211ULL;
+            } else {
+                tstring *payload = tobj_tostring_full(&term->payload);
+                hash = hash_bytes(hash, tstring_cstr(payload), tstring_len(payload));
+                tstring_free(payload);
+            }
 		}
 		if (tstring_len(term->provider)) {
 			hash = hash_bytes(hash, tstring_cstr(term->provider),
@@ -636,10 +716,7 @@ uint64_t trule_ir_semantic_hash(const trule_ir *ir)
 		for (uint_objs j = 0; j < term->arguments.len; j++) {
 			trule_term *argument =
 				(trule_term *)term->arguments.data[j].val.v_tcompo;
-			uint_objs position = ir->terms.len;
-			for (uint_objs k = 0; k < ir->terms.len; k++)
-				if (ir->terms.data[k].val.v_tcompo ==
-				    (tcompo_v *)argument) { position = k; break; }
+			long position = serial_term_index(ir, argument);
 			hash ^= (uint64_t)position + 1;
 			hash *= 1099511628211ULL;
 		}
@@ -648,8 +725,7 @@ uint64_t trule_ir_semantic_hash(const trule_ir *ir)
 		trule_item *item = (trule_item *)ir->items.data[i].val.v_tcompo;
 		hash ^= (uint64_t)item->kind + 1;
 		hash *= 1099511628211ULL;
-		trule_term *root = item->kind == trule_item_condition ?
-			item->term : item->rule;
+		trule_term *root = item->kind == trule_item_requirement ? item->rule : item->term;
 		long position = serial_term_index(ir, root);
 		hash ^= (uint64_t)(position + 1);
 		hash *= 1099511628211ULL;
@@ -695,7 +771,10 @@ static void serial_text(tstring *out, const char *text)
 static long serial_term_index(const trule_ir *ir, const trule_term *term)
 {
 	for (uint_objs i = 0; i < ir->terms.len; i++)
-		if (ir->terms.data[i].val.v_tcompo == (tcompo_v *)term)
+		if (ir->terms.data[i].val.v_tcompo == (tcompo_v *)term ||
+		    (term->kind == trule_term_parameter &&
+		     ((trule_term *)ir->terms.data[i].val.v_tcompo)->kind == trule_term_parameter &&
+		     ((trule_term *)ir->terms.data[i].val.v_tcompo)->id == term->id))
 			return (long)i;
 	return -1;
 }
@@ -710,6 +789,23 @@ static int serial_value(tstring *out, const trule_ir *ir, const tobj *value)
 		tstring_append_fmt(out, "f%.17g;", value->val.v_tfloat);
 		return 1;
 	case tcompo:
+        if (tobj_compo_type(value) == compo_trange) {
+            const tdomain *d = (tdomain *)value->val.v_tcompo;
+            tstring_append_fmt(out, "g%ld;%ld;", d->start, d->end); return 1;
+        }
+        if (tobj_compo_type(value) == compo_tpoints) {
+            const tdomain *d = (tdomain *)value->val.v_tcompo;
+            if (d->item_type->contains_instance) return 0;
+            tstring_append_c(out, 'p'); serial_text(out, tstring_cstr(d->item_type->canonical));
+            tstring_append_fmt(out, "%u;", (unsigned)d->values.len);
+            for (uint_objs i = 0; i < d->values.len; i++) {
+                const tobj *v = &d->values.data[i];
+                /* Retain the existing transport boundary: no arbitrary object graphs. */
+                if (v->type == tcompo && tobj_compo_type(v) != compo_tstr && tobj_compo_type(v) != compo_ttypeval) return 0;
+                if (!serial_value(out, ir, v)) return 0;
+            }
+            return 1;
+        }
 		if (tobj_compo_type(value) == compo_tstr) {
 			tstring_append_c(out, 's');
 			serial_text(out, tstring_cstr(
@@ -717,6 +813,7 @@ static int serial_value(tstring *out, const trule_ir *ir, const tobj *value)
 			return 1;
 		}
 		if (tobj_compo_type(value) == compo_ttypeval) {
+			if (((ttypeval *)value->val.v_tcompo)->contains_instance) return 0;
 			tstring_append_c(out, 'y');
 			serial_text(out, tstring_cstr(
 				((ttypeval *)value->val.v_tcompo)->canonical));
@@ -736,7 +833,7 @@ static int serial_value(tstring *out, const trule_ir *ir, const tobj *value)
 
 int trule_ir_serialize(const trule_ir *ir, tstring **result)
 {
-	tstring *out = tstring_new("TPIR1;");
+	tstring *out = tstring_new(ir->version >= 7 ? "TPIR7;" : ir->version >= 6 ? "TPIR6;" : ir->version == 5 ? "TPIR5;" : ir->version == 4 ? "TPIR4;" : ir->version == 3 ? "TPIR3;" : ir->version == 2 ? "TPIR2;" : "TPIR1;");
 	serial_text(out, tstring_cstr(ir->display_name));
 	serial_text(out, tstring_cstr(ir->source));
 	tstring_append_fmt(out, "%ld;%u;%u;%u;", ir->version,
@@ -745,6 +842,7 @@ int trule_ir_serialize(const trule_ir *ir, tstring **result)
 	for (uint_objs i = 0; i < ir->terms.len; i++) {
 		trule_term *term = (trule_term *)ir->terms.data[i].val.v_tcompo;
 		tstring_append_fmt(out, "%d;", (int)term->kind);
+		if (term->type->contains_instance) { tstring_free(out); return 0; }
 		serial_text(out, tstring_cstr(term->type->canonical));
 		if (!serial_value(out, ir, &term->payload)) {
 			tstring_free(out);
@@ -771,7 +869,7 @@ int trule_ir_serialize(const trule_ir *ir, tstring **result)
 	for (uint_objs i = 0; i < ir->items.len; i++) {
 		trule_item *item = (trule_item *)ir->items.data[i].val.v_tcompo;
 		long index = serial_term_index(ir,
-			item->kind == trule_item_condition ? item->term : item->rule);
+			item->kind == trule_item_requirement ? item->rule : item->term);
 		if (index < 0) { tstring_free(out); return 0; }
 		tstring_append_fmt(out, "%d;%ld;%u;", (int)item->kind, index,
 			(unsigned)item->arguments.len);
@@ -817,6 +915,28 @@ static int parse_value(const char **cursor, trule_term **terms,
 {
 	char tag = *(*cursor)++;
 	tobj_set_nil(result);
+    if (tag == 'g') {
+        long start, end;
+        if (!parse_long(cursor, &start) || !parse_long(cursor, &end) || start > end) return 0;
+        tobj_set_compo(result, (tcompo_v *)trange_new(start, end)); return 1;
+    }
+    if (tag == 'p') {
+        char *canonical = parse_text(cursor);
+        ttypeval *type = canonical ? ttypeval_retain(ttypeval_from_canonical(canonical)) : nullptr;
+        free(canonical);
+        long count;
+        if (!type || !parse_long(cursor, &count) || count < 0 || (unsigned long)count > strlen(*cursor)) { ttypeval_release(type); return 0; }
+        tobj *values = calloc(count + 1, sizeof(*values));
+        if (!values) abort();
+        int valid = 1;
+        for (long i = 0; valid && i < count; i++) {
+            if (**cursor != 'n' && **cursor != 'b' && **cursor != 'i' && **cursor != 'f' && **cursor != 's' && **cursor != 'y') valid = 0;
+            else valid = parse_value(cursor, terms, term_count, &values[i]) && ttypeval_matches(&values[i], type);
+        }
+        if (valid) tobj_set_compo(result, (tcompo_v *)tpoints_new(type, values, (uint_regs)count));
+        for (long i = 0; i < count; i++) tobj_try_clear(&values[i]);
+        free(values); ttypeval_release(type); return valid;
+    }
 	if (tag == 'n') return *(*cursor)++ == ';';
 	if (tag == 's' || tag == 'y') {
 		char *text = parse_text(cursor);
@@ -850,7 +970,7 @@ static int parse_value(const char **cursor, trule_term **terms,
 
 trule_ir *trule_ir_deserialize(const char *data)
 {
-	if (!data || strncmp(data, "TPIR1;", 6) != 0) return nullptr;
+	if (!data || (strncmp(data, "TPIR1;", 6) != 0 && strncmp(data, "TPIR2;", 6) != 0 && strncmp(data, "TPIR3;", 6) != 0 && strncmp(data, "TPIR4;", 6) != 0 && strncmp(data, "TPIR5;", 6) != 0 && strncmp(data, "TPIR6;", 6) != 0 && strncmp(data, "TPIR7;", 6) != 0)) return nullptr;
 	const char *cursor = data + 6;
 	char *name = parse_text(&cursor);
 	char *source = parse_text(&cursor);
@@ -859,6 +979,7 @@ trule_ir *trule_ir_deserialize(const char *data)
 	long parameter_count_value;
 	long item_count_value;
 	if (!name || !source || !parse_long(&cursor, &version) ||
+	    version != data[4] - '0' ||
 	    !parse_long(&cursor, &term_count_value) ||
 	    !parse_long(&cursor, &parameter_count_value) ||
 	    !parse_long(&cursor, &item_count_value) || term_count_value < 0 ||
@@ -876,7 +997,10 @@ trule_ir *trule_ir_deserialize(const char *data)
 		char *canonical;
 		tobj payload;
 		long argument_count;
-		if (!parse_long(&cursor, &kind) || !(canonical = parse_text(&cursor)) ||
+		if (!parse_long(&cursor, &kind) || kind < trule_term_constant ||
+		    kind > trule_term_in || (kind == trule_term_in && version < 6) || (kind == trule_term_not && version < 4) ||
+		    (kind >= trule_term_and && version < 5) ||
+		    !(canonical = parse_text(&cursor)) ||
 		    !parse_value(&cursor, terms, i, &payload) ||
 		    !parse_long(&cursor, &argument_count) || argument_count < 0)
 			goto invalid;
@@ -891,6 +1015,28 @@ trule_ir *trule_ir_deserialize(const char *data)
 			    (uint_objs)index >= i) { free(arguments); goto invalid; }
 			tobj_set_nil(&arguments[j]);
 			tobj_set_compo(&arguments[j], (tcompo_v *)terms[index]);
+		}
+		if (kind == trule_term_in && (argument_count != 2 || payload.type != tnil ||
+		    !ttypeval_equal(type, ttypeval_builtin(tbuiltin_bool)))) {
+			free(arguments); tobj_try_clear(&payload); goto invalid;
+		}
+		if (kind == trule_term_not &&
+		    (argument_count != 1 || !ttypeval_equal(type, ttypeval_builtin(tbuiltin_bool)) ||
+		     payload.type != tnil ||
+		     (!trule_antecedent_type(((trule_term *)arguments[0].val.v_tcompo)->type) &&
+		      !ttypeval_equal(((trule_term *)arguments[0].val.v_tcompo)->type,
+				     ttypeval_builtin(tbuiltin_any))))) {
+			free(arguments); tobj_try_clear(&payload); goto invalid;
+		}
+		if (kind == trule_term_and || kind == trule_term_or) {
+			int valid = argument_count == 2 && payload.type == tnil &&
+				ttypeval_equal(type, ttypeval_builtin(tbuiltin_bool));
+			for (long j = 0; valid && j < argument_count; j++) {
+				ttypeval *operand = ((trule_term *)arguments[j].val.v_tcompo)->type;
+				valid = trule_antecedent_type(operand) ||
+					ttypeval_equal(operand, ttypeval_builtin(tbuiltin_any));
+			}
+			if (!valid) { free(arguments); tobj_try_clear(&payload); goto invalid; }
 		}
 		char *provider = parse_text(&cursor);
 		char *provider_kind = parse_text(&cursor);
@@ -930,7 +1076,9 @@ trule_ir *trule_ir_deserialize(const char *data)
 		long argument_count;
 		if (!parse_long(&cursor, &kind) || !parse_long(&cursor, &index) ||
 		    !parse_long(&cursor, &argument_count) || index < 0 ||
-		    (uint_objs)index >= term_count || argument_count < 0) goto invalid;
+		    (uint_objs)index >= term_count || argument_count < 0 ||
+		    kind < trule_item_condition || kind > trule_item_implication ||
+	    (kind == trule_item_implication && data[4] == '1')) goto invalid;
 		tobj *arguments = argument_count ? calloc(
 			(uint_objs)argument_count, sizeof(*arguments)) : nullptr;
 		for (long j = 0; j < argument_count; j++) {
@@ -949,12 +1097,21 @@ trule_ir *trule_ir_deserialize(const char *data)
 		    !parse_long(&cursor, &end)) {
 			free(description); free(arguments); goto invalid;
 		}
-		trule_item *item = kind == trule_item_condition ?
+		if (kind == trule_item_implication) {
+			int valid = argument_count > 0 && trule_antecedent_type(terms[index]->type) &&
+				(data[4] >= '3' || ttypeval_equal(terms[index]->type, ttypeval_builtin(tbuiltin_bool)));
+			for (long j = 0; valid && j < argument_count; j++)
+				valid = ttypeval_equal(((trule_term *)arguments[j].val.v_tcompo)->type,
+					ttypeval_builtin(tbuiltin_bool));
+			if (!valid) { free(description); free(arguments); goto invalid; }
+		}
+		trule_item *item = kind == trule_item_implication ?
+			trule_implication_new(terms[index], arguments, (uint_regs)argument_count, description) :
+			kind == trule_item_condition ?
 			trule_condition_new(terms[index], description) :
 			trule_requirement_new(terms[index], arguments,
 				(uint_regs)argument_count);
-		trule_term **root = kind == trule_item_condition ?
-			&item->term : &item->rule;
+		trule_term **root = kind == trule_item_requirement ? &item->rule : &item->term;
 		if ((*root)->base.refctr > 0) (*root)->base.refctr--;
 		if ((*root)->base.refctr == 0) (*root)->base.vtable->free(*root);
 		*root = terms[index];

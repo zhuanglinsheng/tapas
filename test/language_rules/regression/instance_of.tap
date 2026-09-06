@@ -1,0 +1,98 @@
+let Positive = rule (value: Int) { value > 0 }
+import ../fixtures/instance_of_module.tap as module_one
+import ../fixtures/instance_of_module.tap as module_two
+function imported(action: InstanceOf[module_one::Positive]) { return action }
+assert(rule {
+    types::matches(module_one::Positive(1), parameters(imported)[0][1])
+    types::matches(module_two::Positive(1), parameters(imported)[0][1]) == false
+})
+let Other = rule (value: Int) { value > 0 }
+
+function accept(action: InstanceOf[Positive])
+{
+    return arguments(action)[0]
+}
+
+let action: InstanceOf[; Positive] = Positive(3)
+let expected = parameters(accept)[0][1]
+let expected_copy = expected.copy()
+assert(rule {
+    accept(action) == 3
+    types::matches(action, expected)
+    types::matches(Other(3), expected) == false
+    types::matches(action, expected_copy)
+    types::matches(Other(3), expected_copy) == false
+    // Membership does not assert satisfaction.
+    types::matches(Positive(-1), expected)
+})
+
+function make_rule()
+{
+    return rule (number: Int) { number > 0 }
+}
+let first = make_rule()
+let second = make_rule()
+function from_first(action: InstanceOf[first])
+{
+    return action
+}
+let first_type = parameters(from_first)[0][1]
+assert(rule {
+    types::matches(first(1), first_type)
+    types::matches(second(1), first_type) == false
+})
+
+function nested(actions: List[InstanceOf[Positive]]) -> InstanceOf[Positive]
+{
+    return actions[0]
+}
+let nested_result = nested([Positive(4)])
+assert(rule { arguments(nested_result)[0] == 4 })
+
+let Composed = rule (instance: InstanceOf[Positive]) { instance }
+assert(Composed(Positive(2)))
+
+function checker_for(rule_value: Rule)
+{
+    return (action: InstanceOf[rule_value])
+    { return arguments(action)[0] }
+}
+let first_checker = checker_for(first)
+let second_checker = checker_for(second)
+assert(rule {
+    first_checker(first(7)) == 7
+    second_checker(second(8)) == 8
+    types::matches(second(8), parameters(first_checker)[0][1]) == false
+})
+
+let Multi = rule (number: Int, label: String) { number > 0 }
+function multiple(action: InstanceOf[Multi])
+{
+    return arguments(action)
+}
+let bound_values = multiple(Multi(2, '测试'))
+assert(rule {
+    bound_values[0] == 2
+    bound_values[1] == '测试'
+})
+
+// Aliases preserve identity; rebinding a name does not alter an existing Type.
+var Selected = make_rule()
+let original = Selected
+function selected(action: InstanceOf[Selected]) { return arguments(action)[0] }
+Selected = make_rule()
+assert(rule {
+    selected(original(9)) == 9
+    types::matches(Selected(9), parameters(selected)[0][1]) == false
+})
+
+let Empty = rule () { true }
+function empty(action: types::InstanceOf[; Empty]) { return arguments(action) }
+assert(rule { len(empty(Empty())) == 0 })
+
+function optional(action: InstanceOf[Positive] | Int) { return action }
+assert(rule {
+    optional(0) == 0
+    types::matches(Positive(1), parameters(optional)[0][1])
+    types::matches(Other(1), parameters(optional)[0][1]) == false
+})

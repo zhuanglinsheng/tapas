@@ -2,6 +2,7 @@
 #define TAPAS_RUNTIME_TCFN_H
 
 #include "tapas/tval.h"
+#include "tapas/runtime/tfunction_metadata.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -39,6 +40,7 @@ int tcfn_descriptor_valid(const tcfn_descriptor *descriptor);
 
 struct tcppgenf {
 	tcompo_v base;
+	tfunction_metadata *metadata;
 	genf_t f;
 	tstring *name;
 	tstring *signature_type;
@@ -59,6 +61,7 @@ int tcppgenf_accepts(const tcppgenf *g, uint_regs count);
 
 struct tcppsessf {
 	tcompo_v base;
+	tfunction_metadata *metadata;
 	sessf_t f;
 	tstring *name;
 	tstring *signature_type;

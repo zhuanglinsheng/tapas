@@ -1,0 +1,156 @@
+var minimum = 3
+let allowed = rules::points(types::Int, 3, 5, 8)
+let R = rule(x: Int) {
+    let y = x + 1
+    y >= minimum
+    y in allowed
+}
+let ir = rules::inspect(R)
+let comparison = ir::items[0]::term
+let membership = ir::items[1]::term
+let initializer = comparison::arguments[0]::arguments[0]
+assert(rule {
+    ir::version == 7
+    comparison::kind == 'Intrinsic'
+    comparison::payload == '>='
+    initializer::kind == 'Intrinsic'
+    initializer::payload == '+'
+    initializer::arguments[0]::id == ir::parameters[0]::id
+    initializer::arguments[1]::kind == 'Constant'
+    initializer::arguments[1]::payload == 1
+    comparison::arguments[1]::kind == 'Capture'
+    comparison::arguments[1]::payload == 'minimum'
+    membership::kind == 'In'
+    membership::arguments[0]::arguments[0]::id == initializer::id
+    membership::arguments[1]::kind == 'Capture'
+})
+assert(R(2))
+minimum = 5
+assert(rule { not R(2) })
+assert(R(4))
+let capture_reader = evaluators::make('capture-reader', 1, (context) {
+    let capture = context::ir::items[0]::term::arguments[1]
+    return {'status': 'Success', 'value': evaluators::capture(context, capture), 'violations': [], 'diagnostics': []}
+})
+assert(rule { evaluators::eval(R(4), capture_reader)::value == 5 })
+minimum = 8
+assert(rule { evaluators::eval(R(4), capture_reader)::value == 8 })
+
+// Structurally retained fields and symbolic indexes; no directory lookup during compilation.
+let Row = types::make_type('key': types::String)
+let catalog = {'a': {'price': 3}, 'b': {'price': 5}}
+let Lookup = rule(row: Row) { catalog[row::key]::price >= 3 }
+let lookup = rules::inspect(Lookup)::items[0]::term::arguments[0]
+assert(rule {
+    lookup::payload == 'member'
+    lookup::arguments[1]::payload == 'price'
+    lookup::arguments[0]::payload == 'index'
+    lookup::arguments[0]::arguments[0]::kind == 'Capture'
+    lookup::arguments[0]::arguments[1]::payload == 'member'
+})
+assert(Lookup({'key': 'a'}))
+
+// A Rule application retains its target and argument expression.
+let Child = rule(x: Int) { x >= 0 }
+let Parent = rule(x: Int) { Child(x + 1); not Child(x - 5) }
+let application = rules::inspect(Parent)::items[0]::rule
+assert(rule {
+    application::kind == 'Call'
+    application::payload::kind == 'Capture'
+    application::payload::payload == 'Child'
+    application::arguments[0]::payload == '+'
+})
+assert(Parent(1))
+
+// Reading a subtree executes the checker once, never its call a second time.
+var calls = [0]
+function counted(x: Int) -> Int { calls[0] = calls[0] + 1; return x }
+let Counted = rule(x: Int) {
+    let y = counted(x) + 1
+    y >= 0
+    y <= 10
+}
+let reader = evaluators::make('expression-reader', 1, (context) {
+    let expression = context::ir::items[0]::term::arguments[0]::arguments[0]
+    return {'status': 'Success', 'value': evaluators::value(context, expression), 'violations': [], 'diagnostics': []}
+})
+let count_before = calls[0]
+let read = evaluators::eval(Counted(3), reader)
+assert(rule { read::value == 4; calls[0] == count_before + 1 })
+
+// Capture identities belong to the particular closure, even with equal names.
+function factory(minimum: Int) { return rule(x: Int) { x >= minimum } }
+let Low = factory(1)
+let High = factory(9)
+assert(rule {
+    evaluators::eval(Low(5), capture_reader)::value == 1
+    evaluators::eval(High(5), capture_reader)::value == 9
+    Low(5)
+    not High(5)
+    rules::semantic_hash(Low) == rules::semantic_hash(High)
+})
+let Shadow = rule(minimum: Int) { minimum == 2 }
+assert(rule { len(rules::inspect(Shadow)::captures) == 0 })
+assert(Shadow(2))
+
+// The source closure reconnects for a same-process serialized round trip.
+let restored = rules::deserialize(rules::serialize(Counted))
+assert(restored(3))
+assert(rule { rules::semantic_hash(restored) == rules::semantic_hash(Counted) })
+
+let Literals = rule(x: Int) {
+    x in [1, 3, 5]
+    {'key': x}::key == x
+    -x + 3 >= 0
+    1.25 > 0.5
+}
+assert(Literals(1))
+let literals_ir = rules::inspect(Literals)
+assert(rule {
+    literals_ir::items[0]::term::arguments[1]::kind == 'Construct'
+    literals_ir::items[0]::term::arguments[1]::payload == 'list'
+    literals_ir::items[1]::term::arguments[0]::arguments[0]::payload == 'dictionary'
+    literals_ir::items[2]::term::arguments[0]::arguments[0]::payload == 'neg'
+    literals_ir::items[3]::term::arguments[0]::payload == 1.25
+})
+let LongName = rule(parameter_with_a_name_longer_than_thirty_two_characters: Int) {
+    parameter_with_a_name_longer_than_thirty_two_characters == 3
+}
+let constrained = rules::restrict(LongName, 'parameter_with_a_name_longer_than_thirty_two_characters': 3)
+assert(constrained(3))
+let Tunnel = rule(x: Int) { x.counted() >= 0 }
+let tunnel = rules::inspect(Tunnel)::items[0]::term::arguments[0]
+assert(rule {
+    tunnel::kind == 'Call'
+    tunnel::payload::arguments[0]::kind == 'Capture'
+    tunnel::payload::arguments[0]::payload == 'counted'
+    tunnel::payload::arguments[1]::kind == 'Parameter'
+})
+assert(Tunnel(1))
+
+let Shared = rule(x: Int) {
+    let v0 = x + 1
+    let v1 = v0 + v0
+    let v2 = v1 + v1
+    let v3 = v2 + v2
+    let v4 = v3 + v3
+    let v5 = v4 + v4
+    let v6 = v5 + v5
+    let v7 = v6 + v6
+    let v8 = v7 + v7
+    let v9 = v8 + v8
+    let v10 = v9 + v9
+    let v11 = v10 + v10
+    let v12 = v11 + v11
+    let v13 = v12 + v12
+    let v14 = v13 + v13
+    let v15 = v14 + v14
+    let v16 = v15 + v15
+    let v17 = v16 + v16
+    let v18 = v17 + v17
+    let v19 = v18 + v18
+    v19 >= 0
+}
+assert(Shared(0))
+assert(rule { len(rules::terms(rules::inspect(Shared))) < 100 })
+print('rule expression IR: ok')

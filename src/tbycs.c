@@ -199,11 +199,35 @@ void tbycode_tostring(tbycode c, char *buf, size_t buf_size)
 	case OP_PUSHF:
 		snprintf(buf, buf_size, "OP_PUSHF    %u", (unsigned)tbycode_get_U(c));
 		break;
+	case OP_FUNCMETA:
+		snprintf(buf, buf_size, "OP_FUNCMETA");
+		break;
+	case OP_BINDTYPE:
+		snprintf(buf, buf_size, "OP_BINDTYPE");
+		break;
+	case OP_CHECKTYPE:
+		snprintf(buf, buf_size, "OP_CHECKTYPE");
+		break;
+	case OP_RULETYPE:
+		snprintf(buf, buf_size, "OP_RULETYPE");
+		break;
 	case OP_PUSHRULE:
 		snprintf(buf, buf_size, "OP_PUSHRULE %u", (unsigned)tbycode_get_U(c));
 		break;
 	case OP_RULECOND:
 		snprintf(buf, buf_size, "OP_RULECOND %u", (unsigned)tbycode_get_U(c));
+		break;
+	case OP_RULENOT:
+		snprintf(buf, buf_size, "OP_RULENOT %u", (unsigned)tbycode_get_U(c));
+		break;
+	case OP_RULEVALUE:
+		snprintf(buf, buf_size, "OP_RULEVALUE %u", (unsigned)tbycode_get_U(c));
+		break;
+	case OP_RULETRUTH:
+		snprintf(buf, buf_size, "OP_RULETRUTH %u", (unsigned)tbycode_get_U(c));
+		break;
+	case OP_RULEITEM:
+		snprintf(buf, buf_size, "OP_RULEITEM %u", (unsigned)tbycode_get_U(c));
 		break;
 	case OP_RULEREQ:
 		snprintf(buf, buf_size, "OP_RULEREQ");

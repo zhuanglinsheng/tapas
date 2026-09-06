@@ -41,7 +41,8 @@ typedef enum {
 	tnative_intrinsic_type_pair,
 	tnative_intrinsic_type_dictionary,
 	tnative_intrinsic_type_rule,
-	tnative_intrinsic_type_rule_instance
+	tnative_intrinsic_type_rule_instance,
+	tnative_intrinsic_type_enum
 } tnative_intrinsic;
 
 typedef enum {
@@ -51,6 +52,8 @@ typedef enum {
 
 typedef struct {
 	const char *name;
+	/* Function signature, value Type, or (for textension_type) its definition.
+	 * "Type" keeps the legacy builtin-Type-name convention. */
 	const char *type;
 	const char *detail;
 	textension_symbol_kind kind;

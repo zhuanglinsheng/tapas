@@ -1,0 +1,5 @@
+import ../../fixtures/imported_rule_types.tap as imported
+let Check = rule (point: imported::Point) {
+    point['x'] > 0
+}
+print(rules::check(Check({'x': 'wrong', 'y': 2.5})))

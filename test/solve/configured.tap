@@ -1,0 +1,12 @@
+let R = rule(x: Int) { x == 4 }
+let no = solve::hold(R)
+assert(rule { no::status == 'unsat'; no::scope == 'configured'; no::integer_min == 0; no::integer_max == 3 })
+assert(rule { solve::hold(R(4))::status == 'unsat' })
+let S = rule(x: Int) { x >= 2 }
+let yes = solve::hold(S)
+assert(rule { yes::status == 'sat'; yes::scope == 'configured'; arguments(yes::witness)[0] >= 2; arguments(yes::witness)[0] <= 3 })
+assert(yes::witness)
+let Nested = rule(x: Int) { x == 4 }
+let Outer = rule(x: Int) { Nested(x + 1) }
+assert(rule { solve::hold(Outer)::status == 'sat' })
+print('configured domain: ok')

@@ -22,7 +22,11 @@ typedef enum {
 	ttype_kind_rule_instance,
 	ttype_kind_rule_term,
 	ttype_kind_union,
-	ttype_kind_recursive
+	ttype_kind_enum,
+	ttype_kind_recursive,
+	ttype_kind_instance_of,
+	ttype_kind_points,
+	ttype_kind_range
 } ttype_kind;
 
 typedef struct {
@@ -44,8 +48,14 @@ struct ttypeval {
 	uint8_t recursive_defined;
 	uint32_t recursive_id;
 	ttypeval *recursive_body;
+	tobj instance_rule;
+	tstring *instance_reference;
+	uint8_t contains_instance;
+	uint8_t contains_domain;
 	tstring **optional_fields;
 	uint_objs optional_field_count;
+	tstring **enum_members;
+	uint_objs enum_member_count;
 };
 
 extern tcompo_vtable ttypeval_vtable;
@@ -56,6 +66,7 @@ ttypeval *ttypeval_from_canonical(const char *canonical);
 ttypeval *ttypeval_retain(ttypeval *type);
 void ttypeval_release(ttypeval *type);
 ttypeval *ttypeval_new_fields(const ttype_field *fields, uint_objs count);
+ttypeval *ttypeval_new_domain(int range, ttypeval *item);
 ttypeval *ttypeval_new_list(ttypeval *item);
 ttypeval *ttypeval_new_iterator(ttypeval *item);
 ttypeval *ttypeval_new_pair(ttypeval *first, ttypeval *second);
@@ -68,8 +79,15 @@ ttypeval *ttypeval_new_rule(ttypeval *const *parameters,
 			    uint_objs parameter_count);
 ttypeval *ttypeval_new_rule_instance(ttypeval *const *parameters,
 				     uint_objs parameter_count);
+ttypeval *ttypeval_new_instance_reference(const char *name,
+	ttypeval *const *parameters, uint_objs count);
+ttypeval *ttypeval_new_instance_of(const tobj *rule);
+typedef const tobj *(*ttype_instance_resolver)(void *context, const char *name);
+/* Returns one owned reference. Callback is visited for symbolic Rule values. */
+ttypeval *ttypeval_resolve_instances(ttypeval *type, ttype_instance_resolver resolver, void *context);
 ttypeval *ttypeval_new_rule_term(ttypeval *result);
 ttypeval *ttypeval_new_union(ttypeval *const *members, uint_objs count);
+ttypeval *ttypeval_new_enum(const tstring *const *members, uint_objs count);
 ttypeval *ttypeval_new_recursive(void);
 int ttypeval_define_recursive(ttypeval *type, ttypeval *body);
 int ttypeval_is_recursive(const ttypeval *type);
@@ -85,6 +103,9 @@ ttypeval *ttypeval_field_named(const ttypeval *type, const char *name);
 int ttypeval_field_optional(const ttypeval *type, const char *name);
 uint_objs ttypeval_member_count(const ttypeval *type);
 ttypeval *ttypeval_member_at(const ttypeval *type, uint_objs index);
+uint_objs ttypeval_enum_member_count(const ttypeval *type);
+const tstring *ttypeval_enum_member_at(const ttypeval *type, uint_objs index);
+int ttypeval_enum_contains(const ttypeval *type, const tstring *member);
 ttypeval *ttypeval_base(const ttypeval *type);
 ttypeval *ttypeval_parameter(const ttypeval *type, const char *name);
 uint_objs ttypeval_function_parameter_count(const ttypeval *type);

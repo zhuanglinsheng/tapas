@@ -132,8 +132,31 @@ See the [Type System](TypeSystem_en.md) for Type construction and static
 checking, [Rules](Rules_en.md) for Rule values, the
 [Standard Library](Stdlib_en.md) for collections, arrays, and time, and
 [C Interaction](Foreign_en.md) for extension values. The
-[Type example](examples/syntax/types.tap) combines union, structural, and
+[Type example](examples/syntax/types.tap) combines union, enum, structural, and
 parameterized container Types in one program.
+
+A finite String set is expressed with the static `types::enum` Type
+constructor; `enum` is not a declaration keyword:
+
+```tapas
+let TutorialOrderStatus = types::enum(
+    'Pending',
+    'Shipped',
+    'Delivered',
+)
+let tutorial_status: TutorialOrderStatus = TutorialOrderStatus['Delivered']
+```
+
+The constructor requires one or more direct, unique String literals. Enum
+members remain Strings at runtime, while String indexing on an enum Type
+returns a member-checked value. A member literal may be used directly when the
+target Type is known; a non-member literal is a compile error. An ordinary
+String expression must first pass `types::matches` to be narrowed to the enum.
+Enums with the same member set are structurally equivalent; a smaller member
+set is assignable to an enum containing it, and every enum is assignable to
+`String`. See [Enum Types](TypeSystem_en.md#24-enum-types) for the complete
+equivalence, assignability, dynamic-indexing, reflection, and runtime-erasure
+rules.
 
 ### 4. Variables, scope, and assignment
 
@@ -355,16 +378,17 @@ the same row are left-associative unless stated otherwise.
 
 | Precedence | Operators or form | Associativity and constraints |
 |---:|---|---|
-| 13 | call `()`, index `[]`, member `.`/`::` | left, chainable |
-| 12 | `^` | right-associative |
-| 11 | unary `+`, unary `-` | right-associative |
-| 10 | `*`, `/`, `%`, `@` | left |
-| 9 | `+`, `-` | left |
-| 8 | `==`, `!=`, `>`, `<`, `>=`, `<=` | non-associative |
-| 7 | `to` | non-associative |
-| 6 | `in` | non-associative |
-| 5 | `&` | left, non-short-circuiting |
-| 4 | `\|` | left, non-short-circuiting |
+| 14 | call `()`, index `[]`, member `.`/`::` | left, chainable |
+| 13 | `^` | right-associative |
+| 12 | unary `+`, unary `-` | right-associative |
+| 11 | `*`, `/`, `%`, `@` | left |
+| 10 | `+`, `-` | left |
+| 9 | `==`, `!=`, `>`, `<`, `>=`, `<=` | non-associative |
+| 8 | `to` | non-associative |
+| 7 | `in` | non-associative |
+| 6 | `&` | left, non-short-circuiting |
+| 5 | `\|` | left, non-short-circuiting |
+| 4 | `not` | right-associative |
 | 3 | `and` | left, short-circuit |
 | 2 | `or` | left, short-circuit |
 | 1 | `:` | right-associative |
@@ -396,8 +420,15 @@ float. Mixed integer/float arithmetic returns a float. Integer `/` truncates
 toward zero. Integer division or remainder by zero is an error. Floating-point
 operations follow the host C runtime.
 
-`and` and `or` require booleans and short-circuit. They do not apply truthiness
-conversion. Conditions in `if` and `while` likewise require an actual `Bool`.
+`not` is a reserved keyword and cannot be used as a variable or function name.
+
+See the runnable [logical negation example](examples/syntax/logical_not.tap).
+
+In ordinary expressions, `not` accepts only a scalar Bool and returns its logical negation, evaluating the operand exactly once. Statically known non-Bool operands are compile errors; dynamic values are checked at runtime. It does not apply truthiness conversions. Inside a Rule's own expressions, `not RuleInstance` additionally checks and negates instance satisfaction, producing Bool. Ordinary functions do not inherit this extension, and bare Rules are always rejected. See [Rule negation](Rules_en.md#25-logical-negation-not).
+
+`not` binds less tightly than comparisons, `in`, `&`, and `|`, but more tightly than `and` and `or`. Thus `not x > 0` means `not (x > 0)`, `not a and b` means `(not a) and b`, and `not not a` means `not (not a)`. Parenthesize negation when used as an operand of a comparison or a tighter-binding operator, as in `a == (not b)`.
+
+In ordinary functions and expressions, `and` and `or` accept only Bool. Within a Rule's own expressions, they also accept RuleInstance, check satisfaction left to right with short-circuiting, and return Bool. Errors propagate; skipped instances are neither constructed nor checked. Two bare instance items are independent obligations, whereas an `and`/`or` is one combined condition. See [Rule logical composition](Rules_en.md#26-logical-composition-and--or). Conditions in `if` and `while` still require Bool.
 
 `start to end` requires integers and creates a half-open iterator with step
 `1`; it is empty when `end <= start`. Use `iter(start, step, end)` for a
@@ -487,7 +518,7 @@ print(tutorial_factorial(6))
 For typed functions, recursion, closures, and variadic arguments in one
 program, see the [function example](examples/syntax/functions.tap).
 
-### 11. Rules and `require`
+### 11. Rules and child-rule composition
 
 A Rule is a rule value that can be stored, passed, and composed. A parameterized
 Rule uses `rule (parameters) { ... }`; a zero-parameter Rule may omit the
@@ -501,7 +532,7 @@ let tutorial_positive = rule (value: Int) {
 }
 
 let tutorial_small_positive = rule (value: Int) {
-    require tutorial_positive(value)
+    tutorial_positive(value)
     'value must be below ten':
         value < 10
 }
@@ -513,8 +544,7 @@ Calling a Rule only binds its arguments and produces a RuleInstance; it does
 not check the Conditions immediately. Checking begins when `assert`,
 `rules::check`, or an evaluator consumes that RuleInstance.
 
-`require` is valid only at the outermost level of a Rule body and must be
-followed by a Rule call that produces a RuleInstance. A Rule body may also use
+Top-level Bool expressions must be true; bare RuleInstance expressions must hold and retain their dependency and violation paths. The `require` keyword has been removed: migrate `require R(x)` to `R(x)`. A Rule body may also use
 local `let` declarations, and a String followed by `:` may describe one
 Condition or a block of Conditions. A Rule body does not accept `var`,
 assignment, control flow, imports, or direct IO.
@@ -695,11 +725,11 @@ Reserved words are:
 
 ```text
 and as base break continue elif else false for function if import in
-let nil of or require return rule this to true var while
+let nil not of or return rule this to true var while
 ```
 
 `function` begins a named declaration but not an expression; `rule` begins a
-Rule expression, and `require` composes another RuleInstance inside a Rule body;
+Rule expression; bare RuleInstance items compose child rules;
 `nil` and `of` also do not begin expressions. A keyword is recognized only when the following
 character is not an identifier continuation character.
 
@@ -742,7 +772,7 @@ The lexer uses longest-match tokenization:
 ```text
 Multi-character:  ==  !=  >=  <=  ::  ...  ->  //
 Single-character: + - * / % @ ^ & | > < = : . , ; ( ) [ ] { }
-Word operators:   and or in to
+Word operators:   and or not in to
 ```
 
 `//` starts a comment. `.` is part of a float only in the numeric forms above;
@@ -827,12 +857,14 @@ function-declaration = "function", IDENTIFIER, parameter-list,
                        [ return-annotation ], block ;
 type-expression   = union-type ;
 union-type        = primary-type, { "|", primary-type } ;
-primary-type      = function-type | type-application | qualified-type-name ;
+primary-type      = function-type | instance-type | type-application | qualified-type-name ;
+instance-type     = [ "types::" ], "InstanceOf", "[", [ ";" ],
+                    qualified-type-name, [ "," ], "]" ;
 function-type     = ( "Function" | "types::Function" ), "[",
-                    [ type-arguments, [ "," ] | "..." ], "]",
+                    [ type-arguments, [ "," ] | "..." ], [ ";" ], "]",
                     "->", type-expression ;
 type-application  = qualified-type-name,
-                    "[", [ type-arguments, [ "," ] ], "]" ;
+                    "[", [ type-arguments, [ "," ] ], [ ";" ], "]" ;
 type-arguments    = type-expression, { ",", type-expression } ;
 qualified-type-name = IDENTIFIER, { "::", IDENTIFIER } ;
 assignment        = assignment-target, "=", expression ;
@@ -876,8 +908,8 @@ expression      = pair-expression ;
 pair-expression = or-expression, [ ":", pair-expression ] ;
 
 or-expression   = and-expression, { "or", and-expression } ;
-and-expression  = elementwise-or-expression,
-                  { "and", elementwise-or-expression } ;
+and-expression  = not-expression, { "and", not-expression } ;
+not-expression  = "not", not-expression | elementwise-or-expression ;
 
 elementwise-or-expression  = elementwise-and-expression,
                              { "|", elementwise-and-expression } ;
@@ -963,22 +995,24 @@ rule-item-list = rule-item, { separator-run, rule-item } ;
 rule-item = rule-let-declaration
           | condition-statement
           | described-condition-statement
-          | require-statement ;
+          | implication-statement ;
 rule-let-declaration = "let", declarator, { ",", declarator } ;
 condition-statement = expression ;
+implication-statement = [ STRING, ":", separators ],
+                        expression, "implies",
+                        ( expression | condition-block ) ;
 described-condition-statement = STRING, ":", separators,
                                 ( expression | condition-block ) ;
 condition-block = "{", separators, condition-statement,
                   { separator-run, condition-statement },
                   separators, "}" ;
-require-statement = "require", expression ;
 ```
 
 Named declarations and function literals share parameter, result-annotation,
 and body rules. A named declaration creates a read-only binding; a function
 literal remains an ordinary expression. A Rule literal is also an ordinary
 expression, but it uses a specialized body containing only Rule items;
-`require` is not an ordinary statement. Within a Rule body, an item beginning
+Within a Rule body, an item beginning
 with a String literal immediately followed by `:` is parsed as a described
 Condition rather than as an ordinary Pair expression. While a block-requiring header is
 waiting for `{`, the newline after that header is not a `SEP`; a newline after
@@ -1008,11 +1042,13 @@ Plain EBNF cannot express these required constraints:
 13. every Rule parameter requires a Type annotation, and parameter names are
     distinct;
 14. the outermost level of a Rule body accepts only local `let` declarations,
-    Conditions, described Conditions, and `require`;
+    Bool/RuleInstance items, described items, and `implies`;
 15. a Condition produces Bool, and a description is written directly as a
     String literal;
-16. `require` occurs only at the outermost level of a Rule body, and its
-    expression produces a RuleInstance.
+16. bare RuleInstance items retain child dependencies; bare Rule values are invalid items;
+17. `implies` is a Rule item with a Bool or RuleInstance antecedent (including their union) and nonempty Bool consequents,
+    not a general Bool operator. Consequent blocks reject declarations,
+    bare instance obligations, and nested implications. See [Rule semantics](Rules_en.md#24-implication-items).
 
 ## Part IV — Default Operator Semantics for Built-in Types
 
@@ -1069,6 +1105,7 @@ follow the host C math library.
 | `==`, `!=` | two `Int \| Float` values | Numeric comparison, including mixed `Int` and `Float` operands, producing `Bool`. |
 | `==`, `!=` | `RealArray` and `Int \| Float`, in either order | Element-wise comparison producing an equal-shaped `BoolArray`. |
 | `==`, `!=` | two equal-shaped `RealArray` values | Element-wise comparison producing an equal-shaped `BoolArray`. |
+| `==`, `!=` | an enum value and a String | String content comparison producing `Bool`; a direct String literal must be a member of that enum. |
 | `==`, `!=` | two values of the same Type among `Bool`, `String`, `List`, `Pair`, `Iterator`, `BoolArray`, and `Time` | Content comparison producing one `Bool`. `List` and `Pair` compare their contents recursively. |
 | `==`, `!=` | two `Dictionary`, `Function`, or `Library` values | Object-identity comparison producing `Bool`. |
 | `==`, `!=` | other values of different types | Produces `false` or `true`, respectively. |
@@ -1086,7 +1123,8 @@ whether two values refer to the same runtime object.
 
 | Operator | Valid operands | Result and behavior |
 |---|---|---|
-| `and`, `or` | `Bool`, `Bool` | Produces `Bool` and uses short-circuit evaluation for the right operand. |
+| `not` | `Bool`; additionally `RuleInstance` inside a Rule | Produces Bool, evaluating its operand once; instances are evaluated during checking. |
+| `and`, `or` | `Bool`; additionally `RuleInstance` inside a Rule | Produces `Bool` and uses short-circuit evaluation for the right operand. |
 | `&`, `\|` | `Bool`, `Bool` | Produces `Bool`. Both operands are evaluated; these operators do not short-circuit. |
 | `&`, `\|` | `BoolArray` and `Bool`, in either order | Combines the `Bool` with every array element and produces an equal-shaped `BoolArray`. |
 | `&`, `\|` | two equal-shaped `BoolArray` values | Computes logical AND or OR for corresponding elements and produces an equal-shaped `BoolArray`. |
@@ -1148,7 +1186,7 @@ BLAS-required operation actually executes.
 | `==`, `!=` | element-wise, producing `BoolArray` | compares complete contents, producing `Bool` |
 | `>`, `<`, `>=`, `<=` | element-wise with a number or equal-shaped real array | unsupported |
 | `&`, `\|` | unsupported | element-wise with `Bool` or an equal-shaped `BoolArray` |
-| `and`, `or`, `in` | unsupported | unsupported |
+| `not`, `and`, `or`, `in` | unsupported | unsupported |
 
 An invalid shape or unsupported operand type is a runtime error. The following
 program checks the default real-array operator behavior:

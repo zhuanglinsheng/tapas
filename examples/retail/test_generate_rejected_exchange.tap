@@ -1,0 +1,66 @@
+/// test_generate_rejected_exchange.tap
+///
+/// 部分限制实验：固定订单和目标规格，让求解器决定支付额度。
+/// 在 99–100 分内精准违反额度条件，预期得到 99 分。
+/// 将求出的额度交给模拟，再通过同一个 ExchangeModel 查询实际转移。
+
+import model.tap as model
+import simulation.tap as simulation
+
+let initial_state = simulation::initial_state('keyboard-clicky-plain')
+let exchange_parameters = simulation::exchange_parameters('keyboard-clicky-plain')
+let RejectedByCapacity = rules::violate(
+    model::ExchangeAllowed,
+    '可支付额度必须足以支付差价',
+)
+
+// 只替换额度字段；violate 保留其他许可条件并精准违反额度条件。
+let RejectedCapacity = rule (payment_capacity: Int) {
+    let previous_state = {
+        'order_id': initial_state::order_id,
+        'user_id': initial_state::user_id,
+        'status': initial_state::status,
+        'item_id': initial_state::item_id,
+        'payment_method_id': initial_state::payment_method_id,
+        'payment_capacity': payment_capacity,
+        'authenticated_user_id': initial_state::authenticated_user_id,
+        'confirmed_target_id': initial_state::confirmed_target_id,
+    }
+    model::ExchangeInput(previous_state, exchange_parameters)
+    RejectedByCapacity(previous_state, exchange_parameters)
+}
+
+let input_model = rules::restrict(RejectedCapacity,
+    'payment_capacity': rules::range(99, 100),
+)
+let generated = solve::hold(input_model)
+print('输入生成：', generated::status)
+
+if (generated::status == 'sat') {
+    let payment_capacity = arguments(generated::witness)[0]
+    print('求出的支付额度（分）：', payment_capacity)
+    let previous_state = initial_state.copy()
+    previous_state['payment_capacity'] = payment_capacity
+    let exchange_result = simulation::exchange(previous_state.copy(), exchange_parameters.copy())
+    let transition_model = rules::restrict(model::ExchangeModel,
+        'previous_state': previous_state,
+        'action_parameters': exchange_parameters,
+        'exchange_output': exchange_result::output,
+        'next_state': exchange_result::after,
+    )
+    let checked = solve::hold(transition_model)
+    print('模拟结果：', exchange_result::output::decision)
+    print('实际转移：', checked::status)
+    if (len(checked::conflicts) > 0) {
+        pprint(checked::conflicts)
+    }
+    if (checked::reason != '') {
+        print(checked::reason)
+    }
+}
+if (len(generated::conflicts) > 0) {
+    pprint(generated::conflicts)
+}
+if (generated::reason != '') {
+    print(generated::reason)
+}

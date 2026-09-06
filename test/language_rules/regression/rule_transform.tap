@@ -1,0 +1,127 @@
+/// Rule Item selection and direct Rule transformations.
+
+let Bounds = rule (value: Int) {
+    'lower bound': value >= 0
+    'upper bound': value <= 10
+}
+
+let lower = rules::item(Bounds, 0)
+assert(rule { identical(lower, rules::item(Bounds, 'lower bound')) })
+assert(rule { identical(lower, rules::item(Bounds, lower)) })
+
+let WithoutLower = rules::drop(Bounds, 'lower bound')
+assert(WithoutLower(-1))
+assert(rule { not WithoutLower(11) })
+assert(Bounds(0))
+assert(rule { not Bounds(-1) })
+
+let BelowLower = rules::violate(Bounds, lower)
+assert(BelowLower(-1))
+assert(rule { not BelowLower(0); not BelowLower(11) })
+
+let AboveUpper = rules::violate(Bounds, 1)
+assert(AboveUpper(11))
+assert(rule { not AboveUpper(10); not AboveUpper(-1) })
+
+let AboveTen = rule (value: Int) {
+    value > 10
+}
+
+// drop_if removes the upper bound only in the AboveTen branch.
+let DropUpperWhenAboveTen = rules::drop_if(Bounds, 'upper bound', AboveTen)
+assert(DropUpperWhenAboveTen(11))
+assert(DropUpperWhenAboveTen(10))
+assert(rule { not DropUpperWhenAboveTen(-1) })
+
+let Negative = rule (value: Int) {
+    value < 0
+}
+
+// violate_if makes the selected Item false exactly when Negative holds.
+let ViolateLowerWhenNegative = rules::violate_if(Bounds, 'lower bound', Negative)
+assert(ViolateLowerWhenNegative(-1))
+assert(ViolateLowerWhenNegative(0))
+assert(rule { not ViolateLowerWhenNegative(11) })
+
+// A derived Rule keeps reading the original source Rule's live closure.
+var minimum = 2
+let Captured = rule (value: Int) {
+    'minimum': value >= minimum
+}
+let BelowCapturedMinimum = rules::violate(Captured, 'minimum')
+assert(BelowCapturedMinimum(1))
+minimum = 0
+assert(rule { not BelowCapturedMinimum(1) })
+
+let Positive = rule (value: Int) {
+    'positive': value > 0
+}
+let RequiresPositive = rule (value: Int) {
+    'nested requirement': Positive(value)
+}
+let ViolatesRequirement = rules::violate(RequiresPositive, 0)
+assert(ViolatesRequirement(0))
+assert(rule { not ViolatesRequirement(1) })
+
+let DropRequirementWhenNegative = rules::drop_if(
+    RequiresPositive, 0, Negative,
+)
+assert(DropRequirementWhenNegative(-1))
+assert(DropRequirementWhenNegative(1))
+assert(rule { not DropRequirementWhenNegative(0) })
+
+let ViolateRequirementWhenNegative = rules::violate_if(
+    RequiresPositive, 0, Negative,
+)
+assert(ViolateRequirementWhenNegative(-1))
+assert(ViolateRequirementWhenNegative(1))
+assert(rule { not ViolateRequirementWhenNegative(0) })
+
+let dynamic_value = rules::parameter('value', types::Int)
+let DynamicPositive = rules::make('DynamicPositive', [dynamic_value], [
+    rules::condition(dynamic_value > rules::constant(0), 'positive'),
+])
+let DynamicRequirement = rules::make('DynamicRequirement', [dynamic_value], [
+    rules::requirement(DynamicPositive, [dynamic_value]),
+])
+let ViolatesDynamicRequirement = rules::violate(DynamicRequirement, 0)
+assert(ViolatesDynamicRequirement(0))
+assert(rule { not ViolatesDynamicRequirement(1) })
+
+let LimitedWhenNonnegative = rule (value: Int) {
+    'conditional upper bound': (value >= 0) implies {
+        value <= 2
+    }
+}
+let ViolatesImplication = rules::violate(
+    LimitedWhenNonnegative,
+    'conditional upper bound',
+)
+assert(ViolatesImplication(3))
+assert(rule { not ViolatesImplication(-1); not ViolatesImplication(2) })
+
+let AboveTwo = rule (value: Int) {
+    value > 2
+}
+let ViolateImplicationAboveTwo = rules::violate_if(
+    LimitedWhenNonnegative,
+    'conditional upper bound',
+    AboveTwo,
+)
+assert(ViolateImplicationAboveTwo(3))
+assert(ViolateImplicationAboveTwo(2))
+assert(ViolateImplicationAboveTwo(-1))
+
+// The premise Rule retains and reads its own live closure.
+var conditional_limit = 0
+let BelowConditionalLimit = rule (value: Int) {
+    value < conditional_limit
+}
+let ConditionalLower = rules::violate_if(
+    Bounds, 'lower bound', BelowConditionalLimit,
+)
+assert(ConditionalLower(-1))
+conditional_limit = -2
+assert(rule { not ConditionalLower(-1) })
+
+print('rule transforms: ok')

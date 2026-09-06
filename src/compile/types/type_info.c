@@ -95,7 +95,7 @@ static uint32_t symbol_for_declaration(const type_analyzer *analyzer, tast_id id
 		TSEMANTIC_INVALID_ID;
 }
 
-static tstatic_type_id resolve_annotation_name(void *context, const char *name)
+static tstatic_type_id resolve_annotation_definition(void *context, const char *name)
 {
 	type_analyzer *analyzer = (type_analyzer *)context;
 	if (strstr(name, "::"))
@@ -118,13 +118,36 @@ static tstatic_type_id resolve_annotation_name(void *context, const char *name)
 		TSTATIC_TYPE_UNKNOWN;
 }
 
+static tstatic_type_id resolve_annotation_name(void *context, const char *name)
+{
+	type_analyzer *analyzer = context;
+	tstatic_type_id definition = resolve_annotation_definition(context, name);
+	return tstatic_type_with_name(&analyzer->model->arena, definition, name);
+}
+
+static tstatic_type_id resolve_annotation_value(void *context, const char *name)
+{
+	type_analyzer *analyzer = context;
+	if (strstr(name, "::")) return analyzer->external_resolver ?
+		analyzer->external_resolver(analyzer->external_context, &analyzer->model->arena, name, 0) :
+		TSTATIC_TYPE_UNKNOWN;
+	uint32_t scope = tsemantic_scope_at(analyzer->semantic, analyzer->annotation_offset);
+	for (uint32_t i = analyzer->semantic->symbol_count; i-- > 0;) {
+		const tsemantic_symbol *symbol = &analyzer->semantic->symbols[i];
+		if (tstring_eq_cstr(symbol->name, name) && symbol->span.start < analyzer->annotation_offset &&
+		    tsemantic_scope_contains(analyzer->semantic, symbol->scope, scope))
+			return analyzer->model->symbol_type_ids[i];
+	}
+	return TSTATIC_TYPE_UNKNOWN;
+}
+
 static tstatic_type_id parse_annotation(type_analyzer *analyzer,
 					tsource_span span)
 {
 	tstring *text = tsource_document_slice(analyzer->document, span);
 	analyzer->annotation_offset = span.start;
-	tstatic_type_id result = tstatic_type_parse(&analyzer->model->arena,
-		tstring_cstr(text), resolve_annotation_name, analyzer);
+	tstatic_type_id result = tstatic_type_parse_with_values(&analyzer->model->arena,
+		tstring_cstr(text), resolve_annotation_name, resolve_annotation_value, analyzer);
 	tstring_free(text);
 	return result == TSTATIC_TYPE_INVALID_NAME ? TSTATIC_TYPE_UNKNOWN : result;
 }
@@ -206,6 +229,19 @@ static tstatic_type_id static_type_call(type_analyzer *analyzer,
 		if (valid) result = tstatic_type_make(&analyzer->model->arena,
 			tstatic_type_union, values, count, 0);
 		free(values);
+	} else if (constructor == ttype_constructor_enum) {
+		tstring **members = (tstring **)calloc(count, sizeof(*members));
+		if (!members) abort();
+		int valid = 1;
+		for (uint32_t i = 0; i < count; i++) {
+			members[i] = literal_string(analyzer,
+				tast_get(analyzer->ast, arguments[i]));
+			valid = valid && members[i];
+		}
+		if (valid) result = tstatic_type_make_enum(
+			&analyzer->model->arena, members, count);
+		for (uint32_t i = 0; i < count; i++) tstring_free(members[i]);
+		free(members);
 	} else if (constructor == ttype_constructor_rule ||
 		   constructor == ttype_constructor_rule_instance) {
 		tstatic_type_id *values = count ?
@@ -486,40 +522,22 @@ static tstatic_type_id infer_function_with_context(type_analyzer *analyzer,
 	return result;
 }
 
-static tstatic_type_id infer_dictionary(type_analyzer *analyzer,
-					const tast_node *node)
-{
-	uint32_t count = node->aggregate.count / 2;
-	if (!count) return tbuiltin_dictionary;
-	const tast_id *entries = tast_get_children(analyzer->ast,
-		node->aggregate.children, node->aggregate.count);
-	tstatic_field *fields = (tstatic_field *)calloc(count, sizeof(*fields));
-	if (!fields) abort();
-	int valid = 1;
-	for (uint32_t i = 0; i < count; i++) {
-		fields[i].name = literal_string(analyzer,
-			tast_get(analyzer->ast, entries[i * 2]));
-		fields[i].type = infer(analyzer, entries[i * 2 + 1]);
-		valid = valid && fields[i].name &&
-			fields[i].type != TSTATIC_TYPE_UNKNOWN;
-	}
-	tstatic_type_id result = valid ? tstatic_type_make_fields(
-		&analyzer->model->arena, fields, count) : tbuiltin_dictionary;
-	for (uint32_t i = 0; i < count; i++) tstring_free(fields[i].name);
-	free(fields);
-	return result;
-}
-
 static tstatic_type_id infer_index(type_analyzer *analyzer,
 				   const tast_node *node)
 {
 	tstatic_type_id receiver_id = infer(analyzer, node->aggregate.receiver);
 	const tstatic_type *receiver = tstatic_type_get(
 		&analyzer->model->arena, receiver_id);
+	if (receiver && receiver->kind == tstatic_type_builtin &&
+	    receiver->builtin == tbuiltin_type) {
+		receiver_id = static_value(analyzer, node->aggregate.receiver);
+		receiver = tstatic_type_get(&analyzer->model->arena, receiver_id);
+	}
 	if (!receiver || node->aggregate.count != 1) return TSTATIC_TYPE_UNKNOWN;
 	const tast_id *indices = tast_get_children(analyzer->ast,
 		node->aggregate.children, node->aggregate.count);
 	const tast_node *index = tast_get(analyzer->ast, indices[0]);
+	if (receiver->kind == tstatic_type_enum) return receiver_id;
 	if (index && index->kind == tast_slice &&
 	    receiver->kind == tstatic_type_list) return receiver_id;
 	const tstatic_type_id *children = tstatic_type_children(
@@ -570,12 +588,24 @@ static tstatic_type_id infer(type_analyzer *analyzer, tast_id id)
 	case tast_rule_condition:
 		result = infer(analyzer, node->rule_condition.value);
 		break;
-	case tast_rule_requirement:
-		result = infer(analyzer, node->expression_statement.value);
+	case tast_rule_implication:
+		infer(analyzer, node->rule_implication.antecedent);
+		infer(analyzer, node->rule_implication.consequent);
+		result = tbuiltin_bool;
 		break;
 	case tast_group: result = infer(analyzer, node->group.value); break;
-	case tast_unary: result = infer(analyzer, node->unary.operand); break;
+	case tast_unary:
+		result = infer(analyzer, node->unary.operand);
+		if (node->unary.op == tsyntax_kw_not) result = tbuiltin_bool;
+		break;
 	case tast_binary:
+        if (node->binary.op == tsyntax_kw_in) {
+            tstatic_type_id left = infer(analyzer, node->binary.left), right = infer(analyzer, node->binary.right);
+            int symbolic = left == tbuiltin_rule_term || left == tbuiltin_rule_parameter || left == tbuiltin_rule_capture ||
+                right == tbuiltin_rule_term || right == tbuiltin_rule_parameter || right == tbuiltin_rule_capture;
+            result = symbolic ? tbuiltin_rule_term : tbuiltin_bool;
+            break;
+        }
 		if (node->binary.op == tsyntax_colon) {
 			tstatic_type_id values[2] = {
 				infer(analyzer, node->binary.left),
@@ -619,7 +649,11 @@ static tstatic_type_id infer(type_analyzer *analyzer, tast_id id)
 			tstatic_type_make(&analyzer->model->arena,
 				tstatic_type_list, &item, 1, 0);
 	} break;
-	case tast_dictionary: result = infer_dictionary(analyzer, node); break;
+	case tast_dictionary:
+		/* Literal entries are data, not declared field constraints. A dictionary
+		 * may gain or lose keys and change value Types after initialization. */
+		result = tbuiltin_dictionary;
+		break;
 	case tast_index: result = infer_index(analyzer, node); break;
 	case tast_call: {
 		const tast_id *arguments = tast_get_children(analyzer->ast,
@@ -635,6 +669,24 @@ static tstatic_type_id infer(type_analyzer *analyzer, tast_id id)
 			result = function->child_count ?
 				signature[function->child_count - 1] : TSTATIC_TYPE_UNKNOWN;
 		}
+        const tast_node *domain_callee = tast_get(analyzer->ast, node->aggregate.receiver);
+        if (domain_callee && domain_callee->kind == tast_member && domain_callee->member.op == tsyntax_scope) {
+            const tast_node *receiver = tast_get(analyzer->ast, domain_callee->member.receiver);
+            const tsemantic_symbol *symbol = receiver && receiver->kind == tast_name ?
+                tsemantic_resolved_symbol(analyzer->semantic, domain_callee->member.receiver) : nullptr;
+            if (symbol && symbol->external && tstring_eq_cstr(symbol->name, "rules")) {
+                tstring *member = tsource_document_slice(analyzer->document, domain_callee->member.name);
+                if (tstring_eq_cstr(member, "points") && node->aggregate.count >= 1) {
+                    tstatic_type_id item = static_value(analyzer, arguments[0]);
+                    result = item == TSTATIC_TYPE_UNKNOWN ? TSTATIC_TYPE_UNKNOWN :
+                        tstatic_type_make(&analyzer->model->arena, tstatic_type_points, &item, 1, 0);
+                } else if (tstring_eq_cstr(member, "range") && node->aggregate.count == 2) {
+                    tstatic_type_id item = tstatic_type_builtin_id(&analyzer->model->arena, tbuiltin_int);
+                    result = tstatic_type_make(&analyzer->model->arena, tstatic_type_range, &item, 1, 0);
+                }
+                tstring_free(member);
+            }
+        }
 		const tstandard_symbol *standard = standard_callee(
 			analyzer, node->aggregate.receiver);
 		if (standard && standard->result_from_argument) {
@@ -811,6 +863,17 @@ static void analyze_iteration_symbols(type_analyzer *analyzer)
 			analyzer, loop->for_statement.iterable);
 		const tstatic_type *iterable = tstatic_type_get(
 			&analyzer->model->arena, iterable_id);
+		if (iterable && iterable->kind == tstatic_type_builtin &&
+		    iterable->builtin == tbuiltin_type) {
+			iterable_id = static_value(
+				analyzer, loop->for_statement.iterable);
+			iterable = tstatic_type_get(
+				&analyzer->model->arena, iterable_id);
+		}
+		if (iterable && iterable->kind == tstatic_type_enum) {
+			analyzer->model->symbol_type_ids[sid] = iterable_id;
+			continue;
+		}
 		if (!iterable || (iterable->kind != tstatic_type_iterator &&
 		    iterable->kind != tstatic_type_list) || iterable->child_count != 1)
 			continue;
@@ -871,11 +934,11 @@ void ttype_info_analyze_with_resolver(
 	}
 	for (uint32_t i = 0; i < model->node_count; i++)
 		if (model->node_type_ids[i] != TSTATIC_TYPE_UNKNOWN)
-			model->node_types[i] = tstatic_type_format(
+			model->node_types[i] = tstatic_type_display(
 				&model->arena, model->node_type_ids[i]);
 	for (uint32_t i = 0; i < model->symbol_count; i++)
 		if (model->symbol_type_ids[i] != TSTATIC_TYPE_UNKNOWN)
-			model->symbol_types[i] = tstatic_type_format(
+			model->symbol_types[i] = tstatic_type_display(
 				&model->arena, model->symbol_type_ids[i]);
 }
 

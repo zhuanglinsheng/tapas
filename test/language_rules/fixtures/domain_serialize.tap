@@ -1,0 +1,6 @@
+let p = rules::parameter('x', types::Int)
+let R = rules::make('DomainTransport', [p], [
+    rules::condition(rules::membership(p, rules::constant(rules::points(types::Int, 1, 4, 9)))),
+    rules::condition(rules::membership(p, rules::constant(rules::range(0, 5)))),
+])
+print(rules::serialize(R))

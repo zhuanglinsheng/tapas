@@ -1,0 +1,6 @@
+let R = rule(x: Int) { x == 4 }
+let result = solve::hold(R)
+assert(rule { result::status == 'error'; types::matches(result::witness, types::Nil) })
+let again = solve::hold(R)
+assert(rule { again::status == 'error'; types::matches(again::witness, types::Nil) })
+print('solve error: ok')

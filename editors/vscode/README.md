@@ -6,6 +6,16 @@ This extension connects Visual Studio Code directly to the C implementation of
 `tapas-language-server`. It recognizes `.tap` files and has no npm runtime
 dependencies.
 
+Rule expressions support `not`, `and`, and `or` with `Bool` and `RuleInstance`
+operands; `and` and `or` short-circuit. Write Rule dependencies as bare instances
+such as `Valid(x)`; `require` is no longer a keyword. Outside Rule expressions,
+these logical operators accept only `Bool` operands.
+
+Use `tapas-language-server`, `tapas`, and the `format` package from the same Core
+build. Updating the extension alone updates static highlighting, but does not
+update diagnostics, execution, or formatting: the extension uses external Core
+tools and does not bundle them.
+
 ## Current capabilities
 
 ### Editing
@@ -30,6 +40,20 @@ dependencies.
   built-in signatures, default packages, and package members.
 - Local inference currently covers literals, functions, arithmetic, pairs,
   lists, dictionaries, imports, and annotated bindings.
+- Fixed member reads such as `state::status` display the field Type on hover.
+  Completion after `state::` uses structural Types, including function/Rule
+  parameters, nested members, and imported Types such as `model::State`.
+  These features reuse AST Type facts without executing user code.
+- Type presentation preserves named structural references, for example `Rule[State]`
+  and `Function[State] -> List[State]`, including aliases and nested annotations.
+  Hover and completion share this view; hovering the Type value itself shows its
+  definition. Explicit anonymous structural Types remain expanded; dictionary literals
+  infer `Dictionary` and do not declare field constraints. Builtin Types use canonical names.
+- Names and `::` members inside parameter, return, and variable Type annotations
+  support hover, definition lookup, references, and rename through a separate
+  annotation reference index, including Rule references in `InstanceOf[model::Exchange]`.
+  Parameter annotations use the definition scope,
+  even when a parameter has the same name as a Type or module.
 
 ### Navigation and refactoring
 
@@ -98,9 +122,10 @@ document never executes user code.
 Public module interfaces come from the dictionary returned by the module's
 final statement. Cross-module queries currently target public members accessed
 with `::`; ordinary local symbols remain file- and lexical-scope based.
-Signature help, semantic-token delta responses, incremental text
-synchronization, and complete structural Type hover information remain planned
-work.
+Signature help, semantic-token delta responses, and incremental text
+synchronization remain planned work. Structural-field navigation/rename and
+union/recursive structural completion are not yet supported; dynamically unknown
+members may have no Type information.
 The run command does not provide breakpoints, stepping, variable inspection, or
 call stacks; those features require a separate Tapas Debug Adapter.
 
@@ -158,6 +183,13 @@ current workspace.
 
 Set `tapas.languageServer.path` to an absolute path when automatic discovery is
 not suitable.
+
+If `rule` or `types::enum` works in the CLI but produces editor syntax errors,
+check for a stale server bundled in an older extension. When developing Tapas,
+set workspace `tapas.languageServer.path` and `tapas.runtime.path` to absolute
+paths for `build/bin/tapas-language-server` and `build/bin/tapas` from the same
+build. Rebuild and run VS Code's `Developer: Reload Window`; updating source
+alone does not replace an already running server.
 
 The extension searches for the Tapas runtime in this order:
 

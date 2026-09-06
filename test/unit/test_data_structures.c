@@ -10,6 +10,11 @@
 #include "tapas/runtime/tstr.h"
 #include "tapas/runtime/ttime.h"
 #include "tapas/runtime/ttype.h"
+#include "tapas/runtime/trule_ir.h"
+#include "tapas/runtime/trule.h"
+#include "tapas/runtime/tdomain.h"
+#include <stdlib.h>
+#include "../../src/stdlib/function_metadata.h"
 
 #include <assert.h>
 #include <math.h>
@@ -369,8 +374,161 @@ static void test_capability_dispatch(void)
 	tobj_try_clear(&list_value);
 }
 
+static ttypeval *metadata_string(void) { return ttypeval_retain(ttypeval_builtin(tbuiltin_string)); }
+
+static void test_function_metadata(void)
+{
+	assert(tstdlib_validate_function_metadata());
+	ttypeval *types[] = {ttypeval_builtin(tbuiltin_int), ttypeval_builtin(tbuiltin_string)};
+	ttypeval *signature = ttypeval_new_function(types, 2, ttypeval_builtin(tbuiltin_bool), 0);
+	tfunction_metadata *metadata = tfunction_metadata_decode(
+		"value\x1f" "label", tstring_cstr(signature->canonical));
+	assert(metadata && tfunction_metadata_count(metadata) == 2);
+    assert(!tfunction_metadata_display_name(metadata));
+	assert(!strcmp(tfunction_metadata_name(metadata, 0), "value"));
+	assert(ttypeval_equal(tfunction_metadata_type(metadata, 0), ttypeval_builtin(tbuiltin_int)));
+	assert(ttypeval_equal(tfunction_metadata_return_type(metadata), ttypeval_builtin(tbuiltin_bool)));
+	tfunction_metadata *shared = tfunction_metadata_retain(metadata);
+	assert(shared == metadata);
+	tfunction_metadata_release(metadata);
+	assert(!strcmp(tfunction_metadata_name(shared, 1), "label"));
+	tfunction_metadata_release(shared);
+    metadata = tfunction_metadata_decode("named\x1e" "value\x1f" "label", tstring_cstr(signature->canonical));
+    assert(metadata && !strcmp(tfunction_metadata_display_name(metadata), "named"));
+    assert(tfunction_metadata_count(metadata) == 2);
+    assert(!strcmp(tfunction_metadata_name(metadata, 0), "value"));
+    tfunction_metadata_release(metadata);
+	assert(!tfunction_metadata_decode("value", tstring_cstr(signature->canonical)));
+	assert(!tfunction_metadata_decode("", "Int"));
+	assert(!tfunction_metadata_decode("\x1f", tstring_cstr(signature->canonical)));
+	ttypeval_release(signature);
+	const tparameter_spec optional[] = {{"prompt", metadata_string, 1, 0}};
+	metadata = tfunction_metadata_new(optional, 1, ttypeval_builtin(tbuiltin_string), 0);
+	assert(metadata && tfunction_metadata_optional(metadata, 0));
+	tfunc *function = tfunc_new(0, nullptr, 0, 0, 1, 0, 0);
+	function->metadata = tfunction_metadata_retain(metadata);
+	tfunc *copy = function->compo_base.vtable->copy(function);
+	assert(copy->metadata == function->metadata);
+	function->compo_base.vtable->free(function);
+	assert(!strcmp(tfunction_metadata_name(copy->metadata, 0), "prompt"));
+	copy->compo_base.vtable->free(copy);
+	tfunction_metadata_release(metadata);
+}
+
+static void test_rule_logic_ir(void)
+{
+	const char *valid = "TPIR5;0:0:5;3;2;1;1;16:B12:RuleInstances1:p0;0:0:0;-1;-1;1;16:B12:RuleInstances1:q0;0:0:0;-1;-1;10;7:B4:Booln;2;0;1;0:0:0;-1;-1;0;1;0;2;0;0:-1;-1;";
+	trule_ir *ir = trule_ir_deserialize(valid);
+	assert(ir && ir->version == 5);
+	trule_item *item = (trule_item *)ir->items.data[0].val.v_tcompo;
+	assert(item->term->kind == trule_term_or && item->term->arguments.len == 2);
+	tstring *encoded = nullptr;
+	assert(trule_ir_serialize(ir, &encoded));
+	trule_ir *restored = trule_ir_deserialize(tstring_cstr(encoded));
+	assert(restored && trule_ir_semantic_hash(restored) == trule_ir_semantic_hash(ir));
+	restored->base.vtable->free(restored);
+	ir->base.vtable->free(ir);
+	tstring_free(encoded);
+	/* New operators cannot be smuggled into older versions; arity and
+	 * operand Type remain part of deserialization validation. */
+	assert(!trule_ir_deserialize("TPIR4;0:0:4;2;1;1;1;7:B4:Bools1:p0;0:0:0;-1;-1;9;7:B4:Booln;2;0;0;0:0:0;-1;-1;0;0;1;0;0:-1;-1;"));
+	assert(!trule_ir_deserialize("TPIR5;0:0:5;2;1;1;1;7:B4:Bools1:p0;0:0:0;-1;-1;9;7:B4:Booln;1;0;0:0:0;-1;-1;0;0;1;0;0:-1;-1;"));
+	assert(!trule_ir_deserialize("TPIR5;0:0:5;2;1;1;1;6:B3:Ints1:p0;0:0:0;-1;-1;10;7:B4:Booln;2;0;0;0:0:0;-1;-1;0;0;1;0;0:-1;-1;"));
+}
+
+static void test_rule_not_ir(void)
+{
+	const char *valid = "TPIR4;0:0:4;2;1;1;1;16:B12:RuleInstances1:p0;0:0:0;-1;-1;8;7:B4:Booln;1;0;0:0:0;-1;-1;0;0;1;0;0:-1;-1;";
+	trule_ir *ir = trule_ir_deserialize(valid);
+	assert(ir && ir->version == 4);
+	trule_item *item = (trule_item *)ir->items.data[0].val.v_tcompo;
+	assert(item->term->kind == trule_term_not && item->term->arguments.len == 1);
+	tstring *encoded = nullptr;
+	assert(trule_ir_serialize(ir, &encoded));
+	trule_ir *restored = trule_ir_deserialize(tstring_cstr(encoded));
+	assert(restored && trule_ir_semantic_hash(restored) == trule_ir_semantic_hash(ir));
+	restored->base.vtable->free(restored);
+	tstring_free(encoded);
+	ir->base.vtable->free(ir);
+	/* Reject a new node under an old version, a non-Bool result, a missing
+	 * operand, and a statically incompatible operand. */
+	assert(!trule_ir_deserialize("TPIR3;0:0:3;2;1;1;1;16:B12:RuleInstances1:p0;0:0:0;-1;-1;8;7:B4:Booln;1;0;0:0:0;-1;-1;0;0;1;0;0:-1;-1;"));
+	assert(!trule_ir_deserialize("TPIR4;0:0:4;2;1;1;1;16:B12:RuleInstances1:p0;0:0:0;-1;-1;8;6:B3:Intn;1;0;0:0:0;-1;-1;0;0;1;0;0:-1;-1;"));
+	assert(!trule_ir_deserialize("TPIR4;0:0:4;2;1;1;1;16:B12:RuleInstances1:p0;0:0:0;-1;-1;8;7:B4:Booln;0;0:0:0;-1;-1;0;0;1;0;0:-1;-1;"));
+	assert(!trule_ir_deserialize("TPIR4;0:0:4;2;1;1;1;6:B3:Ints1:p0;0:0:0;-1;-1;8;7:B4:Booln;1;0;0:0:0;-1;-1;0;0;1;0;0:-1;-1;"));
+}
+
+static void test_rule_representations(void)
+{
+    trule *r = trule_new(nullptr, "rule(x: Int) { x > 0 }", "", "", "", "");
+    tobj rule = {.type=tcompo, .val.v_tcompo=(tcompo_v *)r};
+    tstring *abbr = tobj_tostring_abbr(&rule), *full = tobj_tostring_full(&rule);
+    char expected[64];
+    snprintf(expected, sizeof(expected), "<%p>", (void *)r);
+    assert(!strcmp(tstring_cstr(abbr), expected));
+    snprintf(expected, sizeof(expected), "Rule #%llu[]", (unsigned long long)r->identity);
+    assert(!strcmp(tstring_cstr(full), expected));
+    tstring_free(abbr); tstring_free(full); r->base.vtable->free(r);
+
+    trule_term *flag = trule_term_parameter_new("flag", ttypeval_builtin(tbuiltin_bool));
+    tobj parameter = {.type=tcompo, .val.v_tcompo=(tcompo_v *)flag};
+    abbr = tobj_tostring_abbr(&parameter);
+    snprintf(expected, sizeof(expected), "<%p>", (void *)flag);
+    assert(!strcmp(tstring_cstr(abbr), expected));
+    tstring_free(abbr);
+    trule_term *both = trule_term_logic_new(trule_term_and, flag, flag);
+    tobj dag = {.type=tcompo, .val.v_tcompo=(tcompo_v *)both};
+    abbr = tobj_tostring_abbr(&dag);
+    snprintf(expected, sizeof(expected), "<%p>", (void *)both);
+    assert(!strcmp(tstring_cstr(abbr), expected));
+    tstring_free(abbr);
+    full = tobj_tostring_full(&dag);
+    assert(strstr(tstring_cstr(full), "(flag and flag)"));
+    assert(!strstr(tstring_cstr(full), "<cycle>"));
+    tstring_free(full); both->base.vtable->free(both);
+
+    trule_term *cycle = trule_term_new(trule_term_not, ttypeval_builtin(tbuiltin_bool), nullptr, nullptr, 0);
+    cycle->base.refctr = 1; /* Keep an external reference while breaking the cycle. */
+    tobj self = {.type=tcompo, .val.v_tcompo=(tcompo_v *)cycle};
+    tobj_vec_push(&cycle->arguments, &self);
+    full = tobj_tostring_full(&self);
+    assert(strstr(tstring_cstr(full), "<cycle>"));
+    tstring_free(full); tobj_vec_free(&cycle->arguments);
+    cycle->base.refctr = 0; cycle->base.vtable->free(cycle);
+
+    /* Arbitrary point members may lead back through a container to the domain. */
+    tlist *list = tlist_new(); list->base.refctr = 1;
+    tobj member = {.type=tcompo, .val.v_tcompo=(tcompo_v *)list};
+    tdomain *points = tpoints_new(ttypeval_builtin(tbuiltin_any), &member, 1);
+    tobj domain = {.type=tcompo, .val.v_tcompo=(tcompo_v *)points};
+    tobj_vec_push(&list->items, &domain);
+    full = tobj_tostring_full(&domain);
+    assert(strstr(tstring_cstr(full), "<cycle>"));
+    tstring_free(full); tobj_vec_free(&list->items);
+    list->base.refctr = 0; list->base.vtable->free(list);
+
+    tobj label = {.type=tcompo, .val.v_tcompo=(tcompo_v *)tstr_new("a\"b\nc")};
+    points = tpoints_new(ttypeval_builtin(tbuiltin_string), &label, 1);
+    domain.val.v_tcompo = (tcompo_v *)points;
+    full = tobj_tostring_full(&domain);
+    assert(!strcmp(tstring_cstr(full), "PointsOf[String][\"a\\\"b\\nc\"]"));
+    tstring_free(full); points->base.vtable->free(points);
+
+    char *large = malloc(20001); memset(large, 'x', 20000); large[20000] = 0;
+    r = trule_new(nullptr, "", "", "", "", "");
+    tstring_free(r->ir->display_name); r->ir->display_name = tstring_new(large); free(large);
+    rule.val.v_tcompo = (tcompo_v *)r;
+    full = tobj_tostring_full(&rule);
+    assert(tstring_len(full) <= 16400 && strstr(tstring_cstr(full), "<truncated>"));
+    tstring_free(full); r->base.vtable->free(r);
+}
+
 int main(void)
 {
+    test_rule_representations();
+	test_rule_not_ir();
+	test_rule_logic_ir();
+	test_function_metadata();
 	test_c_function_descriptor();
 	test_extension_descriptor();
 	test_numeric_array();

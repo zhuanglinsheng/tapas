@@ -24,7 +24,155 @@ set(COMPILE_INVALID_DIR "${FIXTURE_DIR}/invalid/compile")
 set(RUNTIME_INVALID_DIR "${FIXTURE_DIR}/invalid/runtime")
 set(ENVIRONMENT_INVALID_DIR "${FIXTURE_DIR}/invalid/environment")
 
+foreach(mode IN ITEMS source bytecode)
+    if(mode STREQUAL "source")
+        set(dictionary_command "${REGRESSION_DIR}/dictionary_mutation.tap")
+    else()
+        execute_process(COMMAND "${TAPAS}" -c "${REGRESSION_DIR}/dictionary_mutation.tap"
+            RESULT_VARIABLE dictionary_compile)
+        if(NOT dictionary_compile EQUAL 0)
+            message(FATAL_ERROR "Dictionary mutation bytecode compilation failed")
+        endif()
+        set(dictionary_command -e "${REGRESSION_DIR}/dictionary_mutation.tapc")
+    endif()
+    execute_process(COMMAND "${TAPAS}" ${dictionary_command}
+        RESULT_VARIABLE dictionary_result OUTPUT_VARIABLE dictionary_output ERROR_VARIABLE dictionary_error)
+    if(NOT dictionary_result EQUAL 0 OR NOT dictionary_output STREQUAL "changed\n1\nnew\n")
+        message(FATAL_ERROR "Dictionary mutation ${mode} failed: ${dictionary_output}${dictionary_error}")
+    endif()
+endforeach()
+file(REMOVE "${REGRESSION_DIR}/dictionary_mutation.tapc")
+
+include("${CMAKE_CURRENT_LIST_DIR}/logical_not.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/rule_not.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/rule_logic.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/rule_domains.cmake")
+
+foreach(mode IN ITEMS source bytecode)
+    if(mode STREQUAL "source")
+        set(instance_command "${REGRESSION_DIR}/instance_of.tap")
+    else()
+        execute_process(COMMAND "${TAPAS}" -c "${REGRESSION_DIR}/instance_of.tap"
+            RESULT_VARIABLE instance_compile)
+        if(NOT instance_compile EQUAL 0)
+            message(FATAL_ERROR "InstanceOf bytecode compilation failed")
+        endif()
+        set(instance_command -e "${REGRESSION_DIR}/instance_of.tapc")
+    endif()
+    execute_process(COMMAND "${TAPAS}" ${instance_command}
+        RESULT_VARIABLE instance_result OUTPUT_VARIABLE instance_output ERROR_VARIABLE instance_error)
+    if(NOT instance_result EQUAL 0)
+        message(FATAL_ERROR "InstanceOf ${mode} failed: ${instance_output}${instance_error}")
+    endif()
+endforeach()
+file(REMOVE "${REGRESSION_DIR}/instance_of.tapc")
+foreach(fixture IN ITEMS call declaration result rule nested factory copy)
+    execute_process(COMMAND "${TAPAS}" "${RUNTIME_INVALID_DIR}/instance_of_${fixture}.tap"
+        RESULT_VARIABLE instance_result OUTPUT_VARIABLE instance_output ERROR_VARIABLE instance_error)
+    if(instance_result EQUAL 0 OR NOT instance_error MATCHES "InstanceOf|Type")
+        message(FATAL_ERROR "InstanceOf ${fixture} should fail: ${instance_output}${instance_error}")
+    endif()
+endforeach()
+foreach(fixture IN ITEMS reassign non_rule syntax signature)
+    execute_process(COMMAND "${TAPAS}" -c "${COMPILE_INVALID_DIR}/instance_of_${fixture}.tap"
+        RESULT_VARIABLE instance_result OUTPUT_VARIABLE instance_output ERROR_VARIABLE instance_error)
+    if(instance_result EQUAL 0)
+        message(FATAL_ERROR "InstanceOf ${fixture} should fail compilation")
+    endif()
+endforeach()
+
+execute_process(COMMAND "${TAPAS}" "${REGRESSION_DIR}/function_parameters.tap"
+    RESULT_VARIABLE function_parameters_result OUTPUT_VARIABLE function_parameters_output
+    ERROR_VARIABLE function_parameters_error)
+if(NOT function_parameters_result EQUAL 0)
+    message(FATAL_ERROR "Function parameters failed: ${function_parameters_output}${function_parameters_error}")
+endif()
+execute_process(COMMAND "${TAPAS}" -c "${REGRESSION_DIR}/function_parameters.tap"
+    RESULT_VARIABLE function_compile_result)
+execute_process(COMMAND "${TAPAS}" -e "${REGRESSION_DIR}/function_parameters.tapc"
+    RESULT_VARIABLE function_reload_result OUTPUT_VARIABLE function_reload_output
+    ERROR_VARIABLE function_reload_error)
+file(REMOVE "${REGRESSION_DIR}/function_parameters.tapc")
+if(NOT function_compile_result EQUAL 0 OR NOT function_reload_result EQUAL 0)
+    message(FATAL_ERROR "Function metadata bytecode roundtrip failed: ${function_reload_output}${function_reload_error}")
+endif()
+
+execute_process(COMMAND "${TAPAS}" "${REGRESSION_DIR}/argument_reflection.tap"
+    RESULT_VARIABLE reflection_result OUTPUT_VARIABLE reflection_output ERROR_VARIABLE reflection_error)
+if(NOT reflection_result EQUAL 0)
+    message(FATAL_ERROR "Argument reflection failed: ${reflection_output}${reflection_error}")
+endif()
+
+execute_process(COMMAND "${TAPAS}" "${REGRESSION_DIR}/rule_instance_implies.tap"
+    RESULT_VARIABLE instance_implies_result OUTPUT_VARIABLE instance_implies_output
+    ERROR_VARIABLE instance_implies_error)
+if(NOT instance_implies_result EQUAL 0)
+    message(FATAL_ERROR "RuleInstance antecedent regression failed: ${instance_implies_output}${instance_implies_error}")
+endif()
+
+execute_process(
+    COMMAND "${TAPAS}" "${REGRESSION_DIR}/rule_implies.tap"
+    RESULT_VARIABLE implies_result
+    OUTPUT_VARIABLE implies_output
+    ERROR_VARIABLE implies_error
+)
+if(NOT implies_result EQUAL 0 OR NOT implies_output STREQUAL
+   "false\nfalse\n后续条件仍保持定位\n1\ntrue\ntrue\n2\nfalse\nfalse\n前件为假时不执行后件\n3\nfalse\nImplication\n2\ntrue\ntrue\nfalse\ntrue\n")
+    message(FATAL_ERROR "Implication regression failed:\n${implies_output}${implies_error}")
+endif()
+
+execute_process(
+    COMMAND "${TAPAS}" "${REGRESSION_DIR}/rule_import.tap"
+    RESULT_VARIABLE rule_import_result
+    OUTPUT_VARIABLE rule_import_output
+    ERROR_VARIABLE rule_import_error
+)
+if(NOT rule_import_result EQUAL 0 OR
+   NOT rule_import_output STREQUAL "true\nfalse\ntrue\nfalse\ntrue\ntrue\nfalse\n")
+    message(FATAL_ERROR
+        "Imported Rule Type fixture failed (${rule_import_result}):\n"
+        "${rule_import_output}${rule_import_error}")
+endif()
+
 set(loop_control_bytecode "${REGRESSION_DIR}/loop_control.tapc")
+execute_process(
+    COMMAND "${TAPAS}" "${SUPPORT_FIXTURE_DIR}/implies_serialize.tap"
+    RESULT_VARIABLE serialize_result
+    OUTPUT_VARIABLE serialized
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+if(NOT serialize_result EQUAL 0 OR NOT serialized MATCHES "^TPIR2;")
+    message(FATAL_ERROR "Implication serialization failed")
+endif()
+get_filename_component(tapas_bin_dir "${TAPAS}" DIRECTORY)
+set(restore_fixture "${tapas_bin_dir}/implies_restore.tap")
+file(WRITE "${restore_fixture}"
+    "let Check = rules::deserialize('${serialized}')\n"
+    "assert(Check(false, false))\n"
+    "assert(Check(true, true))\n"
+    "print(rules::check(Check(true, false))['passed'])\n")
+execute_process(COMMAND "${TAPAS}" "${restore_fixture}"
+    RESULT_VARIABLE restore_result OUTPUT_VARIABLE restore_output ERROR_VARIABLE restore_error)
+if(NOT restore_result EQUAL 0 OR NOT restore_output STREQUAL "false\n")
+    message(FATAL_ERROR "Cross-process implication restore failed: ${restore_output}${restore_error}")
+endif()
+execute_process(
+    COMMAND "${TAPAS}" "${SUPPORT_FIXTURE_DIR}/implies_instance_serialize.tap"
+    RESULT_VARIABLE serialize_result OUTPUT_VARIABLE serialized OUTPUT_STRIP_TRAILING_WHITESPACE)
+if(NOT serialize_result EQUAL 0 OR NOT serialized MATCHES "^TPIR3;")
+    message(FATAL_ERROR "RuleInstance antecedent serialization failed")
+endif()
+set(instance_restore_fixture "${tapas_bin_dir}/implies_instance_restore.tap")
+file(WRITE "${instance_restore_fixture}"
+    "let Check = rules::deserialize('${serialized}')\n"
+    "let Premise = rule (p: Bool) { p }\n"
+    "assert(Check(Premise(false)))\n"
+    "print(rules::check(Check(Premise(true)))['passed'])\n")
+execute_process(COMMAND "${TAPAS}" "${instance_restore_fixture}"
+    RESULT_VARIABLE restore_result OUTPUT_VARIABLE restore_output ERROR_VARIABLE restore_error)
+if(NOT restore_result EQUAL 0 OR NOT restore_output STREQUAL "false\n")
+    message(FATAL_ERROR "Cross-process RuleInstance antecedent restore failed: ${restore_output}${restore_error}")
+endif()
 set(imported_ast_bytecode "${SUPPORT_FIXTURE_DIR}/imported_ast_module.tapc")
 set(recursive_types_bytecode "${REGRESSION_DIR}/recursive_types.tapc")
 file(REMOVE "${loop_control_bytecode}" "${imported_ast_bytecode}"
@@ -462,10 +610,52 @@ if(NOT runtime_types_output STREQUAL expected_runtime_types_output)
         "Actual:\n${runtime_types_output}")
 endif()
 
+execute_process(
+    COMMAND "${TAPAS}" "${REGRESSION_DIR}/enum_types.tap"
+    RESULT_VARIABLE enum_types_result
+    OUTPUT_VARIABLE enum_types_output
+    ERROR_VARIABLE enum_types_error
+)
+if(NOT enum_types_result EQUAL 0)
+    message(FATAL_ERROR
+        "Enum Type fixture failed (${enum_types_result}):\n"
+        "${enum_types_output}${enum_types_error}")
+endif()
+set(expected_enum_types_output [=[Delivered
+Pending
+Delivered
+Delivered
+true
+true
+false
+true
+4
+[Pending, Shipped, Delivered, Cancelled]
+Pending
+Shipped
+Delivered
+Cancelled
+Cancelled
+Shipped
+Shipped
+[Pending, Delivered]
+true
+true
+]=])
+if(NOT enum_types_output STREQUAL expected_enum_types_output)
+    message(FATAL_ERROR
+        "Unexpected Enum Type output.\n"
+        "Expected:\n${expected_enum_types_output}\n"
+        "Actual:\n${enum_types_output}")
+endif()
+
 set(types_example_expected [=[2.5
 3
 true
 true
+true
+true
+Delivered
 true
 true
 ]=])
@@ -609,7 +799,7 @@ if(NOT ast_import_result EQUAL 0)
         "AST import fixture failed (${ast_import_result}):\n"
         "${ast_import_output}${ast_import_error}")
 endif()
-if(NOT ast_import_output STREQUAL "42\ntrue\n2.5\n")
+if(NOT ast_import_output STREQUAL "42\ntrue\n2.5\nDelivered\nPending\n")
     message(FATAL_ERROR
         "Unexpected AST import output: ${ast_import_output}")
 endif()
@@ -643,10 +833,10 @@ set(invalid_fixtures
     type_structure_unknown.tap
     type_structure_duplicate.tap
     type_structure_mismatch.tap
-    type_inferred_field_read.tap
     type_list_arity.tap
     type_pair_arity.tap
     type_dictionary_arity.tap
+    type_dictionary_field_read.tap
     type_application_arity.tap
     type_application_base.tap
     type_application_argument.tap
@@ -680,6 +870,11 @@ set(invalid_fixtures
     time_from_unix_float.tap
 )
 
+list(APPEND invalid_fixtures
+    implies_rule_value.tap implies_instance_body.tap
+    retired_require.tap
+    implies_guard_type.tap implies_body_type.tap implies_empty.tap
+    implies_nested.tap implies_require.tap implies_outside.tap implies_chain.tap)
 foreach(fixture IN LISTS invalid_fixtures)
     execute_process(
         COMMAND "${TAPAS}" "${COMPILE_INVALID_DIR}/${fixture}"
@@ -698,6 +893,14 @@ foreach(fixture IN LISTS invalid_fixtures)
 endforeach()
 
 set(runtime_error_fixtures
+    dictionary_structure_argument.tap
+    arguments_unbound.tap parameters_unsupported.tap
+    implies_instance_error.tap implies_instance_recursion.tap
+    implies_instance_if.tap
+    implies_triggered_error.tap
+    implies_dynamic_empty.tap
+    implies_dynamic_type.tap
+    rule_import_argument.tap
     array_modulo_shape.tap
     array_unary_plus.tap
     boolean_logic_type.tap
@@ -784,3 +987,9 @@ foreach(fixture IN LISTS blas_independent_fixtures)
             "${independent_output}${independent_error}")
     endif()
 endforeach()
+
+include("${CMAKE_CURRENT_LIST_DIR}/rule_restrict.cmake")
+
+include("${CMAKE_CURRENT_LIST_DIR}/rule_transform.cmake")
+
+include("${CMAKE_CURRENT_LIST_DIR}/rule_expression_ir.cmake")

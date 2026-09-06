@@ -158,7 +158,7 @@ function is_function_prefix(kind: String) -> Bool
 {
     return (kind == '(' or kind == '[' or kind == '{' or kind == ',' or
         kind == ':' or kind == '=' or kind == 'function' or
-        kind == 'return' or kind == 'and' or kind == 'or' or
+        kind == 'return' or kind == 'and' or kind == 'or' or kind == 'not' or
         kind == '+' or kind == '-' or kind == '*' or kind == '/' or
         kind == '%' or kind == '==' or kind == '!=' or kind == '<' or
         kind == '<=' or kind == '>' or kind == '>=')
@@ -180,6 +180,39 @@ function put_edit(
     }
 }
 
+function parameter_indentation(
+        source: String,
+        edits: Dictionary,
+        opening: Int,
+        closing: Int,
+        indentation: String,
+) -> Nil {
+    let header_indent = expand_indentation(indentation)
+    let continuation = header_indent.copy()
+    continuation.append('        ')
+    let line_start = 0
+    let first = true
+    for (let token in syntax::tokens(source)) {
+        let kind = token['kind']
+        if (kind == 'newline') {
+            line_start = token['end']
+            first = true
+        } elif (kind != 'whitespace' and kind != 'eof') {
+            if (first and line_start > opening and token['start'] <= closing) {
+                let replacement = continuation.copy()
+                if (token['start'] == closing) {
+                    replacement = header_indent.copy()
+                }
+                edits[line_start] = {
+                    'end': token['start'],
+                    'text': replacement.copy(),
+                }
+            }
+            first = false
+        }
+    }
+}
+
 function structural_edits(
         source      : String,
         tokens      : List,
@@ -191,6 +224,7 @@ function structural_edits(
     let edits: Dictionary = {}
     let matches = parenthesis_matches(tokens)
     let function_braces: Dictionary[Int, Int] = {}
+    let parameter_headers: Dictionary[Int, Int] = {}
 
     for (let index in 0 to tokens.len()) {
         let kind = tokens[index]['kind']
@@ -209,6 +243,9 @@ function structural_edits(
             let opening = index + 1
             if (tokens[opening]['kind'] == '(' and opening in matches) {
                 let closing = matches[opening]
+                if (kind == 'rule') {
+                    parameter_headers[opening] = index
+                }
                 put_edit(edits, clean_before, tokens, index, opening, ' ')
                 if (closing + 1 < tokens.len() and
                     tokens[closing + 1]['kind'] == '{') {
@@ -234,6 +271,7 @@ function structural_edits(
                 let brace = block_after(tokens, matches[opening] + 1)
                 if (brace >= 0) {
                     function_braces[brace] = index
+                    parameter_headers[opening] = index
                 }
             }
         }
@@ -258,13 +296,21 @@ function structural_edits(
         if (tokens[after]['kind'] == '{') {
             if ((after in function_braces) == false) {
                 function_braces[after] = opening
+                parameter_headers[opening] = opening
             }
         } elif (tokens[after]['kind'] == '->') {
             let brace = block_after(tokens, after + 1)
             if (brace >= 0 and (brace in function_braces) == false) {
                 function_braces[brace] = opening
+                parameter_headers[opening] = opening
             }
         }
+    }
+
+    for (let opening in keys(parameter_headers)) {
+        parameter_indentation(source, edits,
+            tokens[opening]['start'], tokens[matches[opening]]['start'],
+            indents[parameter_headers[opening]])
     }
 
     for (let brace in keys(function_braces)) {
@@ -272,7 +318,7 @@ function structural_edits(
         let prefix = ' '
         if (lines[header] == lines[brace - 1]) {
             prefix = line_break.copy()
-            prefix.append(indents[header])
+            prefix.append(expand_indentation(indents[header]))
         }
         put_edit(
             edits, clean_before, tokens,
@@ -300,6 +346,111 @@ function apply_edits(source: String, edits: Dictionary) -> String
     return output.copy()
 }
 
+function implication_edits(
+        source: String,
+        line_break: String,
+) -> Dictionary {
+    let clean: List[Bool] = []
+    let indents: List[String] = []
+    let lines: List[Int] = []
+    let tokens = lexical_view(source, clean, indents, lines)
+    let matches = parenthesis_matches(tokens)
+    let edits: Dictionary = {}
+    for (let index in 0 to tokens.len()) {
+        if (tokens[index]['kind'] != 'implies' or index == 0 or
+            index + 1 >= tokens.len()) {
+            continue
+        }
+        let left = index - 1
+        let depth = 0
+        let scanning = true
+        while (scanning) {
+            let kind = tokens[left]['kind']
+            if (kind == ')' or kind == ']' or kind == '}') { depth = depth + 1 }
+            if (kind == '(' or kind == '[' or kind == '{') { depth = depth - 1 }
+            if (left == 0) {
+                scanning = false
+            } elif (depth == 0 and
+                    (lines[left - 1] != lines[left] or
+                     tokens[left - 1]['kind'] == '{' or
+                     tokens[left - 1]['kind'] == ':' or
+                     tokens[left - 1]['kind'] == ';')) {
+                scanning = false
+            } else {
+                left = left - 1
+            }
+        }
+        let right = index + 1
+        let braced = tokens[right]['kind'] == '{'
+        let end = right
+        depth = 0
+        scanning = true
+        while (scanning and end < tokens.len()) {
+            let kind = tokens[end]['kind']
+            if (kind == '(' or kind == '[' or kind == '{') { depth = depth + 1 }
+            if (kind == ')' or kind == ']' or kind == '}') { depth = depth - 1 }
+            if (depth == 0 and
+                (braced or end + 1 == tokens.len() or
+                 lines[end + 1] != lines[end] or
+                 tokens[end + 1]['kind'] == '}' or
+                 tokens[end + 1]['kind'] == ';')) {
+                scanning = false
+            } else {
+                end = end + 1
+            }
+        }
+        if (end >= tokens.len()) { continue }
+        let safe = true
+        for (let at in left + 1 to end + 1) {
+            if (clean[at] == false) { safe = false }
+        }
+        // Do not move comments across the antecedent/consequent boundary.
+        if (safe == false) { continue }
+        let first = left
+        let last = index - 1
+        while (first < last and first in matches and matches[first] == last) {
+            first = first + 1
+            last = last - 1
+        }
+        let antecedent = source[tokens[first]['start']:tokens[last]['end']]
+        let replacement = ''
+        if (first == last and tokens[first]['kind'] == 'identifier') {
+            replacement.append(antecedent)
+        } else {
+            replacement.append('(')
+            replacement.append(antecedent)
+            replacement.append(')')
+        }
+        replacement.append(' implies ')
+        first = right
+        last = end
+        if (braced) { first = first + 1; last = last - 1 }
+        while (first < last and first in matches and matches[first] == last) {
+            first = first + 1
+            last = last - 1
+        }
+        if (first == last and tokens[first]['kind'] == 'identifier') {
+            replacement.append(source[tokens[first]['start']:tokens[first]['end']])
+        } elif (braced) {
+            replacement.append(source[tokens[right]['start']:tokens[end]['end']])
+        } else {
+            replacement.append('{')
+            replacement.append(line_break)
+            replacement.append(indents[left])
+            replacement.append('    ')
+            replacement.append(source[tokens[right]['start']:tokens[end]['end']])
+            replacement.append(line_break)
+            replacement.append(indents[left])
+            replacement.append('}')
+        }
+        edits[tokens[left]['start']] = {
+            'end': tokens[end]['end'],
+            'text': replacement.copy(),
+        }
+    }
+    return edits.copy()
+}
+
 function source(source_text: String) -> String
 {
     let all_tokens = syntax::tokens(source_text)
@@ -323,7 +474,8 @@ function source(source_text: String) -> String
     }
     let formatted = apply_edits(
         source_text, edits)
-    return formatted.copy()
+    let implications = implication_edits(formatted, line_break)
+    return apply_edits(formatted, implications)
 }
 
 function is_formatted(source_text: String) -> Bool

@@ -5,6 +5,7 @@
 #include "tapas/runtime/tpair.h"
 #include "tapas/runtime/tstr.h"
 #include "tapas/runtime/trule.h"
+#include "tapas/runtime/tdomain.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -42,6 +43,7 @@ static void ttype_set_definition(ttypeval *owner,
 				 const char *name,
 				 ttypeval *value)
 {
+	if (value) { owner->contains_instance |= value->contains_instance; owner->contains_domain |= value->contains_domain; }
 	tobj key;
 	tobj val;
 	tobj_set_nil(&key);
@@ -88,6 +90,13 @@ static int ttype_compare_entry(const void *left, const void *right)
 	const tstr *ak = (const tstr *)a->key->val.v_tcompo;
 	const tstr *bk = (const tstr *)b->key->val.v_tcompo;
 	return tstring_cmp(ak->data, bk->data);
+}
+
+static int ttype_compare_string_ptr(const void *left, const void *right)
+{
+	const tstring *a = *(const tstring *const *)left;
+	const tstring *b = *(const tstring *const *)right;
+	return tstring_cmp(a, b);
 }
 
 static ttype_entry *ttype_sorted_entries(const ttypeval *type,
@@ -221,6 +230,24 @@ ttypeval *ttypeval_from_canonical(const char *canonical)
 	if (!canonical || !*canonical) return nullptr;
 	if (strcmp(canonical, "A") == 0) return ttypeval_builtin(tbuiltin_any);
 	const char *cursor = canonical;
+	if (*cursor == 'N') {
+		cursor++;
+		uint_objs length;
+		if (!canonical_number(&cursor, &length) || strlen(cursor) < length) return nullptr;
+		tstring *name = tstring_new_len(cursor, length);
+		cursor += length;
+		ttypeval *signature = ttypeval_retain(canonical_wrapped(&cursor));
+		if (!signature || *cursor || signature->kind != ttype_kind_rule_instance) {
+			tstring_free(name); ttypeval_release(signature); return nullptr;
+		}
+		uint_objs count = ttypeval_function_parameter_count(signature);
+		ttypeval **parameters = calloc(count + 1, sizeof(*parameters));
+		if (!parameters) abort();
+		for (uint_objs i = 0; i < count; i++) parameters[i] = ttypeval_function_parameter_at(signature, i);
+		ttypeval *result = ttypeval_new_instance_reference(tstring_cstr(name), parameters, count);
+		free(parameters); ttypeval_release(signature); tstring_free(name);
+		return result;
+	}
 	if (*cursor == 'B') {
 		cursor++;
 		uint_objs length;
@@ -232,11 +259,12 @@ ttypeval *ttypeval_from_canonical(const char *canonical)
 		free(name);
 		return type;
 	}
-	if (*cursor == 'L' || *cursor == 'I' || *cursor == 'Z') {
+	if (*cursor == 'L' || *cursor == 'I' || *cursor == 'Z' || *cursor == 'H' || *cursor == 'J') {
 		char tag = *cursor++;
 		ttypeval *item = canonical_wrapped(&cursor);
 		if (!item || *cursor) return nullptr;
-		return tag == 'L' ? ttypeval_new_list(item) :
+		return (tag == 'H' || tag == 'J') ? ttypeval_new_domain(tag == 'J', item) :
+			tag == 'L' ? ttypeval_new_list(item) :
 			tag == 'I' ? ttypeval_new_iterator(item) :
 			ttypeval_new_rule_term(item);
 	}
@@ -293,6 +321,30 @@ ttypeval *ttypeval_from_canonical(const char *canonical)
 	fields_invalid:
 		for (uint_objs i = 0; i < count; i++) tstring_free(names[i]);
 		free(names); free(fields);
+		return nullptr;
+	}
+	if (*cursor == 'E') {
+		cursor++;
+		uint_objs count;
+		if (!canonical_number(&cursor, &count) || count == 0) return nullptr;
+		tstring **members = calloc(count, sizeof(*members));
+		if (!members) abort();
+		for (uint_objs i = 0; i < count; i++) {
+			uint_objs length;
+			if (!canonical_number(&cursor, &length) || strlen(cursor) < length)
+				goto enum_invalid;
+			members[i] = tstring_new_len(cursor, length);
+			cursor += length;
+		}
+		if (*cursor) goto enum_invalid;
+		ttypeval *type = ttypeval_new_enum(
+			(const tstring *const *)members, count);
+		for (uint_objs i = 0; i < count; i++) tstring_free(members[i]);
+		free(members);
+		return type;
+	enum_invalid:
+		for (uint_objs i = 0; i < count; i++) tstring_free(members[i]);
+		free(members);
 		return nullptr;
 	}
 	if (*cursor == 'M') {
@@ -399,6 +451,42 @@ ttypeval *ttypeval_new_fields(const ttype_field *fields, uint_objs count)
 	return type;
 }
 
+ttypeval *ttypeval_new_enum(const tstring *const *members, uint_objs count)
+{
+	if (!members || count == 0)
+		twarn(ErrRuntime_ParamsCtr, "types::enum",
+		      "at least one String member is required");
+	ttypeval *type = ttype_new(ttype_kind_enum);
+	type->enum_members = (tstring **)calloc(count, sizeof(*type->enum_members));
+	if (!type->enum_members)
+		twarn(ErrRuntime_Other, "types::enum", "out of memory");
+	type->enum_member_count = count;
+	for (uint_objs i = 0; i < count; i++) {
+		if (!members[i])
+			twarn(ErrRuntime_ParamsType, "types::enum",
+			      "String member required");
+		for (uint_objs j = 0; j < i; j++)
+			if (tstring_eq(members[i], members[j]))
+				twarn(ErrRuntime_Other, "types::enum",
+				      "duplicate enum member");
+		type->enum_members[i] = tstring_dup(members[i]);
+	}
+	ttype_set_definition(type, "@base", ttypeval_builtin(tbuiltin_string));
+	tstring **sorted = (tstring **)calloc(count, sizeof(*sorted));
+	if (!sorted) abort();
+	for (uint_objs i = 0; i < count; i++) sorted[i] = type->enum_members[i];
+	qsort(sorted, count, sizeof(*sorted), ttype_compare_string_ptr);
+	tstring *canonical = tstring_new("E");
+	tstring_append_fmt(canonical, "%u:", (unsigned)count);
+	for (uint_objs i = 0; i < count; i++) {
+		tstring_append_fmt(canonical, "%zu:", tstring_len(sorted[i]));
+		tstring_append_ts(canonical, sorted[i]);
+	}
+	free(sorted);
+	ttype_finish_canonical(type, canonical);
+	return type;
+}
+
 static ttypeval *ttype_new_parameterized(ttype_kind kind,
 					 tbuiltin_id base,
 					 const char *first_name,
@@ -419,6 +507,14 @@ static ttypeval *ttype_new_parameterized(ttype_kind kind,
 	if (second)
 		ttype_append_canonical(canonical, second);
 	ttype_finish_canonical(type, canonical);
+	return type;
+}
+
+ttypeval *ttypeval_new_domain(int range, ttypeval *item)
+{
+	ttypeval *type = ttype_new_parameterized(range ? ttype_kind_range : ttype_kind_points,
+		range ? tbuiltin_range : tbuiltin_points, "@item", item, nullptr, nullptr, range ? "J" : "H");
+	type->contains_domain = 1;
 	return type;
 }
 
@@ -521,6 +617,103 @@ ttypeval *ttypeval_new_rule_instance(ttypeval *const *parameters,
 {
 	return ttype_new_rule_type(ttype_kind_rule_instance,
 		tbuiltin_rule_instance, "QI", parameters, parameter_count);
+}
+
+ttypeval *ttypeval_new_instance_reference(const char *name,
+	ttypeval *const *parameters, uint_objs count)
+{
+	ttypeval *type = ttype_new_rule_type(ttype_kind_instance_of,
+		tbuiltin_rule_instance, "QI", parameters, count);
+	tstring *canonical = tstring_new("N");
+	tstring_append_fmt(canonical, "%zu:", strlen(name));
+	tstring_append(canonical, name);
+	ttype_append_canonical(canonical, type);
+	tstring_free(type->canonical);
+	type->instance_reference = tstring_new(name);
+	tobj_set_nil(&type->instance_rule);
+	type->contains_instance = 1;
+	ttype_finish_canonical(type, canonical);
+	return type;
+}
+
+ttypeval *ttypeval_new_instance_of(const tobj *value)
+{
+	if (!value || value->type != tcompo || tobj_compo_type(value) != compo_trule)
+		twarn(ErrRuntime_ParamsType, "InstanceOf", "Rule value required");
+	trule *rule = (trule *)value->val.v_tcompo;
+	uint_objs count = rule->ir->parameters.len;
+	ttypeval **parameters = calloc(count + 1, sizeof(*parameters));
+	if (!parameters) abort();
+	for (uint_objs i = 0; i < count; i++)
+		parameters[i] = ((trule_term *)rule->ir->parameters.data[i].val.v_tcompo)->type;
+	ttypeval *type = ttype_new_rule_type(ttype_kind_instance_of,
+		tbuiltin_rule_instance, "QI", parameters, count);
+	free(parameters);
+	tobj_set_nil(&type->instance_rule);
+	tobj_copy(&type->instance_rule, value);
+	type->contains_instance = 1;
+	/* Process-local identity; never decoded as a portable Type definition. */
+	tstring *canonical = tstring_new_empty();
+	tstring_append_fmt(canonical, "OI%llu", (unsigned long long)rule->identity);
+	tstring_free(type->canonical);
+	ttype_finish_canonical(type, canonical);
+	return type;
+}
+
+ttypeval *ttypeval_resolve_instances(ttypeval *type, ttype_instance_resolver resolver, void *context)
+{
+	if (!type || !type->contains_instance) return ttypeval_retain(type);
+	if (type->kind == ttype_kind_instance_of) {
+		if (!type->instance_reference) return ttypeval_retain(type);
+		const tobj *value = resolver(context, tstring_cstr(type->instance_reference));
+		return value ? ttypeval_retain(ttypeval_new_instance_of(value)) : ttypeval_retain(type);
+	}
+	uint_objs count = type->kind == ttype_kind_fields ? ttypeval_field_count(type) :
+		type->kind == ttype_kind_union ? ttypeval_member_count(type) :
+		type->kind == ttype_kind_function ? ttypeval_function_parameter_count(type) + 1 :
+		type->kind == ttype_kind_rule || type->kind == ttype_kind_rule_instance ?
+		ttypeval_function_parameter_count(type) :
+		type->kind == ttype_kind_pair || type->kind == ttype_kind_dictionary ? 2 : 1;
+	ttypeval **children = calloc(count + 1, sizeof(*children));
+	ttype_field *fields = calloc(count + 1, sizeof(*fields));
+	if (!children || !fields) abort();
+	for (uint_objs i = 0; i < count; i++) {
+		ttypeval *child = nullptr;
+		if (type->kind == ttype_kind_fields) {
+			const tobj *name;
+			ttypeval_field_at(type, i, &name, &child);
+			fields[i].name = ((tstr *)name->val.v_tcompo)->data;
+			fields[i].optional = ttypeval_field_optional(type, tstring_cstr(fields[i].name));
+		} else if (type->kind == ttype_kind_union) child = ttypeval_member_at(type, i);
+		else if (type->kind == ttype_kind_function || type->kind == ttype_kind_rule ||
+		    type->kind == ttype_kind_rule_instance)
+			child = type->kind == ttype_kind_function && i + 1 == count ?
+				ttypeval_function_result(type) : ttypeval_function_parameter_at(type, i);
+		else child = ttypeval_parameter(type,
+			type->kind == ttype_kind_pair ? (i ? "second" : "first") :
+			type->kind == ttype_kind_dictionary ? (i ? "value" : "key") : "item");
+		children[i] = ttypeval_resolve_instances(child, resolver, context);
+		fields[i].type = children[i];
+	}
+	ttypeval *result = nullptr;
+	switch (type->kind) {
+	case ttype_kind_fields: result = ttypeval_new_fields(fields, count); break;
+	case ttype_kind_union: result = ttypeval_new_union(children, count); break;
+	case ttype_kind_function: result = ttypeval_new_function(children, count - 1, children[count - 1], type->function_variadic); break;
+	case ttype_kind_rule: result = ttypeval_new_rule(children, count); break;
+	case ttype_kind_rule_instance: result = ttypeval_new_rule_instance(children, count); break;
+	case ttype_kind_points: result = ttypeval_new_domain(0, children[0]); break;
+	case ttype_kind_range: result = ttypeval_new_domain(1, children[0]); break;
+	case ttype_kind_list: result = ttypeval_new_list(children[0]); break;
+	case ttype_kind_iterator: result = ttypeval_new_iterator(children[0]); break;
+	case ttype_kind_pair: result = ttypeval_new_pair(children[0], children[1]); break;
+	case ttype_kind_dictionary: result = ttypeval_new_dictionary(children[0], children[1]); break;
+	default: twarn(ErrRuntime_ParamsType, "InstanceOf", "unsupported enclosing Type");
+	}
+	ttypeval_retain(result);
+	for (uint_objs i = 0; i < count; i++) ttypeval_release(children[i]);
+	free(fields); free(children);
+	return result;
 }
 
 static int ttype_compare_member(const void *left, const void *right)
@@ -664,6 +857,9 @@ static int ttype_equal_graph(const ttypeval *left, const ttypeval *right,
 	right = ttype_unwrap(right);
 	if (left == right) return 1;
 	if (!left || !right || left->kind != right->kind) return 0;
+	if (left->kind == ttype_kind_instance_of)
+		return strcmp(tstring_cstr(left->canonical),
+			      tstring_cstr(right->canonical)) == 0;
 	if (left->kind == ttype_kind_any || left->kind == ttype_kind_builtin)
 		return left->builtin == right->builtin;
 	if (left->kind == ttype_kind_function &&
@@ -798,17 +994,40 @@ ttypeval *ttypeval_member_at(const ttypeval *type, uint_objs index)
 	return ttype_definition_get_type(type, key);
 }
 
+uint_objs ttypeval_enum_member_count(const ttypeval *type)
+{
+	type = ttype_unwrap(type);
+	return type && type->kind == ttype_kind_enum ? type->enum_member_count : 0;
+}
+
+const tstring *ttypeval_enum_member_at(const ttypeval *type, uint_objs index)
+{
+	type = ttype_unwrap(type);
+	return type && type->kind == ttype_kind_enum &&
+	       index < type->enum_member_count ? type->enum_members[index] : nullptr;
+}
+
+int ttypeval_enum_contains(const ttypeval *type, const tstring *member)
+{
+	if (!member) return 0;
+	for (uint_objs i = 0; i < ttypeval_enum_member_count(type); i++)
+		if (tstring_eq(ttypeval_enum_member_at(type, i), member)) return 1;
+	return 0;
+}
+
 ttypeval *ttypeval_base(const ttypeval *type)
 {
 	type = ttype_unwrap(type);
 	if (!type)
 		return nullptr;
-	if (type->kind != ttype_kind_list && type->kind != ttype_kind_iterator &&
+	if (type->kind != ttype_kind_points && type->kind != ttype_kind_range && type->kind != ttype_kind_list && type->kind != ttype_kind_iterator &&
 	    type->kind != ttype_kind_pair &&
 	    type->kind != ttype_kind_dictionary &&
 	    type->kind != ttype_kind_function &&
 	    type->kind != ttype_kind_rule &&
-	    type->kind != ttype_kind_rule_instance)
+	    type->kind != ttype_kind_rule_instance &&
+	    type->kind != ttype_kind_instance_of &&
+	    type->kind != ttype_kind_enum)
 		return (ttypeval *)type;
 	return ttype_definition_get_type(type, "@base");
 }
@@ -828,7 +1047,7 @@ uint_objs ttypeval_function_parameter_count(const ttypeval *type)
 	type = ttype_unwrap(type);
 	return type && (type->kind == ttype_kind_function ||
 		type->kind == ttype_kind_rule ||
-		type->kind == ttype_kind_rule_instance) ?
+		type->kind == ttype_kind_rule_instance || type->kind == ttype_kind_instance_of) ?
 		type->function_parameter_count : 0;
 }
 
@@ -838,7 +1057,7 @@ ttypeval *ttypeval_function_parameter_at(const ttypeval *type,
 	type = ttype_unwrap(type);
 	if (!type || (type->kind != ttype_kind_function &&
 	    type->kind != ttype_kind_rule &&
-	    type->kind != ttype_kind_rule_instance) ||
+	    type->kind != ttype_kind_rule_instance && type->kind != ttype_kind_instance_of) ||
 	    index >= type->function_parameter_count)
 		return nullptr;
 	char key[32];
@@ -872,10 +1091,18 @@ void ttypeval_idx(ttypeval *type, const tobj *params, uint_regs np,
 	type = (ttypeval *)ttype_unwrap(type);
 	if (np != 1)
 		twarn(ErrRuntime_ParamsCtr, "Type index", "one key is required");
-	if (!type || type->kind != ttype_kind_fields ||
+	if (!type || (type->kind != ttype_kind_fields &&
+	    type->kind != ttype_kind_enum) ||
 	    params[0].type != tcompo ||
 	    tobj_compo_type(&params[0]) != compo_tstr)
-		twarn(ErrRuntime_ParamsType, "Type index", "String field required");
+		twarn(ErrRuntime_ParamsType, "Type index", "String member required");
+	if (type->kind == ttype_kind_enum) {
+		const tstring *member = ((const tstr *)params[0].val.v_tcompo)->data;
+		if (!ttypeval_enum_contains(type, member))
+			twarn(ErrRuntime_ObjUnfound, "Type index", "unknown enum member");
+		tobj_set_compo(result, (tcompo_v *)tstr_new(tstring_cstr(member)));
+		return;
+	}
 	const tobj *value = thashtbl_get(type->definition, &params[0]);
 	if (!value)
 		twarn(ErrRuntime_ObjUnfound, "Type index", "unknown field");
@@ -886,8 +1113,18 @@ void ttypeval_idx(ttypeval *type, const tobj *params, uint_regs np,
 
 static int ttypeval_next_key(const ttypeval *type, long *position, tobj *result)
 {
-	if (!type || type->kind != ttype_kind_fields || !position || *position < 0)
+	if (!type || !position || *position < 0)
 		return 0;
+	if (type->kind == ttype_kind_enum) {
+		const tstring *member = ttypeval_enum_member_at(type,
+			(uint_objs)*position);
+		if (!member) return 0;
+		tobj_set_compo(result, (tcompo_v *)tstr_new(tstring_cstr(member)));
+		result->val.v_tcompo->refctr++;
+		(*position)++;
+		return 1;
+	}
+	if (type->kind != ttype_kind_fields) return 0;
 	const tobj *key = nullptr;
 	if (!ttypeval_field_at(type, (uint_objs)*position, &key, nullptr))
 		return 0;
@@ -930,6 +1167,8 @@ static int tbuiltin_matches(const tobj *value, tbuiltin_id builtin)
 		return code == compo_tdict;
 	case tbuiltin_iterator:
 		return code == compo_titer;
+	case tbuiltin_points: return code == compo_tpoints;
+	case tbuiltin_range: return code == compo_trange;
 	case tbuiltin_function:
 		return code == compo_tfunc || code == compo_cppfunc ||
 		       code == compo_sessfunc;
@@ -1065,6 +1304,12 @@ static int ttype_matches_internal(const tobj *value,
 	}
 	if (expected->kind == ttype_kind_any)
 		return 1;
+	if (expected->kind == ttype_kind_instance_of) {
+		return !expected->instance_reference &&
+			tbuiltin_matches(value, tbuiltin_rule_instance) &&
+			((trule_instance *)value->val.v_tcompo)->rule.val.v_tcompo ==
+				expected->instance_rule.val.v_tcompo;
+	}
 	if (expected->kind == ttype_kind_builtin)
 		return tbuiltin_matches(value, expected->builtin);
 	if (expected->kind == ttype_kind_function)
@@ -1112,9 +1357,19 @@ static int ttype_matches_internal(const tobj *value,
 		}
 		return 0;
 	}
+	if (expected->kind == ttype_kind_enum) {
+		return value && value->type == tcompo && value->val.v_tcompo &&
+		       tobj_compo_type(value) == compo_tstr &&
+		       ttypeval_enum_contains(expected,
+			((const tstr *)value->val.v_tcompo)->data);
+	}
 	if (!value || value->type != tcompo || !value->val.v_tcompo)
 		return 0;
 
+	if (expected->kind == ttype_kind_points || expected->kind == ttype_kind_range) {
+		if (tobj_compo_type(value) != (expected->kind == ttype_kind_range ? compo_trange : compo_tpoints)) return 0;
+		return ttypeval_equal(((tdomain *)value->val.v_tcompo)->item_type, ttypeval_parameter(expected, "item"));
+	}
 	if (expected->kind == ttype_kind_list) {
 		if (tobj_compo_type(value) != compo_tlist)
 			return 0;
@@ -1196,7 +1451,9 @@ static tcompo_type ttypeval_get_code(void)
 
 static long ttypeval_len(void *self)
 {
-	return (long)ttypeval_field_count((ttypeval *)self);
+	ttypeval *type = (ttypeval *)self;
+	return (long)(type->kind == ttype_kind_enum ?
+		type->enum_member_count : ttypeval_field_count(type));
 }
 
 static void *ttypeval_copy(void *self)
@@ -1214,6 +1471,21 @@ static void *ttypeval_copy(void *self)
 	copy->canonical_hash = source->canonical_hash;
 	copy->function_parameter_count = source->function_parameter_count;
 	copy->function_variadic = source->function_variadic;
+	copy->contains_instance = source->contains_instance;
+	copy->contains_domain = source->contains_domain;
+	if (source->kind == ttype_kind_instance_of) {
+		tobj_set_nil(&copy->instance_rule);
+		tobj_copy(&copy->instance_rule, &source->instance_rule);
+		if (source->instance_reference) copy->instance_reference = tstring_dup(source->instance_reference);
+	}
+	if (source->enum_member_count) {
+		copy->enum_members = (tstring **)calloc(source->enum_member_count,
+			sizeof(*copy->enum_members));
+		if (!copy->enum_members) abort();
+		copy->enum_member_count = source->enum_member_count;
+		for (uint_objs i = 0; i < source->enum_member_count; i++)
+			copy->enum_members[i] = tstring_dup(source->enum_members[i]);
+	}
 	if (source->optional_field_count) {
 		copy->optional_fields = (tstring **)calloc(
 			source->optional_field_count, sizeof(*copy->optional_fields));
@@ -1228,11 +1500,16 @@ static void *ttypeval_copy(void *self)
 static void ttypeval_free(void *self)
 {
 	ttypeval *type = (ttypeval *)self;
+	if (type->kind == ttype_kind_instance_of) tobj_try_clear(&type->instance_rule);
+	tstring_free(type->instance_reference);
 	thashtbl_free(type->definition);
 	tstring_free(type->canonical);
 	for (uint_objs i = 0; i < type->optional_field_count; i++)
 		tstring_free(type->optional_fields[i]);
 	free(type->optional_fields);
+	for (uint_objs i = 0; i < type->enum_member_count; i++)
+		tstring_free(type->enum_members[i]);
+	free(type->enum_members);
 	free(type);
 }
 

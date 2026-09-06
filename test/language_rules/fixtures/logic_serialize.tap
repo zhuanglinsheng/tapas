@@ -1,0 +1,4 @@
+let p = rules::parameter('p', types::RuleInstance)
+let q = rules::parameter('q', types::RuleInstance)
+let R = rules::make('PortableLogic', [p, q], [rules::condition(rules::disjunction(p, q))])
+print(rules::serialize(R))

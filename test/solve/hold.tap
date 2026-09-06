@@ -1,0 +1,127 @@
+let R = rule(x: Int, y: Int) {
+    x in rules::range(0, 10)
+    y in rules::range(0, 10)
+    x + y == 12
+}
+let S = rules::restrict(R, 'x': 4)
+let sat = solve::hold(S)
+assert(rule { sat::status == 'sat'; sat::scope == 'configured'; types::matches(sat, solve::HoldResult) })
+assert(sat::witness)
+assert(rule { rules::inspect(sat::witness) == rules::inspect(S); arguments(sat::witness)[0] == 4; arguments(sat::witness)[1] == 8 })
+let TrueOrFalse = rule(a: Bool, b: Bool) { a or b; not (a and b) }
+let boolean = solve::hold(TrueOrFalse)
+assert(rule { boolean::status == 'sat'; boolean::scope == 'configured' })
+assert(boolean::witness)
+let Contradiction = rule(b: Bool) { b; not b }
+assert(rule { solve::hold(Contradiction)::status == 'unsat' })
+let ImpossibleImplication = rule(a: Bool, b: Bool) { a implies b; a; not b }
+assert(rule { solve::hold(ImpossibleImplication)::status == 'unsat' })
+let Small = rule(x: Int) { x >= 2; x <= 4 }
+let Outside = rule(x: Int) { not Small(x); x == 7 }
+let outside = solve::hold(Outside)
+assert(rule { outside::status == 'sat'; arguments(outside::witness)[0] == 7 })
+assert(outside::witness)
+let C = types::enum('红色', '蓝色', '绿色')
+let Colors = rule(color: C) { color in rules::points(C, '蓝色', '绿色'); color != '绿色' }
+let color = solve::hold(Colors)
+assert(rule { color::status == 'sat'; color::scope == 'configured'; arguments(color::witness)[0] == '蓝色' })
+let bound = Small(3)
+let fixed = solve::hold(bound)
+assert(rule { fixed::status == 'sat'; fixed::scope == 'configured'; identical(bound, fixed::witness) })
+assert(rule { solve::hold(Small(8))::status == 'unsat' })
+var minimum = 3
+let Captured = rule(x: Int) { x >= minimum; x == 4 }
+assert(rule { solve::hold(Captured)::status == 'sat' })
+minimum = 8
+let unknown = solve::hold(Captured)
+assert(rule { unknown::status == 'unsat'; unknown::scope == 'configured'; unknown::integer_max == 1000000000000 })
+let Beyond = rule(x: Int) { x == 1000000000001 }
+assert(rule { solve::hold(Beyond)::status == 'unsat'; solve::hold(Beyond(1000000000001))::status == 'unsat' })
+let Local = rule(x: Int) { let y = x + 1; y == 4 }
+let local = solve::hold(Local)
+assert(rule { local::status == 'sat'; arguments(local::witness)[0] == 3 })
+var calls = [0]
+function effect() -> Int { calls[0] = calls[0] + 1; return 1 }
+let Unused = rule { let ignored = effect(); true }
+let Opaque = rule { effect() == 1 }
+assert(rule { solve::hold(Unused)::status == 'unsupported'; solve::hold(Opaque)::status == 'unsupported'; calls[0] == 0 })
+let Skipped = rule { true or effect() == 1 }
+assert(rule { solve::hold(Skipped)::status == 'sat'; calls[0] == 0 })
+let p = rules::parameter('p', types::Int)
+let dynamic = rules::make('dynamic', [p], [rules::condition(p >= rules::constant(2))])
+let trial = rules::restrict(dynamic, 'p': rules::points(types::Int, 1, 3))
+let dynamic_result = solve::hold(trial)
+assert(rule { dynamic_result::status == 'sat'; arguments(dynamic_result::witness)[0] == 3 })
+assert(dynamic_result::witness)
+// Rule transformations are compiled directly by the same solve pipeline.
+let BelowSmall = rules::violate(Small, 0)
+let below_small = solve::hold(BelowSmall)
+assert(rule {
+    below_small::status == 'sat'
+    arguments(below_small::witness)[0] < 2
+    arguments(below_small::witness)[0] <= 4
+})
+let WithoutUpper = rules::drop(Small, 1)
+let without_upper = solve::hold(rules::restrict(WithoutUpper, 'x': 8))
+assert(rule { without_upper::status == 'sat' })
+let NegativeForConditionalTransform = rule(x: Int) { x < 0 }
+let GreaterThanFour = rule(x: Int) { x > 4 }
+let DropUpperAboveFour = rules::drop_if(
+    Small, 1, GreaterThanFour,
+)
+assert(rule {
+    solve::hold(rules::restrict(DropUpperAboveFour, 'x': -1))::status == 'unsat'
+    solve::hold(rules::restrict(DropUpperAboveFour, 'x': 4))::status == 'sat'
+    solve::hold(rules::restrict(DropUpperAboveFour, 'x': 8))::status == 'sat'
+})
+let ViolateLowerWhenNegative = rules::violate_if(
+    Small, 0, NegativeForConditionalTransform,
+)
+assert(rule {
+    solve::hold(rules::restrict(ViolateLowerWhenNegative, 'x': -1))::status == 'sat'
+    solve::hold(rules::restrict(ViolateLowerWhenNegative, 'x': 2))::status == 'sat'
+    solve::hold(rules::restrict(ViolateLowerWhenNegative, 'x': 0))::status == 'unsat'
+})
+let PositiveForTransform = rule(x: Int) { x > 0 }
+let RequiresPositiveForTransform = rule(x: Int) {
+    PositiveForTransform(x)
+}
+let violates_requirement = solve::hold(
+    rules::violate(RequiresPositiveForTransform, 0),
+)
+assert(rule {
+    violates_requirement::status == 'sat'
+    arguments(violates_requirement::witness)[0] <= 0
+})
+let ConditionalForTransform = rule(x: Int) {
+    (x >= 0) implies x <= 2
+}
+let violates_implication = solve::hold(
+    rules::violate(ConditionalForTransform, 0),
+)
+assert(rule {
+    violates_implication::status == 'sat'
+    arguments(violates_implication::witness)[0] > 2
+})
+var Rec: Rule[Bool]
+Rec = rule(b: Bool) { Rec(b) }
+assert(rule { solve::hold(Rec)::status == 'unsupported' })
+let Branch = rule(x: Int) { x == -7 or x == 1000000000001 }
+let branch = solve::hold(Branch)
+assert(rule { branch::status == 'sat'; branch::scope == 'configured' })
+assert(branch::witness)
+let Guarded = rule(x: Int, b: Bool) { b implies x in rules::range(0, 3); not b; x == 8 }
+assert(rule { solve::hold(Guarded)::status == 'sat'; solve::hold(Guarded)::scope == 'configured' })
+let Transitive = rule(x: Int, y: Int) { y in rules::range(3, 8); 2 * x + y == 12 }
+let transitive = solve::hold(Transitive)
+assert(rule { transitive::status == 'sat'; transitive::scope == 'configured' })
+assert(transitive::witness)
+let Unbounded = rule(x: Int) { x != 0 }
+assert(rule { solve::hold(Unbounded)::status == 'sat'; solve::hold(Unbounded)::scope == 'configured' })
+print('solve hold: ok')
+
+// A declared result Type preserves field information and the dynamic witness path.
+let typed_result: solve::HoldResult = solve::hold(S)
+let typed_reason: String = typed_result::reason
+let typed_conflicts: List = typed_result::conflicts
+assert(typed_result::witness)

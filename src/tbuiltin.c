@@ -12,7 +12,7 @@ const char *tbuiltin_name(tbuiltin_id type)
 		"Iterable", "Rule", "RuleInstance", "RuleIR", "Parameter",
 		"Capture", "Item", "Condition", "Requirement", "Term",
 		"Origin", "CheckResult", "Violation", "RuleDiagnostic",
-		"Evaluator", "Context", "Result", "EvaluatorDiagnostic"
+		"Evaluator", "Context", "Result", "EvaluatorDiagnostic", "PointsOf", "RangeOf"
 	};
 	return type >= 0 && type < tbuiltin_count ? names[type] : nullptr;
 }

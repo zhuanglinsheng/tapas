@@ -1,0 +1,50 @@
+var calls = [0]
+function observed(value: Int) -> Bool
+{
+    calls[0] = calls[0] + 1
+    return value > 0
+}
+let Contract = rule (amount: Int, label: String) { observed(amount) }
+let instance = Contract(-1, '未执行')
+let declarations = parameters(Contract)
+let instance_declarations = parameters(instance)
+let ir_declarations = parameters(rules::inspect(Contract))
+let bound_values = arguments(instance)
+assert(rule {
+    calls[0] == 0
+    len(declarations) == 2
+    declarations[0][0] == 'amount'
+    declarations[1][0] == 'label'
+    types::matches(1, declarations[0][1])
+    types::matches('文字', declarations[1][1])
+    instance_declarations[0][0] == 'amount'
+    ir_declarations[1][0] == 'label'
+    bound_values[0] == -1
+    bound_values[1] == '未执行'
+})
+// 返回容器独立；修改它不替换实例的绑定。
+bound_values[0] = 100
+let removed_declaration = declarations.pop_back()
+assert(rule {
+    arguments(instance)[0] == -1
+    parameters(Contract)[0][0] == 'amount'
+    len(parameters(Contract)) == 2
+})
+// 元素保持普通引用语义，不承诺深快照。
+let Payload = types::make_type('count': types::Int)
+let WithPayload = rule (payload: Payload) { payload::count >= 0 }
+let payload = {'count': 1}
+let bound = WithPayload(payload)
+let extracted = arguments(bound)[0]
+extracted['count'] = 2
+assert(rule { arguments(bound)[0]::count == 2 })
+let Empty = rule { true }
+assert(rule {
+    len(parameters(Empty)) == 0
+    len(arguments(Empty())) == 0
+})
+let dynamic = rules::make('Dynamic', [rules::parameter('x', types::Int)], [])
+assert(rule {
+    parameters(dynamic)[0][0] == 'x'
+    arguments(dynamic(7))[0] == 7
+})

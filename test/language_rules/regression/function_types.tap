@@ -28,3 +28,23 @@ function keep_formatter(
 let formatter: Function[Int] -> String = keep_formatter(stringify)
 print(apply_number(accepts_any, 3))
 print(formatter(1))
+
+// Full template with an explicit empty Value section; equivalent to short forms.
+let template_values: List[Int;] = [1, 2]
+function template_identity(value: Int) -> Int
+{
+    return value
+}
+function template_apply(
+        callback: Function[Int;] -> Int,
+        values: List[Int;],
+) -> List[Int;] {
+    return [callback(values[0])]
+}
+let template_rule = rule (values: List[Int;]) { len(values) > 0 }
+let template_instance: RuleInstance[List[Int;];] = template_rule(template_values)
+let template_result = template_apply(template_identity, template_values)
+assert(template_instance)
+assert(rule {
+    template_result[0] == 1
+})

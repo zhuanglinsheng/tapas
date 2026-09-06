@@ -88,8 +88,10 @@ static void connect(tcontrol_flow *flow, const tast_arena *arena,
 		connect(flow, arena, child, node->rule_condition.value,
 			tcontrol_child_condition, nested);
 		break;
-	case tast_rule_requirement:
-		connect(flow, arena, child, node->expression_statement.value,
+	case tast_rule_implication:
+		connect(flow, arena, child, node->rule_implication.antecedent,
+			tcontrol_child_condition, nested);
+		connect(flow, arena, child, node->rule_implication.consequent,
 			tcontrol_child_expression, nested);
 		break;
 	case tast_expression_statement:

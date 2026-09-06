@@ -1,0 +1,4 @@
+let First = rule (value: Int) { value > 0 }
+function accept(action: RuleInstance) -> InstanceOf[First] { return action }
+let Second = rule (value: Int) { value > 0 }
+accept(Second(1))

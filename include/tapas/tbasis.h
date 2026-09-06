@@ -183,6 +183,14 @@ typedef enum {
 	OP_NEG,
 	OP_BAND,
 	OP_BOR,
+	OP_FUNCMETA,
+	OP_BINDTYPE,
+	OP_CHECKTYPE,
+	OP_RULETYPE,
+	OP_RULENOT,
+	OP_RULETRUTH,
+	OP_RULEITEM,
+	OP_RULEVALUE,
 	OP_COUNT
 } tins;
 
@@ -225,7 +233,9 @@ typedef enum {
 	compo_tevaluator = 17,
 	compo_trule_ir = 18,
 	compo_trule_term = 19,
-	compo_trule_item = 20
+	compo_trule_item = 20,
+	compo_tpoints = 21,
+	compo_trange = 22
 } tcompo_type;
 
 

@@ -1,0 +1,8 @@
+let First = rule (value: Int) {
+    value >= 0
+}
+let Second = rule (value: Int) {
+    value <= 10
+}
+
+rules::drop(First, rules::items(Second)[0])

@@ -434,8 +434,9 @@ static tast_id parse_primary(tparser *parser)
 	case tsyntax_float: kind = tast_float; break;
 	case tsyntax_string: kind = tast_string; break;
 	case tsyntax_plus:
-	case tsyntax_minus: {
-		tast_id operand = parse_bp(parser, 25);
+	case tsyntax_minus:
+	case tsyntax_kw_not: {
+		tast_id operand = parse_bp(parser, token->kind == tsyntax_kw_not ? 4 : 25);
 		const tast_node *operand_node = tast_get(parser->arena, operand);
 		return tast_arena_add(parser->arena, (tast_node){
 			.kind = tast_unary,
@@ -529,6 +530,12 @@ static tast_id parse_bp(tparser *parser, uint8_t minimum)
 		parser->recursion_depth--;
 		return error_node(parser, peek(parser)->span,
 				  "expression nesting limit exceeded");
+	}
+	if (minimum > 4 && peek(parser)->kind == tsyntax_kw_not) {
+		const tsyntax_token *token = advance(parser);
+		parser->recursion_depth--;
+		return error_node(parser, token->span,
+				  "not requires parentheses in this operand");
 	}
 	tast_id left = parse_postfix(parser, parse_primary(parser));
 	int saw_non_associative = 0;
@@ -727,16 +734,6 @@ static tast_id parse_rule_item_range(tparser *parser,
 		    !declaration->declaration_statement.has_initializer)
 			tdiagnostics_add(parser->diagnostics, tdiagnostic_error,
 				 first->span, "rule let requires an initializer");
-	} else if (first->kind == tsyntax_kw_require) {
-		advance(&nested);
-		tast_id value = parse_bp(&nested, 0);
-		const tast_node *expression = tast_get(parser->arena, value);
-		item = tast_arena_add(parser->arena, (tast_node){
-			.kind = tast_rule_requirement,
-			.span = { first->span.start,
-				expression ? expression->span.end : first->span.end },
-			.expression_statement = { value }
-		});
 	} else {
 		tsource_span description = { first->span.start, first->span.start };
 		int described = first->kind == tsyntax_string &&
@@ -749,12 +746,36 @@ static tast_id parse_rule_item_range(tparser *parser,
 		tast_id value = described && peek(&nested)->kind == tsyntax_lbrace ?
 			parse_block(&nested) : parse_bp(&nested, 0);
 		const tast_node *expression = tast_get(parser->arena, value);
+		if (consume(&nested, tsyntax_kw_implies, nullptr)) {
+			tast_id consequent = peek(&nested)->kind == tsyntax_lbrace ?
+				parse_block(&nested) : parse_bp(&nested, 0);
+			const tast_node *body = tast_get(parser->arena, consequent);
+			if (body && body->kind == tast_block) {
+				if (!body->aggregate.count)
+					tdiagnostics_add(parser->diagnostics, tdiagnostic_error,
+						body->span, "implies requires at least one consequent");
+				const tast_id *children = tast_get_children(parser->arena,
+					body->aggregate.children, body->aggregate.count);
+				for (uint32_t i = 0; i < body->aggregate.count; i++) {
+					const tast_node *child = tast_get(parser->arena, children[i]);
+					if (!child || child->kind != tast_expression_statement)
+						tdiagnostics_add(parser->diagnostics, tdiagnostic_error,
+							body->span, "implies block only accepts Bool expressions");
+				}
+			}
+			item = tast_arena_add(parser->arena, (tast_node){
+				.kind = tast_rule_implication,
+				.span = { first->span.start, body ? body->span.end : first->span.end },
+				.rule_implication = { value, consequent, description, described }
+			});
+		} else {
 		item = tast_arena_add(parser->arena, (tast_node){
 			.kind = tast_rule_condition,
 			.span = { first->span.start,
 				expression ? expression->span.end : first->span.end },
 			.rule_condition = { value, description, described }
 		});
+		}
 	}
 	if (peek(&nested)->kind != tsyntax_eof)
 		tdiagnostics_add(parser->diagnostics, tdiagnostic_error,

@@ -1,0 +1,58 @@
+let OrderStatus = types::enum(
+    'Pending',
+    'Shipped',
+    'Delivered',
+    'Cancelled',
+)
+
+let SameStatus = types::enum(
+    'Cancelled',
+    'Delivered',
+    'Shipped',
+    'Pending',
+)
+let DeliveredOnly = types::enum('Delivered')
+
+let status: OrderStatus = 'Delivered'
+let scoped: OrderStatus = OrderStatus['Pending']
+let widened: String = status
+let widened_enum: OrderStatus = DeliveredOnly['Delivered']
+
+print(status)
+print(scoped)
+print(widened)
+print(widened_enum)
+print(OrderStatus == SameStatus)
+print(types::matches('Shipped', OrderStatus))
+print(types::matches('Unknown', OrderStatus))
+print(types::base(OrderStatus) == types::String)
+print(len(OrderStatus))
+pprint(types::members(OrderStatus))
+
+for (let member in OrderStatus) {
+    print(member)
+}
+
+function accept_status(value: OrderStatus) -> OrderStatus
+{
+    return value
+}
+
+print(accept_status('Cancelled'))
+
+let dynamic_name: String = 'Shipped'
+print(OrderStatus[dynamic_name])
+if (types::matches(dynamic_name, OrderStatus)) {
+    let checked: OrderStatus = dynamic_name
+    print(checked)
+}
+
+let statuses: List[OrderStatus] = ['Pending', OrderStatus['Delivered']]
+pprint(statuses)
+
+let HasStatus = rule (value: OrderStatus) {
+    "status is not delivered": value == 'Delivered'
+}
+print(rules::check(HasStatus('Delivered'))['passed'])
+let RestoredHasStatus = rules::deserialize(rules::serialize(HasStatus))
+print(rules::check(RestoredHasStatus('Delivered'))['passed'])

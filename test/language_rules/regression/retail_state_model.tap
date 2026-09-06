@@ -1,0 +1,231 @@
+import ../../../examples/retail/simulation.tap as simulation
+import ../fixtures/retail_runner.tap as runner
+var model = runner::model
+
+var invocations = [0]
+function counted(state, parameters)
+{
+    invocations[0] = invocations[0] + 1
+    return simulation::exchange(state, parameters)
+}
+function invalid_capacity(state, parameters)
+{
+    let result = simulation::exchange(state, parameters)
+    let after = result['after']
+    after['payment_capacity'] = -1
+    return { 'output': result['output'], 'after': after }
+}
+function invalid_type(state, parameters)
+{
+    let result = simulation::exchange(state, parameters)
+    let after = result['after']
+    after['status'] = '不存在的状态'
+    return { 'output': result['output'], 'after': after }
+}
+function broken_frame(state, parameters)
+{
+    let result = simulation::exchange(state, parameters)
+    let after = result['after']
+    after['user_id'] = '其他用户'
+    return { 'output': result['output'], 'after': after }
+}
+
+// 测试入口允许错误实现返回不满足输出与后状态结构的数据。
+function invalid_output(state, parameters)
+{
+    return {
+        'output': { 'decision': '未知结果', 'charged_difference': '错误金额' },
+        'after': state.copy(),
+    }
+}
+
+function wrongly_reject(state, parameters)
+{
+    return {
+        'output': { 'decision': '拒绝', 'charged_difference': 0 },
+        'after': state.copy(),
+    }
+}
+
+function rejection_changes_state(state, parameters)
+{
+    let after = state.copy()
+    after['status'] = '已取消'
+    return {
+        'output': { 'decision': '拒绝', 'charged_difference': 0 },
+        'after': after,
+    }
+}
+
+function mutates_inputs(state, parameters)
+{
+    let result = simulation::exchange(state, parameters)
+    state['user_id'] = '实现改写的用户'
+    parameters['target_item_id'] = '实现改写的参数'
+    return { 'output': result['output'], 'after': result['after'] }
+}
+
+// 检查触发统计，不依赖契约中蕴含项的排列顺序。
+function triggered_count(record) -> Int
+{
+    var count = 0
+    for (let event in record['implications']) {
+        // 只统计转移规则的行为分支，状态不变量中的蕴含不算行为分支。
+        let owner = rules::semantic_hash(rules::inspect(event['instance']))
+        if (owner == rules::semantic_hash(model::ExchangeTransition) and event['triggered']) {
+            count = count + 1
+        }
+    }
+    return count
+}
+
+let target = 'keyboard-clicky-plain'
+let initial = simulation::initial_state(target)
+let action = model::Exchange(simulation::exchange_parameters(target))
+let good = runner::run(initial, action, counted)
+let unavailable = 'keyboard-clicky-rgb'
+let denied_action = model::Exchange(simulation::exchange_parameters(unavailable))
+let denied = runner::run(simulation::initial_state(unavailable), denied_action, counted)
+let bad_state = runner::run(initial, action, invalid_capacity)
+let bad_type = runner::run(initial, action, invalid_type)
+let bad_output = runner::run(initial, action, invalid_output)
+let bad_frame = runner::run(initial, action, broken_frame)
+let after_is_initial = rules::check(model::InitialState(good['after']))
+let continued = runner::step(good['after'], action, counted)
+let refused_valid = runner::run(initial, action, wrongly_reject)
+let changed_rejection = runner::run(simulation::initial_state(unavailable),
+    denied_action, rejection_changes_state)
+let isolated = runner::run(initial, action, mutates_inputs)
+// 不经过执行器，也能直接检查模型的一步结果。
+let checked_good = rules::check(model::ExchangeModel(
+    good::before, good::parameters, good::output, good::after,
+))
+let checked_bad_state = rules::check(model::ExchangeModel(
+    bad_state::before, bad_state::parameters, bad_state::output, bad_state::after,
+))
+let checked_bad_frame = rules::check(model::ExchangeModel(
+    bad_frame::before, bad_frame::parameters, bad_frame::output, bad_frame::after,
+))
+
+assert(rule {
+    '模型可独立检查同一组转移值': {
+        checked_good::passed
+        checked_bad_state::passed == false
+        checked_bad_frame::passed == false
+        len(checked_bad_state::violations) == len(bad_state::violations)
+    }
+    '实现不能改写操作绑定与记录的输入': {
+        isolated::passed
+        isolated::before::user_id == initial::user_id
+        isolated::parameters::target_item_id == target
+        arguments(action)[0]::target_item_id == target
+    }
+    '成功、拒绝与后续步骤都必须实际调用实现': invocations[0] == 3
+    good['passed']
+    good['verdict'] == '满足契约'
+    denied['passed']
+    denied['output']['decision'] == '拒绝'
+    '运行不能改写起点和前状态': {
+        initial['payment_capacity'] == 100
+        initial['item_id'] == 'keyboard-linear-rgb'
+        good['before']['payment_capacity'] == 100
+    }
+    '合法后状态不必是初始状态': after_is_initial['passed'] == false
+    '合法请求被错误拒绝必须失败': refused_valid['verdict'] == '违反契约'
+    '拒绝时改变状态必须失败': changed_rejection['verdict'] == '违反契约'
+    '后续步骤从合法后状态继续并正确拒绝重复换货': {
+        continued['passed']
+        continued['output']['decision'] == '拒绝'
+        continued['before']['status'] == '换货申请'
+        continued['after']['payment_capacity'] == good['after']['payment_capacity']
+    }
+    '每次转移恰好触发一个行为分支': {
+        triggered_count(good) == 1
+        triggered_count(denied) == 1
+        triggered_count(continued) == 1
+    }
+    '非法状态仍保留证据': {
+        bad_state['passed'] == false
+        bad_state['verdict'] == '违反契约'
+        bad_state['well_typed']
+        bad_state['after']['payment_capacity'] == -1
+        len(bad_state['violations']) > 0
+    }
+    '类型错误不能当成拒绝或通过': {
+        bad_type['passed'] == false
+        bad_type['well_typed'] == false
+        bad_type['verdict'] == '类型错误'
+        bad_type['after']['status'] == '不存在的状态'
+    }
+    '错误输出仍由测试边界保留并判定': {
+        bad_output::passed == false
+        bad_output::well_typed == false
+        bad_output::verdict == '类型错误'
+        bad_output::output::charged_difference == '错误金额'
+        len(bad_output::violations) == 0
+    }
+    '通用 frame 约束必须执行': {
+        bad_frame['passed'] == false
+        len(bad_frame['violations']) > 0
+    }
+})
+
+// 任意正常返回都应成为记录，不能在读取缺失字段时中断诊断。
+function missing_output(state, parameters)
+{
+    return { 'after': state.copy() }
+}
+function missing_after(state, parameters)
+{
+    return { 'output': { 'decision': '成功', 'charged_difference': 100 } }
+}
+function scalar_result(state, parameters)
+{
+    return 42
+}
+let no_output = runner::run(initial, action, missing_output)
+let no_after = runner::run(initial, action, missing_after)
+let scalar = runner::run(initial, action, scalar_result)
+assert(rule {
+    '缺字段返回保留为类型错误': {
+        not no_output::well_typed
+        not no_output::passed
+        no_output::verdict == '类型错误'
+        len(no_output::output) == 0
+        no_output::execution::after::item_id == initial::item_id
+        not no_after::well_typed
+        not no_after::passed
+        len(no_after::after) == 0
+        no_after::output::decision == '成功'
+    }
+
+    '非字典返回保留原始证据且不执行契约': {
+        not scalar::well_typed
+        not scalar::passed
+        scalar::execution == 42
+        len(scalar::violations) == 0
+        len(scalar::output) == 0
+        len(scalar::after) == 0
+    }
+})
+
+// 顶层必须包含输入约束；仅检查输出关系不足以发现无效身份字段。
+let empty_order_state = initial.copy()
+empty_order_state['order_id'] = ''
+let empty_order_parameters = arguments(action)[0].copy()
+empty_order_parameters['order_id'] = ''
+let empty_order_result = simulation::exchange(empty_order_state.copy(), empty_order_parameters.copy())
+let complete_check = rules::check(model::ExchangeModel(
+    empty_order_state, empty_order_parameters,
+    empty_order_result::output, empty_order_result::after,
+))
+let transition_only_check = rules::check(model::ExchangeTransition(
+    empty_order_state, empty_order_parameters,
+    empty_order_result::output, empty_order_result::after,
+))
+assert(rule {
+    '相同数据可以满足转移关系但不满足完整模型': {
+        transition_only_check::passed
+        not complete_check::passed
+    }
+})

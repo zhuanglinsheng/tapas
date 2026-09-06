@@ -2,6 +2,7 @@
 #define TAPAS_COMPILE_MODULE_H
 
 #include "tapas/compile/source.h"
+#include "tapas/compile/static_type.h"
 
 typedef struct tfrontend tfrontend;
 
@@ -56,6 +57,8 @@ void tmodule_interface_extract(const tfrontend *frontend, const char *uri,
 
 const tmodule_export *tmodule_interface_find(
 	const tmodule_interface *interface, const char *name);
+
+tstatic_type_id tstandard_type_resolve(tstatic_type_arena *arena, const char *name, int static_value);
 
 uint32_t tstandard_symbol_count(void);
 

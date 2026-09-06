@@ -1,0 +1,34 @@
+/// test_rejected_exchange.tap
+///
+/// 拒绝换货的一致性查询，可独立运行。
+///
+/// 覆盖无货、未认证、未确认、额度不足、原规格与跨商品六组输入。
+/// 逐组模拟执行，再以 rules::restrict + solve::hold 查询同一个 ExchangeModel。
+/// 六组均预期返回 sat：正确拒绝并保持状态也是符合模型的行为。
+
+import model.tap as model
+import simulation.tap as simulation
+
+for (let input in simulation::rejected_inputs()) {
+    let previous_state = input::state
+    let exchange_parameters = input::parameters
+    let exchange_result = simulation::exchange(previous_state.copy(), exchange_parameters.copy())
+
+    let restricted_model = rules::restrict(
+        model::ExchangeModel,
+        'previous_state': previous_state,
+        'action_parameters': exchange_parameters,
+        'exchange_output': exchange_result::output,
+        'next_state': exchange_result::after,
+    )
+    let result = solve::hold(restricted_model)
+
+    print(input::name, '：', result::status)
+
+    if (len(result::conflicts) > 0) {
+        pprint(result::conflicts)
+    }
+    if (result::reason != '') {
+        print(result::reason)
+    }
+}

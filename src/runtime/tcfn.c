@@ -36,6 +36,7 @@ static void *tcppgenf_copy(void *self)
 	tcppgenf *n = (tcppgenf *)calloc(1, sizeof(tcppgenf));
 	n->base.vtable = g->base.vtable;
 	n->f = g->f;
+	n->metadata = tfunction_metadata_retain(g->metadata);
 	n->name = tstring_dup(g->name);
 	n->signature_type = tstring_dup(g->signature_type);
 	n->minimum_parameters = g->minimum_parameters;
@@ -48,6 +49,7 @@ static void tcppgenf_free(void *self)
 	tcppgenf *g = (tcppgenf *)self;
 	tstring_free(g->name);
 	tstring_free(g->signature_type);
+	tfunction_metadata_release(g->metadata);
 	free(g);
 }
 
@@ -166,6 +168,7 @@ static void *tcppsessf_copy(void *self)
 	tcppsessf *n = (tcppsessf *)calloc(1, sizeof(tcppsessf));
 	n->base.vtable = s->base.vtable;
 	n->f = s->f;
+	n->metadata = tfunction_metadata_retain(s->metadata);
 	n->name = tstring_dup(s->name);
 	n->signature_type = tstring_dup(s->signature_type);
 	n->minimum_parameters = s->minimum_parameters;
@@ -178,6 +181,7 @@ static void tcppsessf_free(void *self)
 	tcppsessf *s = (tcppsessf *)self;
 	tstring_free(s->name);
 	tstring_free(s->signature_type);
+	tfunction_metadata_release(s->metadata);
 	free(s);
 }
 

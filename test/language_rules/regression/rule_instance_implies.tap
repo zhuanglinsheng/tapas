@@ -1,0 +1,81 @@
+var calls = [0, 0]
+function counted(value: Int) -> Bool
+{
+    calls[0] = calls[0] + 1
+    return value > 0
+}
+var Positive = rule (value: Int) { counted(value) }
+function premise(value: Int) -> RuleInstance[Int]
+{
+    calls[1] = calls[1] + 1
+    return Positive(value)
+}
+function unavailable() -> Bool { return [][0] }
+let Contract = rule (value: Int) {
+    '实例前件': (premise(value)) implies { value < 10; value != 5 }
+    '后续条件': value != 42
+}
+let skipped = rules::check(Contract(-1))
+let checked_calls = calls[0]
+let constructed_calls = calls[1]
+assert(rule {
+    skipped['passed']
+    len(skipped['violations']) == 0
+    skipped['implications'][0]['triggered'] == false
+    checked_calls == 1
+    constructed_calls == 1
+})
+let passed = rules::check(Contract(1))
+let failed = rules::check(Contract(5))
+let trailing = rules::check(Contract(42))
+let Lazy = rule (p: RuleInstance[Int]) { p implies unavailable() }
+assert(Lazy(Positive(-1)))
+let Composed = rule (value: Int) { Positive(value) }
+let Outer = rule (value: Int) { Composed(value) implies false }
+let outer = rules::check(Outer(-1))
+let restored = rules::deserialize(rules::serialize(Contract))
+let roundtrip = rules::check(restored(-1))
+assert(rule {
+    passed['passed']
+    failed['passed'] == false
+    len(failed['violations']) == 1
+    failed['violations'][0]['description'] == '实例前件'
+    len(trailing['violations']) == 2
+    trailing['violations'][1]['description'] == '后续条件'
+    outer['passed']
+    len(outer['violations']) == 0
+    roundtrip['passed']
+})
+
+// 动态 IR 也接受 RuleInstance Term，序列化必须保留其 Type 和角色。
+let p = rules::parameter('premise', types::rule_instance(types::Int))
+let yes = rules::constant(true)
+let no = rules::constant(false)
+let item = rules::implication(p, [yes, no])
+let Dynamic = rules::make('DynamicInstanceAntecedent', [p], [item])
+let restored_dynamic = rules::deserialize(rules::serialize(Dynamic))
+let dynamic_false = rules::check(restored_dynamic(Positive(-1)))
+let dynamic_true = rules::check(restored_dynamic(Positive(1)))
+assert(rule {
+    dynamic_false['passed']
+    dynamic_true['passed'] == false
+    len(dynamic_true['violations']) == 1
+    rules::semantic_hash(Dynamic) == rules::semantic_hash(restored_dynamic)
+})
+
+// 反射读取的是原实例，不是已转换的 Bool。
+let observer = evaluators::make('antecedent-reader', 1, (context) {
+    let term = context['ir']['items'][0]['antecedent']
+    return {
+        'status': 'Success',
+        'value': evaluators::value(context, term),
+        'violations': [],
+        'diagnostics': [],
+    }
+})
+let observed = evaluators::eval(Contract(-1), observer)
+assert(rule { types::matches(observed['value'], types::RuleInstance) })
+
+let UnionGuard = rule (p: Bool | RuleInstance[Int]) { p implies true }
+assert(UnionGuard(true))
+assert(UnionGuard(Positive(-1)))

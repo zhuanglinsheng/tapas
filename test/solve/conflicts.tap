@@ -1,0 +1,27 @@
+let R = rule(quantity: Int) { quantity >= 8; quantity <= 4; quantity != -1 }
+let answer: solve::HoldResult = solve::hold(R)
+assert(rule { answer::status == 'unsat'; answer::reason == ''; len(answer::conflicts) == 2 })
+assert(rule { identical(answer::conflicts[0]::rule, R); identical(answer::conflicts[1]::rule, R) })
+assert(rule { answer::conflicts[0]::condition == '(quantity >= 8)'; answer::conflicts[1]::condition == '(quantity <= 4)' })
+let Package = rule(size: Int) { size in rules::points(types::Int, 2, 4, 8) }
+let Trial = rules::restrict(Package, 'size': rules::points(types::Int, 3, 5))
+let restricted = solve::hold(Trial)
+assert(rule { restricted::reason == ''; len(restricted::conflicts) == 2 })
+assert(rule { rules::inspect(restricted::conflicts[0]::rule) == rules::inspect(Package); identical(restricted::conflicts[1]::rule, Trial) })
+let Guarded = rule(x: Int, b: Bool) { b or Package(x); b; x == 3 }
+assert(rule { solve::hold(Guarded)::status == 'sat'; len(solve::hold(Guarded)::conflicts) == 0 })
+let Bound = rule(count: Int) { count <= 4 }
+let fixed = solve::hold(Bound(5))
+assert(rule { fixed::status == 'unsat'; fixed::reason == ''; fixed::bindings::count == 5; len(fixed::conflicts) == 1 })
+assert(rule { identical(fixed::conflicts[0]::rule, Bound) })
+let outside = solve::hold(Bound(1000000000001))
+assert(rule { outside::status == 'unsat'; outside::reason != ''; len(outside::conflicts) == 0 })
+let unsupported = solve::hold(rule(x: Int) { x * x == 4 })
+assert(rule { unsupported::status == 'unsupported'; len(unsupported::conflicts) == 0 })
+function retain_conflict() -> solve::HoldResult {
+    let Local = rule(x: Int) { x == 1; x == 2 }
+    return solve::hold(Local)
+}
+let retained = retain_conflict()
+assert(rule { solve::hold(retained::conflicts[0]::rule)::status == 'unsat' })
+print('structured conflicts: ok')

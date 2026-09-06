@@ -1,0 +1,8 @@
+let Source = rule (value: Int) {
+    value >= 0
+}
+let WrongPremise = rule (enabled: Bool) {
+    enabled
+}
+
+rules::violate_if(Source, 0, WrongPremise)

@@ -4,6 +4,7 @@
 #include "tapas/runtime/tlist.h"
 #include "tapas/runtime/tstr.h"
 #include "tapas/tval.h"
+#include "tapas/runtime/trule_format.h"
 
 #include <stddef.h>
 
@@ -381,6 +382,7 @@ static void *tfunc_copy(void *self)
 	n->env.owner_func = n;
 	n->cmdloc = f->cmdloc;
 	n->ncmds = f->ncmds;
+	n->metadata = tfunction_metadata_retain(f->metadata);
 	return n;
 }
 
@@ -389,6 +391,7 @@ static void tfunc_free(void *self)
 	tfunc *f = (tfunc *)self;
 	tcompo_env_set_regmax(&f->env, 0);
 	tobj_array_free(&f->env.base.objs);
+	tfunction_metadata_release(f->metadata);
 	free(f);
 }
 
@@ -445,12 +448,12 @@ void tfunc_close_over(tfunc *f, tcompo_env *env)
 
 static tstring *tfunc_tostring_abbr(void *self)
 {
-	return tobj_tostring_pointer("Function", self);
+	return trule_format_abbr(self);
 }
 
 static tstring *tfunc_tostring_full(void *self)
 {
-	return tobj_tostring_pointer("Function", self);
+	return trule_format_full(self);
 }
 
 /*------------------------------ Capabilities ------------------------------*/

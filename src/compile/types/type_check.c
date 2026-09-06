@@ -26,6 +26,22 @@ static const tstatic_type *type_of(const type_checker *checker,
 	return tstatic_type_get(&checker->types->arena, id);
 }
 
+static int antecedent_type(const type_checker *checker, tstatic_type_id id)
+{
+	const tstatic_type *type = type_of(checker, id);
+	if (!type) return id == TSTATIC_TYPE_UNKNOWN;
+	if (type->kind == tstatic_type_rule_instance || type->kind == tstatic_type_instance_of) return 1;
+	if (type->kind == tstatic_type_builtin)
+		return type->builtin == tbuiltin_bool || type->builtin == tbuiltin_rule_instance;
+	if (type->kind != tstatic_type_union) return 0;
+	const tstatic_type_id *children = tstatic_type_children(&checker->types->arena, type);
+	for (uint32_t i = 0; i < type->child_count; i++)
+		if (!antecedent_type(checker, children[i])) return 0;
+	return type->child_count != 0;
+}
+
+static tstring *literal_string(type_checker *checker, tast_id id);
+
 static void report(type_checker *checker, tsource_span span,
 		   const char *message)
 {
@@ -88,6 +104,16 @@ static int assignable(type_checker *checker, tast_id expression,
 	const tast_node *node = tast_get(checker->ast, expression);
 	const tstatic_type *expected = type_of(checker, target);
 	if (!node || !expected) return actual == TSTATIC_TYPE_UNKNOWN;
+	if (node->kind == tast_group)
+		return assignable(checker, node->group.value, target);
+	if (expected->kind == tstatic_type_enum) {
+		if (actual == TSTATIC_TYPE_UNKNOWN) return 1;
+		tstring *member = literal_string(checker, expression);
+		int matches = member && tstatic_type_enum_contains(
+			&checker->types->arena, expected, member);
+		tstring_free(member);
+		return matches;
+	}
 	if (expected->kind == tstatic_type_recursive && expected->child_count == 1) {
 		const tstatic_type_id *body = tstatic_type_children(
 			&checker->types->arena, expected);
@@ -100,8 +126,6 @@ static int assignable(type_checker *checker, tast_id expression,
 			if (assignable(checker, expression, children[i])) return 1;
 		return 0;
 	}
-	if (node->kind == tast_group)
-		return assignable(checker, node->group.value, target);
 	if (node->kind == tast_list && expected->kind == tstatic_type_list &&
 	    expected->child_count == 1) {
 		const tast_id *items = tast_get_children(checker->ast,
@@ -181,6 +205,13 @@ static int assignable(type_checker *checker, tast_id expression,
 		free(assigned);
 		return valid;
 	}
+	/* A plain Dictionary has no declared key/value or field constraints.
+	 * Non-literal contents are unknown here; runtime contracts (such as Rule
+	 * parameters) validate them. Direct literals were checked above so definite
+	 * mismatches still receive static diagnostics. */
+	if (actual == tbuiltin_dictionary &&
+	    (expected->kind == tstatic_type_dictionary ||
+	     expected->kind == tstatic_type_fields)) return 1;
 	return actual == TSTATIC_TYPE_UNKNOWN;
 }
 
@@ -195,12 +226,37 @@ static void validate_index(type_checker *checker, const tast_node *node,
 	if (node->aggregate.count != 1) return;
 	tstatic_type_id receiver_id = node_type(checker, node->aggregate.receiver);
 	const tstatic_type *receiver = type_of(checker, receiver_id);
+	if (receiver && receiver->kind == tstatic_type_builtin &&
+	    receiver->builtin == tbuiltin_type) {
+		receiver_id = ttype_info_node_static_value(
+			checker->types, node->aggregate.receiver);
+		receiver = type_of(checker, receiver_id);
+	}
 	if (!receiver) return;
 	const tast_id *indices = tast_get_children(checker->ast,
 		node->aggregate.children, node->aggregate.count);
 	const tast_node *index = tast_get(checker->ast, indices[0]);
 	const tstatic_type_id *parameters = tstatic_type_children(
 		&checker->types->arena, receiver);
+	if (receiver->kind == tstatic_type_enum) {
+		if (writing) {
+			report(checker, node->span, "enum members are immutable");
+			return;
+		}
+		tstring *member = literal_string(checker, indices[0]);
+		if (!member) {
+			if (!assignable(checker, indices[0], tbuiltin_string))
+				report(checker, index ? index->span : node->span,
+				       "enum index must have Type String");
+			return;
+		}
+		if (!tstatic_type_enum_contains(
+			&checker->types->arena, receiver, member))
+			report(checker, index ? index->span : node->span,
+			       "enum member is not declared by the target Type");
+		tstring_free(member);
+		return;
+	}
 	if (receiver->kind == tstatic_type_list && receiver->child_count == 1) {
 		if (!index || index->kind != tast_slice) {
 			if (!assignable(checker, indices[0], tbuiltin_int))
@@ -253,6 +309,27 @@ static int plain_name(type_checker *checker, tast_id id, const char *expected)
 	return result;
 }
 
+static void validate_enum_comparison(type_checker *checker,
+				     const tast_node *node)
+{
+	if (!node || node->kind != tast_binary ||
+	    (node->binary.op != tsyntax_eq && node->binary.op != tsyntax_ne))
+		return;
+	const tast_id operands[2] = { node->binary.left, node->binary.right };
+	for (uint32_t side = 0; side < 2; side++) {
+		const tstatic_type *type = type_of(checker,
+			node_type(checker, operands[side]));
+		if (!type || type->kind != tstatic_type_enum) continue;
+		tstring *member = literal_string(checker, operands[1 - side]);
+		if (!member) continue;
+		if (!tstatic_type_enum_contains(&checker->types->arena, type, member))
+			report(checker, tast_get(checker->ast,
+				operands[1 - side])->span,
+			       "String literal is not a member of the enum Type");
+		tstring_free(member);
+	}
+}
+
 static int types_package_expression(type_checker *checker, tast_id id,
 				    uint32_t depth)
 {
@@ -302,6 +379,27 @@ static void validate_type_constructor(type_checker *checker,
 	}
 	const tast_id *arguments = tast_get_children(checker->ast,
 		call->aggregate.children, count);
+	if (constructor == ttype_constructor_enum) {
+		tstring **members = (tstring **)calloc(count, sizeof(*members));
+		if (!members) abort();
+		for (uint32_t i = 0; i < count; i++) {
+			members[i] = literal_string(checker, arguments[i]);
+			if (!members[i]) {
+				report(checker, tast_get(checker->ast, arguments[i])->span,
+				       "enum member must be a String literal");
+				continue;
+			}
+			for (uint32_t previous = 0; previous < i; previous++)
+				if (members[previous] &&
+				    tstring_eq(members[previous], members[i]))
+					report(checker,
+					       tast_get(checker->ast, arguments[i])->span,
+					       "duplicate enum member");
+		}
+		for (uint32_t i = 0; i < count; i++) tstring_free(members[i]);
+		free(members);
+		return;
+	}
 	if (constructor != ttype_constructor_make_type &&
 	    constructor != ttype_constructor_optional) {
 		for (uint32_t i = 0; i < count; i++)
@@ -442,6 +540,7 @@ static void validate_node(type_checker *checker, tast_id id)
 {
 	const tast_node *node = tast_get(checker->ast, id);
 	if (!node) return;
+	validate_enum_comparison(checker, node);
 	if (node->kind == tast_name &&
 	    tcontrol_role(checker->flow, id) != tcontrol_child_assignment_target) {
 		const tsemantic_symbol *symbol = tsemantic_resolved_symbol(
@@ -518,6 +617,21 @@ static void validate_node(type_checker *checker, tast_id id)
 				report(checker, node->span,
 				       "types::optional is only valid inside types::make_type");
 		}
+        const tstatic_type *domain_result = type_of(checker, node_type(checker, id));
+        const tast_node *domain_callee = tast_get(checker->ast, node->aggregate.receiver);
+        if (domain_result && domain_result->kind == tstatic_type_points && domain_callee && domain_callee->kind == tast_member) {
+            const tast_node *receiver = tast_get(checker->ast, domain_callee->member.receiver);
+            const tsemantic_symbol *symbol = receiver && receiver->kind == tast_name ?
+                tsemantic_resolved_symbol(checker->semantic, domain_callee->member.receiver) : nullptr;
+            tstring *name = tsource_document_slice(checker->document, domain_callee->member.name);
+            if (symbol && symbol->external && tstring_eq_cstr(symbol->name, "rules") && tstring_eq_cstr(name, "points")) {
+                const tast_id *args = tast_get_children(checker->ast, node->aggregate.children, node->aggregate.count);
+                tstatic_type_id item = tstatic_type_children(&checker->types->arena, domain_result)[0];
+                for (uint32_t i = 1; i < node->aggregate.count; i++)
+                    if (!assignable(checker, args[i], item)) report(checker, tast_get(checker->ast, args[i])->span, "point does not match declared element Type");
+            }
+            tstring_free(name);
+        }
 		validate_mutation(checker, node);
 		tstatic_type_id callee_id = node_type(checker, node->aggregate.receiver);
 		const tstatic_type *callee = type_of(checker, callee_id);
@@ -561,17 +675,55 @@ static void validate_node(type_checker *checker, tast_id id)
 					       "argument Type mismatch");
 		}
 	}
+	if (node->kind == tast_unary && node->unary.op == tsyntax_kw_not) {
+		const tast_node *owner = tast_get(checker->ast,
+			tcontrol_enclosing_function(checker->flow, id));
+		int in_rule = owner && owner->kind == tast_rule;
+		tstatic_type_id operand = node_type(checker, node->unary.operand);
+		if (operand != tbuiltin_any &&
+		    !(in_rule && antecedent_type(checker, operand)) &&
+		    !assignable(checker, node->unary.operand, tbuiltin_bool))
+			report(checker, node->span, in_rule ?
+				"not operand must have Type Bool or RuleInstance inside Rule" :
+				"not operand must have Type Bool");
+	}
+	if (node->kind == tast_binary &&
+	    (node->binary.op == tsyntax_kw_and || node->binary.op == tsyntax_kw_or)) {
+		const tast_node *owner = tast_get(checker->ast,
+			tcontrol_enclosing_function(checker->flow, id));
+		int in_rule = owner && owner->kind == tast_rule;
+		tast_id operands[] = {node->binary.left, node->binary.right};
+		for (unsigned i = 0; i < 2; i++) {
+			tstatic_type_id type = node_type(checker, operands[i]);
+			if (type != tbuiltin_any && !(in_rule && antecedent_type(checker, type)) &&
+			    !assignable(checker, operands[i], tbuiltin_bool))
+				report(checker, node->span, in_rule ?
+					"and/or operands must have Type Bool or RuleInstance inside Rule" :
+					"and/or operands must have Type Bool");
+		}
+	}
 	if (node->kind == tast_rule_condition &&
+	    node_type(checker, node->rule_condition.value) != tbuiltin_any &&
+	    !antecedent_type(checker, node_type(checker, node->rule_condition.value)) &&
 	    !assignable(checker, node->rule_condition.value, tbuiltin_bool))
-		report(checker, node->span, "Rule condition must have Type Bool");
-	if (node->kind == tast_rule_requirement) {
-		const tstatic_type *required = type_of(checker,
-			node_type(checker, node->expression_statement.value));
-		if (!required || (required->kind != tstatic_type_rule_instance &&
-		    !(required->kind == tstatic_type_builtin &&
-		      required->builtin == tbuiltin_rule_instance)))
-			report(checker, node->span,
-			       "require expects a Rule application");
+		report(checker, node->span, "Rule item must have Type Bool or RuleInstance");
+	if (node->kind == tast_rule_implication) {
+		if (!antecedent_type(checker, node_type(checker, node->rule_implication.antecedent)) &&
+		    !assignable(checker, node->rule_implication.antecedent, tbuiltin_bool) &&
+		    !assignable(checker, node->rule_implication.antecedent, tbuiltin_rule_instance))
+			report(checker, node->span, "implies antecedent must have Type Bool or RuleInstance");
+		const tast_node *body = tast_get(checker->ast, node->rule_implication.consequent);
+		if (body && body->kind == tast_block) {
+			const tast_id *items = tast_get_children(checker->ast,
+				body->aggregate.children, body->aggregate.count);
+			for (uint32_t i = 0; i < body->aggregate.count; i++) {
+				const tast_node *item = tast_get(checker->ast, items[i]);
+				if (item && item->kind == tast_expression_statement &&
+				    !assignable(checker, item->expression_statement.value, tbuiltin_bool))
+					report(checker, item->span, "implies consequent must have Type Bool");
+			}
+		} else if (!assignable(checker, node->rule_implication.consequent, tbuiltin_bool))
+			report(checker, node->span, "implies consequent must have Type Bool");
 	}
 	if (node->kind == tast_return_statement) {
 		tast_id function_id = tcontrol_enclosing_function(checker->flow, id);

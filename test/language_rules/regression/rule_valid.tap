@@ -4,7 +4,7 @@ let positive = rule (value: Int) {
 }
 
 let bounded = rule (value: Int) {
-    require positive(value)
+    positive(value)
     "value must be below ten":
         value < 10
 }

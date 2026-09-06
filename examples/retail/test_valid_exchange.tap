@@ -1,0 +1,32 @@
+/// test_valid_exchange.tap
+///
+/// 合法换货的一致性查询，可独立运行。
+///
+/// 模拟将键盘换成同一商品的另一规格，支付 100 分差价并用完可支付额度。
+/// 将前状态、请求、模拟输出和后状态通过 rules::restrict 固定到 ExchangeModel。
+/// solve::hold 预期返回 sat，表示这条转移记录满足模型。
+
+import model.tap as model
+import simulation.tap as simulation
+
+let previous_state = simulation::initial_state('keyboard-clicky-plain')
+let exchange_parameters = simulation::exchange_parameters('keyboard-clicky-plain')
+let exchange_result = simulation::exchange(previous_state.copy(), exchange_parameters.copy())
+
+let restricted_model = rules::restrict(
+    model::ExchangeModel,
+    'previous_state': previous_state,
+    'action_parameters': exchange_parameters,
+    'exchange_output': exchange_result::output,
+    'next_state': exchange_result::after,
+)
+let result = solve::hold(restricted_model)
+
+print('合法换货：', result::status)
+
+if (len(result::conflicts) > 0) {
+    pprint(result::conflicts)
+}
+if (result::reason != '') {
+    print(result::reason)
+}

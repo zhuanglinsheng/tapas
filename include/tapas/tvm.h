@@ -20,6 +20,7 @@ typedef struct {
 } tloop_state;
 
 typedef struct tvm_code_cache tvm_code_cache;
+struct tsolve_worker;
 
 typedef struct {
 	tfunc       *func;
@@ -62,6 +63,7 @@ typedef struct tvm {
 	uint_cmds        loop_state_len;
 	uint_cmds        loop_state_cap;
 	tvm_code_cache  *code_caches;
+	struct tsolve_worker *solve_worker;
 	uint32_t         code_cache_len;
 	uint32_t         code_cache_cap;
 	tcall_frame    **frames;
@@ -71,7 +73,9 @@ typedef struct tvm {
 	uint_cmds        error_source_loc_count;
 	uint_cmds       *error_instruction;
 	uint32_t         execution_depth;
+	uint32_t         antecedent_depth;
 	tlist           *rule_output;
+	tlist           *rule_logic_values;
 } tvm;
 
 void tvm_init(tvm *vm, uint_objs tmpmax);

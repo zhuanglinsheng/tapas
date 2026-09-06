@@ -32,6 +32,8 @@ the receiver. For example, `append(items, value)` and
 | `input(prompt: String)` | `String \| Nil` | Writes and flushes a prompt without LF, then reads one line; returns `nil` at EOF. |
 | `len(value: AnyType)` | `Int` | Composite length; 0 for `nil`; 1 for other scalars. |
 | `type(value: AnyType)` | `String` | Runtime type name. |
+| `parameters(value: Function \| Rule \| RuleInstance \| RuleIR)` | `List[Pair[String, Type]]` | Parameter names and actual Type values, in declaration order; does not execute the Rule. |
+| `arguments(instance: RuleInstance)` | `List[AnyType]` | Bound argument values in declaration order; does not execute or check the Rule. |
 | `copy(value: T)` | `T` | Scalar copy or shallow composite copy. |
 | `identical(left: AnyType, right: AnyType)` | `Bool` | Runtime identity/value identity. |
 | `assert(rule: RuleInstance \| Rule)` | `Nil` | Checks a Rule and raises a runtime error when a Condition fails. See [Rules](Rules_en.md#3-checking-apis) for complete semantics. |

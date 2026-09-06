@@ -190,8 +190,9 @@ static void analyze_node(assignment_analyzer *analyzer, tast_id id,
 	case tast_rule_condition:
 		analyze_node(analyzer, node->rule_condition.value, state);
 		break;
-	case tast_rule_requirement:
-		analyze_node(analyzer, node->expression_statement.value, state);
+	case tast_rule_implication:
+		analyze_node(analyzer, node->rule_implication.antecedent, state);
+		analyze_node(analyzer, node->rule_implication.consequent, state);
 		break;
 	case tast_module:
 	case tast_block:

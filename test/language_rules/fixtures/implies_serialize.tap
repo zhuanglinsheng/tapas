@@ -1,0 +1,5 @@
+let a = rules::parameter('a', types::Bool)
+let b = rules::parameter('b', types::Bool)
+let item = rules::implication(a, [b])
+let Check = rules::make('Portable', [a, b], [item])
+print(rules::serialize(Check))

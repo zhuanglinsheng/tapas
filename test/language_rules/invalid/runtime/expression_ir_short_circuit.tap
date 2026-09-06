@@ -1,0 +1,7 @@
+function unavailable() -> Bool { return [][0] }
+let R = rule { true or unavailable() }
+let reader = evaluators::make('skipped-expression', 1, (context) {
+    let skipped = context::ir::items[0]::term::arguments[1]
+    return {'status': 'Success', 'value': evaluators::value(context, skipped), 'violations': [], 'diagnostics': []}
+})
+evaluators::eval(R(), reader)

@@ -13,6 +13,8 @@ typedef struct {
 	tstring **paths;
 	uint_lexs npaths;
 	const ttypeval *pending_function_type;
+	const char *pending_display_name;
+	uint8_t *rule_ir_emitted; /* per-Rule expression DAG metadata */
 } tast_emitter;
 
 static inline tstring *tast_emitter_text(const tast_emitter *emitter,
@@ -22,6 +24,7 @@ static inline tstring *tast_emitter_text(const tast_emitter *emitter,
 }
 
 void tast_emit_expression(tast_emitter *emitter, tast_id id);
+void tast_emit_bound_type(tast_emitter *emitter, ttypeval *type);
 void tast_emit_block(tast_emitter *emitter, const tast_node *block, int inblk);
 ttypeval *tast_resolve_annotation(tast_emitter *emitter,
 				  tsource_span annotation);

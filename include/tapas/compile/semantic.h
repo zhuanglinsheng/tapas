@@ -2,6 +2,7 @@
 #define TAPAS_COMPILE_SEMANTIC_H
 
 #include "tapas/compile/ast.h"
+#include "tapas/compile/annotation_index.h"
 
 typedef struct tdiagnostics tdiagnostics;
 
@@ -43,6 +44,7 @@ typedef struct {
 } tsemantic_scope;
 
 typedef struct tsemantic_model {
+	tannotation_index annotations;
 	tsemantic_symbol *symbols;
 	uint32_t symbol_count;
 	uint32_t symbol_capacity;

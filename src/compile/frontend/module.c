@@ -8,10 +8,11 @@
 static tstandard_symbol *standard_symbols;
 static uint32_t standard_symbol_length;
 
-static tmodule_symbol_kind standard_kind(textension_symbol_kind kind)
+static tmodule_symbol_kind standard_kind(const textension_symbol *symbol)
 {
-	if (kind == textension_function) return tmodule_symbol_function;
-	if (kind == textension_type) return tmodule_symbol_type;
+	if (symbol->kind == textension_function ||
+        (symbol->kind == textension_value && !strncmp(symbol->type, "Function[", 9))) return tmodule_symbol_function;
+	if (symbol->kind == textension_type) return tmodule_symbol_type;
 	return tmodule_symbol_value;
 }
 
@@ -53,7 +54,7 @@ static void initialize_standard_symbols(void)
 					.name = symbol->name,
 					.type = symbol->type,
 					.detail = symbol->detail,
-					.kind = standard_kind(symbol->kind),
+					.kind = standard_kind(symbol),
 					.result_argument = symbol->result_argument,
 					.result_from_argument = symbol->result_relation ==
 						tnative_result_argument
@@ -240,4 +241,38 @@ const tstandard_symbol *tstandard_package(const char *name)
 			return symbol;
 	}
 	return nullptr;
+}
+
+/* Resolve package signatures and named Type definitions without loading or executing values. */
+typedef struct { tstatic_type_arena *arena; unsigned depth; } standard_type_context;
+static tstatic_type_id resolve_standard_type(standard_type_context *, const char *, int);
+static tstatic_type_id standard_type_name(void *opaque, const char *name)
+{
+    standard_type_context *context = opaque;
+    return resolve_standard_type(context, name, 1);
+}
+static tstatic_type_id resolve_standard_type(standard_type_context *context, const char *name, int static_value)
+{
+    if (context->depth >= 32) return TSTATIC_TYPE_UNKNOWN;
+    const char *separator = strstr(name, "::");
+    tstring *package = separator ? tstring_new_len(name, separator-name) : nullptr;
+    const tstandard_symbol *symbol = tstandard_symbol_find(package ? tstring_cstr(package) : nullptr,
+        separator ? separator+2 : name);
+    tstring_free(package);
+    if (!symbol) return TSTATIC_TYPE_UNKNOWN;
+    if (symbol->kind == tmodule_symbol_type && !static_value)
+        return tstatic_type_builtin_id(context->arena, tbuiltin_type);
+    if (symbol->kind == tmodule_symbol_type && !strcmp(symbol->type,"Type"))
+        return tstatic_type_builtin_named(context->arena, symbol->name);
+    if ((static_value && symbol->kind != tmodule_symbol_type) ||
+        (!static_value && symbol->kind != tmodule_symbol_function)) return TSTATIC_TYPE_UNKNOWN;
+    context->depth++;
+    tstatic_type_id result = tstatic_type_parse(context->arena,symbol->type,standard_type_name,context);
+    context->depth--;
+    return static_value ? tstatic_type_with_name(context->arena,result,name) : result;
+}
+tstatic_type_id tstandard_type_resolve(tstatic_type_arena *arena, const char *name, int static_value)
+{
+    standard_type_context context = {.arena=arena};
+    return resolve_standard_type(&context,name,static_value);
 }

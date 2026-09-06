@@ -1,0 +1,122 @@
+/// simulation.tap
+///
+/// 换货业务模拟。
+///
+/// 构造初始订单与请求，根据商品目录模拟执行，返回 output 和 after。
+/// exchange 模拟完整处理；exchange_without_product_check 故意遗漏同商品检查。
+/// 模拟逻辑独立于业务 Rule，产生的数据由测试交给约束模型检查。
+
+import model_defs.tap as defs
+import data.tap as data
+
+// 业务模拟的起点与请求构造；固定商品目录由 data.tap 提供。
+function initial_state(confirmed_target_id: String)
+{
+    return {
+        'order_id': '#W2378156',
+        'user_id': 'yusuf_rossi_9620',
+        'status': '已送达',
+        'item_id': 'keyboard-linear-rgb',
+        'payment_method_id': 'credit_card_9513926',
+        'payment_capacity': 100,
+        'authenticated_user_id': 'yusuf_rossi_9620',
+        'confirmed_target_id': confirmed_target_id,
+    }
+}
+
+function exchange_parameters(target_item_id: String)
+{
+    return {
+        'order_id': '#W2378156',
+        'target_item_id': target_item_id,
+        'payment_method_id': 'credit_card_9513926',
+    }
+}
+
+// 拒绝实验的数据；不包含预期结果或业务判断。
+function rejected_inputs()
+{
+    let target_item_id = 'keyboard-clicky-plain'
+    let unauthenticated_state = initial_state(target_item_id)
+    unauthenticated_state['authenticated_user_id'] = ''
+    let unconfirmed_state = initial_state('')
+    let underfunded_state = initial_state(target_item_id)
+    underfunded_state['payment_capacity'] = 99
+
+    return [
+        { 'name': '无货规格', 'state': initial_state('keyboard-clicky-rgb'),
+            'parameters': exchange_parameters('keyboard-clicky-rgb') },
+        { 'name': '身份未验证', 'state': unauthenticated_state,
+            'parameters': exchange_parameters(target_item_id) },
+        { 'name': '未确认', 'state': unconfirmed_state,
+            'parameters': exchange_parameters(target_item_id) },
+        { 'name': '额度不足', 'state': underfunded_state,
+            'parameters': exchange_parameters(target_item_id) },
+        { 'name': '原规格', 'state': initial_state('keyboard-linear-rgb'),
+            'parameters': exchange_parameters('keyboard-linear-rgb') },
+        { 'name': '跨商品', 'state': initial_state('thermostat-google-home'),
+            'parameters': exchange_parameters('thermostat-google-home') },
+    ]
+}
+
+// 根据请求计算模拟结果；是否检查同商品决定正常与缺陷版本的行为。
+function perform(
+        current_state: defs::State,
+        action_parameters: defs::ExchangeParameters,
+        check_same_product: Bool,
+) {
+    let original_item = data::items[current_state::item_id]
+    let replacement_item = data::items[action_parameters::target_item_id]
+    let price_difference = replacement_item::price - original_item::price
+    let exchange_accepted = (
+        current_state::authenticated_user_id == current_state::user_id and
+        current_state::confirmed_target_id == action_parameters::target_item_id and
+        current_state::order_id == action_parameters::order_id and
+        current_state::payment_method_id == action_parameters::payment_method_id and
+        current_state::status == '已送达' and
+        current_state::item_id != action_parameters::target_item_id and
+        replacement_item::available and
+        current_state::payment_capacity >= price_difference
+    )
+    if (check_same_product) {
+        exchange_accepted = exchange_accepted and original_item::product_id == replacement_item::product_id
+    }
+    let next_state = current_state.copy()
+    if (exchange_accepted) {
+        next_state['status'] = '换货申请'
+        next_state['item_id'] = action_parameters::target_item_id
+        next_state['payment_capacity'] = current_state::payment_capacity - price_difference
+        return {
+            'output': { 'decision': '成功', 'charged_difference': price_difference },
+            'after': next_state,
+        }
+    }
+    return {
+        'output': { 'decision': '拒绝', 'charged_difference': 0 },
+        'after': next_state,
+    }
+}
+
+// 模拟完整的换货处理，包括正确拒绝不允许的请求。
+function simulate_exchange(
+        current_state: defs::State,
+        action_parameters: defs::ExchangeParameters,
+) {
+    return perform(current_state, action_parameters, true)
+}
+
+// 故意遗漏同商品检查，产生可供模型识别的错误转移。
+function simulate_exchange_without_product_check(
+        current_state: defs::State,
+        action_parameters: defs::ExchangeParameters,
+) {
+    return perform(current_state, action_parameters, false)
+}
+
+return {
+    'initial_state': initial_state,
+    'exchange_parameters': exchange_parameters,
+    'rejected_inputs': rejected_inputs,
+    'exchange': simulate_exchange,
+    'exchange_without_product_check': simulate_exchange_without_product_check,
+}

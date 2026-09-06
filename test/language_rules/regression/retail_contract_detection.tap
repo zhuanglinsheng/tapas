@@ -1,0 +1,44 @@
+// 同一种 restrict + hold 查询：正确实现全部 sat，缺陷实现跨商品时 unsat。
+import ../../../examples/retail/simulation.tap as simulation
+import ../../../examples/retail/model.tap as model
+
+// 项目回归断言验证展示结果；不被示例入口引用。
+function query_execution(previous_state, exchange_parameters, execute)
+{
+    let exchange_result = execute(previous_state.copy(), exchange_parameters.copy())
+    let restricted_model = rules::restrict(
+        model::ExchangeModel,
+        'previous_state': previous_state,
+        'action_parameters': exchange_parameters,
+        'exchange_output': exchange_result::output,
+        'next_state': exchange_result::after,
+    )
+    return solve::hold(restricted_model)
+}
+
+let inputs = simulation::rejected_inputs()
+inputs.append({
+    'state': simulation::initial_state('keyboard-clicky-plain'),
+    'parameters': simulation::exchange_parameters('keyboard-clicky-plain'),
+})
+
+var all_correct = true
+var failed_count = 0
+var failed_target_item_id = ''
+for (let input in inputs) {
+    let correct = query_execution(input::state, input::parameters, simulation::exchange)
+    all_correct = all_correct and correct::status == 'sat'
+    let defective = query_execution(input::state, input::parameters, simulation::exchange_without_product_check)
+    if (defective::status == 'unsat') {
+        failed_count = failed_count + 1
+        failed_target_item_id = input::parameters::target_item_id
+    } else {
+        all_correct = all_correct and defective::status == 'sat'
+    }
+}
+assert(rule {
+    all_correct
+    failed_count == 1
+    failed_target_item_id == 'thermostat-google-home'
+})
+print('retail solver queries: ok')

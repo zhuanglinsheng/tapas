@@ -19,6 +19,11 @@ tcp *tcp_new_library(const tlib *library, int interactive);
 
 void tcp_delete(tcp *cp);
 
+/* Compile multiple statements while retaining bindings for the next call. */
+tcinfo parse_sequence(tcp *cp, const tstring *source,
+                      tvmcmd_vect *instructions, tconsts *constants,
+                      tstring **paths, uint_lexs path_count);
+
 tcinfo parse_unit(tcp *cp, const tstring *source,
 		  tvmcmd_vect *instructions, tconsts *constants,
 		  tstring **paths, uint_lexs path_count,

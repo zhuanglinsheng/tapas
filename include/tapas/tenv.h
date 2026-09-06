@@ -92,6 +92,8 @@ struct tfunc {
 	tcompo_env env;
 	uint_cmds cmdloc;
 	uint_cmds ncmds;
+	/* Declaration metadata survives closure capture/copy and bytecode loading. */
+	tfunction_metadata *metadata;
 };
 
 extern tcompo_vtable tfunc_vtable;

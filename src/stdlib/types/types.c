@@ -1,4 +1,5 @@
 #include "tapas/textension.h"
+#include "tapas/runtime/tdomain.h"
 
 #include "tapas/runtime/tdict.h"
 #include "tapas/runtime/tlist.h"
@@ -77,6 +78,26 @@ static void types_union(tobj *params, uint_regs len, tobj *result)
 	for (uint_regs i = 0; i < len; i++)
 		members[i] = require_type(&params[i], "types::union");
 	ttypeval *type = ttypeval_new_union(members, len);
+	free(members);
+	return_type(result, type);
+}
+
+static void types_enum(tobj *params, uint_regs len, tobj *result)
+{
+	if (len == 0)
+		twarn(ErrRuntime_ParamsCtr, "types::enum",
+		      "at least one String member is required");
+	const tstring **members = (const tstring **)calloc(len, sizeof(*members));
+	if (!members)
+		twarn(ErrRuntime_Other, "types::enum", "out of memory");
+	for (uint_regs i = 0; i < len; i++) {
+		if (params[i].type != tcompo ||
+		    tobj_compo_type(&params[i]) != compo_tstr)
+			twarn(ErrRuntime_ParamsType, "types::enum",
+			      "String member required");
+		members[i] = ((const tstr *)params[i].val.v_tcompo)->data;
+	}
+	ttypeval *type = ttypeval_new_enum(members, len);
 	free(members);
 	return_type(result, type);
 }
@@ -228,6 +249,9 @@ static ttypeval *type_of_value(const tobj *value)
 			((trule_item *)value->val.v_tcompo)->kind ==
 			trule_item_condition ? tbuiltin_rule_condition :
 			tbuiltin_rule_requirement);
+	case compo_tpoints:
+	case compo_trange:
+		return ttypeval_new_domain(tobj_compo_type(value) == compo_trange, ((tdomain *)value->val.v_tcompo)->item_type);
 	case compo_tevaluator:
 		return ttypeval_builtin(tbuiltin_evaluator);
 	default:
@@ -285,6 +309,18 @@ static void types_members(tobj *params, uint_regs len, tobj *result)
 	require_count("types::members", len, 1);
 	ttypeval *type = require_type(&params[0], "types::members");
 	tlist *members = tlist_new();
+	if (type->kind == ttype_kind_enum) {
+		for (uint_objs i = 0; i < ttypeval_enum_member_count(type); i++) {
+			tobj value;
+			tobj_set_nil(&value);
+			tobj_set_compo(&value, (tcompo_v *)tstr_new(
+				tstring_cstr(ttypeval_enum_member_at(type, i))));
+			tobj_vec_push(&members->items, &value);
+			tobj_try_clear(&value);
+		}
+		tobj_set_compo(result, (tcompo_v *)members);
+		return;
+	}
 	uint_objs count = ttypeval_member_count(type);
 	if (count == 0) {
 		tobj_vec_push(&members->items, &params[0]);
@@ -343,7 +379,7 @@ static void types_parameters(tobj *params, uint_regs len, tobj *result)
 	require_count("types::parameters", len, 1);
 	ttypeval *type = require_type(&params[0], "types::parameters");
 	tdict *parameters = tdict_new();
-	if (type->kind == ttype_kind_list || type->kind == ttype_kind_iterator)
+	if (type->kind == ttype_kind_points || type->kind == ttype_kind_range || type->kind == ttype_kind_list || type->kind == ttype_kind_iterator)
 		set_parameter(parameters, "item", ttypeval_parameter(type, "item"));
 	else if (type->kind == ttype_kind_pair) {
 		set_parameter(parameters, "first", ttypeval_parameter(type, "first"));
@@ -587,6 +623,16 @@ static const textension_symbol symbols[] = {
 		.minimum_arguments = 2,
 		.maximum_arguments = UNDEF_NPARAMS,
 		.intrinsic = tnative_intrinsic_type_union
+	},
+	{
+		.name = "enum",
+		.type = "Function[...] -> Type",
+		.detail = "types::enum(...members: String) -> Type",
+		.kind = textension_function,
+		.function = types_enum,
+		.minimum_arguments = 1,
+		.maximum_arguments = UNDEF_NPARAMS,
+		.intrinsic = tnative_intrinsic_type_enum
 	},
 	{
 		.name = "list",

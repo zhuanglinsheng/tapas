@@ -33,7 +33,7 @@ typedef enum {
 	tast_function,
 	tast_rule,
 	tast_rule_condition,
-	tast_rule_requirement,
+	tast_rule_implication,
 	tast_module,
 	tast_import_statement,
 	tast_expression_statement,
@@ -84,6 +84,12 @@ typedef struct {
 			tsource_span description;
 			uint8_t has_description;
 		} rule_condition;
+		struct {
+			tast_id antecedent;
+			tast_id consequent;
+			tsource_span description;
+			uint8_t has_description;
+		} rule_implication;
 		struct {
 			tsource_span path;
 			tsource_span alias;

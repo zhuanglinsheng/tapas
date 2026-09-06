@@ -1,0 +1,12 @@
+// Literal keys describe initial data, not a fixed structural Type.
+let catalog = {'item': {'price': 1}}
+let alias = catalog
+append(alias, 'other': false)
+delete(alias, 'item')
+alias['other'] = 'changed'
+print(catalog['other'])
+print(len(catalog))
+let nested = {'item': {'price': 1}}
+append(nested['item'], 'description': 'new')
+delete(nested['item'], 'price')
+print(nested['item']['description'])

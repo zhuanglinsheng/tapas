@@ -1,4 +1,4 @@
-// Union, structural, and parameterized Types.
+// Union, enum, structural, and parameterized Types.
 
 let Number = types::union(types::Int, types::Float)
 var amount: Number = 1
@@ -15,6 +15,8 @@ let scores: types::Dictionary[String, Float] = {
     'Ada' : 9.5,
 }
 let identifier: Union[Int, String] = 'tapas'
+let OrderStatus = types::enum('Pending', 'Delivered')
+let status: OrderStatus = OrderStatus['Delivered']
 
 print(amount)
 print(point['x'])
@@ -28,3 +30,6 @@ print(types::matches(
     identifier,
     types::union(types::Int, types::String),
 ))
+print(status)
+print(types::matches('Pending', OrderStatus))
+print(types::base(OrderStatus) == types::String)

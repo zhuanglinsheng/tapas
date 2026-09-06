@@ -26,11 +26,16 @@ typedef enum {
 	trule_builtin_context_binding,
 	trule_builtin_context_capture,
 	trule_builtin_context_value,
-	trule_builtin_context_requirement
+	trule_builtin_context_requirement,
+	trule_builtin_hold
 } trule_builtin_kind;
 
 struct trule {
 	tcompo_v base;
+	uint64_t identity;
+	/* Evaluate the stored RuleIR directly. A derived source Rule may still
+	 * retain a checker solely to resolve captures and source-backed Terms. */
+	int evaluate_ir;
 	tobj checker;
 	tstring *source;
 	tstring *signature;
@@ -46,6 +51,7 @@ struct trule_instance {
 struct trule_builtin {
 	tcompo_v base;
 	trule_builtin_kind kind;
+	tfunction_metadata *metadata;
 };
 
 extern tcompo_vtable trule_vtable;
@@ -56,6 +62,9 @@ trule *trule_new(tfunc *checker, const char *source, const char *signature,
 		 const char *parameter_names, const char *item_metadata,
 		 const char *capture_metadata);
 trule *trule_new_dynamic(trule_ir *ir, const char *signature);
+trule *trule_new_derived(const trule *source, trule_ir *ir);
+/* Read a declared capture from the current closure without invoking the checker. */
+int trule_read_capture(const trule *rule, const trule_term *capture, tobj *result);
 void trule_close_over(trule *rule, tcompo_env *environment);
 trule_instance *trule_bind(trule *rule, const tobj *arguments,
 			   uint_regs argument_count);

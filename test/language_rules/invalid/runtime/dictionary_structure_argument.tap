@@ -1,0 +1,6 @@
+// INVALID EXAMPLE: expected Runtime Error; do not copy as valid Tapas syntax.
+let Item = types::make_type('price': types::Int)
+let Check = rule (item: Item) { true }
+let item = {'price': 1}
+item['price'] = 'changed'
+let invalid = Check(item)

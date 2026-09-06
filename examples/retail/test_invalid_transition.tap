@@ -1,0 +1,33 @@
+/// test_invalid_transition.tap
+///
+/// 错误换货转移的冲突查询，可独立运行。
+///
+/// 使用遗漏同商品检查的模拟，将键盘错误地换成温控器。
+/// 将完整模拟转移通过 rules::restrict 固定到 ExchangeModel，再调用 solve::hold。
+/// 预期返回 unsat，并打印与模拟数据冲突的 Rule 和条件。
+
+import model.tap as model
+import simulation.tap as simulation
+
+let previous_state = simulation::initial_state('thermostat-google-home')
+let exchange_parameters = simulation::exchange_parameters('thermostat-google-home')
+let exchange_result = simulation::exchange_without_product_check(
+    previous_state.copy(), exchange_parameters.copy(),
+)
+
+let restricted_model = rules::restrict(model::ExchangeModel,
+    'previous_state': previous_state,
+    'action_parameters': exchange_parameters,
+    'exchange_output': exchange_result::output,
+    'next_state': exchange_result::after,
+)
+let result = solve::hold(restricted_model)
+
+print('跨商品错误转移：', result::status)
+
+if (len(result::conflicts) > 0) {
+    pprint(result::conflicts)
+}
+if (result::reason != '') {
+    print(result::reason)
+}

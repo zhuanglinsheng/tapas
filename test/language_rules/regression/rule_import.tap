@@ -1,0 +1,24 @@
+import ../fixtures/imported_rule_types.tap as imported
+
+let Point = imported::Point
+let Positive = rule (point: imported::Point) {
+    '横坐标必须为正': point['x'] > 0
+}
+let Alias = rule (point: Point) {
+    Positive(point)
+}
+let Delivered = rule (request: imported::Request) {
+    Alias(request['point'])
+    '订单已送达': request['status'] == 'Delivered'
+}
+let valid = {'point': {'x': 1, 'y': 2.5}, 'status': 'Delivered'}
+let invalid = {'point': {'x': -1, 'y': 2.5}, 'status': 'Delivered'}
+print(rules::check(Positive(valid['point']))['passed'])
+print(rules::check(Alias(invalid['point']))['passed'])
+print(rules::check(Delivered(valid))['passed'])
+print(rules::check(Delivered(invalid))['passed'])
+print(types::matches(rules::parameters(rules::inspect(Positive))[0],
+    rules::term(imported::Point)))
+let restored = rules::deserialize(rules::serialize(Delivered))
+print(rules::check(restored(valid))['passed'])
+print(rules::check(restored(invalid))['passed'])

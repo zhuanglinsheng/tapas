@@ -1,0 +1,4 @@
+function unavailable() -> Bool { return [][0] }
+let Broken = rule { unavailable() }
+let Check = rule { Broken() implies true }
+rules::check(Check())

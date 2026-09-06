@@ -1,0 +1,5 @@
+let premise = rules::parameter('premise', types::RuleInstance)
+let no = rules::constant(false)
+let item = rules::implication(premise, [no])
+let Check = rules::make('PortableInstanceAntecedent', [premise], [item])
+print(rules::serialize(Check))

@@ -4,6 +4,7 @@
 #include "tapas/runtime/tdict.h"
 #include "tapas/runtime/tstr.h"
 #include "tapas/compile/static_type.h"
+#include "tapas/compile/module.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -58,6 +59,21 @@ static tstatic_type_id runtime_to_static(to_static_context *context,
 	if (type->kind == ttype_kind_builtin)
 		return tstatic_type_builtin_id(
 			context->arena, (tbuiltin_id)type->builtin);
+	if (type->kind == ttype_kind_enum) {
+		uint32_t count = (uint32_t)ttypeval_enum_member_count(type);
+		tstring **members = (tstring **)calloc(count, sizeof(*members));
+		if (!members) abort();
+		for (uint32_t i = 0; i < count; i++)
+			members[i] = (tstring *)ttypeval_enum_member_at(type, i);
+		tstatic_type_id result = tstatic_type_make_enum(
+			context->arena, members, count);
+		free(members);
+		return result;
+	}
+	if (type->kind == ttype_kind_points || type->kind == ttype_kind_range) {
+		tstatic_type_id item = runtime_to_static(context, ttypeval_parameter(type, "item"));
+		return tstatic_type_make(context->arena, type->kind == ttype_kind_range ? tstatic_type_range : tstatic_type_points, &item, 1, 0);
+	}
 	if (type->kind == ttype_kind_list || type->kind == ttype_kind_iterator ||
 	    type->kind == ttype_kind_pair ||
 	    type->kind == ttype_kind_dictionary) {
@@ -80,7 +96,7 @@ static tstatic_type_id runtime_to_static(to_static_context *context,
 			tstatic_type_dictionary, children, count, 0);
 	}
 	if (type->kind == ttype_kind_rule ||
-	    type->kind == ttype_kind_rule_instance) {
+	    type->kind == ttype_kind_rule_instance || type->kind == ttype_kind_instance_of) {
 		uint32_t count = ttypeval_function_parameter_count(type);
 		tstatic_type_id *children = count ?
 			(tstatic_type_id *)calloc(count, sizeof(*children)) : nullptr;
@@ -90,7 +106,11 @@ static tstatic_type_id runtime_to_static(to_static_context *context,
 				ttypeval_function_parameter_at(type, i));
 		tstatic_type_id result = tstatic_type_make(context->arena,
 			type->kind == ttype_kind_rule ? tstatic_type_rule :
+				type->instance_reference ? tstatic_type_instance_of :
 				tstatic_type_rule_instance, children, count, 0);
+		if (type->instance_reference)
+			context->arena->types[result].value_reference =
+				tstring_dup(type->instance_reference);
 		free(children);
 		return result;
 	}
@@ -181,8 +201,22 @@ static ttypeval *static_to_runtime(to_runtime_context *context,
 	if (type->child_count && !children) abort();
 	for (uint32_t i = 0; i < type->child_count; i++)
 		children[i] = static_to_runtime(context, ids[i]);
+	/* Imported annotations may still be unknown in the frontend snapshot.
+	 * Unlike Function, Rule signatures require every parameter to be known. */
+	if (type->kind == tstatic_type_rule ||
+	    type->kind == tstatic_type_rule_instance) {
+		for (uint32_t i = 0; i < type->child_count; i++) {
+			if (children[i]) continue;
+			for (uint32_t j = 0; j < type->child_count; j++)
+				ttypeval_release(children[j]);
+			free(children);
+			return nullptr;
+		}
+	}
 	ttypeval *result = nullptr;
-	if (type->kind == tstatic_type_list && type->child_count == 1)
+	if ((type->kind == tstatic_type_points || type->kind == tstatic_type_range) && type->child_count == 1)
+		result = ttypeval_new_domain(type->kind == tstatic_type_range, children[0]);
+	else if (type->kind == tstatic_type_list && type->child_count == 1)
 		result = ttypeval_new_list(children[0]);
 	else if (type->kind == tstatic_type_iterator && type->child_count == 1)
 		result = ttypeval_new_iterator(children[0]);
@@ -199,6 +233,19 @@ static ttypeval *static_to_runtime(to_runtime_context *context,
 		result = ttypeval_new_rule(children, type->child_count);
 	else if (type->kind == tstatic_type_rule_instance)
 		result = ttypeval_new_rule_instance(children, type->child_count);
+	else if (type->kind == tstatic_type_instance_of)
+		result = ttypeval_new_instance_reference(tstring_cstr(type->value_reference), children, type->child_count);
+	else if (type->kind == tstatic_type_enum) {
+		const tstatic_field *source = tstatic_type_field_items(
+			context->arena, type);
+		const tstring **members = (const tstring **)calloc(
+			type->field_count, sizeof(*members));
+		if (!members) abort();
+		for (uint32_t i = 0; i < type->field_count; i++)
+			members[i] = source[i].name;
+		result = ttypeval_new_enum(members, type->field_count);
+		free(members);
+	}
 	else if (type->kind == tstatic_type_fields) {
 		const tstatic_field *source = tstatic_type_field_items(
 			context->arena, type);
@@ -208,6 +255,8 @@ static ttypeval *static_to_runtime(to_runtime_context *context,
 		for (uint32_t i = 0; i < type->field_count; i++) {
 			fields[i].name = source[i].name;
 			fields[i].type = static_to_runtime(context, source[i].type);
+            /* Unknown fields stay dynamically checked at runtime, like unknown function parameters. */
+            if (!fields[i].type) fields[i].type = ttypeval_retain(ttypeval_builtin(tbuiltin_any));
 			fields[i].optional = source[i].optional;
 		}
 		result = ttypeval_new_fields(fields, type->field_count);
@@ -292,6 +341,11 @@ static tstatic_type_id external_binding_type(
 		    value->val.v_tcompo &&
 		    value->val.v_tcompo->vtable->get_compo_type_code() ==
 			    compo_ttypeval) {
+            tstatic_type_id declared = tstandard_type_resolve(arena,qualified_name,1);
+            if (declared != TSTATIC_TYPE_UNKNOWN) {
+                tobj_try_clear(&member_value);
+                return declared;
+            }
 			to_static_context context = { .cp = cp, .arena = arena };
 			tstatic_type_id result = runtime_to_static(
 				&context, (ttypeval *)value->val.v_tcompo);
@@ -300,6 +354,12 @@ static tstatic_type_id external_binding_type(
 			tobj_try_clear(&member_value);
 			return result;
 		}
+        if (!static_value && value && value->type == tcompo && value->val.v_tcompo &&
+            value->val.v_tcompo->vtable->get_compo_type_code() == compo_trule_builtin) {
+            tstatic_type_id result = tstandard_type_resolve(arena,qualified_name,0);
+            tobj_try_clear(&member_value);
+            return result;
+        }
 		if (!static_value && value && value->type == tcompo &&
 		    value->val.v_tcompo &&
 		    (value->val.v_tcompo->vtable->get_compo_type_code() == compo_cppfunc ||
@@ -395,7 +455,15 @@ static tstatic_type_id resolve_annotation_name(void *data, const char *name)
 		tstring_free(local_name);
 	}
 	return resolved ? runtime_to_static(context, resolved) :
-		TSTATIC_TYPE_UNKNOWN;
+        external_binding_type(context->cp, context->arena, name, 1);
+}
+
+static tstatic_type_id resolve_annotation_value(void *data, const char *name)
+{
+	to_static_context *context = data;
+	/* Imported and nested members are checked against their runtime values. */
+	if (strstr(name, "::")) return TSTATIC_TYPE_UNKNOWN;
+	return external_binding_type(context->cp, context->arena, name, 0);
 }
 
 ttypeval *compile_resolve_annotation(tcp *cp, const tstring *annotation)
@@ -404,8 +472,8 @@ ttypeval *compile_resolve_annotation(tcp *cp, const tstring *annotation)
 	tstatic_type_arena arena;
 	tstatic_type_arena_init(&arena);
 	to_static_context context = { .cp = cp, .arena = &arena };
-	tstatic_type_id id = tstatic_type_parse(&arena,
-		tstring_cstr(annotation), resolve_annotation_name, &context);
+	tstatic_type_id id = tstatic_type_parse_with_values(&arena,
+		tstring_cstr(annotation), resolve_annotation_name, resolve_annotation_value, &context);
 	ttypeval *result = compile_type_from_static(&arena, id);
 	free(context.runtime);
 	free(context.static_ids);

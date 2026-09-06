@@ -10,6 +10,7 @@ typedef struct {
 	tdiagnostics *diagnostics;
 	tsemantic_external_resolver external_resolver;
 	void *external_context;
+	const tsyntax_tokens *tokens;
 } semantic_analyzer;
 
 void tsemantic_model_init(tsemantic_model *model)
@@ -27,6 +28,7 @@ void tsemantic_model_free(tsemantic_model *model)
 	free(model->scopes);
 	free(model->resolutions);
 	free(model->declaration_symbols);
+	free(model->annotations.items);
 	*model = (tsemantic_model){ 0 };
 }
 
@@ -67,6 +69,55 @@ static uint32_t find_in_scope(const semantic_analyzer *analyzer,
 		scope = analyzer->model->scopes[scope].parent;
 	}
 	return TSEMANTIC_INVALID_ID;
+}
+
+const tannotation_reference *tannotation_reference_at(
+	const tannotation_index *index, uint32_t offset)
+{
+	for (uint32_t i = 0; index && i < index->count; i++)
+		if (index->items[i].span.start <= offset && offset < index->items[i].span.end)
+			return &index->items[i];
+	return nullptr;
+}
+
+static void index_annotation(semantic_analyzer *analyzer,
+			     tsource_span span, uint32_t scope)
+{
+	tannotation_index *index = &analyzer->model->annotations;
+	uint32_t previous = UINT32_MAX;
+	int member = 0;
+	for (uint32_t i = 0; i < analyzer->tokens->count; i++) {
+		const tsyntax_token *token = &analyzer->tokens->items[i];
+		if (token->span.start < span.start) continue;
+		if (token->span.end > span.end) break;
+		if (tsyntax_kind_is_trivia(token->kind)) continue;
+		if (token->kind == tsyntax_scope && previous != UINT32_MAX) {
+			member = 1;
+			continue;
+		}
+		if (token->kind != tsyntax_identifier) {
+			previous = UINT32_MAX;
+			member = 0;
+			continue;
+		}
+		uint32_t symbol = TSEMANTIC_INVALID_ID;
+		if (!member) {
+			tstring *name = tsource_document_slice(analyzer->document, token->span);
+			symbol = find_in_scope(analyzer, scope, name, 1);
+			tstring_free(name);
+		}
+		if (index->count == index->capacity) {
+			index->capacity = index->capacity ? index->capacity * 2 : 16;
+			index->items = realloc(index->items, index->capacity * sizeof(*index->items));
+			if (!index->items) abort();
+		}
+		index->items[index->count] = (tannotation_reference){
+			.span = token->span, .scope = scope, .symbol = symbol,
+			.receiver = member ? previous : UINT32_MAX
+		};
+		previous = index->count++;
+		member = 0;
+	}
 }
 
 static uint32_t declare_symbol(semantic_analyzer *analyzer, uint32_t scope,
@@ -201,6 +252,8 @@ static void analyze_node(semantic_analyzer *analyzer, tast_id id,
 		break;
 	case tast_function:
 	case tast_rule: {
+		if (node->function.has_return_annotation)
+			index_annotation(analyzer, node->function.return_annotation, scope);
 		uint32_t function_scope = add_scope(
 			analyzer, scope, node->span, 1, node->kind == tast_rule);
 		const tast_id *parameters = tast_get_children(analyzer->arena,
@@ -208,6 +261,9 @@ static void analyze_node(semantic_analyzer *analyzer, tast_id id,
 		for (uint32_t i = 0; i < node->function.parameter_count; i++) {
 			const tast_node *parameter = tast_get(
 				analyzer->arena, parameters[i]);
+			/* Resolve before parameter bindings: Types use the definition environment. */
+			if (parameter->parameter.has_annotation)
+				index_annotation(analyzer, parameter->parameter.annotation, scope);
 			declare_symbol(analyzer, function_scope, parameter->span,
 				parameters[i], tsemantic_symbol_parameter);
 		}
@@ -216,8 +272,9 @@ static void analyze_node(semantic_analyzer *analyzer, tast_id id,
 	case tast_rule_condition:
 		analyze_node(analyzer, node->rule_condition.value, scope);
 		break;
-	case tast_rule_requirement:
-		analyze_node(analyzer, node->expression_statement.value, scope);
+	case tast_rule_implication:
+		analyze_node(analyzer, node->rule_implication.antecedent, scope);
+		analyze_node(analyzer, node->rule_implication.consequent, scope);
 		break;
 	case tast_module:
 	case tast_block: {
@@ -229,6 +286,8 @@ static void analyze_node(semantic_analyzer *analyzer, tast_id id,
 		analyze_node(analyzer, node->expression_statement.value, scope);
 		break;
 	case tast_declaration_statement: {
+		if (node->declaration_statement.has_annotation)
+			index_annotation(analyzer, node->declaration_statement.annotation, scope);
 		if (node->declaration_statement.has_initializer)
 			analyze_node(analyzer,
 				node->declaration_statement.initializer, scope);
@@ -334,13 +393,17 @@ void tsemantic_analyze_with_resolver(
 		model->resolutions[i] = TSEMANTIC_INVALID_ID;
 		model->declaration_symbols[i] = TSEMANTIC_INVALID_ID;
 	}
+	tsyntax_tokens tokens;
+	tsyntax_tokens_init(&tokens);
+	tsyntax_lex(document, &tokens);
 	semantic_analyzer analyzer = {
-		document, arena, model, diagnostics, resolver, resolver_context
+		document, arena, model, diagnostics, resolver, resolver_context, &tokens
 	};
 	const tast_node *root_node = tast_get(arena, root);
 	uint32_t root_scope = add_scope(&analyzer, TSEMANTIC_INVALID_ID,
 		root_node ? root_node->span : (tsource_span){ 0, 0 }, 0, 0);
 	analyze_node(&analyzer, root, root_scope);
+	tsyntax_tokens_free(&tokens);
 }
 
 const tsemantic_symbol *tsemantic_symbol_for_declaration(
@@ -368,6 +431,10 @@ const tsemantic_symbol *tsemantic_symbol_at(
 		*reference = TAST_INVALID_ID;
 	if (!model || !arena)
 		return nullptr;
+	const tannotation_reference *annotation = tannotation_reference_at(&model->annotations, offset);
+	if (annotation)
+		return annotation->symbol < model->symbol_count ?
+			&model->symbols[annotation->symbol] : nullptr;
 	for (tast_id id = 0; id < model->resolution_count; id++) {
 		const tast_node *node = tast_get(arena, id);
 		if (!node || node->kind != tast_name ||

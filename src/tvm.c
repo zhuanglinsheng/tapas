@@ -1,3 +1,4 @@
+#include "tapas/runtime/tsolve.h"
 #include "tapas/tvm.h"
 
 #include "tapas/runtime/tarray.h"
@@ -40,6 +41,14 @@ void operator_to(const tobj *v1, const tobj *v2, tobj *vre)
 
 void operator_in(const tobj *v1, const tobj *v2, tobj *vre)
 {
+    int left_term = v1->type == tcompo && tobj_compo_type(v1) == compo_trule_term;
+    int right_term = v2->type == tcompo && tobj_compo_type(v2) == compo_trule_term;
+    if (left_term || right_term) {
+        trule_term *left = left_term ? (trule_term *)v1->val.v_tcompo : trule_term_constant_new(v1);
+        trule_term *right = right_term ? (trule_term *)v2->val.v_tcompo : trule_term_constant_new(v2);
+        tobj_set_compo(vre, (tcompo_v *)trule_term_in_new(left, right));
+        return;
+    }
 	tobj_set_bool(vre, v2->type == tcompo && v2->val.v_tcompo &&
 			    tcompo_contains(v2->val.v_tcompo, v1));
 }
@@ -517,6 +526,7 @@ typedef enum {
 
 typedef struct {
 	tcompo_vtable *guard;
+	tfunction_metadata *function_metadata;
 	uint_cmds state_slot;
 	uint8_t kind;
 } tins_cache;
@@ -582,6 +592,7 @@ void tvm_init(tvm *vm, uint_objs tmpmax)
 	vm->loop_states = nullptr;
 	vm->loop_state_len = 0;
 	vm->loop_state_cap = 0;
+	vm->solve_worker = nullptr;
 	vm->code_caches = nullptr;
 	vm->code_cache_len = 0;
 	vm->code_cache_cap = 0;
@@ -592,6 +603,8 @@ void tvm_init(tvm *vm, uint_objs tmpmax)
 	vm->error_source_loc_count = 0;
 	vm->error_instruction = nullptr;
 	vm->execution_depth = 0;
+	vm->antecedent_depth = 0;
+	vm->rule_logic_values = nullptr;
 }
 
 void tvm_set_tmpmax(tvm *vm, uint_objs m)
@@ -618,6 +631,8 @@ void tvm_set_rev_empty(tvm *vm)
 
 void tvm_clean(tvm *vm)
 {
+	tsolve_worker_free(vm->solve_worker);
+	vm->solve_worker = nullptr;
 	tobj_ddc_ref_clear(&vm->rev);
 	tvm_drop_call_frames(vm);
 	uint_regs i;
@@ -629,6 +644,8 @@ void tvm_clean(tvm *vm)
 	vm->loop_state_len = 0;
 	vm->loop_state_cap = 0;
 	for (uint32_t i = 0; i < vm->code_cache_len; i++) {
+		for (uint_cmds j = 0; j < vm->code_caches[i].entry_count; j++)
+			tfunction_metadata_release(vm->code_caches[i].entries[j].function_metadata);
 		free(vm->code_caches[i].entries);
 	}
 	free(vm->code_caches);
@@ -772,6 +789,11 @@ static void tcall_frame_prepare(tcall_frame *fr, tfunc *f)
 static inline void tcall_frame_assign_params(
 		tcall_frame *frame, tobj *params, uint_regs nparams)
 {
+	for (uint_regs i = 0; i < nparams; i++) {
+		ttypeval *type = tfunction_metadata_type(frame->func->metadata, i);
+		if (type && (type->contains_instance || type->contains_domain) && !ttypeval_matches(&params[i], type))
+			twarn(ErrRuntime_ParamsType, "Type annotation", "argument does not match declared Type or Rule identity");
+	}
 	tobj_array *locals = &frame->env.base.objs;
 	if (nparams > locals->capacity)
 		tobj_array_try_expand(locals, nparams);
@@ -881,6 +903,9 @@ static void tvm_pop_call_frame(tvm *vm)
 	if (vm->frame_len == 0)
 		twarn(ErrRuntime_Other, "tvm_pop_call_frame", "empty frame stack");
 	tcall_frame *fr = vm->frames[vm->frame_len - 1];
+	ttypeval *return_type = tfunction_metadata_return_type(fr->func->metadata);
+	if (return_type && (return_type->contains_instance || return_type->contains_domain) && !ttypeval_matches(&vm->rev, return_type))
+		twarn(ErrRuntime_ParamsType, "Type annotation", "return value does not match declared Type or Rule identity");
 	tobj_array saved_tmps = fr->saved_tmps;
 	tobj *saved_stk = fr->saved_stk;
 	uint_regs saved_regmax = fr->saved_regmax;
@@ -1490,7 +1515,7 @@ static int rule_parameter_index(const trule_ir *ir, const trule_term *term)
 }
 
 static void rule_eval_source_item(tvm *vm, trule_instance *instance,
-				  long item_index, tobj *result)
+				  const trule_term *term, tobj *result)
 {
 	trule *rule = (trule *)instance->rule.val.v_tcompo;
 	if (rule->checker.type != tcompo ||
@@ -1499,6 +1524,9 @@ static void rule_eval_source_item(tvm *vm, trule_instance *instance,
 	tfunc *checker = (tfunc *)rule->checker.val.v_tcompo;
 	tlist *output = tlist_new();
 	tlist *saved = vm->rule_output;
+	tlist *negations = tlist_new();
+	tlist *saved_negations = vm->rule_logic_values;
+	vm->rule_logic_values = negations;
 	vm->rule_output = output;
 	tcall_frame *frame = tvm_push_call_frame(vm, checker,
 		instance->arguments.data, (uint_regs)instance->arguments.len);
@@ -1506,24 +1534,96 @@ static void rule_eval_source_item(tvm *vm, trule_instance *instance,
 	tvm_pop_call_frame(vm);
 	tobj_try_clear(&vm->rev);
 	vm->rule_output = saved;
-	if (item_index < 0 || (uint_objs)item_index >= tlist_size(output))
-		twarn(ErrRuntime_Other, "Rule", "invalid source Term index");
-	const tobj *item = tlist_at(output, (uint_objs)item_index);
-	if (item->type == tcompo && tobj_compo_type(item) == compo_tpair)
-		tobj_copy(result, &((tpair *)item->val.v_tcompo)->second);
-	else
-		tobj_copy(result, item);
+	vm->rule_logic_values = saved_negations;
+	const char *role = tstring_cstr(term->provider_kind);
+	if (strcmp(role, "negation-value") == 0 || strcmp(role, "negation-operand") == 0 || strcmp(role, "expression-value") == 0) {
+		const tpair *record = nullptr;
+		for (uint_objs i = 0; i < tlist_size(negations); i++) {
+			const tpair *entry = (tpair *)tlist_at(negations, i)->val.v_tcompo;
+			if (entry->first.val.v_tint == term->provider_version)
+				record = (tpair *)entry->second.val.v_tcompo;
+		}
+		if (!record) twarn(ErrRuntime_Other, "Rule", "logical Term was not evaluated (short-circuited)");
+		tobj_copy(result, strcmp(role, "negation-value") == 0 ? &record->second : &record->first);
+	} else {
+		long item_index = term->provider_version;
+		if (item_index < 0 || (uint_objs)item_index >= tlist_size(output))
+			twarn(ErrRuntime_Other, "Rule", "invalid source Term index");
+		const tobj *item = tlist_at(output, (uint_objs)item_index);
+		if (item->type == tcompo && tobj_compo_type(item) == compo_tpair)
+			tobj_copy(result, &((tpair *)item->val.v_tcompo)->second);
+		else tobj_copy(result, item);
+	}
 	tobj owner;
 	tobj_set_nil(&owner);
 	tobj_set_compo(&owner, (tcompo_v *)output);
 	tobj_try_clear(&owner);
+	tobj_set_compo(&owner, (tcompo_v *)negations);
+	tobj_try_clear(&owner);
 }
+
+static int rule_antecedent_truth(tvm *vm, const tobj *value, tcompo_env *environment);
 
 static void rule_eval_term(tvm *vm, trule_instance *instance,
 			   trule_term *term, tcompo_env *environment,
 			   tobj *result)
 {
 	tobj_set_nil(result);
+    if (!strcmp(tstring_cstr(term->provider), "tapas.source") &&
+        !strcmp(tstring_cstr(term->provider_kind), "expression-value")) {
+        rule_eval_source_item(vm, instance, term, result);
+        return;
+    }
+    if (term->kind == trule_term_in) {
+        if (!strcmp(tstring_cstr(term->provider), "tapas.source")) {
+            rule_eval_source_item(vm, instance, term, result); return;
+        }
+        if (term->arguments.len != 2) twarn(ErrRuntime_Other, "Rule", "In requires two operands");
+        tobj left, right;
+        tobj_set_nil(&left); tobj_set_nil(&right);
+        /* Match ordinary Tapas membership evaluation order. */
+        rule_eval_term(vm, instance, (trule_term *)term->arguments.data[1].val.v_tcompo, environment, &right);
+        rule_eval_term(vm, instance, (trule_term *)term->arguments.data[0].val.v_tcompo, environment, &left);
+        operator_in(&left, &right, result);
+        tobj_try_clear(&left); tobj_try_clear(&right); return;
+    }
+	if (term->kind == trule_term_and || term->kind == trule_term_or) {
+		if (strcmp(tstring_cstr(term->provider), "tapas.source") == 0) {
+			rule_eval_source_item(vm, instance, term, result);
+			return;
+		}
+		if (term->arguments.len != 2)
+			twarn(ErrRuntime_Other, "Rule", "And/Or require two operands");
+		tobj operand;
+		tobj_set_nil(&operand);
+		rule_eval_term(vm, instance, (trule_term *)term->arguments.data[0].val.v_tcompo,
+			environment, &operand);
+		int truth = rule_antecedent_truth(vm, &operand, environment);
+		tobj_try_clear(&operand);
+		if ((term->kind == trule_term_and && truth) || (term->kind == trule_term_or && !truth)) {
+			rule_eval_term(vm, instance, (trule_term *)term->arguments.data[1].val.v_tcompo,
+				environment, &operand);
+			truth = rule_antecedent_truth(vm, &operand, environment);
+			tobj_try_clear(&operand);
+		}
+		tobj_set_bool(result, truth);
+		return;
+	}
+	if (term->kind == trule_term_not) {
+		if (strcmp(tstring_cstr(term->provider), "tapas.source") == 0) {
+			rule_eval_source_item(vm, instance, term, result);
+			return;
+		}
+		if (term->arguments.len != 1)
+			twarn(ErrRuntime_Other, "Rule", "Not requires one operand");
+		tobj operand;
+		tobj_set_nil(&operand);
+		rule_eval_term(vm, instance,
+			(trule_term *)term->arguments.data[0].val.v_tcompo, environment, &operand);
+		tobj_set_bool(result, !rule_antecedent_truth(vm, &operand, environment));
+		tobj_try_clear(&operand);
+		return;
+	}
 	if (term->kind == trule_term_constant) {
 		tobj_copy(result, &term->payload);
 		return;
@@ -1536,8 +1636,11 @@ static void rule_eval_term(tvm *vm, trule_instance *instance,
 		tobj_copy(result, &instance->arguments.data[index]);
 		return;
 	}
-	if (term->kind == trule_term_capture)
-		twarn(ErrRuntime_Other, "Rule", "unbound Capture Term");
+	if (term->kind == trule_term_capture) {
+        if (!trule_read_capture((trule *)instance->rule.val.v_tcompo, term, result))
+            twarn(ErrRuntime_Other, "Rule", "unbound Capture Term");
+        return;
+    }
 	if (term->kind == trule_term_extension)
 		twarn(ErrRuntime_Other, "Rule",
 		      "Extension Term requires a supporting evaluator");
@@ -1568,7 +1671,7 @@ static void rule_eval_term(tvm *vm, trule_instance *instance,
 		if (term->kind == trule_term_construct &&
 		    strcmp(tstring_cstr(term->provider), "tapas.source") == 0) {
 			rule_eval_source_item(vm, instance,
-				term->provider_version, result);
+				term, result);
 			return;
 		}
 		if (term->arguments.len != 1)
@@ -1677,10 +1780,111 @@ static void rule_violation(tlist *violations, trule_item *condition,
 	tobj_try_clear(&value);
 }
 
+/* Rule evaluator logic: no implication-specific VM instruction is needed. */
+static void rule_check(tvm *vm, const tobj *value, tobj *result, int fatal,
+		       tcompo_env *environment);
+
+static int rule_antecedent_truth(tvm *vm, const tobj *value, tcompo_env *environment)
+{
+	if (value->type == tbool) return value->val.v_tbool;
+	if (value->type != tcompo || tobj_compo_type(value) != compo_trule_instance)
+		twarn(ErrRuntime_ParamsType, "Rule truth", "Bool or RuleInstance required");
+	/* Bound source and dynamic recursion even though each nested check starts
+	 * a new requirement path. */
+	if (vm->antecedent_depth >= 128)
+		twarn(ErrRuntime_Other, "Rule truth", "antecedent evaluation depth exceeded (cyclic or deeply nested Rule check)");
+	tobj checked;
+	tobj_set_nil(&checked);
+	vm->antecedent_depth++;
+	rule_check(vm, value, &checked, 0, environment);
+	vm->antecedent_depth--;
+	tobj key;
+	tobj_set_nil(&key);
+	tobj_set_compo(&key, (tcompo_v *)tstr_new("passed"));
+	tobj result;
+	tobj_set_nil(&result);
+	tdict_get((tdict *)checked.val.v_tcompo, &key, &result);
+	int passed = result.val.v_tbool;
+	tobj_try_clear(&result);
+	tobj_try_clear(&key);
+	tobj_try_clear(&checked);
+	return passed;
+}
+
+static int rule_bool_record(const tobj *record)
+{
+	if (!record || record->type != tcompo || tobj_compo_type(record) != compo_tpair ||
+	    ((tpair *)record->val.v_tcompo)->second.type != tbool)
+		twarn(ErrRuntime_Other, "Rule", "invalid implication checker record");
+	return ((tpair *)record->val.v_tcompo)->second.val.v_tbool;
+}
+
+static void rule_check_implication(tvm *vm, trule_instance *instance,
+	trule_item *item, tlist *violations, tlist *implications,
+	trule_instance **path, trule_item **requirement_path, uint32_t depth,
+	tcompo_env *environment, tlist *records, uint_objs *record_index)
+{
+	tobj guard;
+	tobj_set_nil(&guard);
+	if (records && (((trule *)instance->rule.val.v_tcompo)->ir->version >= 7 ||
+        item->term->kind == trule_term_not ||
+	    item->term->kind == trule_term_in || item->term->kind == trule_term_and || item->term->kind == trule_term_or ||
+	    strcmp(tstring_cstr(item->term->provider_kind), "antecedent-value") == 0))
+		(*record_index)++; /* use the already checked truth, not a second evaluation */
+	if (records)
+		tobj_set_bool(&guard, rule_bool_record(tlist_at(records, *record_index)));
+	else rule_eval_term(vm, instance, item->term, environment, &guard);
+	int triggered = rule_antecedent_truth(vm, &guard, environment);
+	tobj_try_clear(&guard);
+	int passed = 1;
+	for (uint_objs j = 0; j < item->arguments.len; j++) {
+		trule_term *term = (trule_term *)item->arguments.data[j].val.v_tcompo;
+		tobj value;
+		tobj_set_nil(&value);
+		if (records) {
+			(*record_index)++;
+			if (*record_index >= tlist_size(records))
+				twarn(ErrRuntime_Other, "implies", "truncated checker records");
+			if (triggered)
+				tobj_set_bool(&value, rule_bool_record(tlist_at(records, *record_index)));
+		} else if (triggered)
+			rule_eval_term(vm, instance, term, environment, &value);
+		if (!triggered) continue;
+		if (value.type != tbool)
+			twarn(ErrRuntime_ParamsType, "implies", "Bool consequent required");
+		if (!value.val.v_tbool) {
+			passed = 0;
+			trule_item *condition = trule_condition_new(term, tstring_cstr(item->description));
+			condition->origin_start = term->origin_start;
+			condition->origin_end = term->origin_end;
+			rule_violation(violations, condition, path, requirement_path, depth);
+		}
+		tobj_try_clear(&value);
+	}
+	tdict *event = tdict_new();
+	tobj field;
+	tobj_set_nil(&field);
+	tobj_set_bool(&field, triggered);
+	rule_result_field(event, "triggered", &field);
+	tobj_set_bool(&field, passed);
+	rule_result_field(event, "passed", &field);
+	tobj_set_int(&field, triggered ? (long)item->arguments.len : 0);
+	rule_result_field(event, "consequents_checked", &field);
+	tobj_set_compo(&field, (tcompo_v *)item);
+	rule_result_field(event, "item", &field);
+	tobj_try_clear(&field);
+	tobj_set_compo(&field, (tcompo_v *)instance);
+	rule_result_field(event, "instance", &field);
+	tobj_try_clear(&field);
+	tobj_set_compo(&field, (tcompo_v *)event);
+	tobj_vec_push(&implications->items, &field);
+	tobj_try_clear(&field);
+}
+
 static void rule_collect(tvm *vm, trule_instance *instance,
 			 tlist *violations, trule_instance **path, uint32_t depth,
 			 trule_item **requirement_path,
-			 tcompo_env *environment)
+			 tcompo_env *environment, tlist *implications)
 {
 	if (depth >= 128)
 		twarn(ErrRuntime_Other, "Rule", "requirement depth exceeded");
@@ -1696,10 +1900,15 @@ static void rule_collect(tvm *vm, trule_instance *instance,
 	}
 	path[depth] = instance;
 	trule *rule = (trule *)instance->rule.val.v_tcompo;
-	if (rule->checker.type == tnil) {
+	if (rule->evaluate_ir) {
 		for (uint_objs i = 0; i < rule->ir->items.len; i++) {
 			trule_item *item =
 				(trule_item *)rule->ir->items.data[i].val.v_tcompo;
+			if (item->kind == trule_item_implication) {
+				rule_check_implication(vm, instance, item, violations, implications,
+					path, requirement_path, depth + 1, environment, nullptr, nullptr);
+				continue;
+			}
 			if (item->kind == trule_item_condition) {
 				tobj value;
 				tobj_set_nil(&value);
@@ -1718,7 +1927,7 @@ static void rule_collect(tvm *vm, trule_instance *instance,
 			rule_eval_term(vm, instance, item->rule, environment, &rule_value);
 			if (rule_value.type != tcompo ||
 			    tobj_compo_type(&rule_value) != compo_trule)
-				twarn(ErrRuntime_ParamsType, "require",
+				twarn(ErrRuntime_ParamsType, "Rule dependency",
 				      "Rule Term required");
 			uint_regs count = (uint_regs)item->arguments.len;
 			tobj *arguments = count ? calloc(count, sizeof(*arguments)) : nullptr;
@@ -1732,7 +1941,7 @@ static void rule_collect(tvm *vm, trule_instance *instance,
 				(trule *)rule_value.val.v_tcompo, arguments, count);
 			requirement_path[depth] = item;
 			rule_collect(vm, required, violations, path, depth + 1,
-				requirement_path, environment);
+				requirement_path, environment, implications);
 			for (uint_regs j = 0; j < count; j++) tobj_try_clear(&arguments[j]);
 			free(arguments);
 			tobj_try_clear(&rule_value);
@@ -1744,6 +1953,9 @@ static void rule_collect(tvm *vm, trule_instance *instance,
 	tfunc *checker = (tfunc *)rule->checker.val.v_tcompo;
 	tlist *output = tlist_new();
 	tlist *saved = vm->rule_output;
+	tlist *negations = tlist_new();
+	tlist *saved_negations = vm->rule_logic_values;
+	vm->rule_logic_values = negations;
 	vm->rule_output = output;
 	tcall_frame *frame = tvm_push_call_frame(
 		vm, checker, instance->arguments.data,
@@ -1752,6 +1964,7 @@ static void rule_collect(tvm *vm, trule_instance *instance,
 	tvm_pop_call_frame(vm);
 	tobj_try_clear(&vm->rev);
 	vm->rule_output = saved;
+	vm->rule_logic_values = saved_negations;
 
 	uint_objs metadata_index = 0;
 	for (uint_objs i = 0; i < tlist_size(output); i++) {
@@ -1759,6 +1972,11 @@ static void rule_collect(tvm *vm, trule_instance *instance,
 		trule_item *metadata = metadata_index < rule->ir->items.len ?
 			(trule_item *)rule->ir->items.data[metadata_index++]
 				.val.v_tcompo : nullptr;
+		if (metadata && metadata->kind == trule_item_implication) {
+			rule_check_implication(vm, instance, metadata, violations, implications,
+				path, requirement_path, depth + 1, environment, output, &i);
+			continue;
+		}
 		if (item->type != tcompo || !item->val.v_tcompo)
 			twarn(ErrRuntime_Other, "Rule", "invalid checker output");
 		if (tobj_compo_type(item) == compo_tpair) {
@@ -1774,18 +1992,31 @@ static void rule_collect(tvm *vm, trule_instance *instance,
 					&condition->first);
 			}
 		} else if (tobj_compo_type(item) == compo_trule_instance) {
-			if (metadata && metadata->kind == trule_item_requirement)
-				requirement_path[depth] = metadata;
+			/* Dynamic source expressions may acquire their dependency role only
+			 * after evaluation. Preserve that role in the violation path too. */
+			trule_item *dependency = metadata;
+			if (metadata && metadata->kind != trule_item_requirement) {
+				dependency = trule_requirement_new(metadata->term, nullptr, 0);
+				tstring_free(dependency->description);
+				dependency->description = tstring_dup(metadata->description);
+				dependency->origin_start = metadata->origin_start;
+				dependency->origin_end = metadata->origin_end;
+			}
+			requirement_path[depth] = dependency;
 			rule_collect(vm, (trule_instance *)item->val.v_tcompo,
 				violations, path, depth + 1,
-				requirement_path, environment);
+				requirement_path, environment, implications);
+			if (dependency && dependency != metadata && dependency->base.refctr == 0)
+				dependency->base.vtable->free(dependency);
 		} else
-			twarn(ErrRuntime_ParamsType, "require",
+			twarn(ErrRuntime_ParamsType, "Rule dependency",
 			      "RuleInstance required");
 	}
 	tobj owner;
 	tobj_set_nil(&owner);
 	tobj_set_compo(&owner, (tcompo_v *)output);
+	tobj_try_clear(&owner);
+	tobj_set_compo(&owner, (tcompo_v *)negations);
 	tobj_try_clear(&owner);
 }
 
@@ -1798,10 +2029,11 @@ static void rule_check(tvm *vm, const tobj *value, tobj *result, int fatal,
 		      "RuleInstance or zero-argument Rule required");
 	int temporary = tobj_compo_type(value) == compo_trule;
 	tlist *violations = tlist_new();
+	tlist *implications = tlist_new();
 	trule_instance *path[128];
 	trule_item *requirement_path[128] = { 0 };
 	rule_collect(vm, instance, violations, path, 0,
-		requirement_path, environment);
+		requirement_path, environment, implications);
 	if (temporary) {
 		tobj owner;
 		tobj_set_nil(&owner);
@@ -1833,6 +2065,8 @@ static void rule_check(tvm *vm, const tobj *value, tobj *result, int fatal,
 	if (fatal) {
 		tobj owner;
 		tobj_set_nil(&owner);
+		tobj_set_compo(&owner, (tcompo_v *)implications);
+		tobj_try_clear(&owner);
 		tobj_set_compo(&owner, (tcompo_v *)violations);
 		tobj_try_clear(&owner);
 		tobj_set_nil(result);
@@ -1849,6 +2083,9 @@ static void rule_check(tvm *vm, const tobj *value, tobj *result, int fatal,
 	tobj_try_clear(&field);
 	tobj_set_compo(&field, (tcompo_v *)violations);
 	rule_result_field(check, "violations", &field);
+	tobj_try_clear(&field);
+	tobj_set_compo(&field, (tcompo_v *)implications);
+	rule_result_field(check, "implications", &field);
 	tobj_try_clear(&field);
 	tobj_set_compo(&field, (tcompo_v *)tlist_new());
 	rule_result_field(check, "diagnostics", &field);
@@ -2005,7 +2242,12 @@ static void rule_deserialize(const tobj *value, tobj *result)
 	    tobj_compo_type(value) != compo_tstr)
 		twarn(ErrRuntime_ParamsType, "rules::deserialize", "String required");
 	const tstring *key = ((tstr *)value->val.v_tcompo)->data;
-	if (strncmp(tstring_cstr(key), "TPIR1;", 6) == 0) {
+	if (strncmp(tstring_cstr(key), "TPIR1;", 6) == 0 ||
+	    strncmp(tstring_cstr(key), "TPIR2;", 6) == 0 ||
+	    strncmp(tstring_cstr(key), "TPIR3;", 6) == 0 ||
+	    strncmp(tstring_cstr(key), "TPIR4;", 6) == 0 ||
+	    strncmp(tstring_cstr(key), "TPIR5;", 6) == 0 ||
+	    strncmp(tstring_cstr(key), "TPIR6;", 6) == 0) {
 		trule_ir *ir = trule_ir_deserialize(tstring_cstr(key));
 		if (!ir)
 			twarn(ErrRuntime_Other, "rules::deserialize",
@@ -2039,6 +2281,10 @@ static void vm_invoke(tvm *vm, const tobj *callable, tobj *arguments,
 	if (!callable || callable->type != tcompo || !callable->val.v_tcompo)
 		twarn(ErrRuntime_RefType, "Evaluator", "Function required");
 	switch (tobj_compo_type(callable)) {
+	case compo_trule:
+		tobj_set_compo(result, (tcompo_v *)trule_bind(
+			(trule *)callable->val.v_tcompo, arguments, argument_count));
+		break;
 	case compo_tfunc: {
 		tfunc *function = (tfunc *)callable->val.v_tcompo;
 		tcall_frame *frame = tvm_push_call_frame(
@@ -2168,26 +2414,8 @@ static void evaluator_context_access(tvm *vm, trule_builtin_kind kind,
 			 ((trule_term *)params[1].val.v_tcompo)->kind ==
 			 trule_term_capture)
 			capture = (trule_term *)params[1].val.v_tcompo;
-		if (!capture || rule->checker.type != tcompo ||
-		    tobj_compo_type(&rule->checker) != compo_tfunc)
-			twarn(ErrRuntime_Other, "evaluators::capture",
-			      "unknown CaptureId");
-		tcompo_env_abstract *capture_environment =
-			&((tfunc *)rule->checker.val.v_tcompo)->env.base;
-		long depth = strtol(tstring_cstr(capture->provider_kind), nullptr, 10);
-		for (long i = 0; i < depth; i++) {
-			capture_environment = capture_environment->father_env;
-			if (!capture_environment)
-				twarn(ErrRuntime_Other, "evaluators::capture",
-				      "Capture environment is unavailable");
-		}
-		if (capture->provider_version < 0 ||
-		    (uint_objs)capture->provider_version >=
-		    capture_environment->objs.len)
-			twarn(ErrRuntime_Other, "evaluators::capture",
-			      "Capture address is invalid");
-		tobj_copy(result, &capture_environment->objs
-			.data[capture->provider_version]);
+        if (!trule_read_capture(rule, capture, result))
+            twarn(ErrRuntime_Other, "evaluators::capture", "unknown or unavailable CaptureId");
 		return;
 	}
 	if (kind == trule_builtin_context_binding) {
@@ -2400,6 +2628,28 @@ void vm_eval(tvm *vm, tbycode *iter, tcompo_env *env)
 				"assert", "one argument required");
 			rule_check(vm, &params[0], &vm->rev, 1, env);
 			break;
+        case trule_builtin_hold: {
+            if (nparams != 1) twarn(ErrRuntime_ParamsCtr, "solve::hold", "one argument required");
+            tobj held; tobj_set_nil(&held);
+            tsolve_hold(&vm->solve_worker, &params[0], &held);
+            tobj key; tobj_set_nil(&key); tobj_set_compo(&key, (tcompo_v *)tstr_new("witness"));
+            tobj candidate; tobj_set_nil(&candidate);
+            tdict_get((tdict *)held.val.v_tcompo, &key, &candidate);
+            tobj_try_clear(&key);
+            if (candidate.type == tcompo && tobj_compo_type(&candidate) == compo_trule_instance) {
+                tobj checked; tobj_set_nil(&checked);
+                rule_check(vm, &candidate, &checked, 0, env);
+                tobj_set_compo(&key, (tcompo_v *)tstr_new("passed"));
+                tobj passed; tobj_set_nil(&passed);
+                tdict_get((tdict *)checked.val.v_tcompo, &key, &passed);
+                if (passed.type != tbool || !passed.val.v_tbool)
+                    tsolve_reject_witness(&held, "solver witness failed the Rule checker");
+                tobj_try_clear(&key); tobj_try_clear(&passed); tobj_try_clear(&checked);
+            }
+            tobj_ddc_ref_clear(&candidate);
+            tobj_copy(&vm->rev, &held);
+            tobj_try_clear(&held);
+        } break;
 		case trule_builtin_check:
 			if (nparams != 1) twarn(ErrRuntime_ParamsCtr,
 				"rules::check", "one argument required");
@@ -2629,6 +2879,18 @@ typedef struct {
 #if defined(__GNUC__) || defined(__clang__)
 __attribute__((always_inline))
 #endif
+static const tobj *resolve_type_rule(void *context, const char *name)
+{
+	tdict *values = context;
+	tobj key;
+	tobj_set_nil(&key);
+	tobj_set_compo(&key, (tcompo_v *)tstr_new(name));
+	const tobj *value = thashtbl_get(values->items, &key);
+	tobj_try_clear(&key);
+	if (!value) twarn(ErrRuntime_ParamsType, "InstanceOf", "missing Rule binding");
+	return value;
+}
+
 static inline texec_action exec_tin(tvm *vm,
 			    tbycode *iter,
 			    tins ins,
@@ -2943,6 +3205,84 @@ static inline texec_action exec_tin(tvm *vm,
 		stk_push(vm, &v);
 		tobj_set_nil(&v);
 	} break;
+	case OP_BINDTYPE: {
+		tobj *encoded = stk_top(vm);
+		tobj *bindings = stk_at(vm, 1);
+		if (tobj_compo_type(encoded) != compo_tstr || tobj_compo_type(bindings) != compo_tdict)
+			twarn(ErrRuntime_ParamsType, "InstanceOf", "invalid Type binding operands");
+		ttypeval *template = ttypeval_retain(ttypeval_from_canonical(
+			tstring_cstr(((tstr *)encoded->val.v_tcompo)->data)));
+		if (!template) twarn(ErrRuntime_ParamsType, "InstanceOf", "invalid Type template");
+		ttypeval *bound = ttypeval_resolve_instances(template, resolve_type_rule, bindings->val.v_tcompo);
+		ttypeval_release(template);
+		stk_popcn(vm, 2);
+		tobj value;
+		tobj_set_nil(&value);
+		tobj_set_compo(&value, (tcompo_v *)bound);
+		stk_push(vm, &value);
+		tobj_set_nil(&value);
+		ttypeval_release(bound);
+	} break;
+	case OP_RULETYPE: {
+		tobj *signature = stk_top(vm);
+		tobj *value = stk_at(vm, 1);
+		if (tobj_compo_type(signature) != compo_ttypeval || tobj_compo_type(value) != compo_trule)
+			twarn(ErrRuntime_ParamsType, "InstanceOf", "Rule signature required");
+		ttypeval *type = (ttypeval *)signature->val.v_tcompo;
+		trule *rule = (trule *)value->val.v_tcompo;
+		if (type->kind != ttype_kind_rule || type->function_parameter_count != rule->ir->parameters.len)
+			twarn(ErrRuntime_ParamsType, "InstanceOf", "Rule parameter count mismatch");
+		tstring *encoded = tstring_new_empty();
+		for (uint_objs i = 0; i < rule->ir->parameters.len; i++) {
+			trule_term *parameter = (trule_term *)rule->ir->parameters.data[i].val.v_tcompo;
+			ttypeval_release(parameter->type);
+			parameter->type = ttypeval_retain(ttypeval_function_parameter_at(type, i));
+			if (i) tstring_append_c(encoded, '\x1f');
+			tstring_append_ts(encoded, parameter->type->canonical);
+		}
+		tstring_free(rule->signature);
+		rule->signature = encoded;
+		stk_popc(vm);
+	} break;
+	case OP_CHECKTYPE: {
+		tobj *type = stk_top(vm);
+		if (tobj_compo_type(type) != compo_ttypeval ||
+		    !ttypeval_matches(stk_at(vm, 1), (ttypeval *)type->val.v_tcompo))
+			twarn(ErrRuntime_ParamsType, "Type annotation", "value does not match declared Type or Rule identity");
+		stk_popc(vm);
+	} break;
+	case OP_FUNCMETA: {
+		tobj *signature = stk_top(vm);
+		tobj *names = stk_at(vm, 1);
+		tobj *function = stk_at(vm, 2);
+		if (tobj_compo_type(function) != compo_tfunc ||
+		    tobj_compo_type(names) != compo_tstr ||
+		    (tobj_compo_type(signature) != compo_tstr && tobj_compo_type(signature) != compo_ttypeval))
+			twarn(ErrRuntime_ParamsType, "Function metadata", "Function and Strings required");
+		tfunc *f = (tfunc *)function->val.v_tcompo;
+		if (tobj_compo_type(signature) == compo_ttypeval) {
+			tfunction_metadata *metadata = tfunction_metadata_from_type(
+				tstring_cstr(((tstr *)names->val.v_tcompo)->data),
+				(ttypeval *)signature->val.v_tcompo);
+			if (!metadata) twarn(ErrRuntime_ParamsType, "InstanceOf", "invalid function signature");
+			tfunction_metadata_release(f->metadata);
+			f->metadata = metadata;
+			stk_popcn(vm, 2);
+			break;
+		}
+		tins_cache *cache = tvm_instruction_cache(code_cache, *idx);
+		if (!cache->function_metadata) {
+			cache->function_metadata = tfunction_metadata_decode(
+				tstring_cstr(((tstr *)names->val.v_tcompo)->data),
+				tstring_cstr(((tstr *)signature->val.v_tcompo)->data));
+			if (!cache->function_metadata)
+				twarn(ErrRuntime_ParamsType, "Function metadata", "invalid parameter declaration");
+		}
+		tfunction_metadata_release(f->metadata);
+		f->metadata = tfunction_metadata_retain(cache->function_metadata);
+		stk_popc(vm);
+		stk_popc(vm);
+	} break;
 	case OP_PUSHRULE: {
 		tobj *captures = stk_top(vm);
 		tobj *metadata = stk_at(vm, 1);
@@ -2981,11 +3321,61 @@ static inline texec_action exec_tin(tvm *vm,
 		stk_push(vm, &value);
 		tobj_set_nil(&value);
 	} break;
+	case OP_RULEVALUE:
+	case OP_RULENOT:
+	case OP_RULETRUTH: {
+		if (!vm->rule_output || !vm->rule_logic_values)
+			twarn(ErrRuntime_Other, "Rule logic", "logical expression outside checker");
+		/* Nested checks may grow the VM stack: retain the value, not its address. */
+		tobj operand;
+		tobj_set_nil(&operand);
+		tobj_copy(&operand, stk_top(vm));
+		int truth = tbycode_ins(*iter) == OP_RULEVALUE ? 0 : rule_antecedent_truth(vm, &operand, env);
+		tobj value, pair, key, entry;
+		tobj_set_nil(&value); tobj_set_nil(&key);
+		if (tbycode_ins(*iter) == OP_RULEVALUE) tobj_copy(&value, &operand);
+		else tobj_set_bool(&value, tbycode_ins(*iter) == OP_RULENOT ? !truth : truth);
+		tobj_set_nil(&pair); tobj_set_nil(&entry);
+		tobj_set_int(&key, tbycode_get_U(*iter));
+		tobj_set_compo(&pair, (tcompo_v *)tpair_new(&operand, &value));
+		tobj_set_compo(&entry, (tcompo_v *)tpair_new(&key, &pair));
+		tobj_vec_push(&vm->rule_logic_values->items, &entry);
+		tobj_try_clear(&entry); tobj_try_clear(&pair); tobj_ddc_ref_clear(&operand);
+		stk_popc(vm);
+		stk_push(vm, &value);
+		tobj_ddc_ref_clear(&value);
+	} break;
+	case OP_RULEITEM:
 	case OP_RULECOND: {
 		if (!vm->rule_output)
 			twarn(ErrRuntime_Other, "Rule condition",
 			      "condition outside checker");
 		tobj *condition = stk_top(vm);
+		if (tbycode_ins(*iter) == OP_RULEITEM && condition->type == tcompo &&
+		    tobj_compo_type(condition) == compo_trule_instance) {
+			tobj_vec_push(&vm->rule_output->items, condition);
+			stk_popc(vm);
+			break;
+		}
+		if (tbycode_get_U(*iter) == TRULE_ANTECEDENT_RECORD) {
+			/* Keep the original Bool/RuleInstance available through source IR.
+			 * Isolate its violations from the enclosing implication. */
+			tobj empty, record;
+			tobj_set_nil(&empty);
+			tobj_set_nil(&record);
+			tobj_set_compo(&empty, (tcompo_v *)tstr_new(""));
+			tobj_set_compo(&record, (tcompo_v *)tpair_new(&empty, condition));
+			tobj_vec_push(&vm->rule_output->items, &record);
+			int truth = rule_antecedent_truth(vm, condition, env);
+			tobj_try_clear(&record);
+			tobj_try_clear(&empty);
+			stk_popc(vm);
+			tobj value;
+			tobj_set_nil(&value);
+			tobj_set_bool(&value, truth);
+			stk_push(vm, &value);
+			break;
+		}
 		if (condition->type != tbool)
 			twarn(ErrRuntime_ParamsType, "Rule condition",
 			      "Bool result required");
@@ -3004,12 +3394,12 @@ static inline texec_action exec_tin(tvm *vm,
 	} break;
 	case OP_RULEREQ: {
 		if (!vm->rule_output)
-			twarn(ErrRuntime_Other, "require",
-			      "require outside checker");
+			twarn(ErrRuntime_Other, "Rule dependency",
+			      "dependency outside checker");
 		tobj *requirement = stk_top(vm);
 		if (requirement->type != tcompo ||
 		    tobj_compo_type(requirement) != compo_trule_instance)
-			twarn(ErrRuntime_ParamsType, "require",
+			twarn(ErrRuntime_ParamsType, "Rule dependency",
 			      "RuleInstance required");
 		tobj_vec_push(&vm->rule_output->items, requirement);
 		stk_popc(vm);
@@ -3134,7 +3524,9 @@ static void tvm_resolve_error_context(
 void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 {
 	twrapper *wrapper = tfunc_get_wrapper_from_env(env);
-	tvm_code_cache *code_cache = tvm_get_code_cache(vm, wrapper);
+	/* Nested Rule/evaluator execution may grow vm->code_caches. Keep the
+	 * descriptor by value; its separately allocated entries remain stable. */
+	tvm_code_cache code_cache = *tvm_get_code_cache(vm, wrapper);
 	tbycode *cmdarr = wrapper->cmdarr;
 	long *cints = wrapper->consts.cints;
 	double *cflts = wrapper->consts.cflts;
@@ -3178,7 +3570,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 		}
 		tcall_request call;
 		texec_action action = exec_tin(vm, &cmdarr[i], instruction,
-				       code_cache, &call,
+				       &code_cache, &call,
 				       &i, end, env, cints, cflts, cstrs);
 		if (action == texec_normal) {
 			i++;
@@ -3214,7 +3606,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 			}
 
 			if (callee_wrapper != wrapper)
-				code_cache = tvm_get_code_cache(vm, callee_wrapper);
+				code_cache = *tvm_get_code_cache(vm, callee_wrapper);
 			wrapper = callee_wrapper;
 			cmdarr = wrapper->cmdarr;
 			cints = wrapper->consts.cints;
@@ -3242,7 +3634,7 @@ resume_caller: {
 
 			env = return_env;
 			if (return_wrapper != wrapper)
-				code_cache = tvm_get_code_cache(vm, return_wrapper);
+				code_cache = *tvm_get_code_cache(vm, return_wrapper);
 			wrapper = return_wrapper;
 			cmdarr = wrapper->cmdarr;
 			cints = wrapper->consts.cints;

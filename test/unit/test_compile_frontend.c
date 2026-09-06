@@ -101,6 +101,29 @@ static void test_document_and_lossless_tokens(void)
 	parsed_free(&parsed);
 }
 
+static void test_logical_not(void)
+{
+	parsed_expression parsed = parse("not not x > 0 | false and true or false");
+	assert(parsed.diagnostics.count == 0);
+	const tast_node *root = node(&parsed, parsed.root);
+	assert(root->kind == tast_binary && root->binary.op == tsyntax_kw_or);
+	const tast_node *conjunction = node(&parsed, root->binary.left);
+	assert(conjunction->kind == tast_binary && conjunction->binary.op == tsyntax_kw_and);
+	const tast_node *outer = node(&parsed, conjunction->binary.left);
+	assert(outer->kind == tast_unary && outer->unary.op == tsyntax_kw_not);
+	const tast_node *inner = node(&parsed, outer->unary.operand);
+	assert(inner->kind == tast_unary && inner->unary.op == tsyntax_kw_not);
+	const tast_node *elementwise = node(&parsed, inner->unary.operand);
+	assert(elementwise->kind == tast_binary && elementwise->binary.op == tsyntax_element_or);
+	const tast_node *comparison = node(&parsed, elementwise->binary.left);
+	assert(comparison->kind == tast_binary && comparison->binary.op == tsyntax_gt);
+	assert(strcmp(tsyntax_kind_name(tsyntax_kw_not), "not") == 0);
+	parsed_free(&parsed);
+	parsed = parse("true == not false");
+	assert(parsed.diagnostics.count > 0);
+	parsed_free(&parsed);
+}
+
 static void test_precedence_and_postfix(void)
 {
 	parsed_expression parsed = parse("-2 ^ 2 + f(3, x)::value[0]");
@@ -418,7 +441,7 @@ static void test_multiline_block_headers(void)
 	parsed_expression rule = parse_module(
 		"let positive = rule(value: Int)\n"
 		"{\n"
-		"  require value > 0\n"
+		"  value > 0\n"
 		"}\n");
 	assert(rule.diagnostics.count == 0);
 	parsed_free(&rule);
@@ -652,6 +675,33 @@ static void test_editor_type_information(void)
 	tfrontend_free(&frontend);
 }
 
+static void test_dictionary_literals_are_not_field_constraints(void)
+{
+	tfrontend frontend;
+	tfrontend_init(&frontend, "dictionary.tap",
+		"let catalog = {'item': {'price': 1}}\n"
+		"let empty = {}\n"
+		"let numeric = {1: 'one'}\n"
+		"let alias = catalog\n"
+		"append(alias, 'other': false)\n"
+		"delete(alias, 'item')\n"
+		"alias['other'] = 'changed'\n"
+		"function fresh() { return {'count': 1} }\n",
+		tfrontend_module);
+	assert(frontend.diagnostics.count == 0);
+	for (uint32_t i = 0; i < frontend.semantic.symbol_count; i++) {
+		const tsemantic_symbol *symbol = &frontend.semantic.symbols[i];
+		const char *type = ttype_info_for_symbol(&frontend.types,
+			&frontend.semantic, symbol);
+		assert(type && strcmp(type, tstring_eq_cstr(symbol->name, "fresh") ?
+			"Function[] -> ?" : "Dictionary") == 0);
+	}
+	for (tast_id i = 0; i < frontend.arena.node_count; i++)
+		if (tast_get(&frontend.arena, i)->kind == tast_dictionary)
+			assert(ttype_info_node_id(&frontend.types, i) == tbuiltin_dictionary);
+	tfrontend_free(&frontend);
+}
+
 static void test_capability_types(void)
 {
 	tfrontend frontend;
@@ -789,6 +839,32 @@ static void test_static_function_types(void)
 {
 	tstatic_type_arena arena;
 	tstatic_type_arena_init(&arena);
+	const char *full[] = {
+		"List[Int;]", "Pair[String, Int;]", "Dictionary[String, List[Int;];]",
+		"Iterator[Int;]", "Union[Int, String;]", "Rule[;]", "RuleInstance[Int;]",
+		"Function[Int;] -> List[String;]", "Function[...;] -> Int",
+		"InstanceOf[; Exchange]", "List[InstanceOf[; model::Exchange]]",
+	};
+	const char *short_form[] = {
+		"List[Int]", "Pair[String, Int]", "Dictionary[String, List[Int]]",
+		"Iterator[Int]", "Int | String", "Rule[]", "RuleInstance[Int]",
+		"Function[Int] -> List[String]", "Function[...] -> Int",
+		"InstanceOf[Exchange]", "List[InstanceOf[model::Exchange]]",
+	};
+	for (size_t i = 0; i < sizeof(full) / sizeof(full[0]); i++) {
+		tstatic_type_id a = tstatic_type_parse(&arena, full[i], nullptr, nullptr);
+		tstatic_type_id b = tstatic_type_parse(&arena, short_form[i], nullptr, nullptr);
+		assert(a != TSTATIC_TYPE_UNKNOWN && b != TSTATIC_TYPE_UNKNOWN);
+		assert(tstatic_type_equal(&arena, a, b));
+	}
+	const char *invalid[] = {
+		"List[Int; 3]", "List[; Int]", "List[Int;;]", "List[Int] -> String",
+		"Function[Int;]", "Rule[...;]", "Unknown[Int;]",
+		"InstanceOf[]", "InstanceOf[First, Second]", "InstanceOf[Int; Exchange]",
+		"InstanceOf[Exchange()]", "InstanceOf[; 42]", "InstanceOf[Exchange] -> Int",
+	};
+	for (size_t i = 0; i < sizeof(invalid) / sizeof(invalid[0]); i++)
+		assert(tstatic_type_parse(&arena, invalid[i], nullptr, nullptr) == TSTATIC_TYPE_UNKNOWN);
 	tstatic_type_id type = tstatic_type_parse(&arena,
 		"Function[Int, List[String]] -> Dictionary[String, Int]",
 		nullptr, nullptr);
@@ -922,8 +998,17 @@ static void test_module_interface_and_standard_environment(void)
 		found_sqrt |= symbol->package && strcmp(symbol->package, "math") == 0 &&
 			strcmp(symbol->name, "sqrt") == 0;
 		if (symbol->kind != tmodule_symbol_package)
-			assert(tstatic_type_parse(&signatures, symbol->type,
-				nullptr, nullptr) != TSTATIC_TYPE_UNKNOWN);
+			{
+                tstring *qualified = tstring_new_empty();
+                if (symbol->package) tstring_append_fmt(qualified,"%s::",symbol->package);
+                tstring_append(qualified,symbol->name);
+                tstatic_type_id type = (symbol->kind == tmodule_symbol_function || symbol->kind == tmodule_symbol_type)
+                    ? tstandard_type_resolve(&signatures,tstring_cstr(qualified),symbol->kind == tmodule_symbol_type)
+                    : tstatic_type_parse(&signatures,symbol->type,nullptr,nullptr);
+                /* Some legacy custom Type factories have no declared structure. */
+                if (symbol->kind != tmodule_symbol_type || strcmp(symbol->type,"Type")) assert(type != TSTATIC_TYPE_UNKNOWN);
+                tstring_free(qualified);
+            }
 	}
 	assert(found_sqrt);
 	tstatic_type_arena_free(&signatures);
@@ -1028,9 +1113,77 @@ static void test_workspace_import_resolution(void)
 	rmdir(directory);
 }
 
+static void test_annotation_reference_index(void)
+{
+	const char *source =
+		"import model.tap as model\n"
+		"let Local = types::Int\n"
+		"function read(model: model::State, Local: List[Local]) -> model::State {\n"
+		"  return model\n}\n"
+		"let value: Local = 1\n";
+	parsed_expression parsed = parse_module(source);
+	tfrontend frontend;
+	tfrontend_init(&frontend, "annotations.tap", source, tfrontend_module);
+	/* Indexing must not append nodes, alter spans, or change AST children. */
+	assert(frontend.arena.node_count == parsed.arena.node_count);
+	assert(frontend.arena.child_count == parsed.arena.child_count);
+	for (tast_id i = 0; i < parsed.arena.node_count; i++) {
+		const tast_node *a = tast_get(&parsed.arena, i);
+		const tast_node *b = tast_get(&frontend.arena, i);
+		assert(a->kind == b->kind);
+		assert(a->span.start == b->span.start && a->span.end == b->span.end);
+	}
+	uint32_t offset = (uint32_t)(strstr(source, "model::State") - source);
+	const tannotation_reference *root = tannotation_reference_at(
+		&frontend.semantic.annotations, offset);
+	assert(root && root->receiver == UINT32_MAX);
+	assert(frontend.semantic.symbols[root->symbol].kind == tsemantic_symbol_import);
+	const tannotation_reference *member = tannotation_reference_at(
+		&frontend.semantic.annotations, offset + 7);
+	assert(member && member->receiver == (uint32_t)(root - frontend.semantic.annotations.items));
+	offset = (uint32_t)(strstr(source, "List[Local]") - source) + 5;
+	const tsemantic_symbol *local = tsemantic_symbol_at(
+		&frontend.semantic, &frontend.arena, offset, nullptr);
+	assert(local && local->kind == tsemantic_symbol_let);
+	tfrontend_free(&frontend);
+	parsed_free(&parsed);
+}
+
+static void test_type_presentation_provenance(void)
+{
+	tstatic_type_arena arena;
+	tstatic_type_arena_init(&arena);
+	tstring *field_name = tstring_new("count");
+	tstatic_field field = { .name = field_name, .type = tbuiltin_int };
+	tstatic_type_id definition = tstatic_type_make_fields(&arena, &field, 1);
+	tstring_free(field_name);
+	tstatic_type_id state = tstatic_type_with_name(&arena, definition, "State");
+	tstatic_type_id snapshot = tstatic_type_with_name(&arena, definition, "Snapshot");
+	assert(state != snapshot && state != definition);
+	assert(tstatic_type_equal(&arena, state, snapshot));
+	assert(tstatic_type_assignable(&arena, state, definition));
+	assert(tstatic_type_assignable(&arena, definition, snapshot));
+	tstatic_type_id parameters[] = { state, snapshot };
+	tstatic_type_id rule = tstatic_type_make(&arena, tstatic_type_rule, parameters, 2, 0);
+	tstring *display = tstatic_type_display(&arena, rule);
+	tstring *expanded = tstatic_type_format(&arena, rule);
+	assert(tstring_eq_cstr(display, "Rule[State, Snapshot]"));
+	assert(tstring_eq_cstr(expanded, "Rule[{count: Int}, {count: Int}]"));
+	tstring_free(display);
+	tstring_free(expanded);
+	/* An independently inferred structure must not acquire an arbitrary alias. */
+	display = tstatic_type_display(&arena, definition);
+	assert(tstring_eq_cstr(display, "{count: Int}"));
+	tstring_free(display);
+	tstatic_type_arena_free(&arena);
+}
+
 int main(void)
 {
+	test_type_presentation_provenance();
+	test_annotation_reference_index();
 	test_document_and_lossless_tokens();
+	test_logical_not();
 	test_precedence_and_postfix();
 	test_tunnel_call_is_distinct_from_member_call();
 	test_right_associativity();
@@ -1046,6 +1199,7 @@ int main(void)
 	test_let_capture_diagnostic();
 	test_named_function_binding();
 	test_editor_type_information();
+	test_dictionary_literals_are_not_field_constraints();
 	test_capability_types();
 	test_shared_type_diagnostics_and_narrowing();
 	test_external_type_information();

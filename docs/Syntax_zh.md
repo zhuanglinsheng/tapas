@@ -110,7 +110,24 @@ Rule 系统还提供`Rule`、`RuleInstance`、`RuleIR`、`RuleTerm`、`RuleItem`
 源码中没有`nil`字面量，变量和集合也不能保存`Nil`；单独写`return`会向调用方返回`Nil`。
 
 Type 的构造和静态检查详见[类型系统](TypeSystem_zh.md)，Rule 相关值详见[Rule](Rules_zh.md)，集合、数组和时间等能力详见[标准库](Stdlib_zh.md)，扩展值详见[C 交互](Foreign_zh.md)。
-包含联合 Type、结构 Type 和参数化容器的完整程序见[Type 示例](examples/syntax/types.tap)。
+包含联合 Type、枚举 Type、结构 Type 和参数化容器的完整程序见[Type 示例](examples/syntax/types.tap)。
+
+有限字符串集合使用`types::enum`建立静态枚举 Type；`enum`不是声明关键字：
+
+```tapas
+let TutorialOrderStatus = types::enum(
+    'Pending',
+    'Shipped',
+    'Delivered',
+)
+let tutorial_status: TutorialOrderStatus = TutorialOrderStatus['Delivered']
+```
+
+构造参数必须是一个或多个直接 String 字面量，不能重复。
+枚举成员在运行时仍是 String；枚举 Type 的 String 索引返回经过成员检查的值。
+目标 Type 已知时可以直接使用成员字面量，非成员字面量是编译错误；普通 String 表达式必须先通过`types::matches`才能收窄为枚举。
+成员集合相同的枚举结构等价，较小成员集合可赋值给包含它的枚举，任意枚举可赋值给`String`。
+完整的等价、可赋值、动态索引、反射和运行时擦除规则见[枚举 Type](TypeSystem_zh.md#24-枚举-type)。
 
 ### 4. 变量、作用域与赋值
 
@@ -300,14 +317,25 @@ function_name(receiver, arg1, arg2)
 | 成员测试 | `in` | 不结合 |
 | 逐元素逻辑与 | `&` | 左结合 |
 | 逐元素逻辑或 | `\|` | 左结合 |
+| 逻辑非 | `not` | 右结合 |
 | 逻辑与 | `and` | 左结合 |
 | 逻辑或 | `or` | 左结合 |
 | 对 | `:` | 右结合 |
 
 比较、`to`和`in`不能直接连续书写；需要组合时必须用括号明确分组。
 `&`和`|`总会计算两个操作数，不会短路。
+`not`是保留关键字，不能再用作变量名或函数名。
+
+可运行示例见[逻辑取反](examples/syntax/logical_not.tap)。
+
+普通表达式中的`not`只接受标量 Bool，返回其逻辑取反；操作数恰好求值一次。静态已知的非 Bool 操作数在编译时报错，动态值在运行时检查；不进行隐式真假转换。Rule 自身的表达式中还允许`not RuleInstance`，检查实例后取反，结果仍为 Bool；普通函数不获得此扩展，裸 Rule 始终不接受。详见 [Rule 否定](Rules_zh.md#25-逻辑否定-not)。
+
+`not`的优先级低于比较、`in`、`&`、`|`，高于`and`和`or`。例如，`not x > 0`表示`not (x > 0)`，`not a and b`表示`(not a) and b`，`not not a`表示`not (not a)`。作为比较或更高优先级运算的操作数时需要括号，例如`a == (not b)`。
+
 `and`和`or`采用短路规则：只在结果尚不能确定时计算右侧。
-`and`、`or`的实际操作数必须是布尔值；`&`、`|`还可以处理布尔数组。
+普通函数与表达式中的`and`、`or`只接受 Bool。Rule 自身表达式中的`and`、`or`也接受 RuleInstance，按从左到右短路检查成立性，返回 Bool；错误正常传播，跳过的实例不构造、不检查。两行裸实例是独立要求，一个`and`/`or`则是组合条件。详见 [Rule 逻辑组合](Rules_zh.md#26-逻辑组合-and--or)。
+
+`&`、`|`还可以处理布尔数组。
 每种值类型自行规定它支持的算术和比较操作；类型组合不受支持时，程序会在运行时报错。
 整数除法向零截断。
 除数为零、整数溢出以及无效数组形状均为运行时错误。
@@ -386,7 +414,7 @@ print(tutorial_factorial(6))
 
 类型标注、递归、闭包和变参函数的组合用法见[函数示例](examples/syntax/functions.tap)。
 
-### 11. Rule 与 `require`
+### 11. Rule 与子规则组合
 
 Rule 是可以保存、传递和组合的规则值。
 带参数的 Rule 使用`rule (参数) { ... }`，而无参数 Rule 可以省略参数列表。
@@ -399,7 +427,7 @@ let tutorial_positive = rule (value: Int) {
 }
 
 let tutorial_small_positive = rule (value: Int) {
-    require tutorial_positive(value)
+    tutorial_positive(value)
     'value must be below ten':
         value < 10
 }
@@ -410,7 +438,7 @@ assert(tutorial_small_positive(5))
 调用 Rule 只会绑定参数并产生 RuleInstance，不会立即检查 Condition。
 `assert`、`rules::check`或 evaluator 消费 RuleInstance 时才会执行检查。
 
-`require`只能出现在 Rule 体最外层，后面必须是产生 RuleInstance 的 Rule 调用。
+Rule 体最外层的 Bool 表达式要求结果为 true，裸 RuleInstance 表达式要求子规则成立并保留依赖与违规路径。`require`关键字已移除，旧写法`require R(x)`迁移为`R(x)`。
 Rule 体还可以使用局部`let`，并可以用 String 和冒号为一个 Condition 或 Condition 代码块添加说明。
 Rule 体不接受`var`、赋值、控制流、导入或直接 IO。
 
@@ -533,10 +561,10 @@ identifier          = identifier-start, { identifier-continue } ;
 
 ```text
 and as base break continue elif else false for function if import in
-let nil of or require return rule this to true var while
+let nil not of or return rule this to true var while
 ```
 
-`function`用于具名声明，但不能作为表达式的开头；`rule`用于 Rule 表达式，`require`用于在 Rule 体中组合另一个 RuleInstance；`nil`和`of`同样不能作为表达式的开头。
+`function`用于具名声明，但不能作为表达式的开头；`rule`用于 Rule 表达式，裸 RuleInstance 表达式用于在 Rule 体中组合子规则；`nil`和`of`同样不能作为表达式的开头。
 关键字必须是完整单词，例如`format`中的`for`不会被识别为关键字。
 
 ### 5. 数值字面量
@@ -574,7 +602,7 @@ double-string = '"', { code-point-except-double-quote }, '"' ;
 ```text
 多字符： ==  !=  >=  <=  ::  ...  ->  //
 单字符： + - * / % @ ^ & | > < = : . , ; ( ) [ ] { }
-单词运算符：and or in to
+单词运算符：and or not in to
 ```
 
 `//`用于开始注释。
@@ -652,12 +680,14 @@ function-declaration = "function", IDENTIFIER, parameter-list,
                        [ return-annotation ], block ;
 type-expression   = union-type ;
 union-type        = primary-type, { "|", primary-type } ;
-primary-type      = function-type | type-application | qualified-type-name ;
+primary-type      = function-type | instance-type | type-application | qualified-type-name ;
+instance-type     = [ "types::" ], "InstanceOf", "[", [ ";" ],
+                    qualified-type-name, [ "," ], "]" ;
 function-type     = ( "Function" | "types::Function" ), "[",
-                    [ type-arguments, [ "," ] | "..." ], "]",
+                    [ type-arguments, [ "," ] | "..." ], [ ";" ], "]",
                     "->", type-expression ;
 type-application  = qualified-type-name,
-                    "[", [ type-arguments, [ "," ] ], "]" ;
+                    "[", [ type-arguments, [ "," ] ], [ ";" ], "]" ;
 type-arguments    = type-expression, { ",", type-expression } ;
 qualified-type-name = IDENTIFIER, { "::", IDENTIFIER } ;
 assignment        = assignment-target, "=", expression ;
@@ -693,8 +723,8 @@ import-path      = PATH | STRING ;
 expression      = pair-expression ;
 pair-expression = or-expression, [ ":", pair-expression ] ;
 or-expression   = and-expression, { "or", and-expression } ;
-and-expression  = elementwise-or-expression,
-                  { "and", elementwise-or-expression } ;
+and-expression  = not-expression, { "and", not-expression } ;
+not-expression  = "not", not-expression | elementwise-or-expression ;
 elementwise-or-expression  = elementwise-and-expression,
                              { "|", elementwise-and-expression } ;
 elementwise-and-expression = membership-expression,
@@ -757,20 +787,22 @@ rule-item-list = rule-item, { separator-run, rule-item } ;
 rule-item = rule-let-declaration
           | condition-statement
           | described-condition-statement
-          | require-statement ;
+          | implication-statement ;
 rule-let-declaration = "let", declarator, { ",", declarator } ;
 condition-statement = expression ;
+implication-statement = [ STRING, ":", separators ],
+                        expression, "implies",
+                        ( expression | condition-block ) ;
 described-condition-statement = STRING, ":", separators,
                                 ( expression | condition-block ) ;
 condition-block = "{", separators, condition-statement,
                   { separator-run, condition-statement },
                   separators, "}" ;
-require-statement = "require", expression ;
 ```
 
 具名声明和函数字面量共用参数、返回值标注与函数体规则。
 具名声明建立只读绑定，函数字面量仍是普通表达式。
-Rule 字面量同样是普通表达式，但使用只接受 Rule 项目的专用代码块；`require`不属于普通语句。
+Rule 字面量同样是普通表达式，但使用只接受 Rule 项目的专用代码块。
 Rule 项目以 String 字面量开头且后面直接跟`:`时，按带说明的 Condition 解析，而不按普通 Pair 表达式解析。
 需要代码块的头部处于等待`{`的状态时，头部后的换行不构成`SEP`；普通完整表达式后的换行仍然分隔语句。
 
@@ -792,9 +824,10 @@ EBNF 只能描述代码的结构，下面这些规则还需要编译器单独检
 9. 同一个未加括号的表达式中，比较、范围和成员测试运算符各自最多出现一次；
 10. 变量和集合不能保存 `nil`；
 11. Rule 参数必须带有 Type 标注，且参数名称不能重复；
-12. Rule 体最外层只允许局部 `let`、Condition、带说明的 Condition 和 `require`；
+12. Rule 体最外层只允许局部 `let`、Bool/RuleInstance 项、带说明的项目和 `implies`；
 13. Condition 必须产生 Bool，说明必须直接写成 String 字面量；
-14. `require` 只能出现在 Rule 体最外层，其表达式必须产生 RuleInstance。
+14. 裸 RuleInstance 项保留子规则依赖；裸 Rule 值不是合法规则项；
+15. `implies` 只能作为 Rule 项，前件为 Bool 或 RuleInstance 表达式（可为两者的联合 Type），非空后件仍为 Bool 表达式；后件块不接受声明、裸实例要求或嵌套蕴含。它不是普通 Bool 运算符，详细语义见 [Rule 文档](Rules_zh.md#24-蕴含规则项-implies)。
 
 ## 第四部分——运算符对内置类型的默认语义
 
@@ -844,6 +877,7 @@ Tapas 编译和安装时不链接 BLAS；程序第一次执行这类运算时，
 | `==`, `!=` | 两个 `Int \| Float` | 按数值比较，允许 `Int` 与 `Float` 混合，返回 `Bool`。 |
 | `==`, `!=` | `RealArray` 与 `Int \| Float`，顺序不限 | 逐元素比较，返回同形 `BoolArray`。 |
 | `==`, `!=` | 两个同形 `RealArray` | 逐元素比较，返回同形 `BoolArray`。 |
+| `==`, `!=` | 枚举值与 String | 按 String 内容比较，返回 `Bool`；直接 String 字面量必须是该枚举的成员。 |
 | `==`, `!=` | 两个同 Type 的 `Bool`、`String`、`List`、`Pair`、`Iterator`、`BoolArray` 或 `Time` | 按内容比较，返回一个 `Bool`。`List` 和 `Pair` 递归比较其内容。 |
 | `==`, `!=` | 两个 `Dictionary`、`Function` 或 `Library` | 按对象同一性比较，返回 `Bool`。 |
 | `==`, `!=` | 其他不同类型的值 | 分别返回 `false`、`true`。 |
@@ -860,7 +894,8 @@ Rule 和 RuleInstance 不定义内容相等运算；需要判断是否为同一�
 
 | 运算符 | 合法操作数 | 结果与行为 |
 |---|---|---|
-| `and`, `or` | `Bool`, `Bool` | 返回 `Bool`，并按照短路规则决定是否计算右侧。 |
+| `not` | `Bool`；Rule 内另接受 `RuleInstance` | 返回取反后的 `Bool`，操作数只求值一次；实例在检查时求值。 |
+| `and`, `or` | `Bool`；Rule 内另接受 `RuleInstance` | 返回 `Bool`，并按照短路规则决定是否计算右侧。 |
 | `&`, `\|` | `Bool`, `Bool` | 返回 `Bool`。两个操作数都会计算，不采用短路规则。 |
 | `&`, `\|` | `BoolArray` 与 `Bool`，顺序不限 | 将 `Bool` 与每个数组元素运算，返回同形 `BoolArray`。 |
 | `&`, `\|` | 两个同形 `BoolArray` | 对对应元素进行逻辑与或逻辑或，返回同形 `BoolArray`。 |
@@ -915,7 +950,7 @@ ILP64 接口以及只提供 Fortran BLAS 符号的动态库不属于当前支持
 | `==`, `!=` | 逐元素，返回 `BoolArray` | 按完整内容比较，返回 `Bool` |
 | `>`, `<`, `>=`, `<=` | 与数字或同形实数数组逐元素比较 | 不支持 |
 | `&`, `\|` | 不支持 | 与 `Bool` 或同形 `BoolArray` 逐元素运算 |
-| `and`, `or`, `in` | 不支持 | 不支持 |
+| `not`, `and`, `or`, `in` | 不支持 | 不支持 |
 
 形状不符合要求或操作数类型不受支持时，程序会在运行时报错。
 下面的程序验证实数数组的默认运算行为：

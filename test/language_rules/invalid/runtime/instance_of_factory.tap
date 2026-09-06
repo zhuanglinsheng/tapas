@@ -1,0 +1,5 @@
+function make_rule() { return rule (value: Int) { value > 0 } }
+let First = make_rule()
+let Second = make_rule()
+function accept(action: InstanceOf[First]) { return action }
+accept(Second(1))

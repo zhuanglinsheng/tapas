@@ -351,6 +351,14 @@ static void index_module_members(tworkspace *workspace,
 			tdiagnostic_error, node->member.name,
 			"module does not export this member");
 	}
+	const tannotation_index *annotations = &document->frontend.semantic.annotations;
+	for (uint32_t i = 0; i < annotations->count; i++) {
+		tworkspace_member_resolution member;
+		if (tworkspace_resolve_member(workspace, document, annotations->items[i].span.start,
+		    &member) && member.document && member.exported)
+			tworkspace_reference_add(workspace, document, member.document,
+				member.exported, member.reference_span);
+	}
 	tworkspace_reference_sort(workspace);
 }
 
@@ -358,30 +366,108 @@ static tstatic_type_id standard_type(void *context, tstatic_type_arena *arena,
 				     const char *qualified_name, int static_value)
 {
 	(void)context;
-	const char *separator = strstr(qualified_name, "::");
-	const char *package = nullptr;
-	const char *name = qualified_name;
-	size_t package_length = 0;
-	if (separator && !strstr(separator + 2, "::")) {
-		package = qualified_name;
-		package_length = (size_t)(separator - qualified_name);
-		name = separator + 2;
+	return tstandard_type_resolve(arena, qualified_name, static_value);
+}
+
+/* Type ids belong to their document's arena; preserve structure across modules
+ * without lossy formatting/parsing or sharing pointers between analyses. */
+static tstatic_type_id copy_type(tstatic_type_arena *target,
+	const tstatic_type_arena *source, tstatic_type_id id, tstatic_type_id *copies)
+{
+	const tstatic_type *type = tstatic_type_get(source, id);
+	if (!type) return TSTATIC_TYPE_UNKNOWN;
+	if (copies[id] != TSTATIC_TYPE_UNKNOWN) return copies[id];
+	if (type->kind == tstatic_type_builtin)
+		return copies[id] = tstatic_type_builtin_id(target, type->builtin);
+	if (type->kind == tstatic_type_recursive) {
+		copies[id] = tstatic_type_make_recursive(target);
+		const tstatic_type_id *children = tstatic_type_children(source, type);
+		if (type->child_count) tstatic_type_define_recursive(target, copies[id],
+			copy_type(target, source, children[0], copies));
+		return copies[id];
 	}
-	for (uint32_t i = 0; i < tstandard_symbol_count(); i++) {
-		const tstandard_symbol *symbol = tstandard_symbol_at(i);
-		if ((package && (!symbol->package ||
-		    strlen(symbol->package) != package_length ||
-		    strncmp(symbol->package, package, package_length) != 0)) ||
-		    (!package && symbol->package) || strcmp(symbol->name, name) != 0)
-			continue;
-		if (symbol->kind == tmodule_symbol_type)
-			return static_value ? tstatic_type_builtin_named(arena, name) :
-				tstatic_type_builtin_id(arena, tbuiltin_type);
-		if (static_value || symbol->kind != tmodule_symbol_function)
+	if (type->kind == tstatic_type_fields || type->kind == tstatic_type_enum) {
+		const tstatic_field *fields = tstatic_type_field_items(source, type);
+		tstatic_field *cloned = calloc(type->field_count + 1, sizeof(*cloned));
+		if (!cloned) abort();
+		for (uint32_t i = 0; i < type->field_count; i++) {
+			cloned[i] = fields[i];
+			cloned[i].type = copy_type(target, source, fields[i].type, copies);
+		}
+		if (type->kind == tstatic_type_fields)
+			copies[id] = tstatic_type_make_fields(target, cloned, type->field_count);
+		else {
+			tstring **names = calloc(type->field_count + 1, sizeof(*names));
+			if (!names) abort();
+			for (uint32_t i = 0; i < type->field_count; i++) names[i] = fields[i].name;
+			copies[id] = tstatic_type_make_enum(target, names, type->field_count);
+			free(names);
+		}
+		free(cloned);
+		return copies[id];
+	}
+	const tstatic_type_id *children = tstatic_type_children(source, type);
+	tstatic_type_id *cloned = calloc(type->child_count + 1, sizeof(*cloned));
+	if (!cloned) abort();
+	for (uint32_t i = 0; i < type->child_count; i++)
+		cloned[i] = copy_type(target, source, children[i], copies);
+	copies[id] = tstatic_type_make(target, type->kind, cloned, type->child_count, type->variadic);
+	if (type->value_reference) target->types[copies[id]].value_reference = tstring_dup(type->value_reference);
+	free(cloned);
+	return copies[id];
+}
+
+typedef struct {
+	tworkspace *workspace;
+	tworkspace_document *document;
+} workspace_type_context;
+
+static tstatic_type_id workspace_type(void *opaque, tstatic_type_arena *arena,
+	const char *name, int static_value)
+{
+	workspace_type_context *context = opaque;
+	const char *separator = strstr(name, "::");
+	if (!separator) return standard_type(nullptr, arena, name, static_value);
+	for (uint32_t i = 0; i < context->document->import_count; i++) {
+		const tworkspace_import *imported = &context->document->imports[i];
+		if (!imported->resolved || !imported->alias ||
+		    strlen(tstring_cstr(imported->alias)) != (size_t)(separator - name) ||
+		    strncmp(tstring_cstr(imported->alias), name, separator - name)) continue;
+		tworkspace_document *target = tworkspace_find(context->workspace,
+			tstring_cstr(imported->target_uri));
+		if (!target || target == context->document || target->loading)
 			return TSTATIC_TYPE_UNKNOWN;
-		return tstatic_type_parse(arena, symbol->type, nullptr, nullptr);
+		const tmodule_export *exported = tmodule_interface_find(&target->interface, separator + 2);
+		if (!exported || exported->local_symbol >= target->frontend.types.symbol_count)
+			return TSTATIC_TYPE_UNKNOWN;
+		const ttype_info_model *types = &target->frontend.types;
+		tstatic_type_id id = static_value ? types->symbol_static_values[exported->local_symbol] :
+			types->symbol_type_ids[exported->local_symbol];
+		tstatic_type_id *copies = malloc((types->arena.type_count + 1) * sizeof(*copies));
+		if (!copies) abort();
+		for (uint32_t j = 0; j < types->arena.type_count; j++) copies[j] = TSTATIC_TYPE_UNKNOWN;
+		tstatic_type_id result = copy_type(arena, &types->arena, id, copies);
+		/* Rebase only proven exported names into the importing scope. Private
+		 * or otherwise inaccessible names fall back to their full structure. */
+		for (uint32_t j = 0; j < types->arena.type_count; j++) {
+			const tstatic_type *original = &types->arena.types[j];
+			if (!original->display_name || copies[j] == TSTATIC_TYPE_UNKNOWN) continue;
+			const tmodule_export *named = tmodule_interface_find(&target->interface,
+				tstring_cstr(original->display_name));
+			if (!named || named->local_symbol >= types->symbol_count ||
+			    types->symbol_static_values[named->local_symbol] != original->display_definition)
+				continue;
+			tstatic_type *copied = &arena->types[copies[j]];
+			tstring_free(copied->display_name);
+			copied->display_name = tstring_new_empty();
+			tstring_append_fmt(copied->display_name, "%s::%s",
+				tstring_cstr(imported->alias), tstring_cstr(named->name));
+			copied->display_definition = TSTATIC_TYPE_UNKNOWN;
+		}
+		free(copies);
+		return result;
 	}
-	return TSTATIC_TYPE_UNKNOWN;
+	return standard_type(nullptr, arena, name, static_value);
 }
 
 static tworkspace_document *analyze_document(tworkspace *workspace,
@@ -414,6 +500,19 @@ static tworkspace_document *analyze_document(tworkspace *workspace,
 				tdiagnostic_error, document->imports[i].path_span,
 				"circular module import");
 	}
+	/* Imports must be loaded before enriching the reusable Type facts. Parsing
+	 * and name resolution are retained; no user module is executed. */
+	workspace_type_context context = { workspace, document };
+	ttype_info_model_free(&document->frontend.types);
+	ttype_info_model_init(&document->frontend.types);
+	ttype_info_analyze_with_resolver(&document->frontend.document,
+		&document->frontend.arena, &document->frontend.semantic,
+		&document->frontend.flow, &document->frontend.types, workspace_type, &context);
+	tmodule_interface_free(&document->interface);
+	tmodule_interface_init(&document->interface, tstring_cstr(document->uri));
+	tmodule_interface_extract(&document->frontend, tstring_cstr(document->uri),
+		(uint64_t)(version < 0 ? 0 : version), &document->interface);
+	link_exported_namespaces(document);
 	index_module_members(workspace, document);
 	return document;
 }
@@ -519,6 +618,35 @@ const tworkspace_import *tworkspace_import_for_symbol(
 	return nullptr;
 }
 
+static int resolve_symbol_namespace(tworkspace *workspace,
+		const tworkspace_document *document, const tsemantic_symbol *symbol,
+		tworkspace_namespace *result, uint32_t depth)
+{
+	if (!symbol || depth > 16) return 0;
+	if (symbol->kind == tsemantic_symbol_import) {
+		tworkspace_import *imported = (tworkspace_import *)
+			tworkspace_import_for_symbol(document, symbol);
+		if (!imported) return 0;
+		if (!imported->resolved) {
+			tstring *path = resolve_import_path(workspace, document,
+				tstring_cstr(imported->path));
+			if (!path) return 0;
+			imported->target_uri = tworkspace_uri_from_path(tstring_cstr(path));
+			imported->resolved = 1;
+			tstring_free(path);
+		}
+		result->document = tworkspace_load(workspace,
+			tstring_cstr(imported->target_uri));
+		return result->document && result->document->generation;
+	}
+	const tast_node *declaration = tast_get(&document->frontend.arena,
+		symbol->declaration);
+	if (declaration && declaration->kind == tast_declaration_statement)
+		return resolve_namespace(workspace, document,
+			declaration->declaration_statement.initializer, result, depth + 1);
+	return 0;
+}
+
 static int resolve_namespace(tworkspace *workspace,
 			     const tworkspace_document *document, tast_id expression,
 			     tworkspace_namespace *result, uint32_t depth)
@@ -549,28 +677,7 @@ static int resolve_namespace(tworkspace *workspace,
 		tstring_free(name);
 		return package != nullptr;
 	}
-	if (symbol->kind == tsemantic_symbol_import) {
-		tworkspace_import *imported = (tworkspace_import *)
-			tworkspace_import_for_symbol(document, symbol);
-		if (!imported) return 0;
-		if (!imported->resolved) {
-			tstring *path = resolve_import_path(workspace, document,
-				tstring_cstr(imported->path));
-			if (!path) return 0;
-			imported->target_uri = tworkspace_uri_from_path(tstring_cstr(path));
-			imported->resolved = 1;
-			tstring_free(path);
-		}
-		result->document = tworkspace_load(workspace,
-			tstring_cstr(imported->target_uri));
-		return result->document && result->document->generation;
-	}
-	const tast_node *declaration = tast_get(&document->frontend.arena,
-		symbol->declaration);
-	if (declaration && declaration->kind == tast_declaration_statement)
-		return resolve_namespace(workspace, document,
-			declaration->declaration_statement.initializer, result, depth + 1);
-	return 0;
+	return resolve_symbol_namespace(workspace, document, symbol, result, depth);
 }
 
 int tworkspace_resolve_member_node(tworkspace *workspace,
@@ -650,6 +757,23 @@ int tworkspace_resolve_standard_at(
 	if (result) *result = nullptr;
 	if (reference_span) *reference_span = (tsource_span){ 0 };
 	if (!document) return 0;
+	const tannotation_reference *annotation = tannotation_reference_at(
+		&document->frontend.semantic.annotations, offset);
+	if (annotation) {
+		if (annotation->receiver != UINT32_MAX ||
+		    annotation->symbol != TSEMANTIC_INVALID_ID) return 0;
+		tstring *name = tsource_document_slice(&document->frontend.document, annotation->span);
+		const tstandard_symbol *found = tstandard_symbol_find(nullptr, tstring_cstr(name));
+		if (!found) {
+			const tstandard_symbol *type = tstandard_symbol_find("types", tstring_cstr(name));
+			if (type && type->kind == tmodule_symbol_type) found = type;
+		}
+		tstring_free(name);
+		if (!found) return 0;
+		if (result) *result = found;
+		if (reference_span) *reference_span = annotation->span;
+		return 1;
+	}
 	tast_id id = tcontrol_find_node_at(&document->frontend.flow,
 		&document->frontend.arena, document->frontend.root, offset);
 	const tast_node *node = tast_get(&document->frontend.arena, id);
@@ -674,12 +798,62 @@ int tworkspace_resolve_standard_at(
 	return 1;
 }
 
+/* Resolve the side index through the same namespace/export tables as values.
+ * Targets are resolved on demand, so imported-document reloads cannot leave
+ * dangling export pointers in an annotation entry. */
+static int resolve_annotation_member(tworkspace *workspace,
+	const tworkspace_document *document, const tannotation_reference *reference,
+	tworkspace_member_resolution *result)
+{
+	const tannotation_index *index = &document->frontend.semantic.annotations;
+	const tannotation_reference *chain[32];
+	uint32_t count = 0;
+	while (reference->receiver != UINT32_MAX) {
+		if (count == 32 || reference->receiver >= index->count) return 0;
+		chain[count++] = reference;
+		reference = &index->items[reference->receiver];
+	}
+	if (!count) return 0;
+	tworkspace_namespace namespace = { 0 };
+	if (reference->symbol < document->frontend.semantic.symbol_count) {
+		if (!resolve_symbol_namespace(workspace, document,
+		    &document->frontend.semantic.symbols[reference->symbol], &namespace, 0)) return 0;
+	} else {
+		tstring *name = tsource_document_slice(&document->frontend.document, reference->span);
+		const tstandard_symbol *package = tstandard_package(tstring_cstr(name));
+		tstring_free(name);
+		if (!package) return 0;
+		namespace.standard_package = package->name;
+	}
+	while (count) {
+		reference = chain[--count];
+		tstring *name = tsource_document_slice(&document->frontend.document, reference->span);
+		tworkspace_member_resolution found = { .reference_span = reference->span };
+		if (namespace.document) {
+			found.document = namespace.document;
+			found.exported = tmodule_interface_find(&namespace.document->interface, tstring_cstr(name));
+		} else {
+			found.standard = tstandard_symbol_find(namespace.standard_package, tstring_cstr(name));
+		}
+		tstring_free(name);
+		if (!found.exported && !found.standard) return 0;
+		if (!count) { if (result) *result = found; return 1; }
+		if (!found.exported || !found.exported->namespace_uri) return 0;
+		namespace.document = tworkspace_load(workspace, tstring_cstr(found.exported->namespace_uri));
+		if (!namespace.document || !namespace.document->generation) return 0;
+	}
+	return 0;
+}
+
 int tworkspace_resolve_member(tworkspace *workspace,
 			      const tworkspace_document *document,
 			      uint32_t offset,
 			      tworkspace_member_resolution *result)
 {
 	if (!document) return 0;
+	const tannotation_reference *annotation = tannotation_reference_at(
+		&document->frontend.semantic.annotations, offset);
+	if (annotation) return resolve_annotation_member(workspace, document, annotation, result);
 	for (tast_id id = tcontrol_find_node_at(&document->frontend.flow,
 		&document->frontend.arena, document->frontend.root, offset);
 	     id != TAST_INVALID_ID;

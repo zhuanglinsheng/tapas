@@ -14,6 +14,57 @@ static int find_binding(tast_emitter *emitter, tsource_span span,
 	return found;
 }
 
+typedef struct { tast_emitter *emitter; uint32_t count; } bound_type_context;
+
+static void emit_qualified_value(tast_emitter *emitter, const char *name)
+{
+	const char *last = nullptr;
+	for (const char *p = name; (p = strstr(p, "::")); p += 2) last = p;
+	if (!last) {
+		tstring *root = tstring_new(name);
+		compile_emit_reference(emitter->cp, root, emitter->instructions, emitter->constants);
+		tstring_free(root);
+		return;
+	}
+	tvmcmd_vect_append(emitter->instructions, tbycode_make_u(OP_PUSHS,
+		tconsts_add_str_const(emitter->constants, last + 2)));
+	treg_ctr_add(&emitter->cp->regctr);
+	tstring *receiver = tstring_new_len(name, last - name);
+	emit_qualified_value(emitter, tstring_cstr(receiver));
+	tstring_free(receiver);
+	tvmcmd_vect_append(emitter->instructions, tbycode_make_u(OP_IDXR, 1));
+	treg_ctr_ddt(&emitter->cp->regctr);
+}
+
+static const tobj *emit_instance_reference(void *data, const char *name)
+{
+	bound_type_context *context = data;
+	tast_emitter *emitter = context->emitter;
+	emit_qualified_value(emitter, name);
+	tvmcmd_vect_append(emitter->instructions, tbycode_make_u(OP_PUSHS,
+		tconsts_add_str_const(emitter->constants, name)));
+	treg_ctr_add(&emitter->cp->regctr);
+	tvmcmd_vect_append(emitter->instructions, tbycode_make(OP_PAIR));
+	treg_ctr_ddt(&emitter->cp->regctr);
+	context->count++;
+	return nullptr;
+}
+
+void tast_emit_bound_type(tast_emitter *emitter, ttypeval *type)
+{
+	bound_type_context context = { emitter, 0 };
+	ttypeval *walked = ttypeval_resolve_instances(type, emit_instance_reference, &context);
+	ttypeval_release(walked);
+	tvmcmd_vect_append(emitter->instructions, tbycode_make_u(OP_PUSHDICT, context.count));
+	treg_ctr_ddt_n(&emitter->cp->regctr, context.count);
+	treg_ctr_add(&emitter->cp->regctr);
+	tvmcmd_vect_append(emitter->instructions, tbycode_make_u(OP_PUSHS,
+		tconsts_add_str_const(emitter->constants, tstring_cstr(type->canonical))));
+	treg_ctr_add(&emitter->cp->regctr);
+	tvmcmd_vect_append(emitter->instructions, tbycode_make(OP_BINDTYPE));
+	treg_ctr_ddt(&emitter->cp->regctr);
+}
+
 int tast_is_types_package_expression(tast_emitter *emitter, tast_id id)
 {
 	const tast_node *node = tast_get(emitter->arena, id);
@@ -191,6 +242,31 @@ ttypeval *tast_infer_expression_type(tast_emitter *emitter, tast_id id,
 				     ttypeval **static_value)
 {
 	if (static_value) *static_value = nullptr;
+	const tast_node *node = tast_get(emitter->arena, id);
+	const tcompile_export *exported = module_member_export(emitter, node);
+	if (exported && exported->type) {
+		if (static_value) *static_value = ttypeval_retain(exported->type);
+		return ttypeval_retain(ttypeval_builtin(tbuiltin_type));
+	}
+	if (node && node->kind == tast_rule) {
+		/* Imports are available now, but were not necessarily available when
+		 * the frontend inferred this Rule's signature. */
+		uint32_t count = node->function.parameter_count;
+		const tast_id *ids = tast_get_children(emitter->arena,
+			node->function.parameters, count);
+		ttypeval **parameters = count ?
+			calloc(count, sizeof(*parameters)) : nullptr;
+		if (count && !parameters) abort();
+		for (uint32_t i = 0; i < count; i++)
+			parameters[i] = tast_resolve_annotation(emitter,
+				tast_get(emitter->arena, ids[i])->parameter.annotation);
+		ttypeval *result = ttypeval_retain(
+			ttypeval_new_rule(parameters, count));
+		for (uint32_t i = 0; i < count; i++)
+			ttypeval_release(parameters[i]);
+		free(parameters);
+		return result;
+	}
 	tstatic_type_id static_id = ttype_info_node_static_value(
 		&emitter->frontend->types, id);
 	if (static_id != TSTATIC_TYPE_UNKNOWN) {
@@ -204,6 +280,16 @@ ttypeval *tast_infer_expression_type(tast_emitter *emitter, tast_id id,
 	}
 	tstatic_type_id shared = ttype_info_node_id(
 		&emitter->frontend->types, id);
-	return shared == TSTATIC_TYPE_UNKNOWN ? nullptr : compile_type_from_static(
-		&emitter->frontend->types.arena, shared);
+	ttypeval *result = shared == TSTATIC_TYPE_UNKNOWN ? nullptr :
+		compile_type_from_static(&emitter->frontend->types.arena, shared);
+	if (!result && node && node->kind == tast_name) {
+		tobj_ctr *owner = nullptr;
+		uint_objs slot = 0;
+		if (find_binding(emitter, node->span, &owner, &slot)) {
+			result = ttypeval_retain(owner->bindings[slot].value_type);
+			if (static_value)
+				*static_value = ttypeval_retain(owner->bindings[slot].type_value);
+		}
+	}
+	return result;
 }

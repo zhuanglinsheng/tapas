@@ -1,0 +1,147 @@
+/// model.tap
+///
+/// 换货业务约束。
+///
+/// 定义合法状态、请求范围、换货允许条件及成功或拒绝时的状态转移规则。
+/// 顶层 ExchangeModel 组合前状态、请求、输出与后状态的约束，供测试统一查询。
+
+import model_defs.tap as defs
+import data.tap as data
+
+// S：可表示的状态中，满足这些约束的集合。
+let StateSpace = rule (state: defs::State) {
+    '订单与用户身份不能为空': {
+        state::order_id != ''
+        state::user_id != ''
+        state::payment_method_id != ''
+    }
+    '订单商品必须属于示例目录': state::item_id in data::items
+    '可支付额度不能为负': state::payment_capacity >= 0
+    '确认只能指向已知规格或为空':
+        state::confirmed_target_id == '' or state::confirmed_target_id in data::items
+}
+
+// I：本示例从已送达的原键盘订单开始，认证、确认与额度可变化。
+let InitialState = rule (state: defs::State) {
+    StateSpace(state)
+    state::status == '已送达'
+    state::item_id == 'keyboard-linear-rgb'
+}
+
+// P：可构造操作的参数空间。无货、跨商品和原规格仍是合法测试输入。
+let Exchange = rule (action_parameters: defs::ExchangeParameters) {
+    action_parameters::order_id != ''
+    action_parameters::payment_method_id != ''
+    action_parameters::target_item_id in data::items
+}
+
+// Allowed 不是调用前过滤器；不满足它的请求也要交给实现，测试实际拒绝。
+let ExchangeAllowed = rule (
+        previous_state: defs::State,
+        action_parameters: defs::ExchangeParameters,
+) {
+    let original_item = data::items[previous_state::item_id]
+    let replacement_item = data::items[action_parameters::target_item_id]
+    '必须认证为订单所属用户':
+        previous_state::authenticated_user_id == previous_state::user_id
+    '确认必须关联这次换货的目标规格':
+        previous_state::confirmed_target_id == action_parameters::target_item_id
+    '订单与支付方式必须匹配': {
+        previous_state::order_id == action_parameters::order_id
+        previous_state::payment_method_id == action_parameters::payment_method_id
+    }
+    '只有已送达订单可以换货': previous_state::status == '已送达'
+    '只能换成同一商品的其他规格': {
+        original_item::product_id == replacement_item::product_id
+        previous_state::item_id != action_parameters::target_item_id
+    }
+    '目标规格必须有货': replacement_item::available
+    '可支付额度必须足以支付差价':
+        previous_state::payment_capacity >= replacement_item::price - original_item::price
+}
+
+// C(previous_state, action_parameters, exchange_output, next_state)：只判断实际转移，不生成结果。
+let ExchangeTransition = rule (
+        previous_state: defs::State,
+        action_parameters: defs::ExchangeParameters,
+        exchange_output: defs::ExchangeOutput,
+        next_state: defs::State,
+) {
+    // 绑定许可规则实例，由两个互补前件分别判断是否成立。
+    let exchange_allowed = ExchangeAllowed(previous_state, action_parameters)
+    let price_difference: Int = (
+        data::items[action_parameters::target_item_id]::price -
+        data::items[previous_state::item_id]::price
+    )
+
+    '允许换货时必须正确更新订单与额度':
+        exchange_allowed implies {
+            exchange_output::decision == '成功'
+            exchange_output::charged_difference == price_difference
+            next_state::status == '换货申请'
+            next_state::item_id == action_parameters::target_item_id
+            next_state::payment_capacity == previous_state::payment_capacity - price_difference
+        }
+
+    '不允许换货时必须拒绝且保持业务状态':
+        (not exchange_allowed) implies {
+            exchange_output::decision == '拒绝'
+            exchange_output::charged_difference == 0
+            next_state::status == previous_state::status
+            next_state::item_id == previous_state::item_id
+            next_state::payment_capacity == previous_state::payment_capacity
+        }
+
+    // Frame：其余字段在成功、拒绝两条分支中都不得变化。
+    '换货不能改变身份、支付方式和可信上下文': {
+        next_state::order_id == previous_state::order_id
+        next_state::user_id == previous_state::user_id
+        next_state::payment_method_id == previous_state::payment_method_id
+        next_state::authenticated_user_id == previous_state::authenticated_user_id
+        next_state::confirmed_target_id == previous_state::confirmed_target_id
+    }
+}
+
+// 在合法前状态与操作参数上检查一步结果；输入空间由执行器在调用前验证。
+// 转移与后状态不变量绑定到同一组值，组合方式属于模型，不属于执行器。
+let ExchangeResult = rule (
+        previous_state: defs::State,
+        action_parameters: defs::ExchangeParameters,
+        exchange_output: defs::ExchangeOutput,
+        next_state: defs::State,
+) {
+    ExchangeTransition(previous_state, action_parameters, exchange_output, next_state)
+    StateSpace(next_state)
+}
+
+// 完整输入空间；业务上不允许换货的请求仍属于可检查输入。
+let ExchangeInput = rule (
+        previous_state: defs::State,
+        action_parameters: defs::ExchangeParameters,
+) {
+    StateSpace(previous_state)
+    Exchange(action_parameters)
+}
+
+// 顶层模型：所有参与本次转移的约束必须在这里组合。
+// InitialState 是实验起点限制，不限制一般转移或后续步骤。
+let ExchangeModel = rule (
+        previous_state: defs::State,
+        action_parameters: defs::ExchangeParameters,
+        exchange_output: defs::ExchangeOutput,
+        next_state: defs::State,
+) {
+    ExchangeInput(previous_state, action_parameters)
+    ExchangeResult(previous_state, action_parameters, exchange_output, next_state)
+}
+
+return {
+    'StateSpace': StateSpace,
+    'InitialState': InitialState,
+    'Exchange': Exchange,
+    'ExchangeAllowed': ExchangeAllowed,
+    'ExchangeTransition': ExchangeTransition,
+    'ExchangeResult': ExchangeResult,
+    'ExchangeInput': ExchangeInput,
+    'ExchangeModel': ExchangeModel,
+}

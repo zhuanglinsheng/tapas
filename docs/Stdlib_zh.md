@@ -27,6 +27,8 @@
 | `type(value: AnyType)` | `String` | 返回运行时类型名。 |
 | `copy(value: T)` | `T` | 复制标量或浅复制复合值。 |
 | `identical(left: AnyType, right: AnyType)` | `Bool` | 检查运行时同一性。 |
+| `parameters(value: Function \| Rule \| RuleInstance \| RuleIR)` | `List[Pair[String, Type]]` | 按声明顺序读取参数名与实际 Type 对象，不执行规则。 |
+| `arguments(instance: RuleInstance)` | `List[AnyType]` | 按声明顺序读取已绑定实参，不执行或检查规则。 |
 | `assert(rule: RuleInstance \| Rule)` | `Nil` | 检查 Rule；Condition 不满足时产生运行时错误。完整语义见 [Rule](Rules_zh.md#3-检查接口)。 |
 | `clock()` | `Float` | 进程 CPU 时间（秒）。 |
 | `clock_ns()` | `Int` | 进程 CPU 时间（纳秒），适合测量较短的代码。 |

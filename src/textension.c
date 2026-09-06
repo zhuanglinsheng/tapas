@@ -12,7 +12,7 @@ static int symbol_valid(const textension_symbol *symbol)
 	if (symbol->kind == textension_function) {
 		if (!!symbol->function == !!symbol->session_function ||
 		    symbol->value_factory ||
-		    symbol->intrinsic > tnative_intrinsic_type_rule_instance ||
+		    symbol->intrinsic > tnative_intrinsic_type_enum ||
 		    symbol->result_relation > tnative_result_argument ||
 		    (symbol->result_relation == tnative_result_argument &&
 		     symbol->result_argument >= symbol->minimum_arguments))

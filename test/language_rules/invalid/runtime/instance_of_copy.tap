@@ -1,0 +1,4 @@
+let First = rule (value: Int) { value > 0 }
+let Copied = First.copy()
+function accept(action: InstanceOf[First]) { return action }
+accept(Copied(1))

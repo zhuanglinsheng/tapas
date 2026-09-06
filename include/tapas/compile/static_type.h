@@ -24,8 +24,12 @@ typedef enum {
 	tstatic_type_rule,
 	tstatic_type_rule_instance,
 	tstatic_type_union,
+	tstatic_type_enum,
 	tstatic_type_fields,
-	tstatic_type_recursive
+	tstatic_type_recursive,
+	tstatic_type_instance_of,
+	tstatic_type_points,
+	tstatic_type_range
 } tstatic_type_kind;
 
 typedef struct {
@@ -36,6 +40,10 @@ typedef struct {
 	uint32_t fields;
 	uint32_t field_count;
 	uint8_t variadic;
+	tstring *value_reference;
+	/* Presentation provenance of this occurrence, never part of Type equality. */
+	tstring *display_name;
+	tstatic_type_id display_definition;
 } tstatic_type;
 
 typedef struct {
@@ -59,6 +67,11 @@ typedef struct {
 typedef tstatic_type_id (*tstatic_type_resolver)(void *context,
 						 const char *qualified_name);
 
+typedef tstatic_type_id (*tstatic_value_type_resolver)(void *context, const char *name);
+tstatic_type_id tstatic_type_parse_with_values(tstatic_type_arena *arena,
+	const char *text, tstatic_type_resolver resolver,
+	tstatic_value_type_resolver value_resolver, void *context);
+
 void tstatic_type_arena_init(tstatic_type_arena *arena);
 void tstatic_type_arena_free(tstatic_type_arena *arena);
 tstatic_type_id tstatic_type_builtin_id(tstatic_type_arena *arena,
@@ -72,6 +85,9 @@ tstatic_type_id tstatic_type_make(tstatic_type_arena *arena,
 tstatic_type_id tstatic_type_make_fields(tstatic_type_arena *arena,
 					 const tstatic_field *fields,
 					 uint32_t field_count);
+tstatic_type_id tstatic_type_make_enum(tstatic_type_arena *arena,
+				       tstring *const *members,
+				       uint32_t member_count);
 tstatic_type_id tstatic_type_make_recursive(tstatic_type_arena *arena);
 int tstatic_type_define_recursive(tstatic_type_arena *arena,
 				  tstatic_type_id recursive,
@@ -82,6 +98,12 @@ const tstatic_type_id *tstatic_type_children(const tstatic_type_arena *arena,
 					      const tstatic_type *type);
 const tstatic_field *tstatic_type_field_items(const tstatic_type_arena *arena,
 					      const tstatic_type *type);
+uint32_t tstatic_type_enum_member_count(const tstatic_type *type);
+const tstring *tstatic_type_enum_member_at(const tstatic_type_arena *arena,
+					   const tstatic_type *type,
+					   uint32_t index);
+int tstatic_type_enum_contains(const tstatic_type_arena *arena,
+			       const tstatic_type *type, const tstring *member);
 tstatic_type_id tstatic_type_parse(tstatic_type_arena *arena,
 				   const char *text,
 				   tstatic_type_resolver resolver,
@@ -93,6 +115,9 @@ int tstatic_type_assignable(const tstatic_type_arena *arena,
 				    tstatic_type_id target);
 tstring *tstatic_type_format(const tstatic_type_arena *arena,
 			     tstatic_type_id id);
+tstring *tstatic_type_display(const tstatic_type_arena *arena, tstatic_type_id id);
+tstatic_type_id tstatic_type_with_name(tstatic_type_arena *arena,
+		tstatic_type_id id, const char *name);
 
 #ifdef __cplusplus
 }

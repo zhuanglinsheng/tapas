@@ -1,0 +1,53 @@
+/// model_defs.tap
+///
+/// 业务数据类型定义。
+///
+/// 定义订单状态 State、换货请求 ExchangeParameters、业务输出 ExchangeOutput 及相关枚举。
+/// 供模拟与约束模型共同使用，不包含业务 Rule 或状态转移逻辑。
+
+let OrderStatus = types::enum('已送达', '换货申请', '已取消')
+
+let State = types::make_type(
+
+    // 订单身份与归属
+    'order_id': types::String,
+    'user_id': types::String,
+
+    // 订单的业务状态、商品规格
+    'status': OrderStatus,
+    'item_id': types::String,
+
+    // 支付信息
+    'payment_method_id': types::String,
+    'payment_capacity': types::Int,
+
+    // 操作上下文
+    'authenticated_user_id': types::String,
+    'confirmed_target_id': types::String,
+)
+
+let ExchangeParameters = types::make_type(
+    // 当前订单
+    'order_id': types::String,
+
+    // 目标换货
+    'target_item_id': types::String,
+
+    // 支付方式
+    'payment_method_id': types::String,
+)
+
+let Decision = types::enum('成功', '拒绝')
+
+let ExchangeOutput = types::make_type(
+    'decision': Decision,
+    'charged_difference': types::Int,
+)
+
+return {
+    'OrderStatus': OrderStatus,
+    'Decision': Decision,
+    'State': State,
+    'ExchangeParameters': ExchangeParameters,
+    'ExchangeOutput': ExchangeOutput,
+}
