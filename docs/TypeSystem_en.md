@@ -83,10 +83,12 @@ operation without constraining its parameter or result Types. See the
 category and the [Rule documentation](Rules_en.md) for exact Rule and
 RuleInstance Types.
 
-RuleInstance is not Bool and has no general implicit conversion. Only the
-antecedent position of `implies` accepts Bool, RuleInstance, or their union;
-instances are interpreted by checking their satisfaction. Consequents remain
-Bool, and bare Rules must first be bound. This does not extend `if`, `and`, or `or`.
+RuleInstance is not Bool and has no general implicit conversion. Inside a Rule,
+standalone items, `implies` antecedents, and operands of `not`, `and`, and `or`
+accept Bool or RuleInstance, interpreting instances by checking satisfaction.
+Consequents remain Bool, and bare Rules must first be bound. Logic outside a
+Rule, including ordinary function bodies, still requires Bool; `if` does not
+accept RuleInstance.
 
 ### 1.3 Static Type expressions
 
@@ -691,10 +693,10 @@ condition. The variadic `...` form cannot carry a parameter annotation, but a
 result annotation may follow its parameter list.
 
 The compiler uses a precise function signature to check the body, statically
-known calls, and module interfaces. This signature is compile-time Type
-metadata and does not change the runtime function object;
-`types::of(function_value)` still returns raw `types::Function`. Exact function
-Types currently have no runtime construction or reflection interface.
+known calls, and module interfaces. Runtime functions retain parameter metadata
+for display and `parameters(function_value)`, while `types::of(function_value)`
+still returns raw `types::Function`. There is no runtime constructor for an exact
+function Type value; parameter reflection does not return a complete signature Type.
 
 ### 3.3 Field Types and structure literals
 
@@ -867,12 +869,11 @@ Without a target Type, container literals are inferred as follows:
 1. if every element Type of a non-empty List is known, Item is their canonical
    union;
 2. if both member Types of a Pair are known, they become First and Second;
-3. if every key of a non-empty Dictionary is a String literal and every value
-   Type is known, infer a field Type;
-4. for any other non-empty Dictionary whose key and value Types are known, Key
-   and Value are the normalized unions of those Types;
-5. infer the corresponding raw container Type for an empty container or when
-   any required member is `Unknown`.
+3. a Dictionary literal without a target Type always has raw `Dictionary`
+   Type; initial entries do not impose fixed fields or key/value constraints,
+   so keys may be added or deleted and value Types may change;
+4. use the raw container Type for an empty List or unknown required members.
+   Annotate dictionaries explicitly when field or key/value constraints are needed.
 
 If an inferred union has only one member after normalization, that member is used
 directly. This is not subject to the source-level rule that `types::union`

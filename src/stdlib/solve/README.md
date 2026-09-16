@@ -149,12 +149,13 @@ let result = solve::sample(
 Tapas 构建不依赖 Python 或 OR-Tools；调用求解需要 Python 3 和本目录的依赖：
 
 ```sh
-python3 -m venv .venv-solve
-.venv-solve/bin/python -m pip install -r src/stdlib/solve/requirements.txt
-TAPAS_SOLVE_PYTHON="$PWD/.venv-solve/bin/python" build/bin/tapas examples/solve/feasibility.tap
+python3 -c "import sys, ortools; print(sys.executable, ortools.__version__)"
+# 仅当上一步提示缺少 OR-Tools 时，安装到同一个 python3 环境：
+python3 -m pip install -r src/stdlib/solve/requirements.txt
+build/bin/tapas examples/solve/feasibility.tap
 ```
 
-若默认 `python3` 已安装依赖，可省略 `TAPAS_SOLVE_PYTHON`。它接受解释器路径，不接受带参数的 shell 命令。
+默认使用 `PATH` 中找到的 `python3`，不要求创建或激活 venv。已有 OR-Tools 时无需重复安装。可选的 `TAPAS_SOLVE_PYTHON` 用于指定另一个解释器；它接受路径，不接受带参数的 shell 命令。若 Python 由系统包管理器管理，请使用该环境支持的安装方式；venv 只是用户可自行选择的方案。
 
 ### 基本查询
 

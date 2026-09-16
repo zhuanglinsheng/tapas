@@ -67,9 +67,9 @@ its signature at runtime.
 
 ```text
 let Between = rule (
-    value  : Int,
-    minimum: Int,
-    maximum: Int,
+        value  : Int,
+        minimum: Int,
+        maximum: Int,
 ) {
     value >= minimum
     value <= maximum
@@ -344,14 +344,14 @@ change the IR.
 
 | Type | Purpose |
 |---|---|
-| `RuleIR` | Complete rule representation |
+| `types::RuleIR` | Complete rule representation |
 | `Parameter`, `Capture` | Parameter and capture descriptions |
-| `Item`, `Condition`, `Requirement` | Ordered Rule items |
-| `Term`, `term(Type)` | Broad or result-typed Term |
+| `types::RuleItem`, `Condition`, `Requirement` | Ordered Rule items |
+| `types::RuleTerm`, `term(Type)` | Broad or result-typed Term |
 | `Origin` | Source range |
 | `CheckResult`, `Violation`, `Diagnostic` | Check results |
 
-All names above use the `rules::` namespace. Common readers are:
+Except for core Types explicitly qualified with `types::`, these names use `rules::`. Common readers are:
 
 | API | Result |
 |---|---|
@@ -576,7 +576,7 @@ In, domain constants, and domain parameter Types use TPIR6, with TPIR1–5 read 
 
 ## 11. Restricting an existing Rule
 
-`rules::restrict(base, ...restrictions) -> Rule` accepts a Rule and zero or more `Pair[String : AnyType]` arguments. Keys name parameters. Concrete values add `==` conditions; `RangeOf[Int]` and `PointsOf[T]` add `in` conditions.
+`rules::restrict(base, ...restrictions) -> Rule` accepts a Rule and zero or more `Pair[String, AnyType]` arguments. Keys name parameters. Concrete values add `==` conditions; `RangeOf[Int]` and `PointsOf[T]` add `in` conditions.
 
 ```tapas
 let restrict_base = rule (quantity: Int, approved: Bool) {

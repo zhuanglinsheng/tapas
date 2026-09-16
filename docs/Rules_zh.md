@@ -61,9 +61,9 @@ Rule 参数必须具有 Type 标注。
 
 ```text
 let Between = rule (
-    value  : Int,
-    minimum: Int,
-    maximum: Int,
+        value  : Int,
+        minimum: Int,
+        maximum: Int,
 ) {
     value >= minimum
     value <= maximum
@@ -319,14 +319,14 @@ let instance: RuleInstance[Int] = Positive(1)
 
 | Type | 作用 |
 |---|---|
-| `RuleIR` | 完整规则表示 |
+| `types::RuleIR` | 完整规则表示 |
 | `Parameter`、`Capture` | 参数和捕获描述 |
-| `Item`、`Condition`、`Requirement` | 有序 Rule 项目 |
-| `Term`、`term(Type)` | 无类型或精确结果 Type 的 Term |
+| `types::RuleItem`、`Condition`、`Requirement` | 有序 Rule 项目 |
+| `types::RuleTerm`、`term(Type)` | 无类型或精确结果 Type 的 Term |
 | `Origin` | 源码范围 |
 | `CheckResult`、`Violation`、`Diagnostic` | 检查结果 |
 
-以上名称均通过`rules::`访问。
+除已写明 `types::` 的核心 Type 外，以上名称通过 `rules::` 访问。
 常用读取函数为：
 
 | 接口 | 结果 |
@@ -544,7 +544,7 @@ RuleIR 使用 Bool 类型的 `In` Term，两个有序参数分别是待检查值
 
 ## 11. 限制已有 Rule
 
-`rules::restrict(base, ...restrictions) -> Rule` 接受一个 Rule 和零个或多个 `Pair[String : AnyType]`。Pair 的键是参数名；值为具体值时生成 `==` 条件，为 `RangeOf[Int]` 或 `PointsOf[T]` 时生成 `in` 条件。
+`rules::restrict(base, ...restrictions) -> Rule` 接受一个 Rule 和零个或多个 `Pair[String, AnyType]`。Pair 的键是参数名；值为具体值时生成 `==` 条件，为 `RangeOf[Int]` 或 `PointsOf[T]` 时生成 `in` 条件。
 
 ```tapas
 let restrict_base = rule (quantity: Int, approved: Bool) {

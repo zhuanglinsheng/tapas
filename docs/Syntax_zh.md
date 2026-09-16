@@ -532,7 +532,7 @@ import 'path with spaces/module.tap' as module_name
 ### 1. 源文本与位置
 
 编译器按字节读取源文件。
-语法中的标点、关键字、标识符和数字都使用 ASCII 字符；字符串可以直接包含除自身结束引号、反斜杠和换行外的其他字节。
+标点、关键字和数字使用 ASCII 字符。标识符还接受值大于等于 0x80 的字节，因此可以使用中文等 UTF-8 名称；当前词法器不验证 Unicode 标识符类别或执行名称规范化。字符串可以直接包含除自身结束引号、反斜杠和换行外的其他字节。
 LF、CRLF 和单独的 CR 都表示一次换行。
 错误位置的行号和列号从 1 开始，其中列号按字节计算。
 
@@ -555,7 +555,7 @@ Tapas 不支持块注释。
 ### 4. 标识符与关键字
 
 ```ebnf
-identifier-start    = ASCII-letter | "_" ;
+identifier-start    = ASCII-letter | "_" | non-ASCII-byte ;
 identifier-continue = identifier-start | decimal-digit ;
 identifier          = identifier-start, { identifier-continue } ;
 ```
@@ -566,7 +566,7 @@ identifier          = identifier-start, { identifier-continue } ;
 
 ```text
 and as base break continue elif else false for function if import in
-let nil not of or return rule this to true var while
+let nil not of or return rule implies this to true var while
 ```
 
 `function`用于具名声明，但不能作为表达式的开头；`rule`用于 Rule 表达式，裸 RuleInstance 表达式用于在 Rule 体中组合子规则；`nil`和`of`同样不能作为表达式的开头。
@@ -629,10 +629,12 @@ unquoted-import-path = path-character, { path-character } ;
 
 ### 9. Markdown 源码提取
 
-在 Markdown 中，一行去掉行首空白后，如果以三个反引号开头，并紧接`tap`或`tapas`，就表示 Tapas 代码块开始；语言标签后只能有空白。
+为保证各执行入口一致，Markdown 应使用以下规范形式：一行去掉行首空白后，以三个反引号开头并紧接`tap`或`tapas`，表示 Tapas 代码块开始；语言标签后只写空白。
 结束行同样允许行首空白，但必须包含至少三个反引号，之后也只能有空白。
 编译器只读取围栏内的代码，其他行按空行处理，以保留正确的报错行号。
 `Tapas-Return`输出区域不会参与编译。
+
+实现兼容性说明：当前提取器按 `tap` 前缀识别标签，并把代码块内任何以三个反引号开头的行视为结束；更新输出模式还接受反引号与标签间的空白。这些宽松形式在不同入口间不完全一致，文档与程序应使用上述规范形式。
 
 ## 第三部分——语法规则（EBNF）
 
@@ -757,15 +759,17 @@ power-expression = postfix-expression, [ "^", unary-expression ] ;
 postfix-expression = primary-expression, { postfix-suffix } ;
 postfix-suffix     = call-suffix | index-suffix
                    | readonly-member-suffix | tunnel-suffix ;
-call-suffix       = "(", [ argument-list ], ")" ;
+call-suffix       = "(", [ call-arguments ], ")" ;
 argument-list     = expression, { ",", expression }, [ "," ] ;
+call-arguments    = call-argument, { ",", call-argument }, [ "," ] ;
+call-argument     = expression | IDENTIFIER, "=", expression ;
 index-suffix        = "[", index-argument-list, "]" ;
 index-argument-list = index-argument, { ",", index-argument } ;
 index-argument      = expression | slice ;
 slice               = [ or-expression ], ":", [ or-expression ] ;
 readonly-member-suffix = "::", IDENTIFIER
                        | ".", IDENTIFIER  (* only when not followed by "(" *) ;
-tunnel-suffix = ".", IDENTIFIER, "(", [ argument-list ], ")" ;
+tunnel-suffix = ".", IDENTIFIER, "(", [ call-arguments ], ")" ;
 ```
 
 切片端点使用`or-expression`，从而排除无括号的对运算符。
@@ -777,12 +781,14 @@ tunnel-suffix = ".", IDENTIFIER, "(", [ argument-list ], ")" ;
 primary-expression = INTEGER | FLOAT | STRING | "true" | "false"
                    | IDENTIFIER | "this" | "base"
                    | parenthesized-expression | list-literal
-                   | dictionary-literal | function-literal | rule-literal ;
+                   | dictionary-literal | structure-literal | function-literal | rule-literal ;
 parenthesized-expression = "(", expression, ")" ;
 list-literal = "[", [ argument-list ], "]" ;
 dictionary-literal = "{", [ dictionary-entry,
                             { ",", dictionary-entry }, [ "," ] ], "}" ;
 dictionary-entry = or-expression, ":", expression ;
+structure-literal = "{", structure-entry, { ",", structure-entry }, [ "," ], "}" ;
+structure-entry   = or-expression | IDENTIFIER, "=", expression ;
 function-literal  = parameter-list, [ return-annotation ], block ;
 parameter-list    = "(", [ fixed-parameters | "..." ], ")" ;
 fixed-parameters  = parameter, { ",", parameter }, [ "," ] ;
@@ -821,6 +827,8 @@ Rule 项目以 String 字面量开头且后面直接跟`:`时，按带说明的 
 
 语法中有意不包含`nil`。
 表达式位置的`{}`是空字典；代码块只出现在复合语句或函数要求的位置。
+
+调用中的命名选项写作 `name = expression`，必须放在所有位置实参之后。接受哪些名称由被调用接口决定；这不是按普通函数参数名自动重排实参的机制，例如 `solve::sample` 明确支持命名选项。结构字面量需要已知字段 Type，位置字段必须先于命名字段，且不能与字典的 `key: value` 项混用。
 
 ### 8. 上下文相关约束
 
