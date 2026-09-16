@@ -108,9 +108,9 @@ Download a prebuilt Linux or macOS archive from
 [GitHub Releases](https://github.com/zhuanglinsheng/tapas/releases), or build
 Tapas from source.
 
-Tapas depends on GNU Readline and Python 3, with the OR-Tools package installed
-in the Python environment. Make sure the system can find GNU Readline and
-Python through its default search paths, and that Python can import `ortools`.
+Tapas requires GNU Readline. Solving, sampling, and the full test suite also
+require `python3` on `PATH` to import OR-Tools. Reuse your existing Python
+environment; no virtual environment is required.
 With a C23 compiler and CMake 3.21 or newer, build and run the tests from the
 repository root:
 

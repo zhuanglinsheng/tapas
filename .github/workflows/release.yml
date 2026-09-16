@@ -64,6 +64,16 @@ jobs:
       - name: Check out tagged source
         uses: actions/checkout@v6
 
+      - name: Set up Python for solver tests
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install and verify solver dependency
+        run: |
+          python3 -m pip install -r src/stdlib/solve/requirements.txt
+          python3 -c "import sys, ortools; from ortools.sat.python import cp_model; print(sys.executable, ortools.__version__)"
+
       - name: Install GNU Readline on Linux
         if: runner.os == 'Linux'
         run: |
@@ -90,7 +100,10 @@ jobs:
 
       - name: Test
         shell: bash
-        run: ctest --test-dir build --output-on-failure
+        run: ctest --test-dir build --output-on-failure --timeout 120
+
+      - name: Check maintained documentation
+        run: python3 test/release/check_docs.py --tapas build/bin/tapas
 
       - name: Install and archive
         shell: bash
@@ -98,8 +111,11 @@ jobs:
           package="tapas-core-$VERSION-${{ matrix.asset_suffix }}"
           mkdir -p dist
           cmake --install build --prefix "dist/$package"
-          cp LICENSE README.md README_en.md "dist/$package/"
+          cp LICENSE INSTALL.md CHANGELOG.md README.md README_en.md "dist/$package/"
           tar -czf "dist/$package.tar.gz" -C dist "$package"
+          mkdir -p "$RUNNER_TEMP/tapas-extracted"
+          tar -xzf "dist/$package.tar.gz" -C "$RUNNER_TEMP/tapas-extracted"
+          python3 test/release/verify_core.py "$RUNNER_TEMP/tapas-extracted/$package" --version "$VERSION"
 
       - name: Upload Core archive
         uses: actions/upload-artifact@v7
@@ -128,9 +144,17 @@ jobs:
         working-directory: editors/vscode
         run: |
           mkdir -p ../../dist
-          npx --yes @vscode/vsce package \
+          npx --yes @vscode/vsce@4.0.0 package \
             --no-dependencies \
             --out "../../dist/tapas-language-$VERSION.vsix"
+
+      - name: Set up Python for archive inspection
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Verify packaged VSIX
+        run: python3 test/release/verify_vsix.py "dist/tapas-language-$VERSION.vsix" --version "$VERSION"
 
       - name: Upload VSIX
         uses: actions/upload-artifact@v7
@@ -152,6 +176,9 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       VERSION: ${{ needs.validate.outputs.version }}
     steps:
+      - name: Check out release notes
+        uses: actions/checkout@v6
+
       - name: Download release artifacts
         uses: actions/download-artifact@v8
         with:
@@ -170,5 +197,6 @@ jobs:
           gh release create "$GITHUB_REF_NAME" dist/* \
             --repo "$GITHUB_REPOSITORY" \
             --verify-tag \
+            --target "$VERSION" \
             --title "Tapas $VERSION" \
-            --generate-notes
+            --notes-file CHANGELOG.md
