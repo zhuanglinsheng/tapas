@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(tapas VERSION 0.1.0 LANGUAGES C)
+project(tapas VERSION 0.2.0 LANGUAGES C)
 
 include(CTest)
 include(GNUInstallDirs)
@@ -400,6 +400,7 @@ if(BUILD_TESTING)
     file(GLOB_RECURSE TAPAS_DOCUMENTATION CONFIGURE_DEPENDS
         "${CMAKE_CURRENT_SOURCE_DIR}/docs/*.md"
     )
+    list(FILTER TAPAS_DOCUMENTATION EXCLUDE REGEX "/docs/plan/")
     list(APPEND TAPAS_DOCUMENTATION
         "${CMAKE_CURRENT_SOURCE_DIR}/README.md"
         "${CMAKE_CURRENT_SOURCE_DIR}/CODE_OF_CONDUCT.md"
@@ -468,3 +469,13 @@ install(DIRECTORY src/stdlib/format
 install(FILES "${FORMAT_BYTECODE}"
     DESTINATION ${CMAKE_INSTALL_DATADIR}/tapas/stdlib/format
 )
+
+# Solver dependencies remain external; ship the exact tested requirement.
+install(FILES src/stdlib/solve/requirements.txt
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/tapas/solve)
+install(FILES LICENSE INSTALL.md CHANGELOG.md
+    DESTINATION ${CMAKE_INSTALL_DOCDIR})
+install(FILES
+    src/dsa/third_party/pcg-c/LICENSE-MIT.txt
+    src/dsa/third_party/pcg-c/LICENSE-APACHE.txt
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/licenses/tapas/pcg-c)

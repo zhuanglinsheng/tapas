@@ -102,15 +102,17 @@ the [failure-data generation example](examples/solve/generate_violations.tap).
 | How to read and write Tapas code | [A First Look at Tapas](docs/examples/Basics_en.md): variables, functions, and control flow; [modules and packages](docs/examples/modules/README_en.md): organizing code across files |
 | What else you can run | [Example collection](examples/README_en.md): solving, business tests, and general algorithms |
 
+See [CHANGELOG](CHANGELOG.md) for changes and migration notes.
+
 ## Installation and Build
 
 Download a prebuilt Linux or macOS archive from
 [GitHub Releases](https://github.com/zhuanglinsheng/tapas/releases), or build
 Tapas from source.
 
-Tapas depends on GNU Readline and Python 3, with the OR-Tools package installed
-in the Python environment. Make sure the system can find GNU Readline and
-Python through its default search paths, and that Python can import `ortools`.
+Tapas requires GNU Readline. Solving, sampling, and the full test suite also
+require `python3` on `PATH` to import OR-Tools. Reuse your existing Python
+environment; no virtual environment is required.
 With a C23 compiler and CMake 3.21 or newer, build and run the tests from the
 repository root:
 

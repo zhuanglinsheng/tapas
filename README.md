@@ -77,11 +77,13 @@ conflicts = [{
 | 代码的基本写法 | [Tapas 入门](docs/examples/Basics_zh.md)：变量、函数和控制流；[模块与目录包](docs/examples/modules/README.md)：跨文件组织代码 |
 | 还有哪些可运行案例 | [示例目录](examples/README.md)：求解、业务测试与通用算法 |
 
+版本变化与迁移说明见 [CHANGELOG](CHANGELOG.md)。
+
 ## 安装和构建
 
 可以从 [GitHub Releases](https://github.com/zhuanglinsheng/tapas/releases) 下载 Linux 或 macOS 的预编译包，也可以从源码构建。
 
-Tapas 依赖 GNU Readline 和 Python 3，Python 环境中需要安装 OR-Tools 包。请确保系统能从默认搜索路径找到 GNU Readline 和 Python，并且 Python 可以导入 `ortools`。从源码构建还需要支持 C23 的编译器和 CMake 3.21 或更高版本。在仓库根目录运行：
+Tapas 依赖 GNU Readline；求解、采样和完整测试还需要 `PATH` 中的 `python3` 能导入 OR-Tools。可直接使用已有 Python 环境，不要求 venv。从源码构建还需要支持 C23 的编译器和 CMake 3.21 或更高版本。在仓库根目录运行：
 
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
