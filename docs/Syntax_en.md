@@ -684,13 +684,14 @@ The current specification defines no additional compatibility forms.
 
 ### 1. Source text and positions
 
-Tapas source is UTF-8 text. A byte-order mark at the start may be ignored. Line
-endings may be LF or CRLF and are normalized to LF for parsing. Diagnostic line
-and column numbers are one-based for users. Protocol adapters such as LSP
-convert positions to the protocol's required encoding.
+Tapas reads source as bytes. Use UTF-8 without a byte-order mark for portable
+source files. LF, CRLF, and CR are recognized as line endings. Diagnostic line
+and byte-column numbers are one-based. LSP converts positions to the protocol's
+required encoding.
 
-Strings are byte sequences and identifiers are ASCII-only in this language
-version. Non-ASCII bytes may occur in strings and comments but not identifiers.
+Strings are byte sequences. Identifiers also accept bytes at or above 0x80,
+including UTF-8 names. The lexer does not validate Unicode identifier categories
+or normalize names. Punctuation, keywords, and numeric literals use ASCII.
 
 ### 2. Whitespace, nesting, and statement separators
 
@@ -721,7 +722,7 @@ Comments are replaced by whitespace. Tapas has no block comment syntax.
 Identifiers are case-sensitive:
 
 ```ebnf
-identifier-start    = ASCII-letter | "_" ;
+identifier-start    = ASCII-letter | "_" | non-ASCII-byte ;
 identifier-continue = identifier-start | decimal-digit ;
 identifier          = identifier-start, { identifier-continue } ;
 ```
@@ -733,7 +734,7 @@ Reserved words are:
 
 ```text
 and as base break continue elif else false for function if import in
-let nil not of or return rule this to true var while
+let nil not of or return rule implies this to true var while
 ```
 
 `function` begins a named declaration but not an expression; `rule` begins a
@@ -805,12 +806,15 @@ unquoted-import-path = path-character, { path-character } ;
 
 ### 9. Markdown source extraction
 
-In a Markdown module, an opening fence is a line whose first non-whitespace
+For consistent behavior across entry points, use this canonical Markdown form:
+an opening fence is a line whose first non-whitespace
 characters are three backticks followed by the exact tag `tap` or `tapas` and
 optional trailing whitespace. Source continues until a line containing three
 backticks and optional surrounding whitespace. Text outside blocks contributes
 blank lines so diagnostics retain Markdown line numbers. Generated
 `<pre class='Tapas-Return'>` blocks are not source.
+
+Implementation note: current extractors match the `tap` prefix and close a block on any line beginning with three backticks. Output-update mode also accepts whitespace between backticks and the tag. These permissive forms differ between entry points; use the canonical form above for portable documents.
 
 ## Part III — Syntactic Grammar (EBNF)
 
@@ -954,8 +958,10 @@ postfix-suffix     = call-suffix
                    | readonly-member-suffix
                    | tunnel-suffix ;
 
-call-suffix       = "(", [ argument-list ], ")" ;
+call-suffix       = "(", [ call-arguments ], ")" ;
 argument-list     = expression, { ",", expression }, [ "," ] ;
+call-arguments    = call-argument, { ",", call-argument }, [ "," ] ;
+call-argument     = expression | IDENTIFIER, "=", expression ;
 
 index-suffix        = "[", index-argument-list, "]" ;
 index-argument-list = index-argument, { ",", index-argument } ;
@@ -964,7 +970,7 @@ slice               = [ or-expression ], ":", [ or-expression ] ;
 
 readonly-member-suffix = "::", IDENTIFIER
                        | ".", IDENTIFIER  (* only when not followed by "(" *) ;
-tunnel-suffix     = ".", IDENTIFIER, "(", [ argument-list ], ")" ;
+tunnel-suffix     = ".", IDENTIFIER, "(", [ call-arguments ], ")" ;
 ```
 
 Slice bounds use `or-expression` to exclude an unparenthesized pair colon.
@@ -985,6 +991,7 @@ primary-expression = INTEGER
                    | parenthesized-expression
                    | list-literal
                    | dictionary-literal
+                   | structure-literal
                    | function-literal
                    | rule-literal ;
 
@@ -994,6 +1001,8 @@ list-literal             = "[", [ argument-list ], "]" ;
 dictionary-literal = "{", [ dictionary-entry,
                             { ",", dictionary-entry }, [ "," ] ], "}" ;
 dictionary-entry   = or-expression, ":", expression ;
+structure-literal = "{", structure-entry, { ",", structure-entry }, [ "," ], "}" ;
+structure-entry   = or-expression | IDENTIFIER, "=", expression ;
 
 function-literal  = parameter-list, [ return-annotation ], block ;
 parameter-list    = "(", [ fixed-parameters | "..." ], ")" ;
@@ -1038,6 +1047,8 @@ an otherwise complete expression still separates statements.
 `nil` is intentionally absent. `{}` in expression position is an empty
 dictionary; a block occurs only where a compound statement or function expects
 one.
+
+Named call options use `name = expression` and must follow all positional arguments. The called interface decides which names it accepts; this does not automatically bind ordinary function arguments by parameter name. For example, `solve::sample` explicitly supports named options. Structure literals require a known field Type, place positional fields before named fields, and cannot mix with dictionary `key: value` entries.
 
 ### 8. Context-sensitive constraints
 

@@ -53,6 +53,21 @@ build/bin/tapas
 
 如果已将 Tapas 安装到`PATH`，可以直接使用命令名`tapas`。
 
+## Python 与求解依赖
+
+普通执行和 Rule 检查不需要 Python。求解、采样及完整测试需要 `PATH` 中的
+`python3` 能导入 OR-Tools；不要求创建或激活 venv。
+
+```sh
+python3 -c "import sys, ortools; print(sys.executable, ortools.__version__)"
+# 仅当缺少依赖时，在仓库根目录执行：
+python3 -m pip install -r src/stdlib/solve/requirements.txt
+```
+
+发布包用户可使用包内的 `share/tapas/solve/requirements.txt`。已有依赖时无需安装。
+`TAPAS_SOLVE_PYTHON` 可以选择其他解释器，但通常无需设置。依赖由系统管理时，
+使用对应包管理器支持的安装方式；虚拟环境是可选方案。
+
 ## 命令概览
 
 ```text
@@ -111,6 +126,7 @@ Tapas 源文件通常使用`.tap`后缀。
 ```tapas
 print('hello, Tapas')
 ```
+
 <pre class='Tapas-Return'>
 hello, Tapas
 </pre>
@@ -207,6 +223,7 @@ Tapas 可以读取 Markdown 文件并执行其中带 Tapas 标记的代码块：
 ```tapas
 print(1 + 2)
 ```
+
 <pre class='Tapas-Return'>
 3
 </pre>
@@ -293,7 +310,7 @@ __path__().pprint()
 __ls__().pprint()
 ```
 <pre class='Tapas-Return'>
-[print, pprint, input, int, float, bool, str, list, push_front, push_back, pop_front, pop_back, insert, concat, array, pair, idx, append, delete, iter, keys, values, sort, len, type, copy, identical, clock, clock_ns, now, __ls__, __path__, __param__, __nparam__, __binary__, dense, io, time, math, types]
+[print, pprint, input, int, float, bool, str, list, push_front, push_back, pop_front, pop_back, insert, concat, array, pair, idx, append, delete, iter, keys, values, sort, len, type, copy, identical, parameters, arguments, clock, clock_ns, now, __ls__, __path__, __param__, __nparam__, __binary__, assert, dense, io, syntax, time, random, finite, math, types, rules, evaluators, solve]
 </pre>
 
 ## 常用示例

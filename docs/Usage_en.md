@@ -62,6 +62,22 @@ If Tapas has been installed into your `PATH`, run it as `tapas`.
 
 
 
+## Python and solver dependencies
+
+Ordinary execution and Rule checking do not need Python. Solving, sampling,
+and the full test suite require `python3` on `PATH` to import OR-Tools.
+No virtual environment is required; reuse an existing installation.
+
+```sh
+python3 -c "import sys, ortools; print(sys.executable, ortools.__version__)"
+# Only if the dependency is missing, from the repository root:
+python3 -m pip install -r src/stdlib/solve/requirements.txt
+```
+
+Archive users can use `share/tapas/solve/requirements.txt` instead.
+`TAPAS_SOLVE_PYTHON` optionally selects another interpreter. For managed Python,
+use the package manager's supported installation method; venv remains optional.
+
 ## Command Summary
 
 ```text
@@ -132,6 +148,7 @@ Example `hello.tap`:
 ```tapas
 print('hello, Tapas')
 ```
+
 <pre class='Tapas-Return'>
 hello, Tapas
 </pre>
@@ -245,6 +262,7 @@ A Tapas code block uses either `tapas` or `tap` as the fence language:
 ```tapas
 print(1 + 2)
 ```
+
 <pre class='Tapas-Return'>
 3
 </pre>
@@ -343,7 +361,7 @@ library:
 __ls__().pprint()
 ```
 <pre class='Tapas-Return'>
-[print, pprint, input, int, float, bool, str, list, push_front, push_back, pop_front, pop_back, insert, concat, array, pair, idx, append, delete, iter, keys, values, sort, len, type, copy, identical, clock, clock_ns, now, __ls__, __path__, __param__, __nparam__, __binary__, dense, io, time, math, types]
+[print, pprint, input, int, float, bool, str, list, push_front, push_back, pop_front, pop_back, insert, concat, array, pair, idx, append, delete, iter, keys, values, sort, len, type, copy, identical, parameters, arguments, clock, clock_ns, now, __ls__, __path__, __param__, __nparam__, __binary__, assert, dense, io, syntax, time, random, finite, math, types, rules, evaluators, solve]
 </pre>
 
 

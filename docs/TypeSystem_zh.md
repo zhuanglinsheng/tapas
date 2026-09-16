@@ -61,7 +61,7 @@ Type 值是程序可以保存和传递的值，例如`types::Int`；运行时 Ty
 `Indexable`、`Appendable`等能力 Type 只要求值支持相应操作，不约束操作参数和返回值的 Type。
 各值类别支持的具体操作详见[标准库](Stdlib_zh.md)；Rule 及 RuleInstance 的精确 Type 详见[Rule 文档](Rules_zh.md)。
 
-RuleInstance 不是 Bool，也不存在通用隐式转换。仅在 `implies` 前件位置，Bool、RuleInstance 及两者的联合 Type 被接受；实例按规则检查的成立性解释。后件仍必须是 Bool，裸 Rule 必须先绑定为实例。这不改变 `if`、`and`、`or` 的 Bool 使用要求。
+RuleInstance 不是 Bool，也不存在通用隐式转换。在 Rule 体中，独立规则项、`implies` 前件以及 `not`、`and`、`or` 的操作数可以是 Bool 或 RuleInstance；实例按规则检查的成立性解释。`implies` 后件仍必须是 Bool，裸 Rule 必须先绑定为实例。普通函数和 Rule 外的逻辑运算仍只接受 Bool，`if` 条件也不接受 RuleInstance。
 
 ### 1.3 静态 Type 表达式
 
@@ -560,8 +560,8 @@ let formatter: Function[Int] -> String = (value: Int) -> String
 变参函数的`...`不能携带参数标注，但可以在参数列表之后使用返回值标注。
 
 编译器使用精确函数签名检查函数体、静态已知调用和模块接口。
-该签名属于编译期 Type 元数据，不改变运行时函数对象；`types::of(function_value)`仍返回原始`types::Function`。
-当前不提供精确函数 Type 的运行时构造或反射接口。
+运行时函数保留用于展示和 `parameters(function_value)` 的参数元数据；`types::of(function_value)`仍返回原始`types::Function`。
+当前不提供精确函数 Type 值的运行时构造接口；参数反射不等于取得一个完整的精确函数 Type 值。
 
 ### 3.3 字段 Type 与结构字面量
 
@@ -688,9 +688,8 @@ String 字面量具有枚举目标 Type 时还必须是已声明成员；没有�
 
 1. 非空 List 的所有元素 Type 已知时，以元素 Type 规范化后的联合为 Item；
 2. Pair 的两个成员 Type 已知时，分别作为 First 和 Second；
-3. 非空 Dictionary 的键都是 String 字面量，且所有值 Type 已知时，推断字段 Type；
-4. 其他非空 Dictionary 的键和值 Type 已知时，分别以规范化后的联合作为 Key 和 Value；
-5. 空容器或任一必要成员为 `Unknown` 时，推断为对应的原始容器 Type。
+3. 无目标 Type 的 Dictionary 字面量总是推断为原始 `Dictionary`，不会从初始键和值建立固定字段或键值约束；因此可以增加、删除键，或改变值的 Type；
+4. 空 List 或必要成员为 `Unknown` 时，使用对应的原始容器 Type。需要字典字段或统一键值约束时，应显式添加标注。
 
 推断得到的联合经过规范化后如果只剩一个成员，就直接使用该成员，不受`types::union`公开调用至少需要两个参数的限制。
 
