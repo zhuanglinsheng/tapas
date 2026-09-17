@@ -2,10 +2,25 @@
 #include "tapas/dsa/tstring.h"
 
 #include <stdlib.h>
+#include <string.h>
+
+/* Iterators are fixed-size and churn heavily (one per range-loop entry);
+ * recycle them through a bounded thread-local freelist. While pooled, the
+ * next pointer is parked in the unused base.vtable slot. */
+#define TITER_POOL_MAX 256u
+static _Thread_local titer *titer_pool;
+static _Thread_local unsigned titer_pool_len;
 
 titer *titer_new_step(long start, long step, long end)
 {
-	titer *iterator = (titer *)malloc(sizeof(titer));
+	titer *iterator = titer_pool;
+	if (iterator) {
+		memcpy(&titer_pool, &iterator->base.vtable,
+		       sizeof(titer_pool));
+		titer_pool_len--;
+	} else {
+		iterator = (titer *)malloc(sizeof(titer));
+	}
 	iterator->base.vtable = &titer_vtable;
 	iterator->base.refctr = 0;
 	iterator->start = start;
@@ -51,17 +66,19 @@ static long titer_len(void *self)
 static void *titer_copy(void *self)
 {
 	titer *it = (titer *)self;
-	titer *n = (titer *)malloc(sizeof(titer));
-	n->base.vtable = it->base.vtable;
-	n->base.refctr = 0;
-	n->start = it->start;
-	n->end = it->end;
-	n->step = it->step;
-	return n;
+	return titer_new_step(it->start, it->step, it->end);
 }
 
 static void titer_free(void *self)
 {
+	titer *iterator = (titer *)self;
+	if (titer_pool_len < TITER_POOL_MAX) {
+		memcpy(&iterator->base.vtable, &titer_pool,
+		       sizeof(titer_pool));
+		titer_pool = iterator;
+		titer_pool_len++;
+		return;
+	}
 	free(self);
 }
 

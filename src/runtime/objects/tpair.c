@@ -2,11 +2,27 @@
 #include "tapas/dsa/tstring.h"
 
 #include <stdlib.h>
+#include <string.h>
+
+/* Pairs are fixed-size and short-lived (slices, dictionary literals,
+ * named arguments); recycle them through a bounded thread-local freelist.
+ * While pooled, the next pointer is parked in the unused base.vtable
+ * slot. */
+#define TPAIR_POOL_MAX 256u
+static _Thread_local tpair *tpair_pool;
+static _Thread_local unsigned tpair_pool_len;
 
 tpair *tpair_new(const tobj *first, const tobj *second)
 {
-	tpair *pair = (tpair *)calloc(1, sizeof(tpair));
+	tpair *pair = tpair_pool;
+	if (pair) {
+		memcpy(&tpair_pool, &pair->base.vtable, sizeof(tpair_pool));
+		tpair_pool_len--;
+	} else {
+		pair = (tpair *)calloc(1, sizeof(tpair));
+	}
 	pair->base.vtable = &tpair_vtable;
+	pair->base.refctr = 0;
 	tobj_copy(&pair->first, first);
 	tobj_copy(&pair->second, second);
 	return pair;
@@ -49,6 +65,12 @@ static void tpair_free(void *self)
 	tpair *p = (tpair *)self;
 	tobj_ddc_ref_clear(&p->first);
 	tobj_ddc_ref_clear(&p->second);
+	if (tpair_pool_len < TPAIR_POOL_MAX) {
+		memcpy(&p->base.vtable, &tpair_pool, sizeof(tpair_pool));
+		tpair_pool = p;
+		tpair_pool_len++;
+		return;
+	}
 	free(p);
 }
 

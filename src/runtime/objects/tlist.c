@@ -4,13 +4,68 @@
 #include "tapas/objects/tpair.h"
 
 #include <stdlib.h>
+#include <string.h>
+
+/* Small lists keep their items inside the header allocation; growth
+ * migrates out of the embedded tail (see tobj_vec_reserve). */
+#define TLIST_INLINE_ITEMS 4
+
+static tlist *tlist_new_cap(uint_objs cap)
+{
+	if (cap > TLIST_INLINE_ITEMS) {
+		tlist *list = (tlist *)calloc(1, sizeof(tlist));
+		list->base.vtable = &tlist_vtable;
+		tobj_vec_init_cap(&list->items, cap);
+		return list;
+	}
+	tlist *list = (tlist *)calloc(
+		1, sizeof(tlist) + TLIST_INLINE_ITEMS * sizeof(tobj));
+	list->base.vtable = &tlist_vtable;
+	list->items.data = (tobj *)(list + 1);
+	list->items.len = 0;
+	list->items.capacity = TLIST_INLINE_ITEMS;
+	list->items.embedded = 1;
+	return list;
+}
+
+/* Fill a pre-sized destination from a source range; replaces
+ * tobj_vec_copy_range, which re-initializes (and would discard) the
+ * destination's embedded storage. */
+static void tlist_fill_range(tlist *dst, const tlist *src,
+			     uint_objs start, uint_objs count)
+{
+	dst->items.len = count;
+	if (!count)
+		return;
+	memcpy(dst->items.data, src->items.data + start,
+	       count * sizeof(tobj));
+	for (uint_objs i = 0; i < count; i++)
+		if (dst->items.data[i].type == tcompo &&
+		    dst->items.data[i].val.v_tcompo)
+			dst->items.data[i].val.v_tcompo->refctr++;
+}
 
 tlist *tlist_new(void)
 {
-	tlist *list = (tlist *)calloc(1, sizeof(tlist));
-	list->base.vtable = &tlist_vtable;
-	tobj_vec_init(&list->items);
-	return list;
+	return tlist_new_cap(0);
+}
+
+void tlist_slice_index(tlist *l, const tobj *params, tobj *vre)
+{
+	/* params[0] is the end bound (pushed first), params[1] the start. */
+	long first = params[1].val.v_tint;
+	long last = params[0].val.v_tint;
+	long len = (long)tobj_vec_len(&l->items);
+	if (first < 0)
+		first += len;
+	if (last < 0)
+		last += len;
+	if (first < 0 || last < first || last > len)
+		twarn(ErrRuntime_IdxOutRange, "pair_to_range", "");
+	tlist *slice = tlist_new_cap((uint_objs)(last - first));
+	tlist_fill_range(slice, l, (uint_objs)first,
+			 (uint_objs)(last - first));
+	tobj_set_compo(vre, (tcompo_v *)slice);
 }
 
 uint_objs tlist_size(const tlist *list)
@@ -51,9 +106,8 @@ static long tlist_len(void *self)
 static void *tlist_copy(void *self)
 {
 	tlist *l = (tlist *)self;
-	tlist *n = (tlist *)calloc(1, sizeof(tlist));
-	n->base.vtable = l->base.vtable;
-	tobj_vec_copy(&n->items, &l->items);
+	tlist *n = tlist_new_cap(tobj_vec_len(&l->items));
+	tlist_fill_range(n, l, 0, tobj_vec_len(&l->items));
 	return n;
 }
 
@@ -174,9 +228,9 @@ tlist_idx(tlist *l, const tobj *params, uint_regs np, tobj *vre)
 		twarn(ErrRuntime_ParamsCtr, "tlist_idx", "");
 	long start, end;
 	if (pair_to_range(&params[0], (long)tobj_vec_len(&l->items), &start, &end)) {
-		tlist *slice = tlist_new();
-		tobj_vec_copy_range(&slice->items, &l->items,
-				    (uint_objs)start, (uint_objs)(end - start));
+		tlist *slice = tlist_new_cap((uint_objs)(end - start));
+		tlist_fill_range(slice, l, (uint_objs)start,
+				 (uint_objs)(end - start));
 		tobj_set_compo(vre, (tcompo_v *)slice);
 		return;
 	}

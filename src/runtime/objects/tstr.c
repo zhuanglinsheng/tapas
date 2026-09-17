@@ -144,6 +144,24 @@ static void tstr_replace_range(tstr *s, long start, long end, const char *repl)
 }
 
 /* String indexing helper */
+void tstr_slice_index(tstr *s, const tobj *params, tobj *vre)
+{
+	/* params[0] is the end bound (pushed first), params[1] the start. */
+	long first = params[1].val.v_tint;
+	long last = params[0].val.v_tint;
+	long len = (long)tstring_len(s->data);
+	if (first < 0)
+		first += len;
+	if (last < 0)
+		last += len;
+	if (first < 0 || last < first || last > len)
+		twarn(ErrRuntime_IdxOutRange, "pair_to_range", "");
+	tobj_set_compo(
+		vre,
+		(tcompo_v *)tstr_new_len(tstring_cstr(s->data) + first,
+					 (size_t)(last - first)));
+}
+
 static void
 tstr_idx(tstr *s, const tobj *params, uint_regs np, tobj *vre)
 {

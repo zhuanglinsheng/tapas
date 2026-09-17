@@ -22,6 +22,7 @@ typedef struct {
 	tobj *data;          /**< 连续元素存储区。 */
 	uint_objs len;       /**< 当前元素数量。 */
 	uint_objs capacity;  /**< 已分配的元素容量。 */
+	uint8_t embedded;    /**< data 指向所属外层分配的内嵌存储：增长时先迁移，释放时跳过 free。 */
 } tobj_vec;
 
 /**

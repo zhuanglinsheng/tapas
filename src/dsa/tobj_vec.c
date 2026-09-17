@@ -15,6 +15,7 @@ void tobj_vec_init(tobj_vec *v)
 	v->data = nullptr;
 	v->len = 0;
 	v->capacity = 0;
+	v->embedded = 0;
 }
 
 void tobj_vec_init_cap(tobj_vec *v, uint_objs cap)
@@ -22,6 +23,7 @@ void tobj_vec_init_cap(tobj_vec *v, uint_objs cap)
 	v->data = nullptr;
 	v->len = 0;
 	v->capacity = 0;
+	v->embedded = 0;
 	if (cap)
 		tobj_vec_reserve(v, cap);
 }
@@ -32,11 +34,13 @@ void tobj_vec_free(tobj_vec *v)
 		for (uint_objs i = 0; i < v->len; i++)
 			if (v->data[i].type == tcompo)
 				tobj_ddc_ref_clear(&v->data[i]);
-		free(v->data);
+		if (!v->embedded)
+			free(v->data);
 	}
 	v->data = nullptr;
 	v->len = 0;
 	v->capacity = 0;
+	v->embedded = 0;
 }
 
 uint_objs tobj_vec_len(const tobj_vec *v)
@@ -68,7 +72,17 @@ void tobj_vec_reserve(tobj_vec *v, uint_objs cap)
 {
 	if (cap <= v->capacity)
 		return;
-	v->data = (tobj *)realloc(v->data, cap * sizeof(tobj));
+	if (v->embedded) {
+		/* The current storage lives inside an enclosing allocation and
+		 * cannot be realloc'd; migrate it to an owned array first. */
+		tobj *grown = (tobj *)malloc(cap * sizeof(tobj));
+		if (v->len)
+			memcpy(grown, v->data, v->len * sizeof(tobj));
+		v->data = grown;
+		v->embedded = 0;
+	} else {
+		v->data = (tobj *)realloc(v->data, cap * sizeof(tobj));
+	}
 	v->capacity = cap;
 }
 

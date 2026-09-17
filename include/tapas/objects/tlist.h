@@ -38,6 +38,15 @@ extern tcompo_vtable tlist_vtable;
  */
 tlist *tlist_new(void);
 
+/**
+ * @brief 以两个整型边界执行切片读取（专用切片指令的运行期入口）。
+ *
+ * @param list 列表。
+ * @param params 两个参数：params[0] 为 end 边界，params[1] 为 start 边界。
+ * @param vre 接收结果。
+ */
+void tlist_slice_index(tlist *list, const tobj *params, tobj *vre);
+
 /* 能力 */
 
 /**

@@ -50,6 +50,15 @@ tstr *tstr_new(const char *s);
  */
 tstr *tstr_new_len(const char *s, size_t len);
 
+/**
+ * @brief 以两个整型边界执行切片读取（专用切片指令的运行期入口）。
+ *
+ * @param s 字符串。
+ * @param params 两个参数：params[0] 为 end 边界，params[1] 为 start 边界。
+ * @param vre 接收结果。
+ */
+void tstr_slice_index(tstr *s, const tobj *params, tobj *vre);
+
 #ifdef __cplusplus
 }
 #endif
