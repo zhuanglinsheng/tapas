@@ -29,12 +29,11 @@ python3 test/benchmarks/compare_python.py \
 ```sh
 python3 test/benchmarks/compare_python.py \
     build-release/bin/tapas --runs 11 \
-    --markdown test/benchmarks/Results_zh.md
-
-python3 test/benchmarks/compare_python.py \
-    build-release/bin/tapas --runs 11 \
+    --markdown test/benchmarks/Results_zh.md \
     --markdown test/benchmarks/Results_en.md
 ```
+
+重复 `--markdown` 会用同一组测量数据生成两份报告，避免中英文数字因重复运行而不同。
 
 当前记录见[中文结果](Results_zh.md)和[英文结果](Results_en.md)。
 性能门槛不属于常规测试，因为 CPU 负载、电源设置、编译器和 Python 版本都会影响结果。

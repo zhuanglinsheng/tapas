@@ -204,7 +204,9 @@ def main() -> int:
     parser.add_argument(
         "--markdown",
         type=Path,
-        help="write the comparison and environment to a Markdown file",
+        action="append",
+        help=("write the comparison and environment to a Markdown file; "
+              "repeat to generate Chinese and English reports from one run"),
     )
     args = parser.parse_args()
     if args.runs < 3:
@@ -254,19 +256,17 @@ def main() -> int:
     print(f"algorithm geometric mean Tapas/Python: {algorithm_mean:.3f}x")
     print(f"hot-path geometric mean Tapas/Python: {hot_path_mean:.3f}x")
     print(f"geometric mean Tapas/Python: {geometric_mean:.3f}x")
-    if args.markdown:
-        markdown_language = (
-            "en" if args.markdown.name.endswith("_en.md") else "zh"
-        )
+    for markdown in args.markdown or ():
+        markdown_language = "en" if markdown.name.endswith("_en.md") else "zh"
         write_markdown(
-            args.markdown,
+            markdown,
             args.tapas,
             args.runs,
             rows,
             geometric_mean,
             markdown_language,
         )
-        print(f"wrote Markdown report: {args.markdown}")
+        print(f"wrote Markdown report: {markdown}")
     if failed:
         print(
             "Tapas is not faster than Python in every benchmark.",

@@ -37,12 +37,12 @@ Generate or update both reports with 11 measured runs per benchmark:
 ```sh
 python3 test/benchmarks/compare_python.py \
     build-release/bin/tapas --runs 11 \
-    --markdown test/benchmarks/Results_zh.md
-
-python3 test/benchmarks/compare_python.py \
-    build-release/bin/tapas --runs 11 \
+    --markdown test/benchmarks/Results_zh.md \
     --markdown test/benchmarks/Results_en.md
 ```
+
+Repeating `--markdown` writes both reports from the same measurements, so their
+numbers cannot diverge because of a second benchmark run.
 
 See the current [Chinese](Results_zh.md) and [English](Results_en.md) reports.
 Performance thresholds are not part of the regular test suite because CPU
