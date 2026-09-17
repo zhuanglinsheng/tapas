@@ -142,14 +142,27 @@ static inline uint8_t tbycode_get_i(tbycode c)
  * count and otherwise performs an ordinary indexed read. */
 #define TBYCODE_IDXR_COMPARE_FLAG UINT32_C(0x02000000)
 
+/* A lone slice child `receiver[start:end]` is emitted with this flag and
+ * two integer parameters instead of a constructed Pair: params[0] is the
+ * end bound (pushed first) and params[1] the start bound. The VM restores
+ * the Pair protocol for indexables other than List and String. The flag
+ * must stay inside the U field's 26 bits; bit 25 is the compare hint. */
+#define TBYCODE_IDXR_SLICE_FLAG UINT32_C(0x01000000)
+
 static inline uint32_t tbycode_idxr_count(tbycode c)
 {
-	return tbycode_get_U(c) & ~TBYCODE_IDXR_COMPARE_FLAG;
+	return tbycode_get_U(c) & ~(TBYCODE_IDXR_COMPARE_FLAG |
+				    TBYCODE_IDXR_SLICE_FLAG);
 }
 
 static inline int tbycode_idxr_compare(tbycode c)
 {
 	return (tbycode_get_U(c) & TBYCODE_IDXR_COMPARE_FLAG) != 0;
+}
+
+static inline int tbycode_idxr_slice(tbycode c)
+{
+	return (tbycode_get_U(c) & TBYCODE_IDXR_SLICE_FLAG) != 0;
 }
 
 /**

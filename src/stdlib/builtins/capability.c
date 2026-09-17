@@ -1,6 +1,8 @@
 #include "tapas/textension.h"
 
 #include "../arguments.h"
+#include "tapas/dsa/tobj_vec.h"
+#include "tapas/objects/tlist.h"
 #include "tapas/tval.h"
 
 
@@ -20,7 +22,13 @@ static void builtin_idx(tobj *params, uint_regs count, tobj *result)
 static void builtin_append(tobj *params, uint_regs count, tobj *result)
 {
 	tstdlib_require_arguments("append", count, 2);
-	tcompo_append(target(params, "append"), &params[1]);
+	tcompo_v *obj = target(params, "append");
+	/* Lists dominate append traffic; push directly and skip the
+	 * capability dispatch. */
+	if (obj->vtable == &tlist_vtable)
+		tobj_vec_push(&((tlist *)obj)->items, &params[1]);
+	else
+		tcompo_append(obj, &params[1]);
 	tobj_set_nil(result);
 }
 

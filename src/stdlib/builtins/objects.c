@@ -2,6 +2,7 @@
 
 #include "../arguments.h"
 
+#include "tapas/objects/tlist.h"
 #include "tapas/objects/tstr.h"
 
 
@@ -16,7 +17,14 @@ static void builtin_len(tobj *params, uint_regs len, tobj *vre)
 		tobj_set_int(vre, 1);
 		return;
 	}
-	tobj_set_int(vre, params[0].val.v_tcompo->vtable->len(params[0].val.v_tcompo));
+	/* Lists and strings dominate len traffic; read the sizes directly. */
+	tcompo_v *obj = params[0].val.v_tcompo;
+	if (obj->vtable == &tlist_vtable)
+		tobj_set_int(vre, (long)((tlist *)obj)->items.len);
+	else if (obj->vtable == &tstr_vtable)
+		tobj_set_int(vre, (long)tstring_len(((tstr *)obj)->data));
+	else
+		tobj_set_int(vre, obj->vtable->len(obj));
 }
 
 static void builtin_type(tobj *params, uint_regs len, tobj *vre)

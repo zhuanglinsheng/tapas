@@ -51,22 +51,23 @@ void operator_to(const tobj *v1, const tobj *v2, tobj *vre)
 {
 	if (v1->type != tint || v2->type != tint)
 		twarn(ErrRuntime_ParamsType, "operator_to", "");
-	tobj_set_compo(vre,
-		       (tcompo_v *)titer_new(v1->val.v_tint, v2->val.v_tint));
+	tobj_set_compo(vre, (tcompo_v *)titer_new(v1->val.v_tint, v2->val.v_tint));
 }
 
 void operator_in(const tobj *v1, const tobj *v2, tobj *vre)
 {
-    int left_term = v1->type == tcompo && tobj_compo_type(v1) == compo_trule_term;
-    int right_term = v2->type == tcompo && tobj_compo_type(v2) == compo_trule_term;
-    if (left_term || right_term) {
-        trule_term *left = left_term ? (trule_term *)v1->val.v_tcompo : trule_term_constant_new(v1);
-        trule_term *right = right_term ? (trule_term *)v2->val.v_tcompo : trule_term_constant_new(v2);
-        tobj_set_compo(vre, (tcompo_v *)trule_term_in_new(left, right));
-        return;
-    }
-	tobj_set_bool(vre, v2->type == tcompo && v2->val.v_tcompo &&
-			    tcompo_contains(v2->val.v_tcompo, v1));
+	int left_term = v1->type == tcompo && tobj_compo_type(v1) == compo_trule_term;
+	int right_term = v2->type == tcompo && tobj_compo_type(v2) == compo_trule_term;
+	if (left_term || right_term) {
+		trule_term *left = left_term ? (trule_term *)v1->val.v_tcompo :
+		                                trule_term_constant_new(v1);
+		trule_term *right = right_term ? (trule_term *)v2->val.v_tcompo :
+		                                  trule_term_constant_new(v2);
+		tobj_set_compo(vre, (tcompo_v *)trule_term_in_new(left, right));
+		return;
+	}
+	tobj_set_bool(vre, v2->type == tcompo && v2->val.v_tcompo
+		&& tcompo_contains(v2->val.v_tcompo, v1));
 }
 
 static inline void vm_set_int_result(tobj *value, long result)
@@ -90,12 +91,19 @@ static inline void vm_set_bool_result(tobj *value, int result)
 	value->val.v_tbool = result;
 }
 
+#if defined(__GNUC__) || defined(__clang__)
+#define TVM_ALWAYS_INLINE __attribute__((always_inline))
+#else
+#define TVM_ALWAYS_INLINE
+#endif
+
 #define DEF_ALGO(fn_name, fll, fld, fdl, fdd)                                  \
-	static inline int fn_name##_impl(ttypes t1,                            \
-					 ttypes t2,                            \
-					 const tobj *v1,                       \
-					 const tobj *v2,                       \
-					 tobj *vre)                            \
+	static inline TVM_ALWAYS_INLINE int fn_name##_impl(                    \
+				 ttypes t1,                                    \
+				 ttypes t2,                                    \
+				 const tobj *v1,                               \
+				 const tobj *v2,                               \
+				 tobj *vre)                                    \
 	{                                                                      \
 		if (t1 == tint && t2 == tint) {                                \
 			vm_set_int_result(vre,                                 \
@@ -225,8 +233,7 @@ static void operator_add_slow(const tobj *v1, const tobj *v2, tobj *vre)
 			v2->val.v_tcompo, v1, 1, vre);
 		return;
 	}
-	twarn(ErrRuntime_ParamsType, "operator_add",
-	      "unsupported type for +");
+	twarn(ErrRuntime_ParamsType, "operator_add", "unsupported type for +");
 }
 
 static void operator_add(const tobj *v1, const tobj *v2, tobj *vre)
@@ -248,8 +255,7 @@ static void operator_sub_slow(const tobj *v1, const tobj *v2, tobj *vre)
 			v2->val.v_tcompo, v1, 1, vre);
 		return;
 	}
-	twarn(ErrRuntime_ParamsType, "operator_sub",
-	      "unsupported type for -");
+	twarn(ErrRuntime_ParamsType, "operator_sub", "unsupported type for -");
 }
 
 static void operator_sub(const tobj *v1, const tobj *v2, tobj *vre)
@@ -271,8 +277,7 @@ static void operator_mul_slow(const tobj *v1, const tobj *v2, tobj *vre)
 			v2->val.v_tcompo, v1, 1, vre);
 		return;
 	}
-	twarn(ErrRuntime_ParamsType, "operator_mul",
-	      "unsupported type for *");
+	twarn(ErrRuntime_ParamsType, "operator_mul", "unsupported type for *");
 }
 
 static void operator_mul(const tobj *v1, const tobj *v2, tobj *vre)
@@ -312,8 +317,7 @@ static void operator_div_slow(const tobj *v1, const tobj *v2, tobj *vre)
 			v2->val.v_tcompo, v1, 1, vre);
 		return;
 	}
-	twarn(ErrRuntime_ParamsType, "operator_div",
-	      "unsupported type for /");
+	twarn(ErrRuntime_ParamsType, "operator_div", "unsupported type for /");
 }
 
 static void operator_div(const tobj *v1, const tobj *v2, tobj *vre)
@@ -373,8 +377,7 @@ void operator_pow(const tobj *v1, const tobj *v2, tobj *vre)
 static void operator_pos(tobj *value)
 {
 	if (value->type != tint && value->type != tfloat)
-		twarn(ErrRuntime_ParamsType, "operator_pos",
-		      "unary + requires a number");
+		twarn(ErrRuntime_ParamsType, "operator_pos", "unary + requires a number");
 }
 
 static void operator_neg(tobj *value)
@@ -397,11 +400,12 @@ static void operator_neg(tobj *value)
 }
 
 #define DEF_CMP(fn_name, op)                                                   \
-	static inline int fn_name##_impl(ttypes t1,                            \
-					 ttypes t2,                            \
-					 const tobj *v1,                       \
-					 const tobj *v2,                       \
-					 tobj *vre)                            \
+	static inline TVM_ALWAYS_INLINE int fn_name##_impl(                    \
+				 ttypes t1,                                    \
+				 ttypes t2,                                    \
+				 const tobj *v1,                               \
+				 const tobj *v2,                               \
+				 tobj *vre)                                    \
 	{                                                                      \
 		if (t1 == tint && t2 == tint) {                                \
 			vm_set_bool_result(                                    \
@@ -776,7 +780,21 @@ static void tvm_release_loop_iterator(tvm *vm, const tobj *stack_slot)
 	}
 }
 
-static void tcall_frame_release(tcall_frame *fr, tvm *vm)
+/* Mirrors tobj_array_set_len(array, 0) exactly (top-down release). */
+static inline TVM_ALWAYS_INLINE void tvm_array_clear(tobj_array *array)
+{
+	while (array->len > 0) {
+		array->len--;
+		tobj *slot = &array->data[array->len];
+		if (slot->type == tcompo)
+			tobj_ddc_ref_clear(slot);
+		else
+			tobj_set_nil(slot);
+	}
+}
+
+static inline TVM_ALWAYS_INLINE void tcall_frame_release(
+	tcall_frame *fr, tvm *vm)
 {
 	uint_regs i;
 
@@ -784,9 +802,9 @@ static void tcall_frame_release(tcall_frame *fr, tvm *vm)
 	for (i = 0; i < vm->stklen; i++)
 		tobj_ddc_ref_clear(&vm->stk[i]);
 	vm->stklen = 0;
-	tobj_array_set_len(&fr->tmps, 0);
-	tobj_array_set_len(&fr->tail_args, 0);
-	tobj_array_set_len(&fr->env.base.objs, 0);
+	tvm_array_clear(&fr->tmps);
+	tvm_array_clear(&fr->tail_args);
+	tvm_array_clear(&fr->env.base.objs);
 	fr->env.params = nullptr;
 	fr->env.dynamic_nparams = 0;
 	fr->env.owner_func = nullptr;
@@ -862,15 +880,33 @@ static void tcall_frame_prepare(tcall_frame *fr, tfunc *f)
 	fr->env.owner_func = f;
 }
 
+/* Release previous occupants, then bulk-copy and retain. Old slots are nil
+ * in the common case (release cleared them), so the first loop is
+ * branch-only; params live on the caller stack and locals in the frame's
+ * own array, so the memcpy never aliases. */
+static inline TVM_ALWAYS_INLINE void tcall_frame_transfer_params(
+	tobj_array *locals, const tobj *params, uint_regs nparams)
+{
+	for (uint_regs i = 0; i < nparams; i++) {
+		tobj *slot = &locals->data[i];
+		if (slot->type == tcompo && slot->val.v_tcompo)
+			tobj_ddc_ref_clear(slot);
+	}
+	memcpy(locals->data, params, nparams * sizeof(tobj));
+	for (uint_regs i = 0; i < nparams; i++)
+		if (locals->data[i].type == tcompo &&
+		    locals->data[i].val.v_tcompo)
+			locals->data[i].val.v_tcompo->refctr++;
+	locals->len = nparams;
+}
+
 static inline void tcall_frame_assign_params(
 		tcall_frame *frame, tobj *params, uint_regs nparams)
 {
 	tobj_array *locals = &frame->env.base.objs;
 	if (nparams > locals->capacity)
 		tobj_array_try_expand(locals, nparams);
-	locals->len = nparams;
-	for (uint_regs i = 0; i < nparams; i++)
-		tobj_array_set_obj(locals, i, &params[i]);
+	tcall_frame_transfer_params(locals, params, nparams);
 }
 
 static tcall_frame *tvm_push_call_frame(
@@ -923,6 +959,43 @@ static tcall_frame *tvm_push_call_frame(
 	return fr;
 }
 
+/* Inline fast path for the steady state of hot calls: the pooled frame
+ * already serves this exact function with fixed arity. Anything else
+ * (pool growth, prepare miss, dynamic arity, tight capacity) falls back
+ * to tvm_push_call_frame. */
+static inline TVM_ALWAYS_INLINE tcall_frame *tvm_push_call_frame_fast(
+	tvm *vm, tfunc *f, tobj *params, uint_regs nparams)
+{
+	if (vm->frame_len >= vm->frame_cap)
+		return nullptr;
+	tcall_frame *fr = vm->frames[vm->frame_len];
+	if (!fr->initialized || fr->func != f ||
+	    fr->env.nparams == UNDEF_NPARAMS ||
+	    fr->env.nparams != nparams ||
+	    fr->env.base.objs.capacity < nparams)
+		return nullptr;
+	fr->env.owner_func = f;
+	fr->saved_tmps = vm->tmps;
+	fr->saved_stk = vm->stk;
+	fr->saved_regmax = vm->regmax;
+	fr->saved_stklen = vm->stklen;
+	fr->saved_loop_states = vm->loop_states;
+	fr->saved_loop_state_len = vm->loop_state_len;
+	fr->saved_loop_state_cap = vm->loop_state_cap;
+	tcall_frame_transfer_params(&fr->env.base.objs, params, nparams);
+	fr->env.params = fr->env.base.objs.data;
+	fr->env.dynamic_nparams = nparams;
+	vm->tmps = fr->tmps;
+	vm->stk = fr->env.vmstack;
+	vm->regmax = fr->env.regmax;
+	vm->stklen = 0;
+	vm->loop_states = fr->loop_states;
+	vm->loop_state_len = 0;
+	vm->loop_state_cap = fr->loop_state_cap;
+	vm->frame_len++;
+	return fr;
+}
+
 static tcall_frame *tvm_replace_current_call_frame(
 		tvm *vm, tfunc *function, tobj *params, uint_regs nparams)
 {
@@ -953,8 +1026,7 @@ static tcall_frame *tvm_replace_current_call_frame(
 	else
 		tcall_frame_prepare(frame, function);
 	if (frame->env.nparams != UNDEF_NPARAMS) {
-		tcall_frame_assign_params(
-			frame, frame->tail_args.data, nparams);
+		tcall_frame_assign_params(frame, frame->tail_args.data, nparams);
 		frame->env.params = frame->env.base.objs.data;
 	} else {
 		frame->env.params = frame->tail_args.data;
@@ -1089,8 +1161,7 @@ static tobj *vm_pushx_source(tvm *vm, tcompo_env *env, uint_objs slot, uint16_t 
 	return vm_array_slot(&cur->objs, slot);
 }
 
-static inline tobj *vm_direct_slot(tcompo_env *env, uint_objs slot,
-				   uint16_t depth)
+static inline tobj *vm_direct_slot(tcompo_env *env, uint_objs slot, uint16_t depth)
 {
 	tcompo_env_abstract *owner = &env->base;
 	for (uint16_t i = 0; i < depth; i++) {
@@ -1188,13 +1259,41 @@ static inline void vm_finish_binop(tvm *vm, tbinop_operands operands)
 		stk_fill(vm);
 }
 
-#define VM_PARSE_BINOP(vm, fn, code, type, env)                             \
-	do {                                                                 \
-		tbinop_operands operands__ =                                  \
-			vm_binop_operands((vm), (code), (type), (env));         \
-		(fn)(operands__.left, operands__.right, operands__.result);     \
-		vm_finish_binop((vm), operands__);                              \
-	} while (0)
+/* Scalar-only fast dispatch for the two peephole binop sites. The impls
+ * carry the full type matrix and error paths, so this re-dispatches rather
+ * than re-implements; indexed bytes keep their string-aware EQ/NE slow path. */
+static inline TVM_ALWAYS_INLINE int vm_binop_fast(
+		tins instruction, const tobj *left, const tobj *right, tobj *result)
+{
+	switch (instruction) {
+	case OP_ADD:
+		return add_impl(left->type, right->type, left, right, result);
+	case OP_SUB:
+		return sub_impl(left->type, right->type, left, right, result);
+	case OP_MUL:
+		return mul_impl(left->type, right->type, left, right, result);
+	case OP_DIV:
+		return div_impl(left->type, right->type, left, right, result);
+	case OP_EQ:
+		if (vm_is_indexed_byte(left) || vm_is_indexed_byte(right))
+			return 0;
+		return eq_impl(left->type, right->type, left, right, result);
+	case OP_NE:
+		if (vm_is_indexed_byte(left) || vm_is_indexed_byte(right))
+			return 0;
+		return ne_impl(left->type, right->type, left, right, result);
+	case OP_SG:
+		return sg_impl(left->type, right->type, left, right, result);
+	case OP_SL:
+		return sl_impl(left->type, right->type, left, right, result);
+	case OP_GE:
+		return ge_impl(left->type, right->type, left, right, result);
+	case OP_LE:
+		return le_impl(left->type, right->type, left, right, result);
+	default:
+		return 0;
+	}
+}
 
 static inline int vm_apply_binop(tins instruction, const tobj *left,
 				 const tobj *right, tobj *result)
@@ -1275,8 +1374,10 @@ static inline int vm_try_fused_binop(
 		return 0;
 
 	tbinop_operands operands = vm_binop_operands(vm, code, type, env);
-	if (!vm_apply_binop(
-		instruction, operands.left, operands.right, operands.result))
+	if (!vm_binop_fast(instruction, operands.left, operands.right,
+			   operands.result) &&
+	    !vm_apply_binop(instruction, operands.left, operands.right,
+			    operands.result))
 		return 0;
 	vm_finish_binop(vm, operands);
 	return 1;
@@ -1288,8 +1389,9 @@ static inline int vm_try_borrowed_left_binop(
 	if (tbycode_get_U(metadata) != 0 || tbycode_get_L(operation) != 0 ||
 	    tbycode_get_R(operation) != 1 || stk_len(vm) == 0)
 		return 0;
-	return vm_apply_binop(
-		tbycode_ins(operation), left, stk_top(vm), stk_top(vm));
+	tins instruction = tbycode_ins(operation);
+	return vm_binop_fast(instruction, left, stk_top(vm), stk_top(vm)) ||
+	       vm_apply_binop(instruction, left, stk_top(vm), stk_top(vm));
 }
 
 void tmp_add(tvm *vm)
@@ -1353,8 +1455,54 @@ static void vm_list_idx_int(tlist *list, long index, tobj *result)
 		result->val.v_tcompo->refctr++;
 }
 
-static void vm_str_idx_int(tstr *str, long index, int comparison_hint,
-			   tobj *result)
+/* Direct vtable dispatch for the dominant single-int reads. Unlike the
+ * tins_cache path this needs no cache slot access and never degrades; the
+ * bounds and error behaviour mirror vm_list_idx_int / vm_str_idx_int. */
+static inline TVM_ALWAYS_INLINE int vm_idxr_fast(
+		tcompo_v *arr, tobj *params, uint_regs nparams,
+		int comparison_hint, tobj *result)
+{
+	if (nparams != 1 || params[0].type != tint)
+		return 0;
+	long index = params[0].val.v_tint;
+	if (arr->vtable == &tlist_vtable) {
+		tlist *list = (tlist *)arr;
+		uint_objs len = list->items.len;
+		if (index < 0)
+			index += (long)len;
+		if (index < 0 || (uint_objs)index >= len)
+			twarn(ErrRuntime_IdxOutRange, "list index", "");
+		*result = list->items.data[index];
+		if (result->type == tcompo && result->val.v_tcompo)
+			result->val.v_tcompo->refctr++;
+		return 1;
+	}
+	if (arr->vtable == &tstr_vtable) {
+		tstr *str = (tstr *)arr;
+		size_t len = tstring_len(str->data);
+		if (index < 0)
+			index += (long)len;
+		if (index < 0 || (size_t)index >= len)
+			twarn(ErrRuntime_IdxOutRange, "string index", "");
+		if (comparison_hint) {
+			*result = (tobj){
+				.type = tint,
+				.name_loc = (int)VM_INDEXED_BYTE_NAMELOC,
+				.val.v_tint =
+					(unsigned char)tstring_cstr(str->data)[index]
+			};
+			return 1;
+		}
+		tobj_set_compo(
+			result,
+			(tcompo_v *)tstr_new_len(
+				tstring_cstr(str->data) + index, 1));
+		return 1;
+	}
+	return 0;
+}
+
+static void vm_str_idx_int(tstr *str, long index, int comparison_hint, tobj *result)
 {
 	size_t len = tstring_len(str->data);
 	if (index < 0)
@@ -1398,8 +1546,7 @@ static size_t vm_dense_int2_offset(tcompo_v *array, const tobj *params)
 	return (size_t)row * columns + (size_t)column;
 }
 
-static void vm_dense_idx_int2(tcompo_v *array, const tobj *params,
-			      tobj *result)
+static void vm_dense_idx_int2(tcompo_v *array, const tobj *params, tobj *result)
 {
 	size_t offset = vm_dense_int2_offset(array, params);
 	if (array->vtable == &tdarr_vtable)
@@ -1408,8 +1555,7 @@ static void vm_dense_idx_int2(tcompo_v *array, const tobj *params,
 		vm_set_bool_result(result, ((tbarr *)array)->data[offset] != 0);
 }
 
-static void vm_dense_iset_int2(tcompo_v *array, const tobj *params,
-			       const tobj *value)
+static void vm_dense_iset_int2(tcompo_v *array, const tobj *params, const tobj *value)
 {
 	size_t offset = vm_dense_int2_offset(array, params);
 	if (array->vtable == &tdarr_vtable) {
@@ -1432,8 +1578,29 @@ static void vm_dense_iset_int2(tcompo_v *array, const tobj *params,
 /* Index right */
 static void vm_idxr_value(tvm *vm, tcompo_v *arr, tobj *params,
 			  uint_regs nparams, int comparison_hint,
-			  tins_cache *cache)
+			  int slice_form, tins_cache *cache)
 {
+	if (slice_form) {
+		if (nparams == 2 && params[0].type == tint &&
+		    params[1].type == tint) {
+			if (arr->vtable == &tlist_vtable) {
+				tlist_slice_index((tlist *)arr, params, &vm->rev);
+				return;
+			}
+			if (arr->vtable == &tstr_vtable) {
+				tstr_slice_index((tstr *)arr, params, &vm->rev);
+				return;
+			}
+		}
+		/* Other indexables keep the Pair protocol. */
+		tobj pair;
+		tobj_set_nil(&pair);
+		tobj_set_compo(&pair,
+			(tcompo_v *)tpair_new(&params[1], &params[0]));
+		tcompo_index(arr, &pair, 1, &vm->rev);
+		tobj_try_clear(&pair);
+		return;
+	}
 	if (cache && cache->kind == tins_cache_idxr_list_int &&
 	    cache->guard == arr->vtable && nparams == 1 &&
 	    params[0].type == tint) {
@@ -1480,8 +1647,11 @@ static void vm_idxr(tvm *vm, tbycode instruction, tins_cache *cache)
 	tobj *obj = stk_top(vm);
 	if (obj->type != tcompo || !obj->val.v_tcompo)
 		twarn(ErrRuntime_RefType, "vm_idxr", "");
-	vm_idxr_value(vm, obj->val.v_tcompo, stk_topn(vm, nparams + 1),
-		       nparams, tbycode_idxr_compare(instruction), cache);
+	if (!vm_idxr_fast(obj->val.v_tcompo, stk_topn(vm, nparams + 1), nparams,
+			  tbycode_idxr_compare(instruction), &vm->rev))
+		vm_idxr_value(vm, obj->val.v_tcompo, stk_topn(vm, nparams + 1),
+			      nparams, tbycode_idxr_compare(instruction),
+			      tbycode_idxr_slice(instruction), cache);
 	stk_popcn(vm, 1 + nparams);
 	stk_push(vm, &vm->rev);
 	tvm_set_rev_empty(vm);
@@ -1493,8 +1663,11 @@ static void vm_idxr_borrowed(tvm *vm, const tobj *obj,
 	uint_regs nparams = (uint_regs)tbycode_idxr_count(instruction);
 	if (obj->type != tcompo || !obj->val.v_tcompo)
 		twarn(ErrRuntime_RefType, "vm_idxr", "");
-	vm_idxr_value(vm, obj->val.v_tcompo, stk_topn(vm, nparams),
-		       nparams, tbycode_idxr_compare(instruction), cache);
+	if (!vm_idxr_fast(obj->val.v_tcompo, stk_topn(vm, nparams), nparams,
+			  tbycode_idxr_compare(instruction), &vm->rev))
+		vm_idxr_value(vm, obj->val.v_tcompo, stk_topn(vm, nparams),
+			      nparams, tbycode_idxr_compare(instruction),
+			      tbycode_idxr_slice(instruction), cache);
 	stk_popcn(vm, nparams);
 	stk_push(vm, &vm->rev);
 	tvm_set_rev_empty(vm);
@@ -1575,8 +1748,7 @@ static void vm_loop_push_cond(tvm *vm, int has_next)
 	stk_fill(vm);
 }
 
-static inline tobj *vm_loop_target(tvm *vm, uint_objs idx, int isenv,
-				    tcompo_env *env)
+static inline tobj *vm_loop_target(tvm *vm, uint_objs idx, int isenv, tcompo_env *env)
 {
 	return isenv ? tcompo_env_get_obj(env, idx) : tmp_obj(vm, idx);
 }
@@ -1692,8 +1864,7 @@ static void vm_loopas(tvm *vm, tins_cache *cache, uint_objs idx,
 /* Forward declare exec_tins (defined later) */
 void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env);
 
-static void rule_result_field(tdict *result, const char *name,
-			      const tobj *value)
+static void rule_result_field(tdict *result, const char *name, const tobj *value)
 {
 	tobj key;
 	tobj_set_nil(&key);
@@ -1755,14 +1926,18 @@ static void rule_eval_source_item(tvm *vm, trule_instance *instance,
 	vm->rule_output = saved;
 	vm->rule_logic_values = saved_negations;
 	const char *role = tstring_cstr(term->provider_kind);
-	if (strcmp(role, "negation-value") == 0 || strcmp(role, "negation-operand") == 0 || strcmp(role, "expression-value") == 0) {
+	if (strcmp(role, "negation-value") == 0
+	 || strcmp(role, "negation-operand") == 0
+	 || strcmp(role, "expression-value") == 0) {
 		const tpair *record = nullptr;
 		for (uint_objs i = 0; i < tlist_size(negations); i++) {
 			const tpair *entry = (tpair *)tlist_at(negations, i)->val.v_tcompo;
 			if (entry->first.val.v_tint == term->provider_version)
 				record = (tpair *)entry->second.val.v_tcompo;
 		}
-		if (!record) twarn(ErrRuntime_Other, "Rule", "logical Term was not evaluated (short-circuited)");
+		if (!record)
+			twarn(ErrRuntime_Other, "Rule",
+			      "logical Term was not evaluated (short-circuited)");
 		tobj_copy(result, strcmp(role, "negation-value") == 0 ? &record->second : &record->first);
 	} else {
 		long item_index = term->provider_version;
@@ -1771,7 +1946,8 @@ static void rule_eval_source_item(tvm *vm, trule_instance *instance,
 		const tobj *item = tlist_at(output, (uint_objs)item_index);
 		if (item->type == tcompo && tobj_compo_type(item) == compo_tpair)
 			tobj_copy(result, &((tpair *)item->val.v_tcompo)->second);
-		else tobj_copy(result, item);
+		else
+			tobj_copy(result, item);
 	}
 	tobj owner;
 	tobj_set_nil(&owner);
@@ -1784,28 +1960,32 @@ static void rule_eval_source_item(tvm *vm, trule_instance *instance,
 static int rule_antecedent_truth(tvm *vm, const tobj *value, tcompo_env *environment);
 
 static void rule_eval_term(tvm *vm, trule_instance *instance,
-			   trule_term *term, tcompo_env *environment,
-			   tobj *result)
+			   trule_term *term, tcompo_env *environment, tobj *result)
 {
 	tobj_set_nil(result);
-    if (!strcmp(tstring_cstr(term->provider), "tapas.source") &&
-        !strcmp(tstring_cstr(term->provider_kind), "expression-value")) {
-        rule_eval_source_item(vm, instance, term, result);
-        return;
-    }
-    if (term->kind == trule_term_in) {
-        if (!strcmp(tstring_cstr(term->provider), "tapas.source")) {
-            rule_eval_source_item(vm, instance, term, result); return;
-        }
-        if (term->arguments.len != 2) twarn(ErrRuntime_Other, "Rule", "In requires two operands");
-        tobj left, right;
-        tobj_set_nil(&left); tobj_set_nil(&right);
-        /* Match ordinary Tapas membership evaluation order. */
-        rule_eval_term(vm, instance, (trule_term *)term->arguments.data[1].val.v_tcompo, environment, &right);
-        rule_eval_term(vm, instance, (trule_term *)term->arguments.data[0].val.v_tcompo, environment, &left);
-        operator_in(&left, &right, result);
-        tobj_try_clear(&left); tobj_try_clear(&right); return;
-    }
+	if (!strcmp(tstring_cstr(term->provider), "tapas.source") &&
+	    !strcmp(tstring_cstr(term->provider_kind), "expression-value")) {
+		rule_eval_source_item(vm, instance, term, result);
+		return;
+	}
+	if (term->kind == trule_term_in) {
+		if (!strcmp(tstring_cstr(term->provider), "tapas.source")) {
+			rule_eval_source_item(vm, instance, term, result);
+			return;
+		}
+		if (term->arguments.len != 2)
+			twarn(ErrRuntime_Other, "Rule", "In requires two operands");
+		tobj left, right;
+		tobj_set_nil(&left);
+		tobj_set_nil(&right);
+		/* Match ordinary Tapas membership evaluation order. */
+		rule_eval_term(vm, instance, (trule_term *)term->arguments.data[1].val.v_tcompo, environment, &right);
+		rule_eval_term(vm, instance, (trule_term *)term->arguments.data[0].val.v_tcompo, environment, &left);
+		operator_in(&left, &right, result);
+		tobj_try_clear(&left);
+		tobj_try_clear(&right);
+		return;
+	}
 	if (term->kind == trule_term_and || term->kind == trule_term_or) {
 		if (strcmp(tstring_cstr(term->provider), "tapas.source") == 0) {
 			rule_eval_source_item(vm, instance, term, result);
@@ -1815,12 +1995,15 @@ static void rule_eval_term(tvm *vm, trule_instance *instance,
 			twarn(ErrRuntime_Other, "Rule", "And/Or require two operands");
 		tobj operand;
 		tobj_set_nil(&operand);
-		rule_eval_term(vm, instance, (trule_term *)term->arguments.data[0].val.v_tcompo,
+		rule_eval_term(vm, instance,
+			(trule_term *)term->arguments.data[0].val.v_tcompo,
 			environment, &operand);
 		int truth = rule_antecedent_truth(vm, &operand, environment);
 		tobj_try_clear(&operand);
-		if ((term->kind == trule_term_and && truth) || (term->kind == trule_term_or && !truth)) {
-			rule_eval_term(vm, instance, (trule_term *)term->arguments.data[1].val.v_tcompo,
+		if ((term->kind == trule_term_and && truth)
+		 || (term->kind == trule_term_or && !truth)) {
+			rule_eval_term(vm, instance,
+				(trule_term *)term->arguments.data[1].val.v_tcompo,
 				environment, &operand);
 			truth = rule_antecedent_truth(vm, &operand, environment);
 			tobj_try_clear(&operand);
@@ -1856,18 +2039,20 @@ static void rule_eval_term(tvm *vm, trule_instance *instance,
 		return;
 	}
 	if (term->kind == trule_term_capture) {
-        if (!trule_read_capture((trule *)instance->rule.val.v_tcompo, term, result))
-            twarn(ErrRuntime_Other, "Rule", "unbound Capture Term");
-        return;
-    }
+		if (!trule_read_capture((trule *)instance->rule.val.v_tcompo, term, result))
+			twarn(ErrRuntime_Other, "Rule", "unbound Capture Term");
+		return;
+	}
 	if (term->kind == trule_term_extension)
 		twarn(ErrRuntime_Other, "Rule",
 		      "Extension Term requires a supporting evaluator");
 	if (term->kind == trule_term_call) {
-		trule_term *function = term->payload.type == tcompo &&
+		trule_term *function =
+			term->payload.type == tcompo &&
 			tobj_compo_type(&term->payload) == compo_trule_term ?
 			(trule_term *)term->payload.val.v_tcompo : nullptr;
-		if (!function) twarn(ErrRuntime_Other, "Rule", "invalid Call Term");
+		if (!function)
+			twarn(ErrRuntime_Other, "Rule", "invalid Call Term");
 		tobj callable;
 		tobj_set_nil(&callable);
 		rule_eval_term(vm, instance, function, environment, &callable);
@@ -1880,17 +2065,17 @@ static void rule_eval_term(tvm *vm, trule_instance *instance,
 				environment, &arguments[i]);
 		}
 		vm_invoke(vm, &callable, arguments, count, environment, result);
-		for (uint_regs i = 0; i < count; i++) tobj_try_clear(&arguments[i]);
+		for (uint_regs i = 0; i < count; i++)
+			tobj_try_clear(&arguments[i]);
 		free(arguments);
 		tobj_try_clear(&callable);
 		return;
 	}
-	if (term->kind == trule_term_construct ||
-	    term->kind == trule_term_convert) {
-		if (term->kind == trule_term_construct &&
-		    strcmp(tstring_cstr(term->provider), "tapas.source") == 0) {
-			rule_eval_source_item(vm, instance,
-				term, result);
+	if (term->kind == trule_term_construct
+	 || term->kind == trule_term_convert) {
+		if (term->kind == trule_term_construct
+		 && strcmp(tstring_cstr(term->provider), "tapas.source") == 0) {
+			rule_eval_source_item(vm, instance, term, result);
 			return;
 		}
 		if (term->arguments.len != 1)
@@ -1902,7 +2087,8 @@ static void rule_eval_term(tvm *vm, trule_instance *instance,
 	}
 	if (term->kind != trule_term_intrinsic)
 		twarn(ErrRuntime_Other, "Rule", "unsupported Term kind");
-	const char *operation = term->payload.type == tcompo &&
+	const char *operation =
+		term->payload.type == tcompo &&
 		tobj_compo_type(&term->payload) == compo_tstr ?
 		tstring_cstr(((tstr *)term->payload.val.v_tcompo)->data) : "";
 	if (term->arguments.len == 1 && strcmp(operation, "neg") == 0) {
@@ -1953,8 +2139,7 @@ static void rule_violation(tlist *violations, trule_item *condition,
 	tobj_set_nil(&value);
 	tobj_set_compo(&value, (tcompo_v *)condition);
 	rule_result_field(violation, "condition", &value);
-	tobj_set_compo(&value, (tcompo_v *)tstr_new(
-		tstring_cstr(condition->description)));
+	tobj_set_compo(&value, (tcompo_v *)tstr_new(tstring_cstr(condition->description)));
 	rule_result_field(violation, "description", &value);
 	tobj_try_clear(&value);
 	tlist *arguments = tlist_new();
@@ -1968,11 +2153,11 @@ static void rule_violation(tlist *violations, trule_item *condition,
 	tobj_try_clear(&value);
 	tlist *requirements = tlist_new();
 	for (uint32_t i = 0; i + 1 < depth; i++) {
-		if (!requirement_path[i]) continue;
+		if (!requirement_path[i])
+			continue;
 		tobj requirement;
 		tobj_set_nil(&requirement);
-		tobj_set_compo(&requirement,
-			(tcompo_v *)requirement_path[i]);
+		tobj_set_compo(&requirement, (tcompo_v *)requirement_path[i]);
 		tobj_vec_push(&requirements->items, &requirement);
 	}
 	tobj_set_compo(&value, (tcompo_v *)requirements);
@@ -1985,8 +2170,7 @@ static void rule_violation(tlist *violations, trule_item *condition,
 	rule_result_field(origin, "end", &value);
 	if (depth) {
 		trule *owner = (trule *)path[depth - 1]->rule.val.v_tcompo;
-		tobj_set_compo(&value, (tcompo_v *)tstr_new(
-			tstring_cstr(owner->source)));
+		tobj_set_compo(&value, (tcompo_v *)tstr_new(tstring_cstr(owner->source)));
 	} else
 		tobj_set_nil(&value);
 	rule_result_field(origin, "source", &value);
@@ -2005,13 +2189,15 @@ static void rule_check(tvm *vm, const tobj *value, tobj *result, int fatal,
 
 static int rule_antecedent_truth(tvm *vm, const tobj *value, tcompo_env *environment)
 {
-	if (value->type == tbool) return value->val.v_tbool;
+	if (value->type == tbool)
+		return value->val.v_tbool;
 	if (value->type != tcompo || tobj_compo_type(value) != compo_trule_instance)
 		twarn(ErrRuntime_ParamsType, "Rule truth", "Bool or RuleInstance required");
 	/* Bound source and dynamic recursion even though each nested check starts
 	 * a new requirement path. */
 	if (vm->antecedent_depth >= 128)
-		twarn(ErrRuntime_Other, "Rule truth", "antecedent evaluation depth exceeded (cyclic or deeply nested Rule check)");
+		twarn(ErrRuntime_Other, "Rule truth",
+		      "antecedent evaluation depth exceeded (cyclic or deeply nested Rule check)");
 	tobj checked;
 	tobj_set_nil(&checked);
 	vm->antecedent_depth++;
@@ -2032,27 +2218,33 @@ static int rule_antecedent_truth(tvm *vm, const tobj *value, tcompo_env *environ
 
 static int rule_bool_record(const tobj *record)
 {
-	if (!record || record->type != tcompo || tobj_compo_type(record) != compo_tpair ||
-	    ((tpair *)record->val.v_tcompo)->second.type != tbool)
+	if (!record
+	 || record->type != tcompo
+	 || tobj_compo_type(record) != compo_tpair
+	 || ((tpair *)record->val.v_tcompo)->second.type != tbool)
 		twarn(ErrRuntime_Other, "Rule", "invalid implication checker record");
 	return ((tpair *)record->val.v_tcompo)->second.val.v_tbool;
 }
 
-static void rule_check_implication(tvm *vm, trule_instance *instance,
-	trule_item *item, tlist *violations, tlist *implications,
-	trule_instance **path, trule_item **requirement_path, uint32_t depth,
-	tcompo_env *environment, tlist *records, uint_objs *record_index)
+static void rule_check_implication(
+		tvm *vm, trule_instance *instance, trule_item *item,
+		tlist *violations, tlist *implications, trule_instance **path,
+		trule_item **requirement_path, uint32_t depth,
+		tcompo_env *environment, tlist *records, uint_objs *record_index)
 {
 	tobj guard;
 	tobj_set_nil(&guard);
-	if (records && (((trule *)instance->rule.val.v_tcompo)->ir->version >= 7 ||
-        item->term->kind == trule_term_not ||
-	    item->term->kind == trule_term_in || item->term->kind == trule_term_and || item->term->kind == trule_term_or ||
-	    strcmp(tstring_cstr(item->term->provider_kind), "antecedent-value") == 0))
+	if (records && (((trule *)instance->rule.val.v_tcompo)->ir->version >= 7
+	 || item->term->kind == trule_term_not
+	 || item->term->kind == trule_term_in
+	 || item->term->kind == trule_term_and
+	 || item->term->kind == trule_term_or
+	 || strcmp(tstring_cstr(item->term->provider_kind), "antecedent-value") == 0))
 		(*record_index)++; /* use the already checked truth, not a second evaluation */
 	if (records)
 		tobj_set_bool(&guard, rule_bool_record(tlist_at(records, *record_index)));
-	else rule_eval_term(vm, instance, item->term, environment, &guard);
+	else
+		rule_eval_term(vm, instance, item->term, environment, &guard);
 	int triggered = rule_antecedent_truth(vm, &guard, environment);
 	tobj_try_clear(&guard);
 	int passed = 1;
@@ -2068,7 +2260,8 @@ static void rule_check_implication(tvm *vm, trule_instance *instance,
 				tobj_set_bool(&value, rule_bool_record(tlist_at(records, *record_index)));
 		} else if (triggered)
 			rule_eval_term(vm, instance, term, environment, &value);
-		if (!triggered) continue;
+		if (!triggered)
+			continue;
 		if (value.type != tbool)
 			twarn(ErrRuntime_ParamsType, "implies", "Bool consequent required");
 		if (!value.val.v_tbool) {
@@ -2112,7 +2305,8 @@ static void rule_collect(tvm *vm, trule_instance *instance,
 			(path[i]->rule.val.v_tcompo == instance->rule.val.v_tcompo &&
 			 path[i]->arguments.len == instance->arguments.len);
 		for (uint_objs j = 0; same && j < instance->arguments.len; j++)
-			same = tobj_identical(&path[i]->arguments.data[j],
+			same = tobj_identical(
+				&path[i]->arguments.data[j],
 				&instance->arguments.data[j]);
 		if (same)
 			twarn(ErrRuntime_Other, "Rule", "cyclic requirement");
@@ -2124,8 +2318,10 @@ static void rule_collect(tvm *vm, trule_instance *instance,
 			trule_item *item =
 				(trule_item *)rule->ir->items.data[i].val.v_tcompo;
 			if (item->kind == trule_item_implication) {
-				rule_check_implication(vm, instance, item, violations, implications,
-					path, requirement_path, depth + 1, environment, nullptr, nullptr);
+				rule_check_implication(
+					vm, instance, item, violations, implications,
+					path, requirement_path, depth + 1,
+					environment, nullptr, nullptr);
 				continue;
 			}
 			if (item->kind == trule_item_condition) {
@@ -2144,8 +2340,8 @@ static void rule_collect(tvm *vm, trule_instance *instance,
 			tobj rule_value;
 			tobj_set_nil(&rule_value);
 			rule_eval_term(vm, instance, item->rule, environment, &rule_value);
-			if (rule_value.type != tcompo ||
-			    tobj_compo_type(&rule_value) != compo_trule)
+			if (rule_value.type != tcompo
+			 || tobj_compo_type(&rule_value) != compo_trule)
 				twarn(ErrRuntime_ParamsType, "Rule dependency",
 				      "Rule Term required");
 			uint_regs count = (uint_regs)item->arguments.len;
@@ -2228,8 +2424,7 @@ static void rule_collect(tvm *vm, trule_instance *instance,
 			if (dependency && dependency != metadata && dependency->base.refctr == 0)
 				dependency->base.vtable->free(dependency);
 		} else
-			twarn(ErrRuntime_ParamsType, "Rule dependency",
-			      "RuleInstance required");
+			twarn(ErrRuntime_ParamsType, "Rule dependency", "RuleInstance required");
 	}
 	tobj owner;
 	tobj_set_nil(&owner);
@@ -2686,12 +2881,6 @@ vm_binop(tvm *vm, binopf f, tbycode *iter, uint_regs type, tcompo_env *env)
 }
 
 /* Single ins execution */
-typedef enum {
-	texec_normal,
-	texec_call,
-	texec_return
-} texec_action;
-
 typedef struct {
 	tfunc *function;
 	tobj *params;
@@ -2700,7 +2889,7 @@ typedef struct {
 	int current_function;
 } tcall_request;
 
-static inline texec_action vm_eval_generic_instruction(
+static inline int vm_eval_generic_instruction(
 		tvm *vm, tbycode *instruction, tins_cache *cache,
 		tcall_request *call, tcompo_env *env)
 {
@@ -2713,13 +2902,13 @@ static inline texec_action vm_eval_generic_instruction(
 			vm_eval_cppfunc(vm, (tcppgenf *)callable->val.v_tcompo,
 				stk_topn(vm, nparams + 1), nparams);
 			vm_finish_eval(vm, nparams + 1);
-			return texec_normal;
+			return 0;
 		}
 		if (cache->kind == tins_cache_eval_sessfunc) {
 			vm_eval_sessfunc(vm, (tcppsessf *)callable->val.v_tcompo,
 				 stk_topn(vm, nparams + 1), nparams, env);
 			vm_finish_eval(vm, nparams + 1);
-			return texec_normal;
+			return 0;
 		}
 	}
 	if (cache && cache->kind == tins_cache_eval_tfunc &&
@@ -2730,7 +2919,7 @@ static inline texec_action vm_eval_generic_instruction(
 		call->nparams = nparams;
 		call->return_stack_values = nparams + 1;
 		call->current_function = 0;
-		return texec_call;
+		return 1;
 	}
 	if (callable->type == tcompo && callable->val.v_tcompo &&
 	    callable->val.v_tcompo->vtable->get_compo_type_code() ==
@@ -2749,7 +2938,7 @@ static inline texec_action vm_eval_generic_instruction(
 		call->nparams = nparams;
 		call->return_stack_values = nparams + 1;
 		call->current_function = 0;
-		return texec_call;
+		return 1;
 	}
 	if (callable->type == tcompo && callable->val.v_tcompo) {
 		tcompo_type kind = tobj_compo_type(callable);
@@ -2768,547 +2957,13 @@ static inline texec_action vm_eval_generic_instruction(
 					vm, (tcppsessf *)callable->val.v_tcompo,
 					stk_topn(vm, nparams + 1), nparams, env);
 			vm_finish_eval(vm, nparams + 1);
-			return texec_normal;
+			return 0;
 		}
 	}
 	if (cache && cache->kind == tins_cache_empty)
 		cache->kind = tins_cache_polymorphic;
 	vm_eval(vm, instruction, env);
-	return texec_normal;
-}
-
-#if defined(__GNUC__) || defined(__clang__)
-__attribute__((always_inline))
-#endif
-static inline texec_action exec_tin(tvm *vm,
-			    tbycode *iter,
-			    tins ins,
-			    tvm_code_cache *code_cache,
-			    tcall_request *call,
-			    uint_cmds *idx,
-			    uint_cmds end,
-			    tcompo_env *env,
-			    long *cints,
-			    double *cflts,
-			    tstring **cstrs)
-{
-	(void)end;
-	switch (ins) {
-	case OP_PASS:
-		break;
-	case OP_VCRT: {
-		uint16_t flags = tbycode_get_R(*iter);
-		int isenv = (flags & TVCRT_ENV_FLAG) != 0;
-		uint_csts nl = tbycode_get_L(*iter);
-		tobj_array *slots;
-		if (isenv) {
-			vm_add_slot(&env->base.objs, nl);
-			slots = &env->base.objs;
-		} else {
-			vm_add_slot(&vm->tmps, UNDEF_NAMELOC);
-			slots = &vm->tmps;
-		}
-		if (flags & TVCRT_INIT_FLAG) {
-			if (stk_len(vm) == 0 || stk_top(vm)->type == tnil)
-				twarn(ErrRuntime_AssignNil, "OP_VCRT", "");
-			tobj_array_set_obj(slots, slots->len - 1, stk_top(vm));
-			stk_pop(vm);
-		}
-	} break;
-	case OP_TMPDEL:
-		vm_del_slots(&vm->tmps, (uint_objs)tbycode_get_U(*iter));
-		break;
-	case OP_THIS: {
-		tobj current;
-		tobj_set_nil(&current);
-		tcompo_env_copy_to_obj(env, &current);
-		stk_push(vm, &current);
-		tobj_set_nil(&current);
-	} break;
-	case OP_BASE: {
-		tobj v;
-		tobj_set_nil(&v);
-		tcompo_env_copy_to_obj(tcompo_env_get_father(env), &v);
-		stk_push(vm, &v);
-		tobj_set_nil(&v);
-	} break;
-	case OP_RET:
-		if (stk_len(vm) > 0) {
-			if (stk_top(vm)->type == tcompo &&
-			    tobj_compo_type(stk_top(vm)) == compo_tfunc)
-				tfunc_close_over(
-					(tfunc *)stk_top(vm)->val.v_tcompo,
-					env);
-			else if (stk_top(vm)->type == tcompo &&
-				 tobj_compo_type(stk_top(vm)) == compo_trule)
-				trule_close_over(
-					(trule *)stk_top(vm)->val.v_tcompo, env);
-			vm->rev = *stk_top(vm);
-			stk_pop(vm);
-		} else
-			tvm_set_rev_empty(vm);
-		stk_popcn(vm, stk_len(vm));
-		*idx = end;
-		return texec_return;
-	case OP_IN: {
-		tobj r;
-		tobj_set_nil(&r);
-		operator_in(stk_top(vm), stk_at(vm, 1), &r);
-		stk_popcn(vm, 2);
-		stk_push(vm, &r);
-		tobj_set_nil(&r);
-	} break;
-	case OP_PAIR: {
-		tobj r;
-		tobj_set_nil(&r);
-		operator_pair(stk_top(vm), stk_at(vm, 1), &r);
-		stk_popcn(vm, 2);
-		stk_push(vm, &r);
-		tobj_set_nil(&r);
-	} break;
-	case OP_TO: {
-		tobj r;
-		tobj_set_nil(&r);
-		operator_to(stk_top(vm), stk_at(vm, 1), &r);
-		stk_popcn(vm, 2);
-		stk_push(vm, &r);
-		tobj_set_nil(&r);
-	} break;
-	case OP_POPN: {
-		int print = tbycode_get_R(*iter);
-		uint_regs i, n = (uint_regs)tbycode_get_L(*iter);
-		for (i = 0; i < n; i++) {
-			tvm_release_loop_iterator(vm, stk_top(vm));
-			if (print && stk_top(vm)->type != tnil) {
-				tstring *s = tobj_tostring_full(stk_top(vm));
-				printf("%s\n", tstring_cstr(s));
-				tstring_free(s);
-			}
-			stk_popc(vm);
-		}
-	} break;
-	case OP_POPCOV:
-		if (stk_top(vm)->type == tnil)
-			twarn(ErrRuntime_AssignNil, "OP_POPCOV", "");
-		if (tbycode_get_R(*iter))
-			tcompo_env_set_obj(
-				env, tbycode_get_L(*iter), stk_top(vm));
-		else
-			tobj_array_set_obj(
-				&vm->tmps, tbycode_get_L(*iter), stk_top(vm));
-		stk_pop(vm);
-		break;
-	case OP_TYPEFWD: {
-		tobj value;
-		tobj_set_nil(&value);
-		tobj_set_compo(&value, (tcompo_v *)ttypeval_new_recursive());
-		stk_push(vm, &value);
-		tobj_set_nil(&value);
-	} break;
-	case OP_TYPEDEFINE: {
-		tobj *target = tbycode_get_R(*iter) ?
-			tcompo_env_get_obj(env, tbycode_get_L(*iter)) :
-			tmp_obj(vm, tbycode_get_L(*iter));
-		tobj *body = stk_top(vm);
-		if (!target || target->type != tcompo ||
-		    tobj_compo_type(target) != compo_ttypeval ||
-		    !body || body->type != tcompo ||
-		    tobj_compo_type(body) != compo_ttypeval ||
-		    !ttypeval_define_recursive(
-			(ttypeval *)target->val.v_tcompo,
-			(ttypeval *)body->val.v_tcompo))
-			twarn(ErrRuntime_Other, "recursive Type",
-			      "invalid or repeated Type definition");
-		stk_popc(vm);
-	} break;
-	case OP_LOOPAS:
-		vm_loopas(vm,
-			  tvm_instruction_cache(code_cache, *idx),
-			  tbycode_get_L(*iter),
-			  tbycode_get_R(*iter),
-			  env);
-		break;
-	case OP_LOOPRANGE:
-		vm_loop_inline_range(
-			vm, tvm_instruction_cache(code_cache, *idx),
-			tbycode_get_L(*iter), tbycode_get_R(*iter), env);
-		break;
-	case OP_JPF:
-		*idx += tbycode_get_U(*iter);
-		iter += tbycode_get_U(*iter);
-		break;
-	case OP_JPB:
-		*idx -= tbycode_get_U(*iter);
-		iter -= tbycode_get_U(*iter);
-		break;
-	case OP_CJPFPOP:
-		if (stk_top(vm)->type != tbool)
-			twarn(ErrRuntime_ParamsType, "OP_CJPFPOP", "");
-		if (stk_top(vm)->val.v_tbool == 0) {
-			uint_cmds u = tbycode_get_U(*iter);
-			*idx += u;
-			iter += u;
-			stk_pop(vm);
-		} else
-			stk_popc(vm);
-		break;
-	case OP_CJPBPOP:
-		if (stk_top(vm)->type != tbool)
-			twarn(ErrRuntime_ParamsType, "OP_CJPBPOP", "");
-		if (stk_top(vm)->val.v_tbool != 0) {
-			uint_cmds u = tbycode_get_U(*iter);
-			*idx += u;
-			iter += u;
-			stk_pop(vm);
-		} else
-			stk_popc(vm);
-		break;
-	case OP_PUSHX: {
-		uint_objs loc = tbycode_get_L(*iter);
-		uint16_t addr = tbycode_get_R(*iter);
-		tobj *src = vm_pushx_source(vm, env, loc, addr);
-		vm->stk[vm->stklen] = *src;
-		if (src->type == tcompo && src->val.v_tcompo)
-			src->val.v_tcompo->refctr++;
-		vm->stklen++;
-	} break;
-	case OP_PUSHI: {
-		tobj v;
-		tobj_set_nil(&v);
-		vm_set_int_result(&v, cints[tbycode_get_U(*iter)]);
-		stk_push(vm, &v);
-	} break;
-	case OP_PUSHFLT: {
-		tobj v;
-		tobj_set_nil(&v);
-		vm_set_float_result(&v, cflts[tbycode_get_U(*iter)]);
-		stk_push(vm, &v);
-	} break;
-	case OP_PUSHB: {
-		tobj v;
-		tobj_set_nil(&v);
-		vm_set_bool_result(&v, (int)tbycode_get_U(*iter));
-		stk_push(vm, &v);
-	} break;
-	case OP_PUSHS: {
-		tobj v;
-		tobj_set_nil(&v);
-		tobj_set_compo(&v, (tcompo_v *)tstr_new(tstring_cstr(cstrs[tbycode_get_U(*iter)])));
-		stk_push(vm, &v);
-		tobj_set_nil(&v);
-	} break;
-	case OP_PUSHDICT: {
-		tdict *d = tdict_new();
-		uint_regs i, n = (uint_regs)tbycode_get_U(*iter);
-		tobj *ps = stk_topn(vm, n);
-		for (i = 0; i < n; i++) {
-			if (ps[i].type != tcompo || tobj_compo_type(&ps[i]) != compo_tpair)
-				twarn(ErrRuntime_ParamsType, "dictionary literal", "Pair required");
-			tpair *pair = (tpair *)ps[i].val.v_tcompo;
-			tdict_set(d, &pair->first, &pair->second);
-		}
-		stk_popcn(vm, n);
-		tobj v;
-		tobj_set_nil(&v);
-		tobj_set_compo(&v, (tcompo_v *)d);
-		stk_push(vm, &v);
-		tobj_set_nil(&v);
-	} break;
-	case OP_PUSHINFO: {
-		tobj v;
-		tobj_set_nil(&v);
-		vm_set_int_result(&v, (long)tbycode_get_U(*iter));
-		stk_push(vm, &v);
-	} break;
-	case OP_IMPORT:
-		vm_import(vm, (uint_csts)tbycode_get_U(*iter), cstrs, env);
-		break;
-	case OP_IDXR:
-		vm_idxr(vm, *iter, tvm_instruction_cache(code_cache, *idx));
-		break;
-	case OP_EVALSF: {
-		int direct = tbycode_get_i(*iter) != 0;
-		uint_regs nparams = direct ? tbycode_get_b(*iter) :
-			(uint_regs)tbycode_get_U(*iter);
-		tobj *callable = direct ?
-			vm_direct_slot(env, tbycode_get_L(*iter),
-				tbycode_get_i(*iter) - 1) : stk_top(vm);
-		if (VM_UNLIKELY(callable->type != tcompo ||
-				callable->val.v_tcompo == nullptr ||
-				callable->val.v_tcompo->vtable != &tcppsessf_vtable))
-			twarn(ErrRuntime_RefType, "OP_EVALSF",
-			      "C Session Function required");
-		tobj *params = nparams ? stk_topn(vm, nparams) : callable;
-		vm_eval_sessfunc(vm, (tcppsessf *)callable->val.v_tcompo,
-				direct ? params : stk_topn(vm, nparams + 1),
-				nparams, env);
-		vm_finish_eval(vm, nparams + (direct ? 0 : 1));
-	} break;
-	case OP_EVALCF: {
-		int direct = tbycode_get_i(*iter) != 0;
-		uint_regs nparams = direct ? tbycode_get_b(*iter) :
-			(uint_regs)tbycode_get_U(*iter);
-		tobj *callable = direct ?
-			vm_direct_slot(env, tbycode_get_L(*iter),
-				tbycode_get_i(*iter) - 1) : stk_top(vm);
-		if (VM_UNLIKELY(callable->type != tcompo ||
-				callable->val.v_tcompo == nullptr ||
-				callable->val.v_tcompo->vtable != &tcppgenf_vtable))
-			twarn(ErrRuntime_RefType, "OP_EVALCF",
-			      "C Function required");
-		tobj *params = nparams ? stk_topn(vm, nparams) : callable;
-		vm_eval_cppfunc(vm, (tcppgenf *)callable->val.v_tcompo,
-				direct ? params : stk_topn(vm, nparams + 1),
-				nparams);
-		vm_finish_eval(vm, nparams + (direct ? 0 : 1));
-	} break;
-	case OP_EVALTF: {
-		uint_regs nparams = (uint_regs)tbycode_get_U(*iter);
-		if (!env->owner_func)
-			twarn(ErrRuntime_RefType,
-			      "exec_tin", "missing current function");
-		call->function = env->owner_func;
-		call->params = stk_topn(vm, nparams);
-		call->nparams = nparams;
-		call->return_stack_values = nparams;
-		call->current_function = 1;
-		return texec_call;
-	}
-	case OP_EVAL:
-		return vm_eval_generic_instruction(
-			vm, iter, tvm_instruction_cache(code_cache, *idx), call, env);
-	case OP_IDXL:
-		vm_idxl(vm,
-			tbycode_get_L(*iter),
-			tbycode_get_b(*iter),
-			tbycode_get_i(*iter),
-			env,
-			tvm_instruction_cache(code_cache, *idx));
-		break;
-	case OP_PUSHF: {
-		uint_cmds ncmds = tbycode_get_U(*iter);
-		uint_regs nparams = (uint_regs)stk_top(vm)->val.v_tint;
-		stk_popc(vm);
-		uint_regs fregmax = (uint_regs)stk_top(vm)->val.v_tint;
-		stk_popc(vm);
-		uint_objs ntmps = (uint_objs)stk_top(vm)->val.v_tint;
-		stk_popc(vm);
-		uint_objs nobjs = (uint_objs)stk_top(vm)->val.v_tint;
-		stk_popc(vm);
-		tfunc *f = tfunc_new(
-			nobjs, env, fregmax, ntmps, nparams, *idx + 1, ncmds);
-		*idx += ncmds;
-		iter += ncmds;
-		tobj v;
-		tobj_set_nil(&v);
-		tobj_set_compo(&v, (tcompo_v *)f);
-		stk_push(vm, &v);
-		tobj_set_nil(&v);
-	} break;
-	case OP_PUSHRULE: {
-		tobj *captures = stk_top(vm);
-		tobj *metadata = stk_at(vm, 1);
-		tobj *names = stk_at(vm, 2);
-		tobj *signature = stk_at(vm, 3);
-		tobj *checker = stk_at(vm, 4);
-		if (checker->type != tcompo ||
-		    tobj_compo_type(checker) != compo_tfunc)
-			twarn(ErrRuntime_ParamsType, "OP_PUSHRULE",
-			      "checker Function required");
-		if (signature->type != tcompo ||
-		    tobj_compo_type(signature) != compo_tstr)
-			twarn(ErrRuntime_ParamsType, "OP_PUSHRULE",
-			      "signature String required");
-		if (names->type != tcompo || tobj_compo_type(names) != compo_tstr)
-			twarn(ErrRuntime_ParamsType, "OP_PUSHRULE",
-			      "parameter names String required");
-		if (metadata->type != tcompo ||
-		    tobj_compo_type(metadata) != compo_tstr)
-			twarn(ErrRuntime_ParamsType, "OP_PUSHRULE",
-			      "item metadata String required");
-		if (captures->type != tcompo ||
-		    tobj_compo_type(captures) != compo_tstr)
-			twarn(ErrRuntime_ParamsType, "OP_PUSHRULE",
-			      "capture metadata String required");
-		trule *rule = trule_new((tfunc *)checker->val.v_tcompo,
-			tstring_cstr(cstrs[tbycode_get_U(*iter)]),
-			tstring_cstr(((tstr *)signature->val.v_tcompo)->data),
-			tstring_cstr(((tstr *)names->val.v_tcompo)->data),
-			tstring_cstr(((tstr *)metadata->val.v_tcompo)->data),
-			tstring_cstr(((tstr *)captures->val.v_tcompo)->data));
-		stk_popcn(vm, 5);
-		tobj value;
-		tobj_set_nil(&value);
-		tobj_set_compo(&value, (tcompo_v *)rule);
-		stk_push(vm, &value);
-		tobj_set_nil(&value);
-	} break;
-	case OP_RULEVALUE:
-	case OP_RULENOT:
-	case OP_RULETRUTH: {
-		if (!vm->rule_output || !vm->rule_logic_values)
-			twarn(ErrRuntime_Other, "Rule logic", "logical expression outside checker");
-		/* Nested checks may grow the VM stack: retain the value, not its address. */
-		tobj operand;
-		tobj_set_nil(&operand);
-		tobj_copy(&operand, stk_top(vm));
-		int truth = tbycode_ins(*iter) == OP_RULEVALUE ? 0 : rule_antecedent_truth(vm, &operand, env);
-		tobj value, pair, key, entry;
-		tobj_set_nil(&value); tobj_set_nil(&key);
-		if (tbycode_ins(*iter) == OP_RULEVALUE) tobj_copy(&value, &operand);
-		else tobj_set_bool(&value, tbycode_ins(*iter) == OP_RULENOT ? !truth : truth);
-		tobj_set_nil(&pair); tobj_set_nil(&entry);
-		tobj_set_int(&key, tbycode_get_U(*iter));
-		tobj_set_compo(&pair, (tcompo_v *)tpair_new(&operand, &value));
-		tobj_set_compo(&entry, (tcompo_v *)tpair_new(&key, &pair));
-		tobj_vec_push(&vm->rule_logic_values->items, &entry);
-		tobj_try_clear(&entry); tobj_try_clear(&pair); tobj_ddc_ref_clear(&operand);
-		stk_popc(vm);
-		stk_push(vm, &value);
-		tobj_ddc_ref_clear(&value);
-	} break;
-	case OP_RULEITEM:
-	case OP_RULEIMPLY: {
-		if (!vm->rule_output)
-			twarn(ErrRuntime_Other, "Rule condition",
-			      "condition outside checker");
-		tobj *condition = stk_top(vm);
-		if (tbycode_ins(*iter) == OP_RULEITEM && condition->type == tcompo &&
-		    tobj_compo_type(condition) == compo_trule_instance) {
-			tobj_vec_push(&vm->rule_output->items, condition);
-			stk_popc(vm);
-			break;
-		}
-		if (tbycode_get_U(*iter) == TRULE_ANTECEDENT_RECORD) {
-			/* Keep the original Bool/RuleInstance available through source IR.
-			 * Isolate its violations from the enclosing implication. */
-			tobj empty, record;
-			tobj_set_nil(&empty);
-			tobj_set_nil(&record);
-			tobj_set_compo(&empty, (tcompo_v *)tstr_new(""));
-			tobj_set_compo(&record, (tcompo_v *)tpair_new(&empty, condition));
-			tobj_vec_push(&vm->rule_output->items, &record);
-			int truth = rule_antecedent_truth(vm, condition, env);
-			tobj_try_clear(&record);
-			tobj_try_clear(&empty);
-			stk_popc(vm);
-			tobj value;
-			tobj_set_nil(&value);
-			tobj_set_bool(&value, truth);
-			stk_push(vm, &value);
-			break;
-		}
-		if (condition->type != tbool)
-			twarn(ErrRuntime_ParamsType, "Rule condition",
-			      "Bool result required");
-		tobj description;
-		tobj_set_nil(&description);
-		tobj_set_compo(&description, (tcompo_v *)tstr_new(
-			tstring_cstr(cstrs[tbycode_get_U(*iter)])));
-		tobj pair;
-		tobj_set_nil(&pair);
-		tobj_set_compo(&pair,
-			(tcompo_v *)tpair_new(&description, condition));
-		tobj_vec_push(&vm->rule_output->items, &pair);
-		tobj_try_clear(&pair);
-		tobj_try_clear(&description);
-		stk_popc(vm);
-	} break;
-	case OP_ADD: {
-		uint_regs type = (uint_regs)stk_top(vm)->val.v_tint;
-		stk_popc(vm);
-		VM_PARSE_BINOP(vm, operator_add, *iter, type, env);
-	} break;
-	case OP_SUB: {
-		uint_regs type = (uint_regs)stk_top(vm)->val.v_tint;
-		stk_popc(vm);
-		VM_PARSE_BINOP(vm, operator_sub, *iter, type, env);
-	} break;
-	case OP_MUL: {
-		uint_regs type = (uint_regs)stk_top(vm)->val.v_tint;
-		stk_popc(vm);
-		VM_PARSE_BINOP(vm, operator_mul, *iter, type, env);
-	} break;
-	case OP_DIV: {
-		uint_regs type = (uint_regs)stk_top(vm)->val.v_tint;
-		stk_popc(vm);
-		VM_PARSE_BINOP(vm, operator_div, *iter, type, env);
-	} break;
-	case OP_MOD: {
-		uint_regs type = (uint_regs)stk_top(vm)->val.v_tint;
-		stk_popc(vm);
-		VM_PARSE_BINOP(vm, operator_mod, *iter, type, env);
-	} break;
-	case OP_POW: {
-		uint_regs type = (uint_regs)stk_top(vm)->val.v_tint;
-		stk_popc(vm);
-		VM_PARSE_BINOP(vm, operator_pow, *iter, type, env);
-	} break;
-	case OP_MMUL: {
-		uint_regs type = (uint_regs)stk_top(vm)->val.v_tint;
-		stk_popc(vm);
-		VM_PARSE_BINOP(vm, operator_mmul, *iter, type, env);
-	} break;
-	case OP_EQ: {
-		uint_regs type = (uint_regs)stk_top(vm)->val.v_tint;
-		stk_popc(vm);
-		VM_PARSE_BINOP(vm, operator_eq, *iter, type, env);
-	} break;
-	case OP_NE: {
-		uint_regs type = (uint_regs)stk_top(vm)->val.v_tint;
-		stk_popc(vm);
-		VM_PARSE_BINOP(vm, operator_ne, *iter, type, env);
-	} break;
-	case OP_GE: {
-		uint_regs type = (uint_regs)stk_top(vm)->val.v_tint;
-		stk_popc(vm);
-		VM_PARSE_BINOP(vm, operator_ge, *iter, type, env);
-	} break;
-	case OP_SG: {
-		uint_regs type = (uint_regs)stk_top(vm)->val.v_tint;
-		stk_popc(vm);
-		VM_PARSE_BINOP(vm, operator_sg, *iter, type, env);
-	} break;
-	case OP_LE: {
-		uint_regs type = (uint_regs)stk_top(vm)->val.v_tint;
-		stk_popc(vm);
-		VM_PARSE_BINOP(vm, operator_le, *iter, type, env);
-	} break;
-	case OP_SL: {
-		uint_regs type = (uint_regs)stk_top(vm)->val.v_tint;
-		stk_popc(vm);
-		VM_PARSE_BINOP(vm, operator_sl, *iter, type, env);
-	} break;
-	case OP_AND: {
-		uint_regs type = (uint_regs)stk_top(vm)->val.v_tint;
-		stk_popc(vm);
-		VM_PARSE_BINOP(vm, operator_and, *iter, type, env);
-	} break;
-	case OP_OR: {
-		uint_regs type = (uint_regs)stk_top(vm)->val.v_tint;
-		stk_popc(vm);
-		VM_PARSE_BINOP(vm, operator_or, *iter, type, env);
-	} break;
-	case OP_BAND: {
-		uint_regs type = (uint_regs)stk_top(vm)->val.v_tint;
-		stk_popc(vm);
-		VM_PARSE_BINOP(vm, operator_and, *iter, type, env);
-	} break;
-	case OP_BOR: {
-		uint_regs type = (uint_regs)stk_top(vm)->val.v_tint;
-		stk_popc(vm);
-		VM_PARSE_BINOP(vm, operator_or, *iter, type, env);
-	} break;
-	case OP_POS:
-		operator_pos(stk_top(vm));
-		break;
-	case OP_NEG:
-		operator_neg(stk_top(vm));
-		break;
-	default:
-		twarn(ErrRuntime_Other, "exec_tin", "invalid bytecode instruction");
-	}
-	return texec_normal;
+	return 0;
 }
 
 #undef VM_PARSE_BINOP
@@ -3330,6 +2985,15 @@ static void tvm_resolve_error_context(
 	*line = location->line;
 	*column = location->column;
 }
+
+#define VM_PARSE_BINOP(vm, fn, code, type, env)                             \
+	do {                                                                 \
+		tbinop_operands operands__ =                                  \
+			vm_binop_operands((vm), (code), (type), (env));         \
+		(fn)(operands__.left, operands__.right, operands__.result);     \
+		vm_finish_binop((vm), operands__);                              \
+	} while (0)
+
 
 void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 {
@@ -3357,6 +3021,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 
 	uint32_t base_frame_depth = vm->frame_len;
 	for (;;) {
+		dispatch:
 		if (i >= end) {
 			if (vm->frame_len == base_frame_depth)
 				break;
@@ -3365,6 +3030,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 		}
 
 		tins instruction = tbycode_ins(cmdarr[i]);
+		tbycode *iter = &cmdarr[i];
 		/* Binary expressions commonly end in PUSHX, PUSHINFO, BINOP. The
 		 * value already on the stack is the right operand; borrow the named
 		 * left operand directly instead of retaining it only to release it
@@ -3399,7 +3065,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 				vm, object, cmdarr[i],
 				tvm_instruction_cache(&code_cache, i));
 			i++;
-			continue;
+			goto dispatch;
 		}
 		if (instruction == OP_PUSHINFO && i + 1 < end) {
 			uint_cmds metadata_instruction = i;
@@ -3415,18 +3081,573 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 			i = metadata_instruction;
 		}
 		tcall_request call;
-		texec_action action = exec_tin(vm, &cmdarr[i], instruction,
-				       &code_cache, &call,
-				       &i, end, env, cints, cflts, cstrs);
-		if (action == texec_normal) {
-			i++;
-			continue;
+		switch (tbycode_ins(cmdarr[i])) {
+		case OP_PASS:
+			break;
+		case OP_VCRT: {
+			uint16_t flags = tbycode_get_R(*iter);
+			int isenv = (flags & TVCRT_ENV_FLAG) != 0;
+			uint_csts nl = tbycode_get_L(*iter);
+			tobj_array *slots;
+			if (isenv) {
+				vm_add_slot(&env->base.objs, nl);
+				slots = &env->base.objs;
+			} else {
+				vm_add_slot(&vm->tmps, UNDEF_NAMELOC);
+				slots = &vm->tmps;
+			}
+			if (flags & TVCRT_INIT_FLAG) {
+				if (stk_len(vm) == 0 || stk_top(vm)->type == tnil)
+					twarn(ErrRuntime_AssignNil, "OP_VCRT", "");
+				tobj_array_set_obj(slots, slots->len - 1, stk_top(vm));
+				stk_pop(vm);
+			}
 		}
-		if (action == texec_return) {
-			if (vm->frame_len == base_frame_depth)
+		break;
+		case OP_TMPDEL:
+			vm_del_slots(&vm->tmps, (uint_objs)tbycode_get_U(*iter));
+			break;
+		case OP_THIS: {
+			tobj current;
+			tobj_set_nil(&current);
+			tcompo_env_copy_to_obj(env, &current);
+			stk_push(vm, &current);
+			tobj_set_nil(&current);
+		}
+		break;
+		case OP_BASE: {
+			tobj v;
+			tobj_set_nil(&v);
+			tcompo_env_copy_to_obj(tcompo_env_get_father(env), &v);
+			stk_push(vm, &v);
+			tobj_set_nil(&v);
+		}
+		break;
+		case OP_RET:
+			if (stk_len(vm) > 0) {
+				if (stk_top(vm)->type == tcompo &&
+				    tobj_compo_type(stk_top(vm)) == compo_tfunc)
+					tfunc_close_over(
+						(tfunc *)stk_top(vm)->val.v_tcompo,
+						env);
+				else if (stk_top(vm)->type == tcompo &&
+					 tobj_compo_type(stk_top(vm)) == compo_trule)
+					trule_close_over(
+						(trule *)stk_top(vm)->val.v_tcompo, env);
+				vm->rev = *stk_top(vm);
+				stk_pop(vm);
+			} else
+				tvm_set_rev_empty(vm);
+			stk_popcn(vm, stk_len(vm));
+			i = end;
+			goto do_return;
+		case OP_IN: {
+			tobj r;
+			tobj_set_nil(&r);
+			operator_in(stk_top(vm), stk_at(vm, 1), &r);
+			stk_popcn(vm, 2);
+			stk_push(vm, &r);
+			tobj_set_nil(&r);
+		}
+		break;
+		case OP_PAIR: {
+			tobj r;
+			tobj_set_nil(&r);
+			operator_pair(stk_top(vm), stk_at(vm, 1), &r);
+			stk_popcn(vm, 2);
+			stk_push(vm, &r);
+			tobj_set_nil(&r);
+		}
+		break;
+		case OP_TO: {
+			tobj r;
+			tobj_set_nil(&r);
+			operator_to(stk_top(vm), stk_at(vm, 1), &r);
+			stk_popcn(vm, 2);
+			stk_push(vm, &r);
+			tobj_set_nil(&r);
+		}
+		break;
+		case OP_POPN: {
+			int print = tbycode_get_R(*iter);
+			uint_regs i, n = (uint_regs)tbycode_get_L(*iter);
+			for (i = 0; i < n; i++) {
+				tvm_release_loop_iterator(vm, stk_top(vm));
+				if (print && stk_top(vm)->type != tnil) {
+					tstring *s = tobj_tostring_full(stk_top(vm));
+					printf("%s\n", tstring_cstr(s));
+					tstring_free(s);
+				}
+				stk_popc(vm);
+			}
+		}
+		break;
+		case OP_POPCOV:
+			if (stk_top(vm)->type == tnil)
+				twarn(ErrRuntime_AssignNil, "OP_POPCOV", "");
+			if (tbycode_get_R(*iter))
+				tcompo_env_set_obj(
+					env, tbycode_get_L(*iter), stk_top(vm));
+			else
+				tobj_array_set_obj(
+					&vm->tmps, tbycode_get_L(*iter), stk_top(vm));
+			stk_pop(vm);
+			break;
+		case OP_TYPEFWD: {
+			tobj value;
+			tobj_set_nil(&value);
+			tobj_set_compo(&value, (tcompo_v *)ttypeval_new_recursive());
+			stk_push(vm, &value);
+			tobj_set_nil(&value);
+		}
+		break;
+		case OP_TYPEDEFINE: {
+			tobj *target = tbycode_get_R(*iter) ?
+				tcompo_env_get_obj(env, tbycode_get_L(*iter)) :
+				tmp_obj(vm, tbycode_get_L(*iter));
+			tobj *body = stk_top(vm);
+			if (!target || target->type != tcompo ||
+			    tobj_compo_type(target) != compo_ttypeval ||
+			    !body || body->type != tcompo ||
+			    tobj_compo_type(body) != compo_ttypeval ||
+			    !ttypeval_define_recursive(
+				(ttypeval *)target->val.v_tcompo,
+				(ttypeval *)body->val.v_tcompo))
+				twarn(ErrRuntime_Other, "recursive Type",
+				      "invalid or repeated Type definition");
+			stk_popc(vm);
+		}
+		break;
+		case OP_LOOPAS:
+			vm_loopas(vm,
+				  tvm_instruction_cache(&code_cache, i),
+				  tbycode_get_L(*iter),
+				  tbycode_get_R(*iter),
+				  env);
+			break;
+		case OP_LOOPRANGE:
+			vm_loop_inline_range(
+				vm, tvm_instruction_cache(&code_cache, i),
+				tbycode_get_L(*iter), tbycode_get_R(*iter), env);
+			break;
+		case OP_JPF:
+			i += tbycode_get_U(*iter);
+			iter += tbycode_get_U(*iter);
+			break;
+		case OP_JPB:
+			i -= tbycode_get_U(*iter);
+			iter -= tbycode_get_U(*iter);
+			break;
+		case OP_CJPFPOP:
+			if (stk_top(vm)->type != tbool)
+				twarn(ErrRuntime_ParamsType, "OP_CJPFPOP", "");
+			if (stk_top(vm)->val.v_tbool == 0) {
+				uint_cmds u = tbycode_get_U(*iter);
+				i += u;
+				iter += u;
+				stk_pop(vm);
+			} else
+				stk_popc(vm);
+			break;
+		case OP_CJPBPOP:
+			if (stk_top(vm)->type != tbool)
+				twarn(ErrRuntime_ParamsType, "OP_CJPBPOP", "");
+			if (stk_top(vm)->val.v_tbool != 0) {
+				uint_cmds u = tbycode_get_U(*iter);
+				i += u;
+				iter += u;
+				stk_pop(vm);
+			} else
+				stk_popc(vm);
+			break;
+		case OP_PUSHX: {
+			uint_objs loc = tbycode_get_L(*iter);
+			uint16_t addr = tbycode_get_R(*iter);
+			tobj *src = vm_pushx_source(vm, env, loc, addr);
+			vm->stk[vm->stklen] = *src;
+			if (src->type == tcompo && src->val.v_tcompo)
+				src->val.v_tcompo->refctr++;
+			vm->stklen++;
+		}
+		break;
+		case OP_PUSHI: {
+			tobj v;
+			tobj_set_nil(&v);
+			vm_set_int_result(&v, cints[tbycode_get_U(*iter)]);
+			stk_push(vm, &v);
+		}
+		break;
+		case OP_PUSHFLT: {
+			tobj v;
+			tobj_set_nil(&v);
+			vm_set_float_result(&v, cflts[tbycode_get_U(*iter)]);
+			stk_push(vm, &v);
+		}
+		break;
+		case OP_PUSHB: {
+			tobj v;
+			tobj_set_nil(&v);
+			vm_set_bool_result(&v, (int)tbycode_get_U(*iter));
+			stk_push(vm, &v);
+		}
+		break;
+		case OP_PUSHS: {
+			tobj v;
+			tobj_set_nil(&v);
+			tobj_set_compo(&v, (tcompo_v *)tstr_new(tstring_cstr(cstrs[tbycode_get_U(*iter)])));
+			stk_push(vm, &v);
+			tobj_set_nil(&v);
+		}
+		break;
+		case OP_PUSHDICT: {
+			tdict *d = tdict_new();
+			uint_regs i, n = (uint_regs)tbycode_get_U(*iter);
+			tobj *ps = stk_topn(vm, n);
+			for (i = 0; i < n; i++) {
+				if (ps[i].type != tcompo || tobj_compo_type(&ps[i]) != compo_tpair)
+					twarn(ErrRuntime_ParamsType, "dictionary literal", "Pair required");
+				tpair *pair = (tpair *)ps[i].val.v_tcompo;
+				tdict_set(d, &pair->first, &pair->second);
+			}
+			stk_popcn(vm, n);
+			tobj v;
+			tobj_set_nil(&v);
+			tobj_set_compo(&v, (tcompo_v *)d);
+			stk_push(vm, &v);
+			tobj_set_nil(&v);
+		}
+		break;
+		case OP_PUSHINFO: {
+			tobj v;
+			tobj_set_nil(&v);
+			vm_set_int_result(&v, (long)tbycode_get_U(*iter));
+			stk_push(vm, &v);
+		}
+		break;
+		case OP_IMPORT:
+			vm_import(vm, (uint_csts)tbycode_get_U(*iter), cstrs, env);
+			break;
+		case OP_IDXR:
+			vm_idxr(vm, *iter, tvm_instruction_cache(&code_cache, i));
+			break;
+		case OP_EVALSF: {
+			int direct = tbycode_get_i(*iter) != 0;
+			uint_regs nparams = direct ? tbycode_get_b(*iter) :
+				(uint_regs)tbycode_get_U(*iter);
+			tobj *callable = direct ?
+				vm_direct_slot(env, tbycode_get_L(*iter),
+					tbycode_get_i(*iter) - 1) : stk_top(vm);
+			if (VM_UNLIKELY(callable->type != tcompo ||
+					callable->val.v_tcompo == nullptr ||
+					callable->val.v_tcompo->vtable != &tcppsessf_vtable))
+				twarn(ErrRuntime_RefType, "OP_EVALSF",
+				      "C Session Function required");
+			tobj *params = nparams ? stk_topn(vm, nparams) : callable;
+			vm_eval_sessfunc(vm, (tcppsessf *)callable->val.v_tcompo,
+					direct ? params : stk_topn(vm, nparams + 1),
+					nparams, env);
+			vm_finish_eval(vm, nparams + (direct ? 0 : 1));
+		}
+		break;
+		case OP_EVALCF: {
+			int direct = tbycode_get_i(*iter) != 0;
+			uint_regs nparams = direct ? tbycode_get_b(*iter) :
+				(uint_regs)tbycode_get_U(*iter);
+			tobj *callable = direct ?
+				vm_direct_slot(env, tbycode_get_L(*iter),
+					tbycode_get_i(*iter) - 1) : stk_top(vm);
+			if (VM_UNLIKELY(callable->type != tcompo ||
+					callable->val.v_tcompo == nullptr ||
+					callable->val.v_tcompo->vtable != &tcppgenf_vtable))
+				twarn(ErrRuntime_RefType, "OP_EVALCF",
+				      "C Function required");
+			tobj *params = nparams ? stk_topn(vm, nparams) : callable;
+			vm_eval_cppfunc(vm, (tcppgenf *)callable->val.v_tcompo,
+					direct ? params : stk_topn(vm, nparams + 1),
+					nparams);
+			vm_finish_eval(vm, nparams + (direct ? 0 : 1));
+		}
+		break;
+		case OP_EVALTF: {
+			uint_regs nparams = (uint_regs)tbycode_get_U(*iter);
+			if (!env->owner_func)
+				twarn(ErrRuntime_RefType,
+				      "exec_tin", "missing current function");
+			call.function = env->owner_func;
+			call.params = stk_topn(vm, nparams);
+			call.nparams = nparams;
+			call.return_stack_values = nparams;
+			call.current_function = 1;
+			goto make_call;
+		}
+		case OP_EVAL:
+			if (vm_eval_generic_instruction(
+					vm, iter, tvm_instruction_cache(&code_cache, i),
+					&call, env))
+				goto make_call;
+			break;
+		case OP_IDXL:
+			vm_idxl(vm,
+				tbycode_get_L(*iter),
+				tbycode_get_b(*iter),
+				tbycode_get_i(*iter),
+				env,
+				tvm_instruction_cache(&code_cache, i));
+			break;
+		case OP_PUSHF: {
+			uint_cmds ncmds = tbycode_get_U(*iter);
+			uint_regs nparams = (uint_regs)stk_top(vm)->val.v_tint;
+			stk_popc(vm);
+			uint_regs fregmax = (uint_regs)stk_top(vm)->val.v_tint;
+			stk_popc(vm);
+			uint_objs ntmps = (uint_objs)stk_top(vm)->val.v_tint;
+			stk_popc(vm);
+			uint_objs nobjs = (uint_objs)stk_top(vm)->val.v_tint;
+			stk_popc(vm);
+			tfunc *f = tfunc_new(
+				nobjs, env, fregmax, ntmps, nparams, i + 1, ncmds);
+			i += ncmds;
+			iter += ncmds;
+			tobj v;
+			tobj_set_nil(&v);
+			tobj_set_compo(&v, (tcompo_v *)f);
+			stk_push(vm, &v);
+			tobj_set_nil(&v);
+		}
+		break;
+		case OP_PUSHRULE: {
+			tobj *captures = stk_top(vm);
+			tobj *metadata = stk_at(vm, 1);
+			tobj *names = stk_at(vm, 2);
+			tobj *signature = stk_at(vm, 3);
+			tobj *checker = stk_at(vm, 4);
+			if (checker->type != tcompo ||
+			    tobj_compo_type(checker) != compo_tfunc)
+				twarn(ErrRuntime_ParamsType, "OP_PUSHRULE",
+				      "checker Function required");
+			if (signature->type != tcompo ||
+			    tobj_compo_type(signature) != compo_tstr)
+				twarn(ErrRuntime_ParamsType, "OP_PUSHRULE",
+				      "signature String required");
+			if (names->type != tcompo || tobj_compo_type(names) != compo_tstr)
+				twarn(ErrRuntime_ParamsType, "OP_PUSHRULE",
+				      "parameter names String required");
+			if (metadata->type != tcompo ||
+			    tobj_compo_type(metadata) != compo_tstr)
+				twarn(ErrRuntime_ParamsType, "OP_PUSHRULE",
+				      "item metadata String required");
+			if (captures->type != tcompo ||
+			    tobj_compo_type(captures) != compo_tstr)
+				twarn(ErrRuntime_ParamsType, "OP_PUSHRULE",
+				      "capture metadata String required");
+			trule *rule = trule_new((tfunc *)checker->val.v_tcompo,
+				tstring_cstr(cstrs[tbycode_get_U(*iter)]),
+				tstring_cstr(((tstr *)signature->val.v_tcompo)->data),
+				tstring_cstr(((tstr *)names->val.v_tcompo)->data),
+				tstring_cstr(((tstr *)metadata->val.v_tcompo)->data),
+				tstring_cstr(((tstr *)captures->val.v_tcompo)->data));
+			stk_popcn(vm, 5);
+			tobj value;
+			tobj_set_nil(&value);
+			tobj_set_compo(&value, (tcompo_v *)rule);
+			stk_push(vm, &value);
+			tobj_set_nil(&value);
+		}
+		break;
+		case OP_RULEVALUE:
+		case OP_RULENOT:
+		case OP_RULETRUTH: {
+			if (!vm->rule_output || !vm->rule_logic_values)
+				twarn(ErrRuntime_Other, "Rule logic", "logical expression outside checker");
+			/* Nested checks may grow the VM stack: retain the value, not its address. */
+			tobj operand;
+			tobj_set_nil(&operand);
+			tobj_copy(&operand, stk_top(vm));
+			int truth = tbycode_ins(*iter) == OP_RULEVALUE ? 0 : rule_antecedent_truth(vm, &operand, env);
+			tobj value, pair, key, entry;
+			tobj_set_nil(&value); tobj_set_nil(&key);
+			if (tbycode_ins(*iter) == OP_RULEVALUE) tobj_copy(&value, &operand);
+			else tobj_set_bool(&value, tbycode_ins(*iter) == OP_RULENOT ? !truth : truth);
+			tobj_set_nil(&pair); tobj_set_nil(&entry);
+			tobj_set_int(&key, tbycode_get_U(*iter));
+			tobj_set_compo(&pair, (tcompo_v *)tpair_new(&operand, &value));
+			tobj_set_compo(&entry, (tcompo_v *)tpair_new(&key, &pair));
+			tobj_vec_push(&vm->rule_logic_values->items, &entry);
+			tobj_try_clear(&entry); tobj_try_clear(&pair); tobj_ddc_ref_clear(&operand);
+			stk_popc(vm);
+			stk_push(vm, &value);
+			tobj_ddc_ref_clear(&value);
+		}
+		break;
+		case OP_RULEITEM:
+		case OP_RULEIMPLY: {
+			if (!vm->rule_output)
+				twarn(ErrRuntime_Other, "Rule condition",
+				      "condition outside checker");
+			tobj *condition = stk_top(vm);
+			if (tbycode_ins(*iter) == OP_RULEITEM && condition->type == tcompo &&
+			    tobj_compo_type(condition) == compo_trule_instance) {
+				tobj_vec_push(&vm->rule_output->items, condition);
+				stk_popc(vm);
 				break;
-			goto resume_caller;
+			}
+			if (tbycode_get_U(*iter) == TRULE_ANTECEDENT_RECORD) {
+				/* Keep the original Bool/RuleInstance available through source IR.
+				 * Isolate its violations from the enclosing implication. */
+				tobj empty, record;
+				tobj_set_nil(&empty);
+				tobj_set_nil(&record);
+				tobj_set_compo(&empty, (tcompo_v *)tstr_new(""));
+				tobj_set_compo(&record, (tcompo_v *)tpair_new(&empty, condition));
+				tobj_vec_push(&vm->rule_output->items, &record);
+				int truth = rule_antecedent_truth(vm, condition, env);
+				tobj_try_clear(&record);
+				tobj_try_clear(&empty);
+				stk_popc(vm);
+				tobj value;
+				tobj_set_nil(&value);
+				tobj_set_bool(&value, truth);
+				stk_push(vm, &value);
+				break;
+			}
+			if (condition->type != tbool)
+				twarn(ErrRuntime_ParamsType, "Rule condition",
+				      "Bool result required");
+			tobj description;
+			tobj_set_nil(&description);
+			tobj_set_compo(&description, (tcompo_v *)tstr_new(
+				tstring_cstr(cstrs[tbycode_get_U(*iter)])));
+			tobj pair;
+			tobj_set_nil(&pair);
+			tobj_set_compo(&pair,
+				(tcompo_v *)tpair_new(&description, condition));
+			tobj_vec_push(&vm->rule_output->items, &pair);
+			tobj_try_clear(&pair);
+			tobj_try_clear(&description);
+			stk_popc(vm);
 		}
+		break;
+		case OP_ADD: {
+			uint_regs type = (uint_regs)stk_top(vm)->val.v_tint;
+			stk_popc(vm);
+			VM_PARSE_BINOP(vm, operator_add, *iter, type, env);
+		}
+		break;
+		case OP_SUB: {
+			uint_regs type = (uint_regs)stk_top(vm)->val.v_tint;
+			stk_popc(vm);
+			VM_PARSE_BINOP(vm, operator_sub, *iter, type, env);
+		}
+		break;
+		case OP_MUL: {
+			uint_regs type = (uint_regs)stk_top(vm)->val.v_tint;
+			stk_popc(vm);
+			VM_PARSE_BINOP(vm, operator_mul, *iter, type, env);
+		}
+		break;
+		case OP_DIV: {
+			uint_regs type = (uint_regs)stk_top(vm)->val.v_tint;
+			stk_popc(vm);
+			VM_PARSE_BINOP(vm, operator_div, *iter, type, env);
+		}
+		break;
+		case OP_MOD: {
+			uint_regs type = (uint_regs)stk_top(vm)->val.v_tint;
+			stk_popc(vm);
+			VM_PARSE_BINOP(vm, operator_mod, *iter, type, env);
+		}
+		break;
+		case OP_POW: {
+			uint_regs type = (uint_regs)stk_top(vm)->val.v_tint;
+			stk_popc(vm);
+			VM_PARSE_BINOP(vm, operator_pow, *iter, type, env);
+		}
+		break;
+		case OP_MMUL: {
+			uint_regs type = (uint_regs)stk_top(vm)->val.v_tint;
+			stk_popc(vm);
+			VM_PARSE_BINOP(vm, operator_mmul, *iter, type, env);
+		}
+		break;
+		case OP_EQ: {
+			uint_regs type = (uint_regs)stk_top(vm)->val.v_tint;
+			stk_popc(vm);
+			VM_PARSE_BINOP(vm, operator_eq, *iter, type, env);
+		}
+		break;
+		case OP_NE: {
+			uint_regs type = (uint_regs)stk_top(vm)->val.v_tint;
+			stk_popc(vm);
+			VM_PARSE_BINOP(vm, operator_ne, *iter, type, env);
+		}
+		break;
+		case OP_GE: {
+			uint_regs type = (uint_regs)stk_top(vm)->val.v_tint;
+			stk_popc(vm);
+			VM_PARSE_BINOP(vm, operator_ge, *iter, type, env);
+		}
+		break;
+		case OP_SG: {
+			uint_regs type = (uint_regs)stk_top(vm)->val.v_tint;
+			stk_popc(vm);
+			VM_PARSE_BINOP(vm, operator_sg, *iter, type, env);
+		}
+		break;
+		case OP_LE: {
+			uint_regs type = (uint_regs)stk_top(vm)->val.v_tint;
+			stk_popc(vm);
+			VM_PARSE_BINOP(vm, operator_le, *iter, type, env);
+		}
+		break;
+		case OP_SL: {
+			uint_regs type = (uint_regs)stk_top(vm)->val.v_tint;
+			stk_popc(vm);
+			VM_PARSE_BINOP(vm, operator_sl, *iter, type, env);
+		}
+		break;
+		case OP_AND: {
+			uint_regs type = (uint_regs)stk_top(vm)->val.v_tint;
+			stk_popc(vm);
+			VM_PARSE_BINOP(vm, operator_and, *iter, type, env);
+		}
+		break;
+		case OP_OR: {
+			uint_regs type = (uint_regs)stk_top(vm)->val.v_tint;
+			stk_popc(vm);
+			VM_PARSE_BINOP(vm, operator_or, *iter, type, env);
+		}
+		break;
+		case OP_BAND: {
+			uint_regs type = (uint_regs)stk_top(vm)->val.v_tint;
+			stk_popc(vm);
+			VM_PARSE_BINOP(vm, operator_and, *iter, type, env);
+		}
+		break;
+		case OP_BOR: {
+			uint_regs type = (uint_regs)stk_top(vm)->val.v_tint;
+			stk_popc(vm);
+			VM_PARSE_BINOP(vm, operator_or, *iter, type, env);
+		}
+		break;
+		case OP_POS:
+			operator_pos(stk_top(vm));
+			break;
+		case OP_NEG:
+			operator_neg(stk_top(vm));
+			break;
+		default:
+			twarn(ErrRuntime_Other, "exec_tins",
+			      "invalid bytecode instruction");
+		}
+		i++;
+		goto dispatch;
+
+		do_return:
+		if (vm->frame_len == base_frame_depth)
+			goto loop_done;
+		goto resume_caller;
+
+		make_call:
 		tfunc *function = call.function;
 		twrapper *callee_wrapper =
 			tfunc_get_wrapper_from_env(&function->env);
@@ -3439,8 +3660,11 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 				vm, function, call.params, call.nparams);
 			env = &vm->frames[vm->frame_len - 1]->env;
 		} else {
-			tcall_frame *frame = tvm_push_call_frame(
+			tcall_frame *frame = tvm_push_call_frame_fast(
 				vm, function, call.params, call.nparams);
+			if (!frame)
+				frame = tvm_push_call_frame(
+					vm, function, call.params, call.nparams);
 			frame->return_pc = i;
 			frame->return_end = end;
 			frame->return_stack_values =
@@ -3450,18 +3674,21 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 			env = &frame->env;
 		}
 
-		if (callee_wrapper != wrapper)
+		/* Same-wrapper calls (all recursion and intra-module calls)
+		 * keep the loaded code context; only crossings reload it. */
+		if (callee_wrapper != wrapper) {
 			code_cache = *tvm_get_code_cache(vm, callee_wrapper);
-		wrapper = callee_wrapper;
-		cmdarr = wrapper->cmdarr;
-		cints = wrapper->consts.cints;
-		cflts = wrapper->consts.cflts;
-		cstrs = wrapper->consts.cstrs;
+			wrapper = callee_wrapper;
+			cmdarr = wrapper->cmdarr;
+			cints = wrapper->consts.cints;
+			cflts = wrapper->consts.cflts;
+			cstrs = wrapper->consts.cstrs;
+			vm->error_source_locs = wrapper->source_locs;
+			vm->error_source_loc_count = wrapper->ncmds;
+		}
 		i = function->cmdloc;
 		end = function->cmdloc + function->ncmds;
-		vm->error_source_locs = wrapper->source_locs;
-		vm->error_source_loc_count = wrapper->ncmds;
-		continue;
+		goto dispatch;
 
 resume_caller:
 		tcall_frame *frame = vm->frames[vm->frame_len - 1];
@@ -3477,18 +3704,21 @@ resume_caller:
 		tvm_set_rev_empty(vm);
 
 		env = return_env;
-		if (return_wrapper != wrapper)
+		if (return_wrapper != wrapper) {
 			code_cache = *tvm_get_code_cache(vm, return_wrapper);
-		wrapper = return_wrapper;
-		cmdarr = wrapper->cmdarr;
-		cints = wrapper->consts.cints;
-		cflts = wrapper->consts.cflts;
-		cstrs = wrapper->consts.cstrs;
+			wrapper = return_wrapper;
+			cmdarr = wrapper->cmdarr;
+			cints = wrapper->consts.cints;
+			cflts = wrapper->consts.cflts;
+			cstrs = wrapper->consts.cstrs;
+			vm->error_source_locs = wrapper->source_locs;
+			vm->error_source_loc_count = wrapper->ncmds;
+		}
 		i = return_pc + 1;
 		end = return_end;
-		vm->error_source_locs = wrapper->source_locs;
-		vm->error_source_loc_count = wrapper->ncmds;
+		goto dispatch;
 	}
+	loop_done:
 	vm->execution_depth--;
 	vm->error_source_locs = previous_source_locs;
 	vm->error_source_loc_count = previous_source_loc_count;
