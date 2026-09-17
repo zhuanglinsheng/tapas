@@ -351,49 +351,76 @@ static void emit_call(tast_emitter *emitter, const tast_node *node)
 	treg_ctr_add(&emitter->cp->regctr);
 }
 
+/* Emit a slice child's two bounds: the end first (or the receiver's len),
+ * then the start (or constant zero). The caller decides whether the two
+ * values are combined into a Pair or consumed by a slice-form IDXR. */
+static void emit_slice_bounds(tast_emitter *emitter, const tast_node *node,
+			      const tast_node *argument)
+{
+	if (argument->slice.has_end)
+		tast_emit_expression(emitter, argument->slice.end);
+	else {
+		tast_emit_expression(emitter, node->aggregate.receiver);
+		tstring *len_name = tstring_new("len");
+		uint16_t native_slot = 0;
+		uint8_t native_depth = 0;
+		int len_opcode = native_call_opcode(
+			emitter, len_name, &native_slot, &native_depth);
+		if (len_opcode != OP_EVALCF && len_opcode != OP_EVALSF)
+			compile_emit_reference(emitter->cp, len_name,
+				emitter->instructions, emitter->constants);
+		tstring_free(len_name);
+		tvmcmd_vect_append(
+			emitter->instructions,
+			len_opcode == OP_EVALCF || len_opcode == OP_EVALSF ?
+				tbycode_make_lbi(
+					len_opcode, native_slot, 1,
+					native_depth + 1) :
+				tbycode_make_u(len_opcode, 1));
+		treg_ctr_ddt_n(&emitter->cp->regctr,
+			len_opcode == OP_EVALCF || len_opcode == OP_EVALSF ?
+				1 : 2);
+		treg_ctr_add(&emitter->cp->regctr);
+	}
+	if (argument->slice.has_start)
+		tast_emit_expression(emitter, argument->slice.start);
+	else {
+		uint_csts zero = tconsts_add_int_const(emitter->constants, 0);
+		tvmcmd_vect_append(emitter->instructions,
+			tbycode_make_u(OP_PUSHI, zero));
+		treg_ctr_add(&emitter->cp->regctr);
+	}
+}
+
 static void emit_index(tast_emitter *emitter, const tast_node *node,
 		       int comparison_hint)
 {
 	const tast_id *children = aggregate_children(emitter, node);
+	/* A lone slice child uses the dedicated two-int form: no runtime
+	 * Pair is constructed and List/String reads skip the generic path. */
+	if (node->aggregate.count == 1) {
+		const tast_node *argument =
+			tast_get(emitter->arena, children[0]);
+		if (argument && argument->kind == tast_slice) {
+			emit_slice_bounds(emitter, node, argument);
+			tast_emit_expression(emitter, node->aggregate.receiver);
+			uint32_t operand = 2u | TBYCODE_IDXR_SLICE_FLAG;
+			if (comparison_hint)
+				operand |= TBYCODE_IDXR_COMPARE_FLAG;
+			tvmcmd_vect_append(emitter->instructions,
+					   tbycode_make_u(OP_IDXR, operand));
+			treg_ctr_ddt_n(&emitter->cp->regctr, 3);
+			treg_ctr_add(&emitter->cp->regctr);
+			return;
+		}
+	}
 	for (uint32_t i = 0; i < node->aggregate.count; i++) {
 		const tast_node *argument = tast_get(emitter->arena, children[i]);
 		if (!argument || argument->kind != tast_slice) {
 			tast_emit_expression(emitter, children[i]);
 			continue;
 		}
-		if (argument->slice.has_end)
-			tast_emit_expression(emitter, argument->slice.end);
-		else {
-			tast_emit_expression(emitter, node->aggregate.receiver);
-			tstring *len_name = tstring_new("len");
-			uint16_t native_slot = 0;
-			uint8_t native_depth = 0;
-			int len_opcode = native_call_opcode(
-				emitter, len_name, &native_slot, &native_depth);
-			if (len_opcode != OP_EVALCF && len_opcode != OP_EVALSF)
-				compile_emit_reference(emitter->cp, len_name,
-					emitter->instructions, emitter->constants);
-			tstring_free(len_name);
-			tvmcmd_vect_append(
-				emitter->instructions,
-				len_opcode == OP_EVALCF || len_opcode == OP_EVALSF ?
-					tbycode_make_lbi(
-						len_opcode, native_slot, 1,
-						native_depth + 1) :
-					tbycode_make_u(len_opcode, 1));
-			treg_ctr_ddt_n(&emitter->cp->regctr,
-				len_opcode == OP_EVALCF || len_opcode == OP_EVALSF ?
-					1 : 2);
-			treg_ctr_add(&emitter->cp->regctr);
-		}
-		if (argument->slice.has_start)
-			tast_emit_expression(emitter, argument->slice.start);
-		else {
-			uint_csts zero = tconsts_add_int_const(emitter->constants, 0);
-			tvmcmd_vect_append(emitter->instructions,
-				tbycode_make_u(OP_PUSHI, zero));
-			treg_ctr_add(&emitter->cp->regctr);
-		}
+		emit_slice_bounds(emitter, node, argument);
 		tvmcmd_vect_append(emitter->instructions, tbycode_make(OP_PAIR));
 		treg_ctr_ddt_n(&emitter->cp->regctr, 2);
 		treg_ctr_add(&emitter->cp->regctr);
