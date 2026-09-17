@@ -3,7 +3,7 @@
 [简体中文](README.md) | English | [Project Home](../../README_en.md)
 
 This directory compares complete algorithms and basic VM hot paths through
-matching Tapas and Python programs.
+matching Tapas, Python, and Lua programs.
 
 - Complete algorithms include recursive Fibonacci, the sieve of Eratosthenes,
   merge sort, N-Queens, longest common subsequence, and matrix multiplication.
@@ -13,36 +13,30 @@ matching Tapas and Python programs.
   ordinary calls, tail recursion, nested branching, and list access to help
   locate specific VM overhead.
 
-Both implementations use the same algorithms and inputs. Measurements record
+All three implementations use the same algorithms and inputs. Measurements record
 process CPU time for the workload and exclude process startup, source loading,
 and compilation. Each program also prints its computed result, and comparison
 stops immediately if the results differ.
 
-Use a Release build. The script performs one warm-up and compares the median of
-seven measured runs by default:
+Use a Release build and a `lua` executable on `PATH` (override with `--lua`).
+The script performs one warm-up and compares the median of
+eleven measured runs per benchmark (tune with `--runs`), prints a summary, and
+updates both result documents:
 
 ```sh
-python3 test/benchmarks/compare_python.py build-release/bin/tapas
+python3 test/benchmarks/compare_script.py build-release/bin/tapas
 ```
+
+Add `--no-markdown` for console output only, or pass `--markdown PATH` to write
+a report elsewhere. Repeating `--markdown` writes multiple reports from the
+same measurements, so their numbers cannot diverge because of a second run.
 
 To require Tapas to be faster in every benchmark, run:
 
 ```sh
-python3 test/benchmarks/compare_python.py \
+python3 test/benchmarks/compare_script.py \
     build-release/bin/tapas --require-faster
 ```
-
-Generate or update both reports with 11 measured runs per benchmark:
-
-```sh
-python3 test/benchmarks/compare_python.py \
-    build-release/bin/tapas --runs 11 \
-    --markdown test/benchmarks/Results_zh.md \
-    --markdown test/benchmarks/Results_en.md
-```
-
-Repeating `--markdown` writes both reports from the same measurements, so their
-numbers cannot diverge because of a second benchmark run.
 
 See the current [Chinese](Results_zh.md) and [English](Results_en.md) reports.
 Performance thresholds are not part of the regular test suite because CPU

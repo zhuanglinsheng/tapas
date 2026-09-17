@@ -30,12 +30,28 @@ HOT_PATH_BENCHMARKS = (
 BENCHMARKS = ALGORITHM_BENCHMARKS + HOT_PATH_BENCHMARKS
 
 
+def lua_version_text(lua: str) -> str:
+    probe = subprocess.run(
+        [lua, "-v"], check=True, capture_output=True, text=True
+    )
+    text = probe.stdout or probe.stderr
+    first = text.splitlines()
+    if not first:
+        raise RuntimeError(f"{lua} -v printed no version")
+    return first[0]
+
+
+def format_micros(nanoseconds: int) -> str:
+    return f"{nanoseconds / 1000:,.1f} µs"
+
+
 def write_markdown(
     path: Path,
     tapas: Path,
+    lua_version: str,
     runs: int,
-    rows: list[tuple[str, int, int, int, float]],
-    geometric_mean: float,
+    rows: list[tuple[str, int, int, int, float, float]],
+    means: dict[str, float],
     language: str,
 ) -> None:
     tapas_version = subprocess.run(
@@ -44,55 +60,59 @@ def write_markdown(
     if language == "zh":
         separator = "："
         period = "。"
-        title = "# Tapas 与 Python 性能比较"
+        title = "# Tapas 与 Python、Lua 性能比较"
         navigation = "简体中文 | [English](Results_en.md) | [项目主页](../../README.md)"
         date_label = "测试日期"
         environment_title = "## 测试环境"
         system_label = "系统"
         architecture_label = "处理器架构"
         executable_label = "Tapas 可执行文件"
+        lua_label = "Lua 解释器"
         runs_text = f"有效运行次数：每项 {runs} 次，另预热 1 次"
         results_title = "## 结果"
-        timing_text = "时间为进程 CPU 时间的中位数，不包含进程启动、源码加载和编译。"
-        ratio_text = "`Tapas/Python` 小于 1 表示 Tapas 更快。"
-        columns = "| 项目 | 源码 | 计算结果 | Tapas | Python | Tapas/Python |"
+        timing_text = "时间为进程 CPU 时间的微秒中位数，不包含进程启动、源码加载和编译。"
+        ratio_text = ("比值小于 1 表示 Tapas 更快（分别相对 Python 与 Lua）。")
+        columns = "| 项目 | 源码 | Tapas | Python | Lua | Tapas/Python | Tapas/Lua |"
         algorithm_title = "综合算法"
         algorithm_description = "这些程序组合使用递归、分支、容器、索引和内存分配，更接近完整算法负载。"
         hot_path_title = "基础热路径"
         hot_path_description = "这些程序分别放大某一种常见 VM 操作，用来定位解释器的基础开销。"
-        group_mean = "本组比值的几何平均数为"
-        total_mean = "全部项目的几何平均数为"
+        group_mean = "本组几何平均数"
+        total_mean = "全部项目的几何平均数"
         notes_title = "## 说明"
         notes = (
-            "这些程序用于比较两种实现执行相同算法时的解释器开销，不代表大型应用的完整性能。",
-            "结果会受系统负载、电源状态、编译器版本和 Python 版本影响。",
+            "这些程序用于比较三种实现执行相同算法时的解释器开销，不代表大型应用的完整性能。",
+            "结果会受系统负载、电源状态、编译器版本、Python 版本和 Lua 版本影响。",
             "更新 VM 或运行环境后，应使用本目录 README 中的命令重新生成。",
         )
     else:
         separator = ": "
         period = "."
-        title = "# Tapas and Python Performance Comparison"
+        title = "# Tapas, Python, and Lua Performance Comparison"
         navigation = "[简体中文](Results_zh.md) | English | [Project Home](../../README_en.md)"
         date_label = "Test date"
         environment_title = "## Test Environment"
         system_label = "System"
         architecture_label = "Architecture"
         executable_label = "Tapas executable"
+        lua_label = "Lua interpreter"
         runs_text = f"Measured runs: {runs} per benchmark, after 1 warm-up run"
         results_title = "## Results"
-        timing_text = "Times are median process CPU times and exclude process startup, source loading, and compilation."
-        ratio_text = "A `Tapas/Python` ratio below 1 means Tapas is faster."
-        columns = "| Benchmark | Source | Result | Tapas | Python | Tapas/Python |"
+        timing_text = "Times are median process CPU times in microseconds and exclude process startup, source loading, and compilation."
+        ratio_text = ("A ratio below 1 means Tapas is faster (against Python and "
+                      "Lua respectively).")
+        columns = ("| Benchmark | Source | Tapas | Python | Lua | "
+                   "Tapas/Python | Tapas/Lua |")
         algorithm_title = "Complete Algorithms"
         algorithm_description = "These programs combine recursion, branching, containers, indexing, and allocation to approximate complete algorithm workloads."
         hot_path_title = "VM Hot Paths"
         hot_path_description = "Each program amplifies one common VM operation to help isolate interpreter overhead."
-        group_mean = "The geometric mean ratio for this group is"
-        total_mean = "The geometric mean ratio across all benchmarks is"
+        group_mean = "The geometric mean ratio for this group"
+        total_mean = "The geometric mean ratio across all benchmarks"
         notes_title = "## Notes"
         notes = (
-            "These programs compare interpreter overhead while both implementations execute the same algorithms; they do not represent complete application performance.",
-            "Results depend on system load, power settings, compiler version, and Python version.",
+            "These programs compare interpreter overhead while all implementations execute the same algorithms; they do not represent complete application performance.",
+            "Results depend on system load, power settings, compiler version, Python version, and Lua version.",
             "Regenerate the reports with the commands in this directory's README after changing the VM or runtime environment.",
         )
     lines = [
@@ -108,6 +128,7 @@ def write_markdown(
         f"- {architecture_label}{separator}`{platform.machine()}`",
         f"- Python{separator}`{platform.python_version()}`",
         f"- Tapas{separator}`{tapas_version}`",
+        f"- {lua_label}{separator}`{lua_version}`",
         f"- {executable_label}{separator}`{tapas}`",
         f"- {runs_text}",
         "",
@@ -127,22 +148,30 @@ def write_markdown(
                 description,
                 "",
                 columns,
-                "| --- | --- | ---: | ---: | ---: | ---: |",
+                "| --- | --- | ---: | ---: | ---: | ---: | ---: |",
             ]
         )
-        ratios = []
+        python_ratios = []
+        lua_ratios = []
         for name in names:
-            _, result, tapas_ns, python_ns, ratio = rows_by_name[name]
-            ratios.append(ratio)
+            _, tapas_ns, python_ns, lua_ns, ratio_py, ratio_lua = rows_by_name[
+                name
+            ]
+            python_ratios.append(ratio_py)
+            lua_ratios.append(ratio_lua)
             lines.append(
-                f"| `{name}` | [Tapas]({name}.tap) · [Python]({name}.py) | "
-                f"{result} | {tapas_ns:,} ns | "
-                f"{python_ns:,} ns | {ratio:.3f}× |"
+                f"| `{name}` | [Tapas]({name}.tap) · [Python]({name}.py) · "
+                f"[Lua]({name}.lua) | {format_micros(tapas_ns)} | "
+                f"{format_micros(python_ns)} | {format_micros(lua_ns)} | "
+                f"{ratio_py:.3f}× | {ratio_lua:.3f}× |"
             )
         lines.extend(
             [
                 "",
-                f"{group_mean} **{statistics.geometric_mean(ratios):.3f}×**{period}",
+                (f"{group_mean}{separator}Tapas/Python "
+                 f"**{statistics.geometric_mean(python_ratios):.3f}×**，"
+                 f"Tapas/Lua **{statistics.geometric_mean(lua_ratios):.3f}×**"
+                 f"{period}"),
                 "",
             ]
         )
@@ -159,7 +188,9 @@ def write_markdown(
     )
     lines.extend(
         [
-            f"{total_mean} **{geometric_mean:.3f}×**{period}",
+            (f"{total_mean}{separator}Tapas/Python "
+             f"**{means['python']:.3f}×**，Tapas/Lua "
+             f"**{means['lua']:.3f}×**{period}"),
             "",
             notes_title,
             "",
@@ -192,10 +223,21 @@ def measure(command: list[str], runs: int) -> tuple[int, list[int]]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Compare matching Tapas and Python benchmark programs."
+        description="Compare matching Tapas, Python, and Lua benchmark programs."
     )
     parser.add_argument("tapas", type=Path, help="Release Tapas executable")
-    parser.add_argument("--runs", type=int, default=7)
+    parser.add_argument(
+        "--lua",
+        type=str,
+        default="lua",
+        help="Lua interpreter executable (default: lua from PATH)",
+    )
+    parser.add_argument(
+        "--runs",
+        type=int,
+        default=11,
+        help="valid runs per benchmark (default: 11)",
+    )
     parser.add_argument(
         "--require-faster",
         action="store_true",
@@ -206,15 +248,26 @@ def main() -> int:
         type=Path,
         action="append",
         help=("write the comparison and environment to a Markdown file; "
-              "repeat to generate Chinese and English reports from one run"),
+              "repeat for additional reports; by default both "
+              "Results_zh.md and Results_en.md next to this script are "
+              "updated from one run"),
+    )
+    parser.add_argument(
+        "--no-markdown",
+        action="store_true",
+        help="skip writing Markdown reports (console output only)",
     )
     args = parser.parse_args()
     if args.runs < 3:
         parser.error("--runs must be at least 3")
 
+    lua_version = lua_version_text(args.lua)
+    print(f"Lua interpreter: {lua_version}")
+
     failed = False
-    ratios: list[float] = []
-    rows: list[tuple[str, int, int, int, float]] = []
+    python_ratios: list[float] = []
+    lua_ratios: list[float] = []
+    rows: list[tuple[str, int, int, int, float, float]] = []
     for name in BENCHMARKS:
         tapas_total, tapas_times = measure(
             [str(args.tapas), str(HERE / f"{name}.tap")], args.runs
@@ -222,48 +275,71 @@ def main() -> int:
         python_total, python_times = measure(
             [sys.executable, str(HERE / f"{name}.py")], args.runs
         )
-        if tapas_total != python_total:
+        lua_total, lua_times = measure(
+            [args.lua, str(HERE / f"{name}.lua")], args.runs
+        )
+        if not (tapas_total == python_total == lua_total):
             raise RuntimeError(
                 f"{name}: different results: "
-                f"Tapas={tapas_total}, Python={python_total}"
+                f"Tapas={tapas_total}, Python={python_total}, "
+                f"Lua={lua_total}"
             )
 
         tapas_median = int(statistics.median(tapas_times))
         python_median = int(statistics.median(python_times))
-        ratio = tapas_median / python_median
-        ratios.append(ratio)
+        lua_median = int(statistics.median(lua_times))
+        ratio_python = tapas_median / python_median
+        ratio_lua = tapas_median / lua_median
+        python_ratios.append(ratio_python)
+        lua_ratios.append(ratio_lua)
         rows.append(
-            (name, tapas_total, tapas_median, python_median, ratio)
+            (name, tapas_median, python_median, lua_median,
+             ratio_python, ratio_lua)
         )
         print(name)
         print(f"  result:        {tapas_total}")
         print(f"  Tapas median:  {tapas_median:,} ns")
         print(f"  Python median: {python_median:,} ns")
-        print(f"  Tapas/Python:  {ratio:.3f}x")
-        if args.require_faster and ratio >= 1.0:
+        print(f"  Lua median:    {lua_median:,} ns")
+        print(f"  Tapas/Python:  {ratio_python:.3f}x")
+        print(f"  Tapas/Lua:     {ratio_lua:.3f}x")
+        if args.require_faster and ratio_python >= 1.0:
             failed = True
 
-    geometric_mean = statistics.geometric_mean(ratios)
-    ratios_by_name = {
-        name: ratio for name, _, _, _, ratio in rows
+    means = {
+        "python": statistics.geometric_mean(python_ratios),
+        "lua": statistics.geometric_mean(lua_ratios),
     }
-    algorithm_mean = statistics.geometric_mean(
-        ratios_by_name[name] for name in ALGORITHM_BENCHMARKS
-    )
-    hot_path_mean = statistics.geometric_mean(
-        ratios_by_name[name] for name in HOT_PATH_BENCHMARKS
-    )
-    print(f"algorithm geometric mean Tapas/Python: {algorithm_mean:.3f}x")
-    print(f"hot-path geometric mean Tapas/Python: {hot_path_mean:.3f}x")
-    print(f"geometric mean Tapas/Python: {geometric_mean:.3f}x")
-    for markdown in args.markdown or ():
+    ratios_by_name = {row[0]: (row[4], row[5]) for row in rows}
+
+    def family_mean(runtimes: "list[tuple[str, ...]]", index: int) -> float:
+        return statistics.geometric_mean(
+            ratios_by_name[name][index] for name in runtimes
+        )
+
+    print("algorithm geometric mean Tapas/Python: "
+          f"{family_mean(list(ALGORITHM_BENCHMARKS), 0):.3f}x")
+    print("hot-path geometric mean Tapas/Python: "
+          f"{family_mean(list(HOT_PATH_BENCHMARKS), 0):.3f}x")
+    print("algorithm geometric mean Tapas/Lua: "
+          f"{family_mean(list(ALGORITHM_BENCHMARKS), 1):.3f}x")
+    print("hot-path geometric mean Tapas/Lua: "
+          f"{family_mean(list(HOT_PATH_BENCHMARKS), 1):.3f}x")
+    print(f"geometric mean Tapas/Python: {means['python']:.3f}x")
+    print(f"geometric mean Tapas/Lua: {means['lua']:.3f}x")
+
+    markdowns = args.markdown
+    if markdowns is None and not args.no_markdown:
+        markdowns = [HERE / "Results_zh.md", HERE / "Results_en.md"]
+    for markdown in markdowns or ():
         markdown_language = "en" if markdown.name.endswith("_en.md") else "zh"
         write_markdown(
             markdown,
             args.tapas,
+            lua_version,
             args.runs,
             rows,
-            geometric_mean,
+            means,
             markdown_language,
         )
         print(f"wrote Markdown report: {markdown}")
