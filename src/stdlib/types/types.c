@@ -187,6 +187,12 @@ static void types_rule_instance_type(tobj *params, uint_regs len, tobj *result)
 	free(parameters);
 }
 
+static void types_instance_of(tobj *params, uint_regs len, tobj *result)
+{
+	require_count("types::instance_of", len, 1);
+	return_type(result, ttypeval_new_instance_of(&params[0]));
+}
+
 static const char *require_string(const tobj *value, const char *operation)
 {
 	if (!value || value->type != tcompo ||
@@ -827,6 +833,16 @@ static const textension_symbol symbols[] = {
 		.minimum_arguments = 0,
 		.maximum_arguments = UNDEF_NPARAMS,
 		.intrinsic = tnative_intrinsic_type_rule_instance
+	},
+	{
+		.name = "instance_of",
+		.type = "Function[Rule] -> Type",
+		.detail = "types::instance_of(rule: Rule) -> Type",
+		.kind = textension_function,
+		.function = types_instance_of,
+		.minimum_arguments = 1,
+		.maximum_arguments = 1,
+		.compile_time_signature = 1
 	},
 	{
 		.name = "of",

@@ -297,6 +297,7 @@ Rule 的精确 Type 只记录有序参数 Type，不记录参数名称、Conditi
 | `InstanceOf[R]` | 由同一个运行时规则 R 绑定产生的实例，自动推导参数签名；不保证约束成立 |
 | `types::rule(Type...)` | 构造精确 Rule Type 值 |
 | `types::rule_instance(Type...)` | 构造精确实例 Type 值 |
+| `types::instance_of(rule)` | 显式构造只匹配该运行时 Rule 身份的 Type 值 |
 
 零参数精确 Type 写成`Rule[]`和`RuleInstance[]`。
 参数 Type 按不变规则比较；名称和说明不参与 Type 相等。
@@ -439,11 +440,10 @@ let reflection_arguments = arguments(reflection_instance)
 
 `reflection_parameters` 是由参数名与 Type 组成的 Pair 列表，例如
 `[pair('amount', types::Int)]`；`reflection_arguments` 是 `[-1]`。
-这些查询不会运行规则，因此也能读取不满足约束的实例。`parameters` 接受 Function、Rule、
+这些查询不会运行规则，因此也能读取不满足约束的实例。`parameters` 只接受 Rule、
 RuleInstance 或 RuleIR；`arguments` 只接受已绑定的 RuleInstance。无参数时返回空列表，
-不支持的对象报错，不以空列表伪装成功。普通函数、匿名函数、闭包与函数副本保留参数名和 Type；未标注参数使用可获得的上下文 Type，否则为 AnyType。标准库函数读取已登记的签名。旧字节码函数需要重新编译；没有参数元信息的第三方原生函数明确报错。
-
-`parameters` 查询的是声明，不是完整的调用规则：`(...)` 没有具名形参，返回空列表，但它仍是变参函数；返回的 Pair 不表示可选参数、默认值或变参标志。
+不支持的对象（包括 Function）报错，不以空列表伪装成功。返回的 Type 来自 Rule IR 的
+描述性 schema；它不会把标注绑定到实例实参，也不会触发隐式运行时检查。
 
 返回列表是新容器；修改它不会替换原绑定或声明。绑定值中的可变对象仍共享引用，
 不是深快照。`parameters` 返回的 Type 是 Type 对象而非字符串。

@@ -181,6 +181,7 @@ typedef enum {
 	OP_TYPEFWD,    /**< 声明递归 Type 占位符。 */
 	OP_TYPEDEFINE, /**< 定义递归 Type 主体。 */
 	OP_LOOPAS,     /**< 绑定循环迭代值。 */
+	OP_LOOPRANGE,  /**< 迭代不逃逸的整数范围。 */
 	OP_JPF,        /**< 向前跳转。 */
 	OP_JPB,        /**< 向后跳转。 */
 	OP_CJPFPOP,    /**< 条件向前跳转并弹栈。 */
@@ -194,15 +195,18 @@ typedef enum {
 	OP_PUSHINFO,   /**< 压入编译信息。 */
 	OP_IMPORT,     /**< 导入模块或符号。 */
 	OP_IDXR,       /**< 执行索引读取。 */
-	OP_EVAL,       /**< 调用普通可调用值。 */
 	OP_EVALSF,     /**< 调用会话原生函数。 */
 	OP_EVALCF,     /**< 调用普通原生函数。 */
-	OP_EVALTF,     /**< 调用 Tapas 函数。 */
+	OP_EVALTF,     /**< 调用当前 Tapas 函数。 */
+	OP_EVAL,       /**< 调用普通可调用值。 */
 	OP_IDXL,       /**< 执行索引写入。 */
 	OP_PUSHF,      /**< 创建并压入函数。 */
 	OP_PUSHRULE,   /**< 创建并压入 Rule。 */
-	OP_RULECOND,   /**< 记录 Rule 条件。 */
-	OP_RULEREQ,    /**< 记录 Rule 要求。 */
+	OP_RULEVALUE,  /**< 记录 Rule IR 求值结果。 */
+	OP_RULENOT,    /**< 对 Rule 条件执行逻辑非。 */
+	OP_RULETRUTH,  /**< 读取 Rule 条件真值。 */
+	OP_RULEITEM,   /**< 提交 Rule 条件或子 Rule。 */
+	OP_RULEIMPLY,  /**< 记录 Rule 蕴含条件。 */
 	OP_ADD,        /**< 加法。 */
 	OP_SUB,        /**< 减法。 */
 	OP_MUL,        /**< 乘法。 */
@@ -222,14 +226,6 @@ typedef enum {
 	OP_NEG,        /**< 一元负号。 */
 	OP_BAND,       /**< 短路逻辑与。 */
 	OP_BOR,        /**< 短路逻辑或。 */
-	OP_FUNCMETA,   /**< 关联函数元数据。 */
-	OP_BINDTYPE,   /**< 绑定 Type。 */
-	OP_CHECKTYPE,  /**< 检查值的 Type。 */
-	OP_RULETYPE,   /**< 构造 Rule 相关 Type。 */
-	OP_RULENOT,    /**< 构造 Rule 逻辑非 Term。 */
-	OP_RULETRUTH,  /**< 读取 Rule 真值。 */
-	OP_RULEITEM,   /**< 构造 RuleItem。 */
-	OP_RULEVALUE,  /**< 读取 Rule 求值结果。 */
 	OP_COUNT       /**< 操作码数量，不是可执行指令。 */
 } tins;
 

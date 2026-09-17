@@ -34,7 +34,6 @@ typedef struct tcompo_env tcompo_env;             /**< 运行时执行环境。 
 typedef struct tcppgenf tcppgenf;                 /**< 普通原生函数对象。 */
 typedef struct tcppsessf tcppsessf;               /**< 会话原生函数对象。 */
 typedef struct ttypeval ttypeval;                 /**< Type 对象。 */
-typedef struct tfunction_metadata tfunction_metadata; /**< 函数元数据。 */
 typedef struct trule trule;                       /**< Rule 对象。 */
 typedef struct trule_instance trule_instance;     /**< RuleInstance 对象。 */
 typedef struct trule_builtin trule_builtin;       /**< 内建 Rule 可调用对象。 */

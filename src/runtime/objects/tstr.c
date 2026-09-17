@@ -8,10 +8,11 @@
 
 tstr *tstr_new_len(const char *text, size_t length)
 {
-	tstr *string = (tstr *)calloc(1, sizeof(tstr));
+	tstr *string = (tstr *)malloc(sizeof(tstr));
 	if (!string)
 		return nullptr;
 	string->base.vtable = &tstr_vtable;
+	string->base.refctr = 0;
 	string->data = &string->storage;
 	if (!tstring_init_len(string->data, text, length)) {
 		free(string);
@@ -46,10 +47,11 @@ static long tstr_len(void *self)
 static void *tstr_copy(void *self)
 {
 	tstr *s = (tstr *)self;
-	tstr *n = (tstr *)calloc(1, sizeof(tstr));
+	tstr *n = (tstr *)malloc(sizeof(tstr));
 	if (!n)
 		return nullptr;
 	n->base.vtable = s->base.vtable;
+	n->base.refctr = 0;
 	n->data = &n->storage;
 	if (!tstring_init_len(n->data, tstring_cstr(s->data),
 			      tstring_len(s->data))) {

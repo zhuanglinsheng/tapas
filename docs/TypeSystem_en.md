@@ -8,9 +8,10 @@ definition in the [Language Reference](Syntax_en.md). The rules here are
 normative for those features; exact Rule Types and their constructors are
 defined separately in the [Rule documentation](Rules_en.md).
 
-Ordinary Type annotations primarily participate in compile-time analysis without
-implicit conversions. `InstanceOf[R]` additionally binds runtime Rule identity and
-checks declaration initialization, function parameters/results, and Rule arguments. A
+All Type annotations, including `InstanceOf[R]`, participate only in compile-time
+analysis; they cause neither implicit conversion nor runtime binding. Statically known
+Rule identities are checked at declaration initialization, function parameter/result,
+and Rule parameter boundaries; dynamic boundaries use `types::matches` explicitly. A
 Type can also be stored, passed, returned, and exported as an ordinary value;
 this document calls such a value a Type value. User-defined Types are immutable,
 and their complete definitions must be visible at compile time.
@@ -473,32 +474,31 @@ only the other category. User-template Value arguments currently accept static
 Bool, Int, Float, and String literals and substitute them as exact-value
 Types.
 
-`InstanceOf[R]`, equivalent to `InstanceOf[; R]`, accepts a Rule name or qualified
-member reference such as `model::Exchange`, not arbitrary expressions. It uses
-special runtime identity binding rather than ordinary literal Value parameters.
-User-defined generic constructors are not supported.
+`InstanceOf[R]`, equivalent to `InstanceOf[; R]`, accepts a statically resolvable
+Rule name or qualified member reference such as `model::Exchange`, not an ordinary
+literal Value parameter. User-defined generic constructors are not supported.
 
-Membership requires the **same runtime Rule object**. Its zero, one, or multiple
-parameter Types are inferred from R and need not be repeated. Membership does not
-assert satisfaction: use `assert(action)` or `rules::check(action)` separately.
-Names, signatures, source locations, and semantic hashes do not establish identity.
+`InstanceOf[R]` is a compile-time Rule-identity annotation. The compiler can reject
+a mismatch when an argument's source is statically known. An `Unknown` call target
+or value is accepted; runtime functions, parameter slots, and ordinary values do
+not bind R and do not perform an implicit check derived from the annotation.
+Satisfaction is separate and still requires `assert(action)` or
+`rules::check(action)`.
 
-Function and Rule creation capture R in the defining environment; declaration
-initialization binds its own R. Later rebinding of the name does not change existing
-signatures. Aliases to the same object match; repeated factory calls, Rule `.copy()`,
-and repeated module executions create distinct objects. Retail uses `runner::model`
-to share the runner's bound Rule, without assuming singleton imports.
+At a dynamic boundary, construct the runtime Type explicitly:
 
-Nested containers and unions support identity checks. This first version rejects
-reassignment of bindings with value-bound annotations and does not support recursive
-Types containing runtime identities. Mutation through container aliases is not
-continuously monitored. Function matching does not wrap arbitrary callbacks to
-enforce their full signatures. `parameters(function)` exposes the bound parameter
-Type for `types::matches`, independently of Rule satisfaction.
+```tapas
+let IdentityExample = rule (value: Int) { true }
+let expected_identity = types::instance_of(IdentityExample)
+let matches_identity = types::matches(IdentityExample(1), expected_identity)
+```
 
-Bytecode stores reference templates and binds them during execution; bound identity
-Types cannot be transported across processes through Rule IR serialization.
+This Type retains the actual Rule identity and is therefore process-local rather
+than portable Rule IR data. Aliases to the same Rule match; repeated factory calls,
+Rule `.copy()`, and repeated module executions create distinct objects.
 `RuleInstance[T, ...]` remains a signature constraint without Rule identity.
+Ordinary assignment and reassignment follow static assignability rules, without
+continuous runtime monitoring of containers or objects.
 
 Annotations follow declaration names and function parameters, and may also
 describe function results:
@@ -544,6 +544,7 @@ A parameterized Type application accepts only these built-in constructors:
 | `Function[A, B, ...] -> R` | zero or more parameters and one result | no runtime construction form |
 | `Rule[A, B, ...]` | zero or more parameters | `types::rule(A, B, ...)` |
 | `RuleInstance[A, B, ...]` | zero or more parameters | `types::rule_instance(A, B, ...)` |
+| `InstanceOf[R]` | one Rule value argument | `types::instance_of(R)` (explicit runtime identity Type) |
 
 A constructor may also be qualified, as in `types::List[T]`. Each argument is
 recursively a `type-expression`, so applications may be nested to a finite
@@ -684,19 +685,18 @@ recursive call known before the body is analyzed. Without a result annotation,
 the function result is `Unknown`; this design does not require automatic
 inference.
 
-Ordinary parameter annotations provide compile-time constraints. Compilation is
-accepted when an argument or call target is `Unknown`, and the compiler does
-not insert an implicit check at function entry, except for Types containing
-`InstanceOf` as described above. Use `types::matches` or an
+All parameter annotations, including `InstanceOf`, provide compile-time constraints.
+Compilation is accepted when an argument or call target is `Unknown`, and the compiler
+does not insert an implicit check at function entry. Use `types::matches` or an
 inline `assert(rule { ... })` when a dynamic boundary must enforce a more specific
 condition. The variadic `...` form cannot carry a parameter annotation, but a
 result annotation may follow its parameter list.
 
 The compiler uses a precise function signature to check the body, statically
-known calls, and module interfaces. Runtime functions retain parameter metadata
-for display and `parameters(function_value)`, while `types::of(function_value)`
-still returns raw `types::Function`. There is no runtime constructor for an exact
-function Type value; parameter reflection does not return a complete signature Type.
+known calls, and module interfaces. Runtime functions retain no parameter or result
+Type metadata: `types::of(function_value)` returns raw `types::Function`, and
+`parameters(function_value)` is unsupported. Rule IR retains its descriptive
+parameter Types, so `parameters` remains available for Rule, RuleInstance, and RuleIR.
 
 ### 3.3 Field Types and structure literals
 

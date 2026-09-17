@@ -1,4 +1,3 @@
-#include "../../src/stdlib/function_metadata.h"
 #include "../../src/stdlib/random/object.h"
 #include "../../src/stdlib/rules/codec.h"
 #include "../../src/stdlib/rules/hash.h"
@@ -105,8 +104,6 @@ static void test_c_function_descriptor(void) {
   assert(tcfn_descriptor_valid(&descriptor));
   tcppgenf *function = tcppgenf_new_descriptor(&descriptor);
   assert(tcppgenf_get_f(function) == native_identity);
-  assert(strcmp(tcppgenf_get_signature_type(function),
-                "Function[...] -> Int") == 0);
   assert(tcppgenf_get_minimum_parameters(function) == 1);
   assert(tcppgenf_get_maximum_parameters(function) == 2);
   assert(tcppgenf_accepts(function, 1));
@@ -511,61 +508,6 @@ static void test_capability_dispatch(void) {
   tobj_try_clear(&list_value);
 }
 
-static ttypeval *metadata_string(void) {
-  return ttypeval_retain(ttypeval_builtin(tbuiltintype_string));
-}
-
-static void test_function_metadata(void) {
-  assert(tstdlib_validate_function_metadata());
-  ttypeval *types[] = {ttypeval_builtin(tbuiltintype_int),
-                       ttypeval_builtin(tbuiltintype_string)};
-  ttypeval *signature =
-      ttypeval_new_function(types, 2, ttypeval_builtin(tbuiltintype_bool), 0);
-  tfunction_metadata *metadata =
-      tfunction_metadata_decode("value\x1f"
-                                "label",
-                                tstring_cstr(signature->canonical));
-  assert(metadata && tfunction_metadata_count(metadata) == 2);
-  assert(!tfunction_metadata_display_name(metadata));
-  assert(!strcmp(tfunction_metadata_name(metadata, 0), "value"));
-  assert(ttypeval_equal(tfunction_metadata_type(metadata, 0),
-                        ttypeval_builtin(tbuiltintype_int)));
-  assert(ttypeval_equal(tfunction_metadata_return_type(metadata),
-                        ttypeval_builtin(tbuiltintype_bool)));
-  tfunction_metadata *shared = tfunction_metadata_retain(metadata);
-  assert(shared == metadata);
-  tfunction_metadata_release(metadata);
-  assert(!strcmp(tfunction_metadata_name(shared, 1), "label"));
-  tfunction_metadata_release(shared);
-  metadata = tfunction_metadata_decode("named\x1e"
-                                       "value\x1f"
-                                       "label",
-                                       tstring_cstr(signature->canonical));
-  assert(metadata &&
-         !strcmp(tfunction_metadata_display_name(metadata), "named"));
-  assert(tfunction_metadata_count(metadata) == 2);
-  assert(!strcmp(tfunction_metadata_name(metadata, 0), "value"));
-  tfunction_metadata_release(metadata);
-  assert(
-      !tfunction_metadata_decode("value", tstring_cstr(signature->canonical)));
-  assert(!tfunction_metadata_decode("", "Int"));
-  assert(
-      !tfunction_metadata_decode("\x1f", tstring_cstr(signature->canonical)));
-  ttypeval_release(signature);
-  const tparameter_spec optional[] = {{"prompt", metadata_string, 1, 0}};
-  metadata =
-      tfunction_metadata_new(optional, 1, ttypeval_builtin(tbuiltintype_string), 0);
-  assert(metadata && tfunction_metadata_optional(metadata, 0));
-  tfunc *function = tfunc_new(0, nullptr, 0, 0, 1, 0, 0);
-  function->metadata = tfunction_metadata_retain(metadata);
-  tfunc *copy = function->compo_base.vtable->copy(function);
-  assert(copy->metadata == function->metadata);
-  function->compo_base.vtable->free(function);
-  assert(!strcmp(tfunction_metadata_name(copy->metadata, 0), "prompt"));
-  copy->compo_base.vtable->free(copy);
-  tfunction_metadata_release(metadata);
-}
-
 static void test_rule_logic_ir(void) {
   const char *valid = "TPIR5;0:0:5;3;2;1;1;16:B12:RuleInstances1:p0;0:0:0;-1;-"
                       "1;1;16:B12:RuleInstances1:q0;0:0:0;-1;-1;10;7:B4:Booln;"
@@ -718,7 +660,6 @@ int main(void) {
   test_rule_representations();
   test_rule_not_ir();
   test_rule_logic_ir();
-  test_function_metadata();
   test_c_function_descriptor();
   test_extension_descriptor();
   test_numeric_array();

@@ -22,6 +22,12 @@ typedef struct {
 	uint_objs count;
 } tcompile_module_interface;
 
+typedef enum {
+	tcompile_call_generic,
+	tcompile_call_native,
+	tcompile_call_session
+} tcompile_call_kind;
+
 typedef struct {
 	tstring *name;
 	ttypeval *value_type;
@@ -32,6 +38,7 @@ typedef struct {
 	uint8_t has_annotation;
 	uint8_t is_types_package;
 	uint8_t initialized;
+	uint8_t call_kind;
 } tcompile_binding;
 
 typedef struct tobj_ctr {
@@ -64,6 +71,9 @@ struct tcp {
 	const tlib *preload_library;
 	uint8_t owns_imports;
 	int in_loop;
+	uint_objs *loop_tmp_bases;
+	uint32_t loop_tmp_base_count;
+	uint32_t loop_tmp_base_cap;
 	int interactive;
 };
 

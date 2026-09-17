@@ -6,7 +6,6 @@
 #include "tapas/objects/titer.h"
 #include "tapas/objects/tlist.h"
 #include "tapas/objects/tcfn.h"
-#include "objects/tfunction_metadata.h"
 #include "tapas/objects/tpair.h"
 #include "tapas/objects/tstr.h"
 #include "tapas/objects/ttype.h"
@@ -17,12 +16,27 @@
 #include <stdlib.h>
 #include <string.h>
 
+#if defined(__GNUC__) || defined(__clang__)
+#define VM_UNLIKELY(condition) __builtin_expect(!!(condition), 0)
+#else
+#define VM_UNLIKELY(condition) (condition)
+#endif
 
 /*===========================================================================*
  * 1. Binary Operator Function Type
  *===========================================================================*/
 
 typedef void (*binopf)(const tobj *v1, const tobj *v2, tobj *vre);
+
+/* Comparison-aware OP_IDXR may keep a one-byte String unboxed until EQ/NE.
+ * No other instruction observes this private representation. */
+#define VM_INDEXED_BYTE_NAMELOC ((uint_csts)(UNDEF_NAMELOC + 1u))
+
+static inline int vm_is_indexed_byte(const tobj *value)
+{
+	return value->type == tint &&
+	       (uint_csts)value->name_loc == VM_INDEXED_BYTE_NAMELOC;
+}
 
 /*===========================================================================*
  * 2. Operators
@@ -215,8 +229,7 @@ static void operator_add_slow(const tobj *v1, const tobj *v2, tobj *vre)
 	      "unsupported type for +");
 }
 
-static void operator_add(
-		const tobj *v1, const tobj *v2, tobj *vre)
+static void operator_add(const tobj *v1, const tobj *v2, tobj *vre)
 {
 	if (add_impl(v1->type, v2->type, v1, v2, vre))
 		return;
@@ -239,8 +252,7 @@ static void operator_sub_slow(const tobj *v1, const tobj *v2, tobj *vre)
 	      "unsupported type for -");
 }
 
-static void operator_sub(
-		const tobj *v1, const tobj *v2, tobj *vre)
+static void operator_sub(const tobj *v1, const tobj *v2, tobj *vre)
 {
 	if (sub_impl(v1->type, v2->type, v1, v2, vre))
 		return;
@@ -263,8 +275,7 @@ static void operator_mul_slow(const tobj *v1, const tobj *v2, tobj *vre)
 	      "unsupported type for *");
 }
 
-static void operator_mul(
-		const tobj *v1, const tobj *v2, tobj *vre)
+static void operator_mul(const tobj *v1, const tobj *v2, tobj *vre)
 {
 	if (mul_impl(v1->type, v2->type, v1, v2, vre))
 		return;
@@ -305,8 +316,7 @@ static void operator_div_slow(const tobj *v1, const tobj *v2, tobj *vre)
 	      "unsupported type for /");
 }
 
-static void operator_div(
-		const tobj *v1, const tobj *v2, tobj *vre)
+static void operator_div(const tobj *v1, const tobj *v2, tobj *vre)
 {
 	if (div_impl(v1->type, v2->type, v1, v2, vre))
 		return;
@@ -428,6 +438,30 @@ DEF_CMP(le, <=)
 
 static void operator_eq_slow(const tobj *v1, const tobj *v2, tobj *vre)
 {
+	if (vm_is_indexed_byte(v1) || vm_is_indexed_byte(v2)) {
+		if (vm_is_indexed_byte(v1) && vm_is_indexed_byte(v2)) {
+			vm_set_bool_result(vre, v1->val.v_tint == v2->val.v_tint);
+			return;
+		}
+		const tobj *byte_value = vm_is_indexed_byte(v1) ? v1 : v2;
+		const tobj *other = vm_is_indexed_byte(v1) ? v2 : v1;
+		char byte = (char)byte_value->val.v_tint;
+		tobj string = { 0 };
+		tobj_set_compo(&string, (tcompo_v *)tstr_new_len(&byte, 1));
+		operator_eq_slow(vm_is_indexed_byte(v1) ? &string : other,
+			vm_is_indexed_byte(v1) ? other : &string, vre);
+		tobj_try_clear(&string);
+		return;
+	}
+	if (v1->type == tcompo && v2->type == tcompo &&
+	    v1->val.v_tcompo && v2->val.v_tcompo &&
+	    v1->val.v_tcompo->vtable == &tstr_vtable &&
+	    v2->val.v_tcompo->vtable == &tstr_vtable) {
+		vm_set_bool_result(vre, tstring_eq(
+			((tstr *)v1->val.v_tcompo)->data,
+			((tstr *)v2->val.v_tcompo)->data));
+		return;
+	}
 	if (v1->type == tcompo && v1->val.v_tcompo->vtable->op_eq) {
 		v1->val.v_tcompo->vtable->op_eq(v1->val.v_tcompo, v2, 0, vre); return;
 	}
@@ -437,15 +471,43 @@ static void operator_eq_slow(const tobj *v1, const tobj *v2, tobj *vre)
 	tobj_set_bool(vre, tobj_identical(v1, v2));
 }
 
-static void operator_eq(
-		const tobj *v1, const tobj *v2, tobj *vre)
+static void operator_eq(const tobj *v1, const tobj *v2, tobj *vre)
 {
-	if (eq_impl(v1->type, v2->type, v1, v2, vre)) return;
+	if (vm_is_indexed_byte(v1) || vm_is_indexed_byte(v2)) {
+		operator_eq_slow(v1, v2, vre);
+		return;
+	}
+	if (eq_impl(v1->type, v2->type, v1, v2, vre))
+		return;
 	operator_eq_slow(v1, v2, vre);
 }
 
 static void operator_ne_slow(const tobj *v1, const tobj *v2, tobj *vre)
 {
+	if (vm_is_indexed_byte(v1) || vm_is_indexed_byte(v2)) {
+		if (vm_is_indexed_byte(v1) && vm_is_indexed_byte(v2)) {
+			vm_set_bool_result(vre, v1->val.v_tint != v2->val.v_tint);
+			return;
+		}
+		const tobj *byte_value = vm_is_indexed_byte(v1) ? v1 : v2;
+		const tobj *other = vm_is_indexed_byte(v1) ? v2 : v1;
+		char byte = (char)byte_value->val.v_tint;
+		tobj string = { 0 };
+		tobj_set_compo(&string, (tcompo_v *)tstr_new_len(&byte, 1));
+		operator_ne_slow(vm_is_indexed_byte(v1) ? &string : other,
+			vm_is_indexed_byte(v1) ? other : &string, vre);
+		tobj_try_clear(&string);
+		return;
+	}
+	if (v1->type == tcompo && v2->type == tcompo &&
+	    v1->val.v_tcompo && v2->val.v_tcompo &&
+	    v1->val.v_tcompo->vtable == &tstr_vtable &&
+	    v2->val.v_tcompo->vtable == &tstr_vtable) {
+		vm_set_bool_result(vre, !tstring_eq(
+			((tstr *)v1->val.v_tcompo)->data,
+			((tstr *)v2->val.v_tcompo)->data));
+		return;
+	}
 	if (v1->type == tcompo && v1->val.v_tcompo->vtable->op_ne) {
 		v1->val.v_tcompo->vtable->op_ne(v1->val.v_tcompo, v2, 0, vre); return;
 	}
@@ -458,25 +520,33 @@ static void operator_ne_slow(const tobj *v1, const tobj *v2, tobj *vre)
 static void operator_ne(
 		const tobj *v1, const tobj *v2, tobj *vre)
 {
-	if (ne_impl(v1->type, v2->type, v1, v2, vre)) return;
+	if (vm_is_indexed_byte(v1) || vm_is_indexed_byte(v2)) {
+		operator_ne_slow(v1, v2, vre);
+		return;
+	}
+	if (ne_impl(v1->type, v2->type, v1, v2, vre))
+		return;
 	operator_ne_slow(v1, v2, vre);
 }
 
-#define DEF_COMPO_CMP_OPERATOR(fn, field, impl, opname)                     \
-static void fn##_slow(const tobj *v1, const tobj *v2, tobj *vre)            \
-{                                                                            \
-	if (v1->type == tcompo && v1->val.v_tcompo->vtable->field) { \
-		v1->val.v_tcompo->vtable->field(v1->val.v_tcompo, v2, 0, vre); return; \
+#define DEF_COMPO_CMP_OPERATOR(fn, field, impl, opname)                        \
+static void fn##_slow(const tobj *v1, const tobj *v2, tobj *vre)               \
+{                                                                              \
+	if (v1->type == tcompo && v1->val.v_tcompo->vtable->field) {           \
+		v1->val.v_tcompo->vtable->field(v1->val.v_tcompo, v2, 0, vre); \
+		return;                                                        \
 	} \
-	if (v2->type == tcompo && v2->val.v_tcompo->vtable->field) { \
-		v2->val.v_tcompo->vtable->field(v2->val.v_tcompo, v1, 1, vre); return; \
+	if (v2->type == tcompo && v2->val.v_tcompo->vtable->field) {           \
+		v2->val.v_tcompo->vtable->field(v2->val.v_tcompo, v1, 1, vre); \
+		return;                                                        \
 	} \
-	twarn(ErrRuntime_ParamsType, opname, "unsupported comparison");            \
-}                                                                            \
-static void fn(const tobj *v1, const tobj *v2, tobj *vre)                    \
-{                                                                            \
-	if (impl(v1->type, v2->type, v1, v2, vre)) return;                     \
-	fn##_slow(v1, v2, vre);                                                 \
+	twarn(ErrRuntime_ParamsType, opname, "unsupported comparison");        \
+}                                                                              \
+static void fn(const tobj *v1, const tobj *v2, tobj *vre)                      \
+{                                                                              \
+	if (impl(v1->type, v2->type, v1, v2, vre))                             \
+		return;                                                        \
+	fn##_slow(v1, v2, vre);                                                \
 }
 
 DEF_COMPO_CMP_OPERATOR(operator_sg, op_sg, sg_impl, "operator_sg")
@@ -492,7 +562,8 @@ void operator_and(const tobj *v1, const tobj *v2, tobj *vre)
 		v1->val.v_tcompo->vtable->op_and(v1->val.v_tcompo, v2, 0, vre);
 	else if (v2->type == tcompo && v2->val.v_tcompo->vtable->op_and)
 		v2->val.v_tcompo->vtable->op_and(v2->val.v_tcompo, v1, 1, vre);
-	else twarn(ErrRuntime_ParamsType, "operator_and", "");
+	else
+		twarn(ErrRuntime_ParamsType, "operator_and", "");
 }
 
 void operator_or(const tobj *v1, const tobj *v2, tobj *vre)
@@ -503,11 +574,13 @@ void operator_or(const tobj *v1, const tobj *v2, tobj *vre)
 		v1->val.v_tcompo->vtable->op_or(v1->val.v_tcompo, v2, 0, vre);
 	else if (v2->type == tcompo && v2->val.v_tcompo->vtable->op_or)
 		v2->val.v_tcompo->vtable->op_or(v2->val.v_tcompo, v1, 1, vre);
-	else twarn(ErrRuntime_ParamsType, "operator_or", "");
+	else
+		twarn(ErrRuntime_ParamsType, "operator_or", "");
 }
 
 #undef DEF_COMPO_CMP_OPERATOR
 #undef DEF_CMP
+
 
 /*===========================================================================*
  * 3. Virtual Machine
@@ -517,18 +590,21 @@ static void tvm_drop_call_frames(tvm *vm);
 
 typedef enum {
 	tins_cache_empty,
+	tins_cache_loop_iter,
+	tins_cache_loop_list,
 	tins_cache_idxr_list_int,
 	tins_cache_idxr_str_int,
 	tins_cache_idxr_dense_int2,
 	tins_cache_idxl_list_int,
 	tins_cache_idxl_dense_int2,
 	tins_cache_eval_tfunc,
+	tins_cache_eval_cppfunc,
+	tins_cache_eval_sessfunc,
 	tins_cache_polymorphic
 } tins_cache_kind;
 
 typedef struct {
 	tcompo_vtable *guard;
-	tfunction_metadata *function_metadata;
 	uint_cmds state_slot;
 	uint8_t kind;
 } tins_cache;
@@ -570,7 +646,7 @@ static tvm_code_cache *tvm_get_code_cache(tvm *vm, const twrapper *wrapper)
 	uint_cmds loop_slot = 0;
 	for (uint_cmds i = 0; i < wrapper->ncmds; i++) {
 		tins instruction = tbycode_ins(wrapper->cmdarr[i]);
-		if (instruction == OP_LOOPAS)
+		if (instruction == OP_LOOPAS || instruction == OP_LOOPRANGE)
 			cache->entries[i].state_slot = loop_slot++;
 	}
 	return cache;
@@ -643,8 +719,6 @@ void tvm_clean(tvm *vm)
 	vm->loop_state_len = 0;
 	vm->loop_state_cap = 0;
 	for (uint32_t i = 0; i < vm->code_cache_len; i++) {
-		for (uint_cmds j = 0; j < vm->code_caches[i].entry_count; j++)
-			tfunction_metadata_release(vm->code_caches[i].entries[j].function_metadata);
 		free(vm->code_caches[i].entries);
 	}
 	free(vm->code_caches);
@@ -683,6 +757,9 @@ static tloop_state *tvm_loop_state(tvm *vm, uint_cmds state_slot)
 	}
 	while (vm->loop_state_len <= state_slot) {
 		vm->loop_states[vm->loop_state_len].pos = 0;
+		vm->loop_states[vm->loop_state_len].range_start = 0;
+		vm->loop_states[vm->loop_state_len].range_step = 1;
+		vm->loop_states[vm->loop_state_len].range_end = 0;
 		vm->loop_states[vm->loop_state_len].iterator_slot = nullptr;
 		vm->loop_state_len++;
 	}
@@ -788,11 +865,6 @@ static void tcall_frame_prepare(tcall_frame *fr, tfunc *f)
 static inline void tcall_frame_assign_params(
 		tcall_frame *frame, tobj *params, uint_regs nparams)
 {
-	for (uint_regs i = 0; i < nparams; i++) {
-		ttypeval *type = tfunction_metadata_type(frame->func->metadata, i);
-		if (type && (type->contains_instance || type->contains_custom) && !ttypeval_matches(&params[i], type))
-			twarn(ErrRuntime_ParamsType, "Type annotation", "argument does not match declared Type or Rule identity");
-	}
 	tobj_array *locals = &frame->env.base.objs;
 	if (nparams > locals->capacity)
 		tobj_array_try_expand(locals, nparams);
@@ -902,9 +974,6 @@ static void tvm_pop_call_frame(tvm *vm)
 	if (vm->frame_len == 0)
 		twarn(ErrRuntime_Other, "tvm_pop_call_frame", "empty frame stack");
 	tcall_frame *fr = vm->frames[vm->frame_len - 1];
-	ttypeval *return_type = tfunction_metadata_return_type(fr->func->metadata);
-	if (return_type && (return_type->contains_instance || return_type->contains_custom) && !ttypeval_matches(&vm->rev, return_type))
-		twarn(ErrRuntime_ParamsType, "Type annotation", "return value does not match declared Type or Rule identity");
 	tobj_array saved_tmps = fr->saved_tmps;
 	tobj *saved_stk = fr->saved_stk;
 	uint_regs saved_regmax = fr->saved_regmax;
@@ -1020,6 +1089,18 @@ static tobj *vm_pushx_source(tvm *vm, tcompo_env *env, uint_objs slot, uint16_t 
 	return vm_array_slot(&cur->objs, slot);
 }
 
+static inline tobj *vm_direct_slot(tcompo_env *env, uint_objs slot,
+				   uint16_t depth)
+{
+	tcompo_env_abstract *owner = &env->base;
+	for (uint16_t i = 0; i < depth; i++) {
+		if (!owner->father_env)
+			twarn(ErrRuntime_ObjUnfound, "direct native call", "");
+		owner = owner->father_env;
+	}
+	return vm_array_slot(&owner->objs, slot);
+}
+
 typedef struct {
 	const tobj *left;
 	const tobj *right;
@@ -1115,17 +1196,11 @@ static inline void vm_finish_binop(tvm *vm, tbinop_operands operands)
 		vm_finish_binop((vm), operands__);                              \
 	} while (0)
 
-static inline int vm_try_fused_binop(
-		tvm *vm, tbycode code, uint_regs type, tcompo_env *env)
+static inline int vm_apply_binop(tins instruction, const tobj *left,
+				 const tobj *right, tobj *result)
 {
-	tins instruction = tbycode_ins(code);
 	if (instruction < OP_ADD || instruction > OP_OR)
 		return 0;
-
-	tbinop_operands operands = vm_binop_operands(vm, code, type, env);
-	const tobj *left = operands.left;
-	const tobj *right = operands.right;
-	tobj *result = operands.result;
 	switch (instruction) {
 	case OP_ADD:
 		if (!add_impl(left->type, right->type, left, right, result))
@@ -1153,11 +1228,15 @@ static inline int vm_try_fused_binop(
 		operator_mmul(left, right, result);
 		break;
 	case OP_EQ:
-		if (!eq_impl(left->type, right->type, left, right, result))
+		if (vm_is_indexed_byte(left) || vm_is_indexed_byte(right))
+			operator_eq_slow(left, right, result);
+		else if (!eq_impl(left->type, right->type, left, right, result))
 			operator_eq_slow(left, right, result);
 		break;
 	case OP_NE:
-		if (!ne_impl(left->type, right->type, left, right, result))
+		if (vm_is_indexed_byte(left) || vm_is_indexed_byte(right))
+			operator_ne_slow(left, right, result);
+		else if (!ne_impl(left->type, right->type, left, right, result))
 			operator_ne_slow(left, right, result);
 		break;
 	case OP_SG:
@@ -1185,8 +1264,32 @@ static inline int vm_try_fused_binop(
 	default:
 		return 0;
 	}
+	return 1;
+}
+
+static inline int vm_try_fused_binop(
+		tvm *vm, tbycode code, uint_regs type, tcompo_env *env)
+{
+	tins instruction = tbycode_ins(code);
+	if (instruction < OP_ADD || instruction > OP_OR)
+		return 0;
+
+	tbinop_operands operands = vm_binop_operands(vm, code, type, env);
+	if (!vm_apply_binop(
+		instruction, operands.left, operands.right, operands.result))
+		return 0;
 	vm_finish_binop(vm, operands);
 	return 1;
+}
+
+static inline int vm_try_borrowed_left_binop(
+		tvm *vm, const tobj *left, tbycode metadata, tbycode operation)
+{
+	if (tbycode_get_U(metadata) != 0 || tbycode_get_L(operation) != 0 ||
+	    tbycode_get_R(operation) != 1 || stk_len(vm) == 0)
+		return 0;
+	return vm_apply_binop(
+		tbycode_ins(operation), left, stk_top(vm), stk_top(vm));
 }
 
 void tmp_add(tvm *vm)
@@ -1250,13 +1353,22 @@ static void vm_list_idx_int(tlist *list, long index, tobj *result)
 		result->val.v_tcompo->refctr++;
 }
 
-static void vm_str_idx_int(tstr *str, long index, tobj *result)
+static void vm_str_idx_int(tstr *str, long index, int comparison_hint,
+			   tobj *result)
 {
 	size_t len = tstring_len(str->data);
 	if (index < 0)
 		index += (long)len;
 	if (index < 0 || (size_t)index >= len)
 		twarn(ErrRuntime_IdxOutRange, "string index", "");
+	if (comparison_hint) {
+		*result = (tobj){
+			.type = tint,
+			.name_loc = (int)VM_INDEXED_BYTE_NAMELOC,
+			.val.v_tint = (unsigned char)tstring_cstr(str->data)[index]
+		};
+		return;
+	}
 	tobj_set_compo(
 		result,
 		(tcompo_v *)tstr_new_len(tstring_cstr(str->data) + index, 1));
@@ -1318,35 +1430,34 @@ static void vm_dense_iset_int2(tcompo_v *array, const tobj *params,
 }
 
 /* Index right */
-static void vm_idxr(tvm *vm, uint_regs nparams, tins_cache *cache)
+static void vm_idxr_value(tvm *vm, tcompo_v *arr, tobj *params,
+			  uint_regs nparams, int comparison_hint,
+			  tins_cache *cache)
 {
-	tobj *obj = stk_top(vm);
-	if (obj->type != tcompo)
-		twarn(ErrRuntime_RefType, "vm_idxr", "");
-	tcompo_v *arr = obj->val.v_tcompo;
-	tobj *params = stk_topn(vm, nparams + 1);
 	if (cache && cache->kind == tins_cache_idxr_list_int &&
 	    cache->guard == arr->vtable && nparams == 1 &&
 	    params[0].type == tint) {
 		vm_list_idx_int((tlist *)arr, params[0].val.v_tint, &vm->rev);
-		goto finish;
+		return;
 	}
 	if (cache && cache->kind == tins_cache_idxr_str_int &&
 	    cache->guard == arr->vtable && nparams == 1 &&
 	    params[0].type == tint) {
-		vm_str_idx_int((tstr *)arr, params[0].val.v_tint, &vm->rev);
-		goto finish;
+		vm_str_idx_int((tstr *)arr, params[0].val.v_tint,
+			       comparison_hint, &vm->rev);
+		return;
 	}
 	if (cache && cache->kind == tins_cache_idxr_dense_int2 &&
 	    cache->guard == arr->vtable && nparams == 2 &&
 	    params[0].type == tint && params[1].type == tint) {
 		vm_dense_idx_int2(arr, params, &vm->rev);
-		goto finish;
+		return;
 	}
 	if (arr->vtable == &tstr_vtable && nparams == 1 &&
 	    params[0].type == tint) {
 		tins_cache_observe(cache, tins_cache_idxr_str_int, arr->vtable);
-		vm_str_idx_int((tstr *)arr, params[0].val.v_tint, &vm->rev);
+		vm_str_idx_int((tstr *)arr, params[0].val.v_tint,
+			       comparison_hint, &vm->rev);
 	} else if (arr->vtable == &tlist_vtable && nparams == 1 &&
 		   params[0].type == tint) {
 		tins_cache_observe(cache, tins_cache_idxr_list_int, arr->vtable);
@@ -1361,8 +1472,30 @@ static void vm_idxr(tvm *vm, uint_regs nparams, tins_cache *cache)
 			cache->kind = tins_cache_polymorphic;
 		tcompo_index(arr, params, nparams, &vm->rev);
 	}
-finish:
+}
+
+static void vm_idxr(tvm *vm, tbycode instruction, tins_cache *cache)
+{
+	uint_regs nparams = (uint_regs)tbycode_idxr_count(instruction);
+	tobj *obj = stk_top(vm);
+	if (obj->type != tcompo || !obj->val.v_tcompo)
+		twarn(ErrRuntime_RefType, "vm_idxr", "");
+	vm_idxr_value(vm, obj->val.v_tcompo, stk_topn(vm, nparams + 1),
+		       nparams, tbycode_idxr_compare(instruction), cache);
 	stk_popcn(vm, 1 + nparams);
+	stk_push(vm, &vm->rev);
+	tvm_set_rev_empty(vm);
+}
+
+static void vm_idxr_borrowed(tvm *vm, const tobj *obj,
+			      tbycode instruction, tins_cache *cache)
+{
+	uint_regs nparams = (uint_regs)tbycode_idxr_count(instruction);
+	if (obj->type != tcompo || !obj->val.v_tcompo)
+		twarn(ErrRuntime_RefType, "vm_idxr", "");
+	vm_idxr_value(vm, obj->val.v_tcompo, stk_topn(vm, nparams),
+		       nparams, tbycode_idxr_compare(instruction), cache);
+	stk_popcn(vm, nparams);
 	stk_push(vm, &vm->rev);
 	tvm_set_rev_empty(vm);
 }
@@ -1442,6 +1575,68 @@ static void vm_loop_push_cond(tvm *vm, int has_next)
 	stk_fill(vm);
 }
 
+static inline tobj *vm_loop_target(tvm *vm, uint_objs idx, int isenv,
+				    tcompo_env *env)
+{
+	return isenv ? tcompo_env_get_obj(env, idx) : tmp_obj(vm, idx);
+}
+
+static void vm_loop_range(tvm *vm, tloop_state *state, uint_objs idx,
+			  int isenv, tcompo_env *env, titer *iterator)
+{
+	long value = iterator->start + state->pos * iterator->step;
+	int has_next = (iterator->step > 0 && value < iterator->end) ||
+		       (iterator->step < 0 && value > iterator->end);
+	if (has_next) {
+		vm_set_int_result(vm_loop_target(vm, idx, isenv, env), value);
+		state->pos++;
+	} else {
+		state->pos = 0;
+		state->iterator_slot = nullptr;
+	}
+	vm_loop_push_cond(vm, has_next);
+}
+
+static void vm_loop_inline_range(tvm *vm, tins_cache *cache, uint_objs idx,
+				 int isenv, tcompo_env *env)
+{
+	tloop_state *state = tvm_loop_state(vm, cache->state_slot);
+	if (!state->iterator_slot) {
+		if (stk_len(vm) < 2 || stk_top(vm)->type != tint ||
+		    stk_at(vm, 1)->type != tint)
+			twarn(ErrRuntime_ParamsType, "range loop", "Int bounds required");
+		state->range_start = stk_top(vm)->val.v_tint;
+		state->range_step = 1;
+		state->range_end = stk_at(vm, 1)->val.v_tint;
+		state->pos = 0;
+		stk_popcn(vm, 2);
+		tobj_set_nil(stk_free(vm));
+		stk_fill(vm);
+		state->iterator_slot = stk_top(vm);
+	}
+	long value = state->range_start + state->pos * state->range_step;
+	int has_next = value < state->range_end;
+	if (has_next) {
+		vm_set_int_result(vm_loop_target(vm, idx, isenv, env), value);
+		state->pos++;
+	}
+	vm_loop_push_cond(vm, has_next);
+}
+
+static void vm_loop_list(tvm *vm, tloop_state *state, uint_objs idx,
+			 int isenv, tcompo_env *env, tlist *list)
+{
+	if ((uint_objs)state->pos < list->items.len) {
+		tobj *target = vm_loop_target(vm, idx, isenv, env);
+		tobj_copy(target, &list->items.data[state->pos++]);
+		vm_loop_push_cond(vm, 1);
+		return;
+	}
+	state->pos = 0;
+	state->iterator_slot = nullptr;
+	vm_loop_push_cond(vm, 0);
+}
+
 static void vm_loopas(tvm *vm, tins_cache *cache, uint_objs idx,
 		      int isenv, tcompo_env *env)
 {
@@ -1456,6 +1651,28 @@ static void vm_loopas(tvm *vm, tins_cache *cache, uint_objs idx,
 		state->pos = 0;
 		state->iterator_slot = viter;
 	}
+	if (cache->kind == tins_cache_loop_iter &&
+	    it->vtable == cache->guard) {
+		vm_loop_range(vm, state, idx, isenv, env, (titer *)it);
+		return;
+	}
+	if (cache->kind == tins_cache_loop_list &&
+	    it->vtable == cache->guard) {
+		vm_loop_list(vm, state, idx, isenv, env, (tlist *)it);
+		return;
+	}
+	if (it->vtable == &titer_vtable) {
+		tins_cache_observe(cache, tins_cache_loop_iter, it->vtable);
+		vm_loop_range(vm, state, idx, isenv, env, (titer *)it);
+		return;
+	}
+	if (it->vtable == &tlist_vtable) {
+		tins_cache_observe(cache, tins_cache_loop_list, it->vtable);
+		vm_loop_list(vm, state, idx, isenv, env, (tlist *)it);
+		return;
+	}
+	if (cache->kind == tins_cache_empty)
+		cache->kind = tins_cache_polymorphic;
 	tobj value;
 	tobj_set_nil(&value);
 	int has_next = tcompo_next(it, &state->pos, &value);
@@ -2240,6 +2457,36 @@ static const tvm_services core_vm_services = {
 	.check_rule = vm_service_check_rule
 };
 
+static inline void vm_eval_cppfunc(tvm *vm, tcppgenf *function,
+				   tobj *params, uint_regs nparams)
+{
+	if (!function->f)
+		twarn(ErrRuntime_Other, tstring_cstr(function->name),
+		      "function is not implemented");
+	if (!tcppgenf_accepts(function, nparams))
+		twarn(ErrRuntime_ParamsCtr, tstring_cstr(function->name),
+		      "incorrect parameter count");
+	function->f(params, nparams, &vm->rev);
+}
+
+static inline void vm_eval_sessfunc(tvm *vm, tcppsessf *function,
+				    tobj *params, uint_regs nparams,
+				    tcompo_env *env)
+{
+	if (!tcppsessf_accepts(function, nparams))
+		twarn(ErrRuntime_ParamsCtr, tstring_cstr(function->name),
+		      "incorrect parameter count");
+	tcompo_env_set_vm_services(env, &core_vm_services, vm);
+	function->f(params, nparams, &vm->rev, env);
+}
+
+static inline void vm_finish_eval(tvm *vm, uint_regs stack_values)
+{
+	stk_popcn(vm, stack_values);
+	stk_push(vm, &vm->rev);
+	tvm_set_rev_empty(vm);
+}
+
 /* Eval helper */
 void vm_eval(tvm *vm, tbycode *iter, tcompo_env *env)
 {
@@ -2267,22 +2514,10 @@ void vm_eval(tvm *vm, tbycode *iter, tcompo_env *env)
 		tvm_pop_call_frame(vm);
 	} break;
 	case compo_cppfunc: {
-		tcppgenf *g = (tcppgenf *)v;
-		if (!g->f)
-			twarn(ErrRuntime_Other,
-			      tstring_cstr(g->name),
-			      "function is not implemented");
-		if (!tcppgenf_accepts(g, nparams))
-			twarn(ErrRuntime_ParamsCtr, tstring_cstr(g->name),
-			      "incorrect parameter count");
-		g->f(params, nparams, &vm->rev);
+		vm_eval_cppfunc(vm, (tcppgenf *)v, params, nparams);
 	} break;
 	case compo_sessfunc: {
-		tcppsessf *s = (tcppsessf *)v;
-		if (!tcppsessf_accepts(s, nparams))
-			twarn(ErrRuntime_ParamsCtr, tstring_cstr(s->name),
-			      "incorrect parameter count");
-		s->f(params, nparams, &vm->rev, env);
+		vm_eval_sessfunc(vm, (tcppsessf *)v, params, nparams, env);
 	} break;
 	case compo_trule_builtin:
 		switch (((trule_builtin *)v)->kind) {
@@ -2296,9 +2531,7 @@ void vm_eval(tvm *vm, tbycode *iter, tcompo_env *env)
 	default:
 		twarn(ErrRuntime_RefType, "vm_eval", "");
 	}
-	stk_popcn(vm, 1 + nparams);
-	stk_push(vm, &vm->rev);
-	tvm_set_rev_empty(vm);
+	vm_finish_eval(vm, 1 + nparams);
 }
 
 void tvm_call(tvm *vm, const tobj *callable, tobj *arguments,
@@ -2467,21 +2700,86 @@ typedef struct {
 	int current_function;
 } tcall_request;
 
+static inline texec_action vm_eval_generic_instruction(
+		tvm *vm, tbycode *instruction, tins_cache *cache,
+		tcall_request *call, tcompo_env *env)
+{
+	uint_regs nparams = (uint_regs)tbycode_get_U(*instruction);
+	tobj *callable = stk_top(vm);
+	if (cache && callable->type == tcompo &&
+	    callable->val.v_tcompo &&
+	    callable->val.v_tcompo->vtable == cache->guard) {
+		if (cache->kind == tins_cache_eval_cppfunc) {
+			vm_eval_cppfunc(vm, (tcppgenf *)callable->val.v_tcompo,
+				stk_topn(vm, nparams + 1), nparams);
+			vm_finish_eval(vm, nparams + 1);
+			return texec_normal;
+		}
+		if (cache->kind == tins_cache_eval_sessfunc) {
+			vm_eval_sessfunc(vm, (tcppsessf *)callable->val.v_tcompo,
+				 stk_topn(vm, nparams + 1), nparams, env);
+			vm_finish_eval(vm, nparams + 1);
+			return texec_normal;
+		}
+	}
+	if (cache && cache->kind == tins_cache_eval_tfunc &&
+	    callable->type == tcompo && callable->val.v_tcompo &&
+	    callable->val.v_tcompo->vtable == cache->guard) {
+		call->function = (tfunc *)callable->val.v_tcompo;
+		call->params = stk_topn(vm, nparams + 1);
+		call->nparams = nparams;
+		call->return_stack_values = nparams + 1;
+		call->current_function = 0;
+		return texec_call;
+	}
+	if (callable->type == tcompo && callable->val.v_tcompo &&
+	    callable->val.v_tcompo->vtable->get_compo_type_code() ==
+		    compo_tfunc) {
+		if (cache && cache->kind == tins_cache_empty) {
+			cache->kind = tins_cache_eval_tfunc;
+			cache->guard = callable->val.v_tcompo->vtable;
+		} else if (cache &&
+			   (cache->kind != tins_cache_eval_tfunc ||
+			    cache->guard != callable->val.v_tcompo->vtable)) {
+			cache->kind = tins_cache_polymorphic;
+			cache->guard = nullptr;
+		}
+		call->function = (tfunc *)callable->val.v_tcompo;
+		call->params = stk_topn(vm, nparams + 1);
+		call->nparams = nparams;
+		call->return_stack_values = nparams + 1;
+		call->current_function = 0;
+		return texec_call;
+	}
+	if (callable->type == tcompo && callable->val.v_tcompo) {
+		tcompo_type kind = tobj_compo_type(callable);
+		if (kind == compo_cppfunc || kind == compo_sessfunc) {
+			tins_cache_observe(
+				cache,
+				kind == compo_cppfunc ? tins_cache_eval_cppfunc :
+						       tins_cache_eval_sessfunc,
+				callable->val.v_tcompo->vtable);
+			if (kind == compo_cppfunc)
+				vm_eval_cppfunc(
+					vm, (tcppgenf *)callable->val.v_tcompo,
+					stk_topn(vm, nparams + 1), nparams);
+			else
+				vm_eval_sessfunc(
+					vm, (tcppsessf *)callable->val.v_tcompo,
+					stk_topn(vm, nparams + 1), nparams, env);
+			vm_finish_eval(vm, nparams + 1);
+			return texec_normal;
+		}
+	}
+	if (cache && cache->kind == tins_cache_empty)
+		cache->kind = tins_cache_polymorphic;
+	vm_eval(vm, instruction, env);
+	return texec_normal;
+}
+
 #if defined(__GNUC__) || defined(__clang__)
 __attribute__((always_inline))
 #endif
-static const tobj *resolve_type_rule(void *context, const char *name)
-{
-	tdict *values = context;
-	tobj key;
-	tobj_set_nil(&key);
-	tobj_set_compo(&key, (tcompo_v *)tstr_new(name));
-	const tobj *value = thashtbl_get(values->items, &key);
-	tobj_try_clear(&key);
-	if (!value) twarn(ErrRuntime_ParamsType, "InstanceOf", "missing Rule binding");
-	return value;
-}
-
 static inline texec_action exec_tin(tvm *vm,
 			    tbycode *iter,
 			    tins ins,
@@ -2499,29 +2797,40 @@ static inline texec_action exec_tin(tvm *vm,
 	case OP_PASS:
 		break;
 	case OP_VCRT: {
-		int isenv = (int)tbycode_get_R(*iter);
+		uint16_t flags = tbycode_get_R(*iter);
+		int isenv = (flags & TVCRT_ENV_FLAG) != 0;
 		uint_csts nl = tbycode_get_L(*iter);
-		if (isenv)
+		tobj_array *slots;
+		if (isenv) {
 			vm_add_slot(&env->base.objs, nl);
-		else
+			slots = &env->base.objs;
+		} else {
 			vm_add_slot(&vm->tmps, UNDEF_NAMELOC);
+			slots = &vm->tmps;
+		}
+		if (flags & TVCRT_INIT_FLAG) {
+			if (stk_len(vm) == 0 || stk_top(vm)->type == tnil)
+				twarn(ErrRuntime_AssignNil, "OP_VCRT", "");
+			tobj_array_set_obj(slots, slots->len - 1, stk_top(vm));
+			stk_pop(vm);
+		}
 	} break;
 	case OP_TMPDEL:
 		vm_del_slots(&vm->tmps, (uint_objs)tbycode_get_U(*iter));
 		break;
-		case OP_THIS: {
-			tobj current;
-			tobj_set_nil(&current);
-			tcompo_env_copy_to_obj(env, &current);
-			stk_push(vm, &current);
-			tobj_set_nil(&current);
-		} break;
-		case OP_BASE: {
-			tobj v;
-			tobj_set_nil(&v);
-			tcompo_env_copy_to_obj(tcompo_env_get_father(env), &v);
-			stk_push(vm, &v);
-			tobj_set_nil(&v);
+	case OP_THIS: {
+		tobj current;
+		tobj_set_nil(&current);
+		tcompo_env_copy_to_obj(env, &current);
+		stk_push(vm, &current);
+		tobj_set_nil(&current);
+	} break;
+	case OP_BASE: {
+		tobj v;
+		tobj_set_nil(&v);
+		tcompo_env_copy_to_obj(tcompo_env_get_father(env), &v);
+		stk_push(vm, &v);
+		tobj_set_nil(&v);
 	} break;
 	case OP_RET:
 		if (stk_len(vm) > 0) {
@@ -2619,6 +2928,11 @@ static inline texec_action exec_tin(tvm *vm,
 			  tbycode_get_R(*iter),
 			  env);
 		break;
+	case OP_LOOPRANGE:
+		vm_loop_inline_range(
+			vm, tvm_instruction_cache(code_cache, *idx),
+			tbycode_get_L(*iter), tbycode_get_R(*iter), env);
+		break;
 	case OP_JPF:
 		*idx += tbycode_get_U(*iter);
 		iter += tbycode_get_U(*iter);
@@ -2679,8 +2993,7 @@ static inline texec_action exec_tin(tvm *vm,
 	case OP_PUSHS: {
 		tobj v;
 		tobj_set_nil(&v);
-		tobj_set_compo(
-			&v, (tcompo_v *)tstr_new(tstring_cstr(cstrs[tbycode_get_U(*iter)])));
+		tobj_set_compo(&v, (tcompo_v *)tstr_new(tstring_cstr(cstrs[tbycode_get_U(*iter)])));
 		stk_push(vm, &v);
 		tobj_set_nil(&v);
 	} break;
@@ -2689,10 +3002,8 @@ static inline texec_action exec_tin(tvm *vm,
 		uint_regs i, n = (uint_regs)tbycode_get_U(*iter);
 		tobj *ps = stk_topn(vm, n);
 		for (i = 0; i < n; i++) {
-			if (ps[i].type != tcompo ||
-			    tobj_compo_type(&ps[i]) != compo_tpair)
-				twarn(ErrRuntime_ParamsType, "dictionary literal",
-				      "Pair required");
+			if (ps[i].type != tcompo || tobj_compo_type(&ps[i]) != compo_tpair)
+				twarn(ErrRuntime_ParamsType, "dictionary literal", "Pair required");
 			tpair *pair = (tpair *)ps[i].val.v_tcompo;
 			tdict_set(d, &pair->first, &pair->second);
 		}
@@ -2713,48 +3024,43 @@ static inline texec_action exec_tin(tvm *vm,
 		vm_import(vm, (uint_csts)tbycode_get_U(*iter), cstrs, env);
 		break;
 	case OP_IDXR:
-		vm_idxr(vm, (uint_regs)tbycode_get_U(*iter),
-			tvm_instruction_cache(code_cache, *idx));
+		vm_idxr(vm, *iter, tvm_instruction_cache(code_cache, *idx));
 		break;
-	case OP_EVAL:
-	case OP_EVALCF:
 	case OP_EVALSF: {
-		uint_regs nparams = (uint_regs)tbycode_get_U(*iter);
-		tobj *callable = stk_top(vm);
-		tins_cache *cache = tvm_instruction_cache(code_cache, *idx);
-		if (cache && cache->kind == tins_cache_eval_tfunc &&
-		    callable->type == tcompo &&
-		    callable->val.v_tcompo &&
-		    callable->val.v_tcompo->vtable == cache->guard) {
-			call->function = (tfunc *)callable->val.v_tcompo;
-			call->params = stk_topn(vm, nparams + 1);
-			call->nparams = nparams;
-			call->return_stack_values = nparams + 1;
-			call->current_function = 0;
-			return texec_call;
-		}
-		if (callable->type == tcompo && callable->val.v_tcompo &&
-		    callable->val.v_tcompo->vtable->get_compo_type_code() ==
-			    compo_tfunc) {
-			if (cache && cache->kind == tins_cache_empty) {
-				cache->kind = tins_cache_eval_tfunc;
-				cache->guard = callable->val.v_tcompo->vtable;
-			} else if (cache &&
-				   (cache->kind != tins_cache_eval_tfunc ||
-				    cache->guard != callable->val.v_tcompo->vtable)) {
-				cache->kind = tins_cache_polymorphic;
-				cache->guard = nullptr;
-			}
-			call->function = (tfunc *)callable->val.v_tcompo;
-			call->params = stk_topn(vm, nparams + 1);
-			call->nparams = nparams;
-			call->return_stack_values = nparams + 1;
-			call->current_function = 0;
-			return texec_call;
-		}
-		if (cache && cache->kind == tins_cache_empty)
-			cache->kind = tins_cache_polymorphic;
-		vm_eval(vm, iter, env);
+		int direct = tbycode_get_i(*iter) != 0;
+		uint_regs nparams = direct ? tbycode_get_b(*iter) :
+			(uint_regs)tbycode_get_U(*iter);
+		tobj *callable = direct ?
+			vm_direct_slot(env, tbycode_get_L(*iter),
+				tbycode_get_i(*iter) - 1) : stk_top(vm);
+		if (VM_UNLIKELY(callable->type != tcompo ||
+				callable->val.v_tcompo == nullptr ||
+				callable->val.v_tcompo->vtable != &tcppsessf_vtable))
+			twarn(ErrRuntime_RefType, "OP_EVALSF",
+			      "C Session Function required");
+		tobj *params = nparams ? stk_topn(vm, nparams) : callable;
+		vm_eval_sessfunc(vm, (tcppsessf *)callable->val.v_tcompo,
+				direct ? params : stk_topn(vm, nparams + 1),
+				nparams, env);
+		vm_finish_eval(vm, nparams + (direct ? 0 : 1));
+	} break;
+	case OP_EVALCF: {
+		int direct = tbycode_get_i(*iter) != 0;
+		uint_regs nparams = direct ? tbycode_get_b(*iter) :
+			(uint_regs)tbycode_get_U(*iter);
+		tobj *callable = direct ?
+			vm_direct_slot(env, tbycode_get_L(*iter),
+				tbycode_get_i(*iter) - 1) : stk_top(vm);
+		if (VM_UNLIKELY(callable->type != tcompo ||
+				callable->val.v_tcompo == nullptr ||
+				callable->val.v_tcompo->vtable != &tcppgenf_vtable))
+			twarn(ErrRuntime_RefType, "OP_EVALCF",
+			      "C Function required");
+		tobj *params = nparams ? stk_topn(vm, nparams) : callable;
+		vm_eval_cppfunc(vm, (tcppgenf *)callable->val.v_tcompo,
+				direct ? params : stk_topn(vm, nparams + 1),
+				nparams);
+		vm_finish_eval(vm, nparams + (direct ? 0 : 1));
 	} break;
 	case OP_EVALTF: {
 		uint_regs nparams = (uint_regs)tbycode_get_U(*iter);
@@ -2768,6 +3074,9 @@ static inline texec_action exec_tin(tvm *vm,
 		call->current_function = 1;
 		return texec_call;
 	}
+	case OP_EVAL:
+		return vm_eval_generic_instruction(
+			vm, iter, tvm_instruction_cache(code_cache, *idx), call, env);
 	case OP_IDXL:
 		vm_idxl(vm,
 			tbycode_get_L(*iter),
@@ -2795,84 +3104,6 @@ static inline texec_action exec_tin(tvm *vm,
 		tobj_set_compo(&v, (tcompo_v *)f);
 		stk_push(vm, &v);
 		tobj_set_nil(&v);
-	} break;
-	case OP_BINDTYPE: {
-		tobj *encoded = stk_top(vm);
-		tobj *bindings = stk_at(vm, 1);
-		if (tobj_compo_type(encoded) != compo_tstr || tobj_compo_type(bindings) != compo_tdict)
-			twarn(ErrRuntime_ParamsType, "InstanceOf", "invalid Type binding operands");
-		ttypeval *template = ttypeval_retain(ttypeval_from_canonical(
-			tstring_cstr(((tstr *)encoded->val.v_tcompo)->data)));
-		if (!template) twarn(ErrRuntime_ParamsType, "InstanceOf", "invalid Type template");
-		ttypeval *bound = ttypeval_resolve_instances(template, resolve_type_rule, bindings->val.v_tcompo);
-		ttypeval_release(template);
-		stk_popcn(vm, 2);
-		tobj value;
-		tobj_set_nil(&value);
-		tobj_set_compo(&value, (tcompo_v *)bound);
-		stk_push(vm, &value);
-		tobj_set_nil(&value);
-		ttypeval_release(bound);
-	} break;
-	case OP_RULETYPE: {
-		tobj *signature = stk_top(vm);
-		tobj *value = stk_at(vm, 1);
-		if (tobj_compo_type(signature) != compo_ttypeval || tobj_compo_type(value) != compo_trule)
-			twarn(ErrRuntime_ParamsType, "InstanceOf", "Rule signature required");
-		ttypeval *type = (ttypeval *)signature->val.v_tcompo;
-		trule *rule = (trule *)value->val.v_tcompo;
-		if (type->kind != ttype_kind_rule || type->function_parameter_count != rule->ir->parameters.len)
-			twarn(ErrRuntime_ParamsType, "InstanceOf", "Rule parameter count mismatch");
-		tstring *encoded = tstring_new_empty();
-		for (uint_objs i = 0; i < rule->ir->parameters.len; i++) {
-			trule_term *parameter = (trule_term *)rule->ir->parameters.data[i].val.v_tcompo;
-			ttypeval_release(parameter->type);
-			parameter->type = ttypeval_retain(ttypeval_function_parameter_at(type, i));
-			if (i) tstring_append_c(encoded, '\x1f');
-			tstring_append_ts(encoded, parameter->type->canonical);
-		}
-		tstring_free(rule->signature);
-		rule->signature = encoded;
-		stk_popc(vm);
-	} break;
-	case OP_CHECKTYPE: {
-		tobj *type = stk_top(vm);
-		if (tobj_compo_type(type) != compo_ttypeval ||
-		    !ttypeval_matches(stk_at(vm, 1), (ttypeval *)type->val.v_tcompo))
-			twarn(ErrRuntime_ParamsType, "Type annotation", "value does not match declared Type or Rule identity");
-		stk_popc(vm);
-	} break;
-	case OP_FUNCMETA: {
-		tobj *signature = stk_top(vm);
-		tobj *names = stk_at(vm, 1);
-		tobj *function = stk_at(vm, 2);
-		if (tobj_compo_type(function) != compo_tfunc ||
-		    tobj_compo_type(names) != compo_tstr ||
-		    (tobj_compo_type(signature) != compo_tstr && tobj_compo_type(signature) != compo_ttypeval))
-			twarn(ErrRuntime_ParamsType, "Function metadata", "Function and Strings required");
-		tfunc *f = (tfunc *)function->val.v_tcompo;
-		if (tobj_compo_type(signature) == compo_ttypeval) {
-			tfunction_metadata *metadata = tfunction_metadata_from_type(
-				tstring_cstr(((tstr *)names->val.v_tcompo)->data),
-				(ttypeval *)signature->val.v_tcompo);
-			if (!metadata) twarn(ErrRuntime_ParamsType, "InstanceOf", "invalid function signature");
-			tfunction_metadata_release(f->metadata);
-			f->metadata = metadata;
-			stk_popcn(vm, 2);
-			break;
-		}
-		tins_cache *cache = tvm_instruction_cache(code_cache, *idx);
-		if (!cache->function_metadata) {
-			cache->function_metadata = tfunction_metadata_decode(
-				tstring_cstr(((tstr *)names->val.v_tcompo)->data),
-				tstring_cstr(((tstr *)signature->val.v_tcompo)->data));
-			if (!cache->function_metadata)
-				twarn(ErrRuntime_ParamsType, "Function metadata", "invalid parameter declaration");
-		}
-		tfunction_metadata_release(f->metadata);
-		f->metadata = tfunction_metadata_retain(cache->function_metadata);
-		stk_popc(vm);
-		stk_popc(vm);
 	} break;
 	case OP_PUSHRULE: {
 		tobj *captures = stk_top(vm);
@@ -2937,7 +3168,7 @@ static inline texec_action exec_tin(tvm *vm,
 		tobj_ddc_ref_clear(&value);
 	} break;
 	case OP_RULEITEM:
-	case OP_RULECOND: {
+	case OP_RULEIMPLY: {
 		if (!vm->rule_output)
 			twarn(ErrRuntime_Other, "Rule condition",
 			      "condition outside checker");
@@ -2981,18 +3212,6 @@ static inline texec_action exec_tin(tvm *vm,
 		tobj_vec_push(&vm->rule_output->items, &pair);
 		tobj_try_clear(&pair);
 		tobj_try_clear(&description);
-		stk_popc(vm);
-	} break;
-	case OP_RULEREQ: {
-		if (!vm->rule_output)
-			twarn(ErrRuntime_Other, "Rule dependency",
-			      "dependency outside checker");
-		tobj *requirement = stk_top(vm);
-		if (requirement->type != tcompo ||
-		    tobj_compo_type(requirement) != compo_trule_instance)
-			twarn(ErrRuntime_ParamsType, "Rule dependency",
-			      "RuleInstance required");
-		tobj_vec_push(&vm->rule_output->items, requirement);
 		stk_popc(vm);
 	} break;
 	case OP_ADD: {
@@ -3146,6 +3365,42 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 		}
 
 		tins instruction = tbycode_ins(cmdarr[i]);
+		/* Binary expressions commonly end in PUSHX, PUSHINFO, BINOP. The
+		 * value already on the stack is the right operand; borrow the named
+		 * left operand directly instead of retaining it only to release it
+		 * again after one operation. */
+		if (instruction == OP_PUSHX && i + 2 < end &&
+		    tbycode_ins(cmdarr[i + 1]) == OP_PUSHINFO) {
+			uint_cmds receiver_instruction = i;
+			tbycode receiver = cmdarr[i];
+			const tobj *left = vm_pushx_source(
+				vm, env, tbycode_get_L(receiver),
+				tbycode_get_R(receiver));
+			i += 2;
+			if (vm_try_borrowed_left_binop(
+				vm, left, cmdarr[i - 1], cmdarr[i])) {
+				i++;
+				continue;
+			}
+			i = receiver_instruction;
+		}
+		/* A named index receiver is emitted as PUSHX immediately followed by
+		 * IDXR. Borrow the stable local slot for the duration of the read so
+		 * every indexable type avoids a redundant stack copy and retain/release
+		 * pair. Arbitrary receiver expressions keep the ordinary stack path. */
+		if (instruction == OP_PUSHX && i + 1 < end &&
+		    tbycode_ins(cmdarr[i + 1]) == OP_IDXR) {
+			tbycode receiver = cmdarr[i];
+			const tobj *object = vm_pushx_source(
+				vm, env, tbycode_get_L(receiver),
+				tbycode_get_R(receiver));
+			i++;
+			vm_idxr_borrowed(
+				vm, object, cmdarr[i],
+				tvm_instruction_cache(&code_cache, i));
+			i++;
+			continue;
+		}
 		if (instruction == OP_PUSHINFO && i + 1 < end) {
 			uint_cmds metadata_instruction = i;
 			i++;
@@ -3172,70 +3427,67 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 				break;
 			goto resume_caller;
 		}
-		{
-			tfunc *function = call.function;
-			twrapper *callee_wrapper =
-				tfunc_get_wrapper_from_env(&function->env);
-			int tail_recursion = call.current_function &&
-				i + 1 < end &&
-				tbycode_ins(cmdarr[i + 1]) == OP_RET &&
-				vm->frame_len > base_frame_depth;
-			if (tail_recursion) {
-				tvm_replace_current_call_frame(
-					vm, function, call.params, call.nparams);
-				env = &vm->frames[vm->frame_len - 1]->env;
-			} else {
-				tcall_frame *frame = tvm_push_call_frame(
-					vm, function, call.params, call.nparams);
-				frame->return_pc = i;
-				frame->return_end = end;
-				frame->return_stack_values =
-					call.return_stack_values;
-				frame->return_env = env;
-				frame->return_wrapper = wrapper;
-				env = &frame->env;
-			}
-
-			if (callee_wrapper != wrapper)
-				code_cache = *tvm_get_code_cache(vm, callee_wrapper);
-			wrapper = callee_wrapper;
-			cmdarr = wrapper->cmdarr;
-			cints = wrapper->consts.cints;
-			cflts = wrapper->consts.cflts;
-			cstrs = wrapper->consts.cstrs;
-			i = function->cmdloc;
-			end = function->cmdloc + function->ncmds;
-			vm->error_source_locs = wrapper->source_locs;
-			vm->error_source_loc_count = wrapper->ncmds;
-			continue;
+		tfunc *function = call.function;
+		twrapper *callee_wrapper =
+			tfunc_get_wrapper_from_env(&function->env);
+		int tail_recursion = call.current_function &&
+			i + 1 < end &&
+			tbycode_ins(cmdarr[i + 1]) == OP_RET &&
+			vm->frame_len > base_frame_depth;
+		if (tail_recursion) {
+			tvm_replace_current_call_frame(
+				vm, function, call.params, call.nparams);
+			env = &vm->frames[vm->frame_len - 1]->env;
+		} else {
+			tcall_frame *frame = tvm_push_call_frame(
+				vm, function, call.params, call.nparams);
+			frame->return_pc = i;
+			frame->return_end = end;
+			frame->return_stack_values =
+				call.return_stack_values;
+			frame->return_env = env;
+			frame->return_wrapper = wrapper;
+			env = &frame->env;
 		}
 
-resume_caller: {
-			tcall_frame *frame = vm->frames[vm->frame_len - 1];
-			uint_cmds return_pc = frame->return_pc;
-			uint_cmds return_end = frame->return_end;
-			uint_regs return_stack_values = frame->return_stack_values;
-			tcompo_env *return_env = frame->return_env;
-			twrapper *return_wrapper = frame->return_wrapper;
+		if (callee_wrapper != wrapper)
+			code_cache = *tvm_get_code_cache(vm, callee_wrapper);
+		wrapper = callee_wrapper;
+		cmdarr = wrapper->cmdarr;
+		cints = wrapper->consts.cints;
+		cflts = wrapper->consts.cflts;
+		cstrs = wrapper->consts.cstrs;
+		i = function->cmdloc;
+		end = function->cmdloc + function->ncmds;
+		vm->error_source_locs = wrapper->source_locs;
+		vm->error_source_loc_count = wrapper->ncmds;
+		continue;
 
-			tvm_pop_call_frame(vm);
-			stk_popcn(vm, return_stack_values);
-			stk_push(vm, &vm->rev);
-			tvm_set_rev_empty(vm);
+resume_caller:
+		tcall_frame *frame = vm->frames[vm->frame_len - 1];
+		uint_cmds return_pc = frame->return_pc;
+		uint_cmds return_end = frame->return_end;
+		uint_regs return_stack_values = frame->return_stack_values;
+		tcompo_env *return_env = frame->return_env;
+		twrapper *return_wrapper = frame->return_wrapper;
 
-			env = return_env;
-			if (return_wrapper != wrapper)
-				code_cache = *tvm_get_code_cache(vm, return_wrapper);
-			wrapper = return_wrapper;
-			cmdarr = wrapper->cmdarr;
-			cints = wrapper->consts.cints;
-			cflts = wrapper->consts.cflts;
-			cstrs = wrapper->consts.cstrs;
-			i = return_pc + 1;
-			end = return_end;
-			vm->error_source_locs = wrapper->source_locs;
-			vm->error_source_loc_count = wrapper->ncmds;
-		}
+		tvm_pop_call_frame(vm);
+		stk_popcn(vm, return_stack_values);
+		stk_push(vm, &vm->rev);
+		tvm_set_rev_empty(vm);
+
+		env = return_env;
+		if (return_wrapper != wrapper)
+			code_cache = *tvm_get_code_cache(vm, return_wrapper);
+		wrapper = return_wrapper;
+		cmdarr = wrapper->cmdarr;
+		cints = wrapper->consts.cints;
+		cflts = wrapper->consts.cflts;
+		cstrs = wrapper->consts.cstrs;
+		i = return_pc + 1;
+		end = return_end;
+		vm->error_source_locs = wrapper->source_locs;
+		vm->error_source_loc_count = wrapper->ncmds;
 	}
 	vm->execution_depth--;
 	vm->error_source_locs = previous_source_locs;
@@ -3256,6 +3508,5 @@ void eval_bycodes(tvm *vm, uint_cmds from, tlib *lib)
 	void *previous_context = lib->env.vm_services_context;
 	tcompo_env_set_vm_services(&lib->env, &core_vm_services, vm);
 	exec_tins(vm, from, wrapper->ncmds - from, &lib->env);
-	tcompo_env_set_vm_services(&lib->env, previous_services,
-		previous_context);
+	tcompo_env_set_vm_services(&lib->env, previous_services, previous_context);
 }

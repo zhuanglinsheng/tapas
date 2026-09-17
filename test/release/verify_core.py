@@ -11,6 +11,9 @@ parser.add_argument('--version', required=True)
 args = parser.parse_args()
 prefix = args.prefix.resolve()
 for name in ('bin/tapas', 'bin/tapas-language-server',
+             'include/tapas/tsession.h',
+             'include/tapas/objects/ttype.h',
+             'include/tapas/version.h',
              'share/tapas/stdlib/format/format.tapc',
              'share/tapas/stdlib/format/edit.tap',
              'share/tapas/solve/requirements.txt',

@@ -82,8 +82,8 @@ let Combined = rule (n: Int) {
     Good(n) implies n > 0
 }
 assert(Combined(3))
-function reflected(n: Int) -> Int { return n }
-assert(rule { len(parameters(reflected)) == 1 })
+let Reflected = rule (n: Int) { n > 0 }
+assert(rule { len(parameters(Reflected)) == 1 })
 let T = types::parameter('T')
 let Box = types::template([T], [], types::make_type('value': T))
 let box: Box[String] = {'value': 'ok'}

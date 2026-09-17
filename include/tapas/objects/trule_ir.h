@@ -13,7 +13,7 @@
 #include "tapas/dsa/tobj_vec.h"
 #include "tapas/tval.h"
 
-/** OP_RULECOND 的内部模式：记录原始前件并把真值留在栈上。 */
+/** OP_RULEIMPLY 的内部模式：记录原始前件并把真值留在栈上。 */
 #define TRULE_ANTECEDENT_RECORD 0x03ffffffu
 
 /**

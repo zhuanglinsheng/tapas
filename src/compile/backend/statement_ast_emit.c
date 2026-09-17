@@ -9,6 +9,44 @@
 static void emit_statement(tast_emitter *emitter, tast_id id,
 			   int cleanstk, int inblk);
 
+/* Loop-body temporaries are destroyed by TMPDEL instructions at the end of
+ * the body block, but break/continue jump past them. Track the temporary
+ * count at each loop-body entry so an early exit can delete the same slots
+ * before jumping. */
+static void loop_tmp_base_push(tcp *cp)
+{
+	if (cp->loop_tmp_base_count >= cp->loop_tmp_base_cap) {
+		uint32_t newcap = cp->loop_tmp_base_cap ?
+			cp->loop_tmp_base_cap * 2 : 8;
+		uint_objs *grown = (uint_objs *)realloc(
+			cp->loop_tmp_bases, newcap * sizeof(uint_objs));
+		if (!grown)
+			abort();
+		cp->loop_tmp_bases = grown;
+		cp->loop_tmp_base_cap = newcap;
+	}
+	cp->loop_tmp_bases[cp->loop_tmp_base_count++] =
+		tobj_ctr_obj_len_cur(&cp->tmpctr);
+}
+
+static void loop_tmp_base_pop(tcp *cp)
+{
+	if (cp->loop_tmp_base_count > 0)
+		cp->loop_tmp_base_count--;
+}
+
+static void emit_loop_body_cleanup(tast_emitter *emitter)
+{
+	tcp *cp = emitter->cp;
+	if (cp->loop_tmp_base_count == 0)
+		return;
+	uint_objs base = cp->loop_tmp_bases[cp->loop_tmp_base_count - 1];
+	uint_objs live = tobj_ctr_obj_len_cur(&cp->tmpctr) - base;
+	if (live > 0)
+		tvmcmd_vect_append(
+			emitter->instructions, tbycode_make_u(OP_TMPDEL, live));
+}
+
 static void sync_initialization(tast_emitter *emitter)
 {
 	const tsemantic_model *semantic = &emitter->frontend->semantic;
@@ -82,20 +120,20 @@ static void emit_rule_implication(tast_emitter *emitter, const tast_node *node)
 	tstring_free(description);
 	tvmcmd_vect *code = emitter->instructions;
 	tast_emit_expression(emitter, node->rule_implication.antecedent);
-	tvmcmd_vect_append(code, tbycode_make_u(OP_RULECOND, TRULE_ANTECEDENT_RECORD));
+	tvmcmd_vect_append(code, tbycode_make_u(OP_RULEIMPLY, TRULE_ANTECEDENT_RECORD));
 	uint_cmds branch = tvmcmd_vect_size32(code);
 	tvmcmd_vect_append(code, tbycode_make_u(OP_CJPFPOP, 0));
 	treg_ctr_ddt(&emitter->cp->regctr);
 	/* One guard record and one record per consequent, on either branch. */
 	tvmcmd_vect_append(code, tbycode_make_u(OP_PUSHB, 1));
 	treg_ctr_add(&emitter->cp->regctr);
-	tvmcmd_vect_append(code, tbycode_make_u(OP_RULECOND, label));
+	tvmcmd_vect_append(code, tbycode_make_u(OP_RULEIMPLY, label));
 	treg_ctr_ddt(&emitter->cp->regctr);
 	for (uint32_t i = 0; i < count; i++) {
 		tast_id value = items ? tast_get(emitter->arena, items[i])->expression_statement.value :
 			node->rule_implication.consequent;
 		tast_emit_expression(emitter, value);
-		tvmcmd_vect_append(code, tbycode_make_u(OP_RULECOND, label));
+		tvmcmd_vect_append(code, tbycode_make_u(OP_RULEIMPLY, label));
 		treg_ctr_ddt(&emitter->cp->regctr);
 	}
 	uint_cmds end_jump = tvmcmd_vect_size32(code);
@@ -105,7 +143,7 @@ static void emit_rule_implication(tast_emitter *emitter, const tast_node *node)
 	for (uint32_t i = 0; i <= count; i++) {
 		tvmcmd_vect_append(code, tbycode_make_u(OP_PUSHB, i ? 1 : 0));
 		treg_ctr_add(&emitter->cp->regctr);
-		tvmcmd_vect_append(code, tbycode_make_u(OP_RULECOND, label));
+		tvmcmd_vect_append(code, tbycode_make_u(OP_RULEIMPLY, label));
 		treg_ctr_ddt(&emitter->cp->regctr);
 	}
 	code->data[end_jump] = tbycode_make_u(OP_JPF,
@@ -260,8 +298,10 @@ static void emit_while(tast_emitter *emitter, const tast_node *statement)
 	tvmcmd_vect *outer = emitter->instructions;
 	emitter->instructions = &body;
 	emitter->cp->in_loop++;
+	loop_tmp_base_push(emitter->cp);
 	tast_emit_block(emitter,
 		tast_get(emitter->arena, statement->control_statement.body), 1);
+	loop_tmp_base_pop(emitter->cp);
 	emitter->cp->in_loop--;
 	emitter->instructions = outer;
 
@@ -282,7 +322,17 @@ static void emit_for(tast_emitter *emitter, const tast_node *statement)
 {
 	uint_objs original_temporaries =
 		tobj_ctr_obj_len_cur(&emitter->cp->tmpctr);
-	tast_emit_expression(emitter, statement->for_statement.iterable);
+	const tast_node *iterable = tast_get(
+		emitter->arena, statement->for_statement.iterable);
+	int inline_range = iterable && iterable->kind == tast_binary &&
+		iterable->binary.op == tsyntax_kw_to;
+	if (inline_range) {
+		/* Match ordinary binary evaluation order: right, then left. */
+		tast_emit_expression(emitter, iterable->binary.right);
+		tast_emit_expression(emitter, iterable->binary.left);
+	} else {
+		tast_emit_expression(emitter, statement->for_statement.iterable);
+	}
 	tstring *name = tast_emitter_text(emitter, statement->for_statement.name);
 	uint_objs location = 0;
 	int is_environment = 0;
@@ -324,8 +374,11 @@ static void emit_for(tast_emitter *emitter, const tast_node *statement)
 	uint_cmds loop_start = tvmcmd_vect_size32(emitter->instructions);
 	tvmcmd_vect_append(
 		emitter->instructions,
-		tbycode_make_lr(OP_LOOPAS, (uint16_t)location,
+		tbycode_make_lr(inline_range ? OP_LOOPRANGE : OP_LOOPAS,
+				(uint16_t)location,
 				(uint16_t)is_environment));
+	if (inline_range)
+		treg_ctr_ddt(&emitter->cp->regctr);
 	treg_ctr_add(&emitter->cp->regctr);
 	treg_ctr_ddt(&emitter->cp->regctr);
 
@@ -334,8 +387,10 @@ static void emit_for(tast_emitter *emitter, const tast_node *statement)
 	tvmcmd_vect *outer = emitter->instructions;
 	emitter->instructions = &body;
 	emitter->cp->in_loop++;
+	loop_tmp_base_push(emitter->cp);
 	tast_emit_block(emitter,
 		tast_get(emitter->arena, statement->for_statement.body), 1);
+	loop_tmp_base_pop(emitter->cp);
 	emitter->cp->in_loop--;
 	emitter->instructions = outer;
 
@@ -424,9 +479,16 @@ static void emit_declaration(tast_emitter *emitter,
 			emitter, declaration->declaration_statement.initializer);
 	tcompile_set_field_order(bindings, location, field_order,
 				 field_order_count);
-	tvmcmd_vect_append(emitter->instructions,
-		tbycode_make_lr(OP_VCRT, (uint16_t)name_location,
-				(uint16_t)environment_binding));
+	int scalar_initializer = inferred &&
+		(ttypeval_equal(inferred, ttypeval_builtin(tbuiltintype_bool)) ||
+		 ttypeval_equal(inferred, ttypeval_builtin(tbuiltintype_int)) ||
+		 ttypeval_equal(inferred, ttypeval_builtin(tbuiltintype_float)));
+	int deferred_initialization = has_initializer && !environment_binding &&
+		scalar_initializer;
+	if (!deferred_initialization)
+		tvmcmd_vect_append(emitter->instructions,
+			tbycode_make_lr(OP_VCRT, (uint16_t)name_location,
+					(uint16_t)environment_binding));
 	if (!has_initializer) {
 		if (static_value) {
 			tvmcmd_vect_append(emitter->instructions,
@@ -459,14 +521,14 @@ static void emit_declaration(tast_emitter *emitter,
 		emitter->pending_function_type = saved_pending;
 		emitter->pending_display_name = saved_name;
 	}
-	if (annotation && (annotation->contains_instance || annotation->contains_custom)) {
-		tast_emit_bound_type(emitter, annotation);
-		tvmcmd_vect_append(emitter->instructions, tbycode_make(OP_CHECKTYPE));
-		treg_ctr_ddt(&emitter->cp->regctr);
-	}
-	tvmcmd_vect_append(emitter->instructions,
-		tbycode_make_lr(OP_POPCOV, (uint16_t)location,
-				(uint16_t)environment_binding));
+	if (deferred_initialization)
+		tvmcmd_vect_append(emitter->instructions,
+			tbycode_make_lr(OP_VCRT, (uint16_t)name_location,
+					TVCRT_INIT_FLAG));
+	else
+		tvmcmd_vect_append(emitter->instructions,
+			tbycode_make_lr(OP_POPCOV, (uint16_t)location,
+					(uint16_t)environment_binding));
 	treg_ctr_ddt(&emitter->cp->regctr);
 
 	tstring_free(name);
@@ -541,11 +603,6 @@ static void emit_assignment(tast_emitter *emitter, const tast_node *statement,
 			tcompile_find_binding(
 				&emitter->cp->objctr, name, &owner, &owner_slot);
 		}
-		if (owner && owner->bindings[owner_slot].has_annotation &&
-		    owner->bindings[owner_slot].value_type &&
-		    owner->bindings[owner_slot].value_type->contains_instance)
-			twarn(ErrCompile_Other, "InstanceOf",
-			      "reassignment of a value-bound annotation is not supported");
 		const tast_node *value = tast_get(
 			emitter->arena, statement->assignment_statement.value);
 		ttypeval *assigned_static = nullptr;
@@ -603,12 +660,6 @@ static void emit_assignment(tast_emitter *emitter, const tast_node *statement,
 			tast_emit_expression(
 				emitter, statement->assignment_statement.value);
 		}
-        if (owner && owner->bindings[owner_slot].has_annotation &&
-            owner->bindings[owner_slot].value_type && owner->bindings[owner_slot].value_type->contains_custom) {
-            tast_emit_bound_type(emitter, owner->bindings[owner_slot].value_type);
-            tvmcmd_vect_append(emitter->instructions, tbycode_make(OP_CHECKTYPE));
-            treg_ctr_ddt(&emitter->cp->regctr);
-        }
 		tvmcmd_vect_append(emitter->instructions,
 			defines_recursive ?
 				tbycode_make_lr(OP_TYPEDEFINE, (uint16_t)location,
@@ -720,16 +771,18 @@ static void emit_statement(tast_emitter *emitter, tast_id id,
 	case tast_break_statement:
 		if (emitter->cp->in_loop == 0)
 			twarn(ErrCompile_Other, "AST break", "break outside loop");
+		emit_loop_body_cleanup(emitter);
 		tvmcmd_vect_append(
 			emitter->instructions,
-			tbycode_make(TCOMPILE_BREAK_MARK));
+			TCOMPILE_BREAK_MARK);
 		break;
 	case tast_continue_statement:
 		if (emitter->cp->in_loop == 0)
 			twarn(ErrCompile_Other, "AST continue", "continue outside loop");
+		emit_loop_body_cleanup(emitter);
 		tvmcmd_vect_append(
 			emitter->instructions,
-			tbycode_make(TCOMPILE_CONTINUE_MARK));
+			TCOMPILE_CONTINUE_MARK);
 		break;
 	default:
 		twarn(ErrCompile_Other, "AST statement",

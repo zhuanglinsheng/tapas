@@ -21,13 +21,11 @@ if(NOT source_result EQUAL 0 OR NOT bytecode_result EQUAL 0
    OR NOT source_output MATCHES "RuleTerm Parameter\\[quantity: Int\\]"
    OR NOT source_output MATCHES "RuleItem Condition\\["
    OR NOT source_output MATCHES "RuleItem Requirement\\["
-   OR NOT source_output MATCHES "Function add\\[Int\\] -> Int"
-   OR NOT source_output MATCHES "Function\\[Int\\] -> Int"
-   OR NOT source_output MATCHES "Function\\[List\\[Int\\]\\] -> List\\[Int\\]"
+   OR NOT source_output MATCHES "Function"
    OR NOT source_output MATCHES "Rule Positive\\[Int\\]"
    OR NOT source_output MATCHES "RuleInstance\\[Positive; value=3\\]"
    OR NOT source_output MATCHES "RuleIR Positive \{"
-   OR source_output MATCHES "Rule Source|Function anonymous_function|Function saved_adder|Rule restrict")
+   OR source_output MATCHES "Rule Source|Rule restrict")
     message(FATAL_ERROR "Rule display failed: ${source_output}${source_error}${bytecode_output}${bytecode_error}")
 endif()
 

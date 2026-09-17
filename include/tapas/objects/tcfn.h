@@ -25,9 +25,9 @@ typedef void (*genf_t)(tobj *params, uint_regs len, tobj *vre);
 typedef void (*sessf_t)(tobj *params, uint_regs len, tobj *vre,
 			tcompo_env *env);
 
-/** 原生函数的语言签名与参数数量约束。 */
+/** 原生函数的编译声明签名与运行时参数数量约束。 */
 typedef struct {
-	const char *type;              /**< 函数 Type 标注字符串。 */
+	const char *type;              /**< 注册到库级编译声明表的函数 Type 字符串。 */
 	uint_regs minimum_parameters;  /**< 允许的最少参数数。 */
 	uint_regs maximum_parameters;  /**< 允许的最多参数数。 */
 } tcfn_signature;
@@ -37,7 +37,7 @@ typedef struct {
 	const char *name;               /**< 导出的符号名称。 */
 	genf_t function;                /**< 普通回调；与会话回调二选一。 */
 	sessf_t session_function;       /**< 会话回调；与普通回调二选一。 */
-	tcfn_signature signature;       /**< 类型及参数数量约束。 */
+	tcfn_signature signature;       /**< 编译期 Type 声明及运行时参数数量约束。 */
 } tcfn_descriptor;
 
 /** 创建固定参数数量的签名初始化值。 */
@@ -99,13 +99,11 @@ void tlib_add_cppf(tlib *library, const char *name, genf_t function,
 
 /** 普通原生函数对象的运行时布局。 */
 struct tcppgenf {
-	tcompo_v base;                  /**< 引用对象共有的对象头。 */
-	tfunction_metadata *metadata;   /**< 运行时函数元数据。 */
-	genf_t f;                       /**< 原生回调。 */
-	tstring *name;                  /**< 对象持有的函数名称。 */
-	tstring *signature_type;        /**< 对象持有的 Type 标注。 */
-	uint_regs minimum_parameters;   /**< 最少参数数。 */
-	uint_regs maximum_parameters;   /**< 最多参数数。 */
+	tcompo_v base;                /**< 引用对象共有的对象头。 */
+	genf_t f;                     /**< 原生回调。 */
+	tstring *name;                /**< 对象持有的函数名称。 */
+	uint_regs minimum_parameters; /**< 最少参数数。 */
+	uint_regs maximum_parameters; /**< 最多参数数。 */
 };
 
 /* 共享 vtable */
@@ -150,14 +148,6 @@ genf_t tcppgenf_get_f(tcppgenf *g);
 uint_regs tcppgenf_get_nparams_sig(tcppgenf *g);
 
 /**
- * @brief 取得对象持有的 Type 标注。
- *
- * @param g 普通原生函数对象。
- * @return 对象持有的只读字符串。
- */
-const char *tcppgenf_get_signature_type(const tcppgenf *g);
-
-/**
  * @brief 取得最少参数数。
  *
  * @param g 普通原生函数对象。
@@ -186,13 +176,11 @@ int tcppgenf_accepts(const tcppgenf *g, uint_regs count);
 
 /** 会话原生函数对象的运行时布局。 */
 struct tcppsessf {
-	tcompo_v base;                  /**< 引用对象共有的对象头。 */
-	tfunction_metadata *metadata;   /**< 运行时函数元数据。 */
-	sessf_t f;                      /**< 会话原生回调。 */
-	tstring *name;                  /**< 对象持有的函数名称。 */
-	tstring *signature_type;        /**< 对象持有的 Type 标注。 */
-	uint_regs minimum_parameters;   /**< 最少参数数。 */
-	uint_regs maximum_parameters;   /**< 最多参数数。 */
+	tcompo_v base;                /**< 引用对象共有的对象头。 */
+	sessf_t f;                    /**< 会话原生回调。 */
+	tstring *name;                /**< 对象持有的函数名称。 */
+	uint_regs minimum_parameters; /**< 最少参数数。 */
+	uint_regs maximum_parameters; /**< 最多参数数。 */
 };
 
 /* 共享 vtable */
@@ -226,14 +214,6 @@ tcppsessf *tcppsessf_new_descriptor(const tcfn_descriptor *descriptor);
  * @return 回调指针。
  */
 sessf_t tcppsessf_get_f(tcppsessf *s);
-
-/**
- * @brief 取得对象持有的 Type 标注。
- *
- * @param s 会话原生函数对象。
- * @return 对象持有的只读字符串。
- */
-const char *tcppsessf_get_signature_type(const tcppsessf *s);
 
 /**
  * @brief 判断对象是否接受指定数量的参数。

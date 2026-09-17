@@ -60,6 +60,39 @@ static void emit_name(tast_emitter *emitter, const tast_node *node)
 	tstring_free(name);
 }
 
+/* A call whose callee resolves to an immutable preloaded native binding can
+ * use a kind-specific opcode. The binding metadata comes from the actual
+ * preload library, so standard-library and host-extension functions follow
+ * the same path. The VM still guards the runtime value before direct call. */
+static int native_call_opcode(tast_emitter *emitter, const tstring *name,
+			      uint16_t *native_slot, uint8_t *native_depth)
+{
+	*native_slot = 0;
+	*native_depth = 0;
+	if (tobj_ctr_obj_loc(&emitter->cp->tmpctr, name) <
+	    tobj_ctr_obj_len_all(&emitter->cp->tmpctr))
+		return OP_EVAL;
+	tobj_ctr *owner = nullptr;
+	uint_objs slot = 0;
+	if (!tcompile_find_binding(&emitter->cp->objctr, name, &owner, &slot) ||
+	    !owner || owner->father != nullptr || slot >= owner->npreload)
+		return OP_EVAL;
+	tobj_ctr_addr address;
+	if (!tobj_ctr_obj_addr(&emitter->cp->objctr, name, &address) ||
+	    address.depth >= 31)
+		return OP_EVAL;
+	*native_slot = (uint16_t)slot;
+	*native_depth = (uint8_t)address.depth;
+	switch ((tcompile_call_kind)owner->bindings[slot].call_kind) {
+	case tcompile_call_native:
+		return OP_EVALCF;
+	case tcompile_call_session:
+		return OP_EVALSF;
+	default:
+		return OP_EVAL;
+	}
+}
+
 static void emit_number(tast_emitter *emitter, const tast_node *node)
 {
 	tstring *literal = tast_emitter_text(emitter, node->span);
@@ -98,6 +131,22 @@ static void emit_string(tast_emitter *emitter, const tast_node *node)
 }
 
 static uint32_t source_logic_index(tast_emitter *emitter, tast_id id);
+static void emit_index(tast_emitter *emitter, const tast_node *node,
+		       int comparison_hint);
+
+static void emit_binary_operand(tast_emitter *emitter, tast_id id,
+				int comparison_hint)
+{
+	const tast_node *operand = tast_get(emitter->arena, id);
+	const tast_node *owner = tast_get(emitter->arena,
+		tcontrol_enclosing_function(&emitter->frontend->flow, id));
+	if (comparison_hint && operand && operand->kind == tast_index &&
+	    (!owner || owner->kind != tast_rule)) {
+		emit_index(emitter, operand, 1);
+		return;
+	}
+	tast_emit_expression(emitter, id);
+}
 
 static void emit_short_circuit(tast_emitter *emitter,
 			       const tast_node *node, int instruction)
@@ -160,10 +209,11 @@ static void emit_binary(tast_emitter *emitter, const tast_node *node)
             tvmcmd_vect_append(emitter->instructions, tbycode_make_u(OP_RULEVALUE, slot));
             return;
         }
-    }
+	}
 	/* The VM's binary convention places the left operand at the stack top. */
-	tast_emit_expression(emitter, node->binary.right);
-	tast_emit_expression(emitter, node->binary.left);
+	int comparison = instruction == OP_EQ || instruction == OP_NE;
+	emit_binary_operand(emitter, node->binary.right, comparison);
+	emit_binary_operand(emitter, node->binary.left, comparison);
 	if (instruction == OP_IN || instruction == OP_PAIR || instruction == OP_TO) {
 		tvmcmd_vect_append(emitter->instructions,
 				   tbycode_make((uint8_t)instruction));
@@ -248,26 +298,61 @@ static void emit_call(tast_emitter *emitter, const tast_node *node)
 	}
 	if (callee->kind == tast_member && callee->member.op == tsyntax_dot) {
 		/* receiver.method(args) is the language's tunnel-call form. */
+		tstring *method_name = tast_emitter_text(emitter,
+			callee->member.name);
+		uint16_t native_slot = 0;
+		uint8_t native_depth = 0;
+		int opcode = native_call_opcode(
+			emitter, method_name, &native_slot, &native_depth);
+		tstring_free(method_name);
 		tast_emit_expression(emitter, callee->member.receiver);
 		emit_arguments(emitter, node);
-		emit_reference(emitter, callee->member.name);
-		tvmcmd_vect_append(emitter->instructions,
-				   tbycode_make_u(OP_EVAL, arguments + 1));
-		treg_ctr_ddt_n(&emitter->cp->regctr,
-				  (uint_regs)(arguments + 2));
+		if (opcode == OP_EVALCF || opcode == OP_EVALSF) {
+			tvmcmd_vect_append(emitter->instructions,
+				tbycode_make_lbi(
+					opcode, native_slot,
+					(uint8_t)(arguments + 1), native_depth + 1));
+			treg_ctr_ddt_n(&emitter->cp->regctr,
+					  (uint_regs)(arguments + 1));
+		} else {
+			emit_reference(emitter, callee->member.name);
+			tvmcmd_vect_append(emitter->instructions,
+					tbycode_make_u(opcode, arguments + 1));
+			treg_ctr_ddt_n(&emitter->cp->regctr,
+					  (uint_regs)(arguments + 2));
+		}
 		treg_ctr_add(&emitter->cp->regctr);
 		return;
 	}
 
+	int opcode = OP_EVAL;
+	uint16_t native_slot = 0;
+	uint8_t native_depth = 0;
+	if (callee->kind == tast_name) {
+		tstring *callee_name = tast_emitter_text(emitter, callee->span);
+		opcode = native_call_opcode(
+			emitter, callee_name, &native_slot, &native_depth);
+		tstring_free(callee_name);
+	}
 	emit_arguments(emitter, node);
-	tast_emit_expression(emitter, node->aggregate.receiver);
-	tvmcmd_vect_append(emitter->instructions,
-			   tbycode_make_u(OP_EVAL, arguments));
-	treg_ctr_ddt_n(&emitter->cp->regctr, (uint_regs)(arguments + 1));
+	if (opcode == OP_EVALCF || opcode == OP_EVALSF) {
+		tvmcmd_vect_append(emitter->instructions,
+			tbycode_make_lbi(
+				opcode, native_slot, (uint8_t)arguments,
+				native_depth + 1));
+		treg_ctr_ddt_n(&emitter->cp->regctr, (uint_regs)arguments);
+	} else {
+		tast_emit_expression(emitter, node->aggregate.receiver);
+		tvmcmd_vect_append(emitter->instructions,
+				tbycode_make_u(opcode, arguments));
+		treg_ctr_ddt_n(
+			&emitter->cp->regctr, (uint_regs)(arguments + 1));
+	}
 	treg_ctr_add(&emitter->cp->regctr);
 }
 
-static void emit_index(tast_emitter *emitter, const tast_node *node)
+static void emit_index(tast_emitter *emitter, const tast_node *node,
+		       int comparison_hint)
 {
 	const tast_id *children = aggregate_children(emitter, node);
 	for (uint32_t i = 0; i < node->aggregate.count; i++) {
@@ -281,12 +366,24 @@ static void emit_index(tast_emitter *emitter, const tast_node *node)
 		else {
 			tast_emit_expression(emitter, node->aggregate.receiver);
 			tstring *len_name = tstring_new("len");
-			compile_emit_reference(emitter->cp, len_name,
-				emitter->instructions, emitter->constants);
+			uint16_t native_slot = 0;
+			uint8_t native_depth = 0;
+			int len_opcode = native_call_opcode(
+				emitter, len_name, &native_slot, &native_depth);
+			if (len_opcode != OP_EVALCF && len_opcode != OP_EVALSF)
+				compile_emit_reference(emitter->cp, len_name,
+					emitter->instructions, emitter->constants);
 			tstring_free(len_name);
-			tvmcmd_vect_append(emitter->instructions,
-				tbycode_make_u(OP_EVAL, 1));
-			treg_ctr_ddt_n(&emitter->cp->regctr, 2);
+			tvmcmd_vect_append(
+				emitter->instructions,
+				len_opcode == OP_EVALCF || len_opcode == OP_EVALSF ?
+					tbycode_make_lbi(
+						len_opcode, native_slot, 1,
+						native_depth + 1) :
+					tbycode_make_u(len_opcode, 1));
+			treg_ctr_ddt_n(&emitter->cp->regctr,
+				len_opcode == OP_EVALCF || len_opcode == OP_EVALSF ?
+					1 : 2);
 			treg_ctr_add(&emitter->cp->regctr);
 		}
 		if (argument->slice.has_start)
@@ -302,8 +399,11 @@ static void emit_index(tast_emitter *emitter, const tast_node *node)
 		treg_ctr_add(&emitter->cp->regctr);
 	}
 	tast_emit_expression(emitter, node->aggregate.receiver);
+	uint32_t operand = node->aggregate.count;
+	if (comparison_hint)
+		operand |= TBYCODE_IDXR_COMPARE_FLAG;
 	tvmcmd_vect_append(emitter->instructions,
-			   tbycode_make_u(OP_IDXR, node->aggregate.count));
+			   tbycode_make_u(OP_IDXR, operand));
 	treg_ctr_ddt_n(&emitter->cp->regctr,
 			  (uint_regs)(node->aggregate.count + 1));
 	treg_ctr_add(&emitter->cp->regctr);
@@ -313,13 +413,25 @@ static void emit_list(tast_emitter *emitter, const tast_node *node)
 {
 	emit_arguments(emitter, node);
 	tstring *list_name = tstring_new("list");
-	compile_emit_reference(emitter->cp, list_name, emitter->instructions,
-			       emitter->constants);
+	uint16_t native_slot = 0;
+	uint8_t native_depth = 0;
+	int list_opcode = native_call_opcode(
+		emitter, list_name, &native_slot, &native_depth);
+	if (list_opcode != OP_EVALCF && list_opcode != OP_EVALSF)
+		compile_emit_reference(emitter->cp, list_name,
+			emitter->instructions, emitter->constants);
 	tstring_free(list_name);
-	tvmcmd_vect_append(emitter->instructions,
-			   tbycode_make_u(OP_EVAL, node->aggregate.count));
+	tvmcmd_vect_append(
+		emitter->instructions,
+		list_opcode == OP_EVALCF || list_opcode == OP_EVALSF ?
+			tbycode_make_lbi(list_opcode, native_slot,
+				(uint8_t)node->aggregate.count,
+				native_depth + 1) :
+			tbycode_make_u(list_opcode, node->aggregate.count));
 	treg_ctr_ddt_n(&emitter->cp->regctr,
-			  (uint_regs)(node->aggregate.count + 1));
+		(list_opcode == OP_EVALCF || list_opcode == OP_EVALSF) ?
+			(uint_regs)node->aggregate.count :
+			(uint_regs)(node->aggregate.count + 1));
 	treg_ctr_add(&emitter->cp->regctr);
 }
 
@@ -341,27 +453,6 @@ static void emit_dictionary(tast_emitter *emitter, const tast_node *node)
 	treg_ctr_add(&emitter->cp->regctr);
 }
 
-static ttypeval *resolve_value_annotation(tast_emitter *emitter,
-		tsource_span annotation, int present, ttypeval *inferred)
-{
-	if (present) {
-		/* Only value-bound syntax needs rebinding in the backend. Ordinary
-		 * annotations retain the frontend's lexical Type resolution. */
-		const tsyntax_tokens *tokens = &emitter->frontend->tokens;
-		for (uint32_t i = 0; i < tokens->count; i++) {
-			const tsyntax_token *token = &tokens->items[i];
-			if (token->span.start >= annotation.end) break;
-			if (token->span.start < annotation.start ||
-			    token->kind != tsyntax_identifier) continue;
-			tstring *name = tast_emitter_text(emitter, token->span);
-			int value_bound = tstring_eq_cstr(name, "InstanceOf");
-			tstring_free(name);
-			if (value_bound) return tast_resolve_annotation(emitter, annotation);
-		}
-	}
-	return ttypeval_retain(inferred);
-}
-
 static void emit_function(tast_emitter *emitter, const tast_node *node)
 {
 	const tast_id *parameter_ids = tast_get_children(
@@ -373,9 +464,22 @@ static void emit_function(tast_emitter *emitter, const tast_node *node)
 			node->function.parameter_count * sizeof(tstring *));
 		if (!parameters)
 			abort();
-		for (uint32_t i = 0; i < node->function.parameter_count; i++)
-			parameters[i] = tast_emitter_text(emitter,
-				tast_get(emitter->arena, parameter_ids[i])->parameter.name);
+		for (uint32_t i = 0; i < node->function.parameter_count; i++) {
+			const tast_node *parameter = tast_get(
+				emitter->arena, parameter_ids[i]);
+			parameters[i] = tast_emitter_text(
+				emitter, parameter->parameter.name);
+			if (parameter->parameter.has_annotation) {
+				ttypeval *validated = tast_resolve_annotation(
+					emitter, parameter->parameter.annotation);
+				ttypeval_release(validated);
+			}
+		}
+	}
+	if (node->function.has_return_annotation) {
+		ttypeval *validated = tast_resolve_annotation(
+			emitter, node->function.return_annotation);
+		ttypeval_release(validated);
 	}
 	ttypeval *signature;
 	if (emitter->pending_function_type) {
@@ -383,26 +487,6 @@ static void emit_function(tast_emitter *emitter, const tast_node *node)
 		ttypeval_retain(signature);
 	} else
 		signature = tast_function_signature(emitter, node);
-	/* Re-resolve explicit annotations at the definition site. Frontend Unknown
-	 * must not silently erase a value-bound contract from runtime metadata. */
-	uint32_t count = node->function.parameter_count;
-	ttypeval **resolved = calloc(count + 1, sizeof(*resolved));
-	if (!resolved) abort();
-	for (uint32_t i = 0; i < count; i++) {
-		const tast_node *parameter = tast_get(emitter->arena, parameter_ids[i]);
-		resolved[i] = resolve_value_annotation(emitter,
-			parameter->parameter.annotation, parameter->parameter.has_annotation,
-			ttypeval_function_parameter_at(signature, i));
-	}
-	resolved[count] = resolve_value_annotation(emitter,
-		node->function.return_annotation, node->function.has_return_annotation,
-		ttypeval_function_result(signature));
-	ttypeval *bound_signature = ttypeval_retain(ttypeval_new_function(
-		resolved, count, resolved[count], node->function.variadic));
-	for (uint32_t i = 0; i <= count; i++) ttypeval_release(resolved[i]);
-	free(resolved);
-	ttypeval_release(signature);
-	signature = bound_signature;
 	tcp function_cp;
 	tcp_init_preload(&function_cp, parameters,
 		(uint_objs)node->function.parameter_count,
@@ -444,29 +528,6 @@ static void emit_function(tast_emitter *emitter, const tast_node *node)
 	treg_ctr_add(&emitter->cp->regctr);
 	tvmcmd_vect_insert_vect(emitter->instructions,
 		tvmcmd_vect_size32(emitter->instructions), &body);
-	/* Attach declaration metadata outside the body: reflection never calls it. */
-	tstring *names = tstring_new_empty();
-    if (emitter->pending_display_name) {
-        tstring_append(names, emitter->pending_display_name);
-        tstring_append_c(names, '\x1e');
-    }
-	for (uint32_t i = 0; i < node->function.parameter_count; i++) {
-		if (i) tstring_append_c(names, '\x1f');
-		tstring_append_ts(names, parameters[i]);
-	}
-	tvmcmd_vect_append(emitter->instructions, tbycode_make_u(OP_PUSHS,
-		tconsts_add_str_const(emitter->constants, tstring_cstr(names))));
-	treg_ctr_add(&emitter->cp->regctr);
-	if (signature->contains_instance) tast_emit_bound_type(emitter, signature);
-	else {
-		tvmcmd_vect_append(emitter->instructions, tbycode_make_u(OP_PUSHS,
-			tconsts_add_str_const(emitter->constants, tstring_cstr(signature->canonical))));
-		treg_ctr_add(&emitter->cp->regctr);
-	}
-	tvmcmd_vect_append(emitter->instructions, tbycode_make(OP_FUNCMETA));
-	treg_ctr_ddt_n(&emitter->cp->regctr, 2);
-	tstring_free(names);
-
 	for (uint32_t i = 0; i < node->function.parameter_count; i++)
 		tstring_free(parameters[i]);
 	free(parameters);
@@ -970,14 +1031,6 @@ static void emit_rule(tast_emitter *emitter, const tast_node *node)
 	tvmcmd_vect_append(emitter->instructions,
 		tbycode_make_u(OP_PUSHRULE, source_id));
 	treg_ctr_ddt_n(&emitter->cp->regctr, 4);
-	ttypeval *rule_type = tast_infer_expression_type(emitter,
-		(tast_id)(node - emitter->arena->nodes), nullptr);
-	if (rule_type && rule_type->contains_instance) {
-		tast_emit_bound_type(emitter, rule_type);
-		tvmcmd_vect_append(emitter->instructions, tbycode_make(OP_RULETYPE));
-		treg_ctr_ddt(&emitter->cp->regctr);
-	}
-	ttypeval_release(rule_type);
 	for (uint32_t i = 0; i < node->function.parameter_count; i++)
 		tstring_free(parameters[i]);
 	free(parameters);
@@ -1042,7 +1095,7 @@ void tast_emit_expression(tast_emitter *emitter, tast_id id)
 		emit_call(emitter, node);
 		break;
 	case tast_index:
-		emit_index(emitter, node);
+		emit_index(emitter, node, 0);
 		break;
 	case tast_member:
 		emit_member(emitter, node);

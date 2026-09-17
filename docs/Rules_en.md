@@ -321,6 +321,7 @@ Conditions, or a result Type:
 | `InstanceOf[R]` | Instance bound by the same runtime Rule R; infers its parameters without asserting satisfaction |
 | `types::rule(Type...)` | Constructs an exact Rule Type value |
 | `types::rule_instance(Type...)` | Constructs an exact instance Type value |
+| `types::instance_of(rule)` | Explicitly constructs a Type matching that runtime Rule identity |
 
 Zero-parameter exact Types are `Rule[]` and `RuleInstance[]`. Parameters are
 invariant; names and descriptions do not affect Type equality. Every exact
@@ -460,18 +461,13 @@ cannot mutate IR, argument bindings, or captures.
 
 ## 7. Execution model
 
-Root `parameters(value)` reads declaration-order name/Type pairs from a Function, Rule,
+Root `parameters(value)` reads declaration-order name/Type pairs from a Rule,
 RuleInstance, or RuleIR. Root `arguments(instance)` reads declaration-order bound
 values from a RuleInstance. Neither query runs or checks the Rule; a failing
 instance can still be inspected. Zero parameters produce an empty list, whereas
-unsupported objects raise an error. Named/anonymous functions, closures, and function copies retain declaration metadata.
-Unannotated parameters use available contextual Types, otherwise AnyType. Standard-library
-functions use their registered signatures. Old bytecode functions must be recompiled;
-third-party native functions without metadata raise an explicit error.
-
-This is declaration reflection, not a complete arity API: `(...)` has no named
-parameters and returns an empty list despite being variadic. Pairs do not encode
-optional/default/variadic flags.
+unsupported objects, including Function, raise an error. The returned Types are
+descriptive Rule IR schema; they neither attach annotations to bound arguments nor
+trigger implicit runtime checks.
 
 Both return fresh lists. Replacing/removing list entries cannot change the original
 bindings or declarations, but mutable argument objects retain shared references:

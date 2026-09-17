@@ -15,57 +15,6 @@ static int find_binding(tast_emitter *emitter, tsource_span span,
 	return found;
 }
 
-typedef struct { tast_emitter *emitter; uint32_t count; } bound_type_context;
-
-static void emit_qualified_value(tast_emitter *emitter, const char *name)
-{
-	const char *last = nullptr;
-	for (const char *p = name; (p = strstr(p, "::")); p += 2) last = p;
-	if (!last) {
-		tstring *root = tstring_new(name);
-		compile_emit_reference(emitter->cp, root, emitter->instructions, emitter->constants);
-		tstring_free(root);
-		return;
-	}
-	tvmcmd_vect_append(emitter->instructions, tbycode_make_u(OP_PUSHS,
-		tconsts_add_str_const(emitter->constants, last + 2)));
-	treg_ctr_add(&emitter->cp->regctr);
-	tstring *receiver = tstring_new_len(name, last - name);
-	emit_qualified_value(emitter, tstring_cstr(receiver));
-	tstring_free(receiver);
-	tvmcmd_vect_append(emitter->instructions, tbycode_make_u(OP_IDXR, 1));
-	treg_ctr_ddt(&emitter->cp->regctr);
-}
-
-static const tobj *emit_instance_reference(void *data, const char *name)
-{
-	bound_type_context *context = data;
-	tast_emitter *emitter = context->emitter;
-	emit_qualified_value(emitter, name);
-	tvmcmd_vect_append(emitter->instructions, tbycode_make_u(OP_PUSHS,
-		tconsts_add_str_const(emitter->constants, name)));
-	treg_ctr_add(&emitter->cp->regctr);
-	tvmcmd_vect_append(emitter->instructions, tbycode_make(OP_PAIR));
-	treg_ctr_ddt(&emitter->cp->regctr);
-	context->count++;
-	return nullptr;
-}
-
-void tast_emit_bound_type(tast_emitter *emitter, ttypeval *type)
-{
-	bound_type_context context = { emitter, 0 };
-	ttypeval *walked = ttypeval_resolve_instances(type, emit_instance_reference, &context);
-	ttypeval_release(walked);
-	tvmcmd_vect_append(emitter->instructions, tbycode_make_u(OP_PUSHDICT, context.count));
-	treg_ctr_ddt_n(&emitter->cp->regctr, context.count);
-	treg_ctr_add(&emitter->cp->regctr);
-	tvmcmd_vect_append(emitter->instructions, tbycode_make_u(OP_PUSHS,
-		tconsts_add_str_const(emitter->constants, tstring_cstr(type->canonical))));
-	treg_ctr_add(&emitter->cp->regctr);
-	tvmcmd_vect_append(emitter->instructions, tbycode_make(OP_BINDTYPE));
-	treg_ctr_ddt(&emitter->cp->regctr);
-}
-
 int tast_is_types_package_expression(tast_emitter *emitter, tast_id id)
 {
 	const tast_node *node = tast_get(emitter->arena, id);

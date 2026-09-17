@@ -11,7 +11,6 @@
 #include "tapas/objects/trule_ir.h"
 #include "tapas/objects/ttype.h"
 #include "runtime/tenv.h"
-#include "tfunction_metadata.h"
 #include "tapas/objects/tstr.h"
 #include "tapas/tformat.h"
 
@@ -83,14 +82,11 @@ static void instance_free(void *self)
 static void *builtin_copy(void *self)
 {
 	trule_builtin *builtin = (trule_builtin *)self;
-	trule_builtin *copy = trule_builtin_new(builtin->kind);
-	copy->metadata = tfunction_metadata_retain(builtin->metadata);
-	return copy;
+	return trule_builtin_new(builtin->kind);
 }
 
 static void builtin_free(void *self)
 {
-	tfunction_metadata_release(((trule_builtin *)self)->metadata);
 	free(self);
 }
 
@@ -166,7 +162,7 @@ static void rule_render(tformat_context *context, const void *self)
 		const trule_builtin *builtin = self;
 		const char *name = builtin->kind == trule_builtin_assert ?
 			"assert" : "unknown";
-		tformat_function_signature(context, name, builtin->metadata);
+		tformat_named(context, "Rule Function", name);
 		break;
 	}
 	default:
@@ -687,13 +683,6 @@ trule_instance *trule_bind(trule *rule, const tobj *arguments,
 {
 	if (rule->ir && argument_count != rule->ir->parameters.len)
 		twarn(ErrRuntime_ParamsCtr, "Rule", "incorrect parameter count");
-	for (uint_regs i = 0; rule->ir && i < argument_count; i++) {
-		trule_term *parameter = (trule_term *)
-			rule->ir->parameters.data[i].val.v_tcompo;
-		if (!ttypeval_matches(&arguments[i], parameter->type))
-			twarn(ErrRuntime_ParamsType, "Rule",
-			      "argument does not match parameter Type");
-	}
 	trule_instance *instance = (trule_instance *)calloc(1, sizeof(*instance));
 	instance->base.vtable = &trule_instance_vtable;
 	tobj_set_compo(&instance->rule, (tcompo_v *)rule);

@@ -59,11 +59,11 @@ str(value: AnyType) -> String
 ```tap
 iter(start: Int, end: Int) -> Iterator
 iter(start: Int, step: Int, end: Int) -> Iterator
-parameters(value: Function | Rule | RuleInstance | RuleIR) -> List[Pair[String, Type]]
+parameters(value: Rule | RuleInstance | RuleIR) -> List[Pair[String, Type]]
 arguments(instance: RuleInstance) -> List[AnyType]
 ```
 
-`iter` 创建从 `start` 开始、但不包含 `end` 的整数迭代器。省略 `step` 时，根据端点顺序使用 `1` 或 `-1`；`step` 为零或方向无法到达 end 时，迭代器为空。`parameters` 按声明顺序返回函数或规则的参数名称与 Type；函数必须带有可用的参数元数据。`arguments` 按参数顺序返回 RuleInstance 当前绑定值的浅层容器副本。
+`iter` 创建从 `start` 开始、但不包含 `end` 的整数迭代器。省略 `step` 时，根据端点顺序使用 `1` 或 `-1`；`step` 为零或方向无法到达 end 时，迭代器为空。`parameters` 按声明顺序返回 Rule IR 的参数名称与描述性 Type；不接受 Function。`arguments` 按参数顺序返回 RuleInstance 当前绑定值的浅层容器副本。
 
 ### 控制台、断言与时间
 

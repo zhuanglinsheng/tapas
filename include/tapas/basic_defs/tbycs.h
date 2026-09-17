@@ -132,6 +132,26 @@ static inline uint8_t tbycode_get_i(tbycode c)
 	return (uint8_t)(c >> 27);
 }
 
+/** OP_VCRT R operand flags. */
+#define TVCRT_ENV_FLAG  UINT16_C(1)
+#define TVCRT_INIT_FLAG UINT16_C(2)
+
+/* OP_IDXR reserves the high U bit as a representation hint when the indexed
+ * value is consumed immediately by equality or inequality. The language-level
+ * result remains unchanged; the VM masks the hint before reading the argument
+ * count and otherwise performs an ordinary indexed read. */
+#define TBYCODE_IDXR_COMPARE_FLAG UINT32_C(0x02000000)
+
+static inline uint32_t tbycode_idxr_count(tbycode c)
+{
+	return tbycode_get_U(c) & ~TBYCODE_IDXR_COMPARE_FLAG;
+}
+
+static inline int tbycode_idxr_compare(tbycode c)
+{
+	return (tbycode_get_U(c) & TBYCODE_IDXR_COMPARE_FLAG) != 0;
+}
+
 /**
  * @brief 将一条指令转换为便于诊断的文本。
  *
@@ -237,8 +257,8 @@ void tvmcmd_vect_insert_vect(tvmcmd_vect *v, uint32_t pos, const tvmcmd_vect *sr
 void tvmcmd_vect_resolve_loop_control(tvmcmd_vect *v, uint32_t begin,
 				      uint32_t end, uint32_t continue_target,
 				      uint32_t break_target,
-				      uint8_t continue_marker,
-				      uint8_t break_marker);
+				      tbycode continue_marker,
+				      tbycode break_marker);
 
 /* 常量池 */
 

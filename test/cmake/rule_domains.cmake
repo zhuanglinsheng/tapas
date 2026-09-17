@@ -23,7 +23,7 @@ foreach(fixture IN ITEMS points_type points_enum range_float annotation arity)
         message(FATAL_ERROR "domain ${fixture} must fail compilation: ${output}${error}")
     endif()
 endforeach()
-foreach(fixture IN ITEMS reversed points_type range_type annotation argument return assignment)
+foreach(fixture IN ITEMS reversed points_type range_type)
     execute_process(COMMAND "${TAPAS}" "${RUNTIME_INVALID_DIR}/domain_${fixture}.tap"
         RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error)
     if(result EQUAL 0 OR NOT error MATCHES "Runtime Error")

@@ -5,8 +5,9 @@
 
 titer *titer_new_step(long start, long step, long end)
 {
-	titer *iterator = (titer *)calloc(1, sizeof(titer));
+	titer *iterator = (titer *)malloc(sizeof(titer));
 	iterator->base.vtable = &titer_vtable;
+	iterator->base.refctr = 0;
 	iterator->start = start;
 	iterator->step = step;
 	iterator->end = end;
@@ -50,8 +51,9 @@ static long titer_len(void *self)
 static void *titer_copy(void *self)
 {
 	titer *it = (titer *)self;
-	titer *n = (titer *)calloc(1, sizeof(titer));
+	titer *n = (titer *)malloc(sizeof(titer));
 	n->base.vtable = it->base.vtable;
+	n->base.refctr = 0;
 	n->start = it->start;
 	n->end = it->end;
 	n->step = it->step;

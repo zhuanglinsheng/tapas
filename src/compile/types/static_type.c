@@ -108,6 +108,35 @@ tstatic_type_id tstatic_type_make(tstatic_type_arena *arena,
 	return id;
 }
 
+tstatic_type_id tstatic_type_with_value_reference(
+	tstatic_type_arena *arena, tstatic_type_id id, const char *reference)
+{
+	const tstatic_type *type = tstatic_type_get(arena, id);
+	if (!type || !reference || !*reference) return id;
+	if (type->value_reference &&
+	    tstring_eq_cstr(type->value_reference, reference))
+		return id;
+	tstatic_type copy = *type;
+	copy.value_reference = tstring_new(reference);
+	copy.display_name = type->display_name ?
+		tstring_dup(type->display_name) : nullptr;
+	reserve_types(arena, 1);
+	tstatic_type_id result = arena->type_count++;
+	arena->types[result] = copy;
+	return result;
+}
+
+tstatic_type_id tstatic_type_make_instance_of(
+	tstatic_type_arena *arena, const tstatic_type_id *parameters,
+	uint32_t parameter_count, const char *reference)
+{
+	if (!reference || !*reference) return TSTATIC_TYPE_UNKNOWN;
+	tstatic_type_id result = tstatic_type_make(arena,
+		tstatic_type_instance_of, parameters, parameter_count, 0);
+	arena->types[result].value_reference = tstring_new(reference);
+	return result;
+}
+
 tstatic_type_id tstatic_type_make_parameter(tstatic_type_arena *arena,
 	const char *name, int value_parameter)
 {
@@ -682,10 +711,11 @@ static tstatic_type_id parse_application(type_parser *parser, tstring *name)
 		    !(rule->kind == tstatic_type_builtin && rule->builtin == tbuiltintype_rule))) {
 			tstring_free(reference); return TSTATIC_TYPE_UNKNOWN;
 		}
-		tstatic_type_id instance = tstatic_type_make(parser->arena, tstatic_type_instance_of,
+		tstatic_type_id instance = tstatic_type_make_instance_of(
+			parser->arena,
 			rule ? tstatic_type_children(parser->arena, rule) : nullptr,
-			rule ? rule->child_count : 0, 0);
-		parser->arena->types[instance].value_reference = reference;
+			rule ? rule->child_count : 0, tstring_cstr(reference));
+		tstring_free(reference);
 		return instance;
 	}
 	const type_application_signature *signature = application_signature(constructor);
@@ -1015,11 +1045,16 @@ static int static_type_assignable_graph(const tstatic_type_arena *arena,
         if (b->builtin == tbuiltintype_rule_term && (a->builtin == tbuiltintype_rule_parameter || a->builtin == tbuiltintype_rule_capture)) return 1;
         if (b->builtin == tbuiltintype_rule_item && (a->builtin == tbuiltintype_rule_condition || a->builtin == tbuiltintype_rule_requirement)) return 1;
     }
-	/* Value identity is enforced after binding the actual Rule at runtime. */
-	if (b->kind == tstatic_type_instance_of)
-		return a->kind == tstatic_type_instance_of ||
-			a->kind == tstatic_type_rule_instance ||
-			(a->kind == tstatic_type_builtin && a->builtin == tbuiltintype_rule_instance);
+	/* Preserve known Rule identities statically. A broad RuleInstance remains
+	 * admissible at a dynamic boundary, where callers can opt into an explicit
+	 * types::matches check. */
+	if (b->kind == tstatic_type_instance_of) {
+		if (a->kind == tstatic_type_instance_of)
+			return tstring_eq(a->value_reference, b->value_reference);
+		return a->kind == tstatic_type_rule_instance ||
+			(a->kind == tstatic_type_builtin &&
+			 a->builtin == tbuiltintype_rule_instance);
+	}
 	if (a->kind == tstatic_type_instance_of && b->kind == tstatic_type_rule_instance) {
 		/* Unknown Rule signatures remain permissive until runtime binding. */
 		if (!a->child_count) return 1;

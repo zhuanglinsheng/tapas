@@ -4,7 +4,6 @@
 #include "tapas/dsa/tstring.h"
 #include "tapas/objects/tdict.h"
 #include "tapas/dsa/thashtbl.h"
-#include "objects/tfunction_metadata.h"
 #include "tapas/objects/tlist.h"
 #include "tapas/objects/tstr.h"
 #include "tapas/tval.h"
@@ -441,7 +440,6 @@ static void *tfunc_copy(void *self)
 	n->env.owner_func = n;
 	n->cmdloc = f->cmdloc;
 	n->ncmds = f->ncmds;
-	n->metadata = tfunction_metadata_retain(f->metadata);
 	return n;
 }
 
@@ -450,7 +448,6 @@ static void tfunc_free(void *self)
 	tfunc *f = (tfunc *)self;
 	tcompo_env_set_regmax(&f->env, 0);
 	tobj_array_free(&f->env.base.objs);
-	tfunction_metadata_release(f->metadata);
 	free(f);
 }
 
@@ -512,10 +509,8 @@ static tstring *tfunc_tostring_abbr(void *self)
 
 static void tfunc_render(tformat_context *context, const void *self)
 {
-	const tfunc *function = self;
-	tformat_function_signature(context,
-		tfunction_metadata_display_name(function->metadata),
-		function->metadata);
+	(void)self;
+	tformat_text(context, "Function");
 }
 
 static tstring *tfunc_tostring_full(void *self)
@@ -645,6 +640,11 @@ static void tlib_free(void *self)
 			tstring_free(l->paths[i]);
 		free(l->paths);
 	}
+	for (uint32_t i = 0; i < l->native_declaration_count; i++) {
+		tstring_free(l->native_declarations[i].name);
+		tstring_free(l->native_declarations[i].type);
+	}
+	free(l->native_declarations);
 	free(l);
 }
 
@@ -707,6 +707,9 @@ tlib *tlib_new(void)
 	lb->npaths_cap = 0;
 	lb->wrapper = nullptr;
 	lb->exposed = nullptr;
+	lb->native_declarations = nullptr;
+	lb->native_declaration_count = 0;
+	lb->native_declaration_capacity = 0;
 	return lb;
 }
 
@@ -778,6 +781,30 @@ void tlib_add_cppf(tlib *lb, const char *name, genf_t f, uint_regs nparams_sig)
 	tlib_add_cfn(lb, &descriptor);
 }
 
+static void tlib_add_native_declaration(tlib *library, const char *name,
+					const char *type)
+{
+	if (!library || !name || !*name || !type || !*type) return;
+	for (uint32_t i = 0; i < library->native_declaration_count; i++)
+		if (tstring_eq_cstr(library->native_declarations[i].name, name))
+			return;
+	if (library->native_declaration_count >=
+	    library->native_declaration_capacity) {
+		uint32_t capacity = library->native_declaration_capacity ?
+			library->native_declaration_capacity * 2 : 16;
+		tnative_declaration *declarations = realloc(
+			library->native_declarations,
+			capacity * sizeof(*declarations));
+		if (!declarations)
+			twarn(ErrRuntime_Other, "native declaration", "out of memory");
+		library->native_declarations = declarations;
+		library->native_declaration_capacity = capacity;
+	}
+	uint32_t index = library->native_declaration_count++;
+	library->native_declarations[index].name = tstring_new(name);
+	library->native_declarations[index].type = tstring_new(type);
+}
+
 void tlib_add_cfn(tlib *lb, const tcfn_descriptor *descriptor)
 {
 	if (!lb || !tcfn_descriptor_valid(descriptor)) return;
@@ -787,6 +814,8 @@ void tlib_add_cfn(tlib *lb, const tcfn_descriptor *descriptor)
 		(tcompo_v *)tcppsessf_new_descriptor(descriptor) :
 		(tcompo_v *)tcppgenf_new_descriptor(descriptor));
 	tlib_lib_add_obj(lb, descriptor->name, &v);
+	tlib_add_native_declaration(
+		lb, descriptor->name, descriptor->signature.type);
 }
 
 void tlib_add_pkg_cfn(tdict *pkg, const tcfn_descriptor *descriptor)
@@ -902,10 +931,20 @@ int tlib_install_extension(tlib *library,
 			tlib_extension_package(library, module->name) : nullptr;
 		if (module->scope == textension_package && !package)
 			return 0;
-		for (uint32_t j = 0; j < module->symbol_count; j++)
-			if (!tlib_install_symbol(library, package,
-				&module->symbols[j]))
+		for (uint32_t j = 0; j < module->symbol_count; j++) {
+			const textension_symbol *symbol = &module->symbols[j];
+			if (!tlib_install_symbol(library, package, symbol))
 				return 0;
+			if (module->scope == textension_package &&
+			    symbol->kind == textension_function) {
+				tstring *qualified = tstring_new(module->name);
+				tstring_append(qualified, "::");
+				tstring_append(qualified, symbol->name);
+				tlib_add_native_declaration(library,
+					tstring_cstr(qualified), symbol->type);
+				tstring_free(qualified);
+			}
+		}
 	}
 	return 1;
 }
@@ -916,6 +955,16 @@ const tobj *tlib_find(const tlib *lb, const char *name)
 	for (uint_objs i = 0; i < lb->ndefault; i++)
 		if (tstring_eq_cstr(lb->default_v_names[i], name))
 			return &lb->env.base.objs.data[i];
+	return nullptr;
+}
+
+const char *tlib_find_native_declaration(const tlib *lb,
+					 const char *qualified_name)
+{
+	if (!lb || !qualified_name) return nullptr;
+	for (uint32_t i = 0; i < lb->native_declaration_count; i++)
+		if (tstring_eq_cstr(lb->native_declarations[i].name, qualified_name))
+			return tstring_cstr(lb->native_declarations[i].type);
 	return nullptr;
 }
 
@@ -1016,6 +1065,10 @@ tlib *tlib_recreate(tlib *lb)
 				 tstring_cstr(lb->default_v_names[i]),
 				 tobj_array_get_obj(&lb->env.base.objs, i));
 	}
+	for (uint32_t j = 0; j < lb->native_declaration_count; j++)
+		tlib_add_native_declaration(lib_rct,
+			tstring_cstr(lb->native_declarations[j].name),
+			tstring_cstr(lb->native_declarations[j].type));
 	return lib_rct;
 }
 

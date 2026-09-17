@@ -5,7 +5,8 @@
 本文说明 Tapas 当前支持的类型标注、Type 值、静态检查以及`types`包，并补充[语言规范](Syntax_zh.md)中的类型系统定义。
 涉及这些内容时，以本文规则为准；Rule 的精确 Type 及其构造形式另见[Rule 文档](Rules_zh.md)。
 
-普通类型标注主要参与编译期分析，不执行隐式转换。`InstanceOf[R]` 例外：它绑定运行时规则身份，并在声明初始化、函数参数/返回以及 Rule 参数边界检查身份。
+所有类型标注（包括 `InstanceOf[R]`）只参与编译期分析，不执行隐式转换或运行时绑定。
+静态已知的 Rule 身份会在声明初始化、函数参数／返回和 Rule 参数处检查；动态边界应显式使用 `types::matches`。
 Type 本身也可以作为普通值保存、传递、返回和导出，本文将这样的值称为 Type 值。
 用户定义的 Type 不可修改，而且完整定义必须在编译期可见。
 编译器无法确定一个值的 Type 时仍允许它进入带标注的位置；如果程序需要在动态边界确认其实际结构，应显式调用`types::matches`。
@@ -381,25 +382,26 @@ Function[Type, Type, ...; Value, Value, ...] -> ResultType
 `Template[Types; Values]`；只含一类时省略空参数区。当前用户模板的值实参限于
 Bool、Int、Float 和 String 字面量，替换结果是精确值 Type。
 
-值参数构造器 `InstanceOf[R]` 等价于 `InstanceOf[; R]`。`R` 是规则值的名称或限定成员引用，
-例如 `model::Exchange`；它使用专门的运行时身份绑定规则，不是普通字面量值参数。
+值参数构造器 `InstanceOf[R]` 等价于 `InstanceOf[; R]`。`R` 是编译期可解析的 Rule 名称或
+限定成员引用，例如 `model::Exchange`；它不是普通字面量值参数。
 
-`InstanceOf[R]` 表示由**同一个运行时 Rule 对象**绑定产生的实例；参数签名从 R 推导，
-无论 R 有零个、一个还是多个参数，都不需要在标注里重复。它不表示实例的约束成立，
-仍需 `assert(action)` 或 `rules::check(action)`。同名、同签名、同源码和同语义哈希均不能代替身份。
+`InstanceOf[R]` 是规则身份的编译期标注。编译器在静态知道实参来源时可据此发现不匹配；
+调用目标或值为 `Unknown` 时允许通过，运行时不会把 R 绑定到函数、参数槽或普通对象上，
+也不会根据该标注隐式检查。它不表示实例的约束成立，后者仍需 `assert(action)` 或
+`rules::check(action)`。
 
-函数或 Rule 创建时，在其定义环境中求取并保留 R；声明初始化时绑定该声明的 R。
-后续修改 R 的名称绑定不会改变已创建签名。别名指向同一个对象时匹配；工厂重复创建、
-Rule 的 `.copy()`、重复执行模块导入产生的新对象不匹配。Retail 使用 `runner::model`
-共享 runner 所绑定的规则对象，不依赖模块单例。
+需要在动态边界检查同一 Rule 对象时，应显式构造运行时 Type：
 
-身份检查支持嵌套的容器和联合类型。首版不支持对含此标注的绑定重新赋值，也不支持
-含运行时身份的递归类型；容器通过别名修改不受持续监控。函数类型匹配仍不负责包装并
-强制执行任意回调的完整签名。`parameters(function)` 可取到实际绑定后的参数 Type，
-用于 `types::matches`；不会把规则是否成立混入类型匹配。
+```tapas
+let IdentityExample = rule (value: Int) { true }
+let expected_identity = types::instance_of(IdentityExample)
+let matches_identity = types::matches(IdentityExample(1), expected_identity)
+```
 
-字节码保存名称模板，在加载执行时重新绑定；绑定后的身份 Type 不能通过 Rule IR
-序列化跨进程搬运。现有 `RuleInstance[T, ...]` 仍表示参数签名约束，不限定规则身份。
+这个 Type 保存实际 Rule 身份，因此只适合当前进程，不是可移植的 Rule IR 数据。
+别名指向同一 Rule 时匹配；工厂重复创建、Rule 的 `.copy()` 或重新执行模块得到的新对象不匹配。
+`RuleInstance[T, ...]` 仍只描述参数签名，不限定 Rule 身份。普通赋值和重新赋值遵守静态
+可赋值规则，但不会在运行时持续监控容器或对象。
 
 类型标注写在声明名称或函数参数之后，也可以用在函数返回值上：
 
@@ -444,6 +446,7 @@ qualified-type-name = IDENTIFIER, { "::", IDENTIFIER } ;
 | `Function[A, B, ...] -> R` | 0 个以上参数 Type 及 1 个返回值 Type | 无运行时构造形式 |
 | `Rule[A, B, ...]` | 0 个以上参数 | `types::rule(A, B, ...)` |
 | `RuleInstance[A, B, ...]` | 0 个以上参数 | `types::rule_instance(A, B, ...)` |
+| `InstanceOf[R]` | 1 个 Rule 值参数 | `types::instance_of(R)`（显式运行时身份 Type） |
 
 构造器可以写成`types::List[T]`等限定形式，参数本身也可以是 Type 应用或联合 Type。
 名称区分大小写；参数数量错误、基 Type 不支持参数，或者任一参数不是有效 Type 表达式时，均为编译错误。
@@ -554,14 +557,15 @@ let formatter: Function[Int] -> String = (value: Int) -> String
 无法证明所有路径返回时，结果中因此包含`Nil`。
 显式的返回值 Type 标注使递归调用的返回值可以在分析函数体之前确定；没有返回值标注时，函数返回值为`Unknown`，当前设计不要求自动推断。
 
-普通参数标注提供编译期约束；含 `InstanceOf` 的标注另外执行身份检查。
-实参或调用目标为`Unknown`时允许编译；除上述身份类型外，编译器不在函数入口自动插入运行时检查。
+所有参数标注（包括 `InstanceOf`）都只提供编译期约束。
+实参或调用目标为`Unknown`时允许编译；编译器不在函数入口自动插入运行时检查。
 动态边界需要保证值满足更具体条件时，应显式使用`types::matches`或内联的`assert(rule { ... })`。
 变参函数的`...`不能携带参数标注，但可以在参数列表之后使用返回值标注。
 
 编译器使用精确函数签名检查函数体、静态已知调用和模块接口。
-运行时函数保留用于展示和 `parameters(function_value)` 的参数元数据；`types::of(function_value)`仍返回原始`types::Function`。
-当前不提供精确函数 Type 值的运行时构造接口；参数反射不等于取得一个完整的精确函数 Type 值。
+运行时函数不保留参数或返回 Type 元数据；`types::of(function_value)`返回原始`types::Function`，
+而 `parameters(function_value)` 不受支持。Rule IR 仍保留自己的描述性参数 Type，
+因此 `parameters` 可用于 Rule、RuleInstance 和 RuleIR。
 
 ### 3.3 字段 Type 与结构字面量
 

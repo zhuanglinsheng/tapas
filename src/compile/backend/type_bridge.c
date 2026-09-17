@@ -386,7 +386,8 @@ static ttypeval *static_to_runtime(to_runtime_context *context,
 	/* Imported annotations may still be unknown in the frontend snapshot.
 	 * Unlike Function, Rule signatures require every parameter to be known. */
 	if (type->kind == tstatic_type_rule ||
-	    type->kind == tstatic_type_rule_instance) {
+	    type->kind == tstatic_type_rule_instance ||
+	    type->kind == tstatic_type_instance_of) {
 		for (uint32_t i = 0; i < type->child_count; i++) {
 			if (children[i]) continue;
 			for (uint32_t j = 0; j < type->child_count; j++)
@@ -544,13 +545,8 @@ static tstatic_type_id external_binding_type(
 		    value->val.v_tcompo &&
 		    (value->val.v_tcompo->vtable->get_compo_type_code() == compo_cppfunc ||
 		     value->val.v_tcompo->vtable->get_compo_type_code() == compo_sessfunc)) {
-			tcompo_type kind =
-				value->val.v_tcompo->vtable->get_compo_type_code();
-			const char *signature = kind == compo_cppfunc ?
-				tcppgenf_get_signature_type(
-					(const tcppgenf *)value->val.v_tcompo) :
-				tcppsessf_get_signature_type(
-					(const tcppsessf *)value->val.v_tcompo);
+			const char *signature = tlib_find_native_declaration(
+				cp->preload_library, qualified_name);
 			tstatic_type_id result = signature && *signature ?
 				tstatic_type_parse(arena, signature, nullptr, nullptr) :
 				TSTATIC_TYPE_UNKNOWN;

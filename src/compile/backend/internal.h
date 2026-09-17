@@ -7,10 +7,8 @@
 int str_to_long_int(const tstring *literal, long *value);
 int str_to_float(const tstring *literal, double *value);
 
-enum {
-	TCOMPILE_BREAK_MARK = 62,
-	TCOMPILE_CONTINUE_MARK = 63
-};
+#define TCOMPILE_BREAK_MARK UINT32_C(0xfffffffe)
+#define TCOMPILE_CONTINUE_MARK UINT32_C(0xffffffff)
 
 int tcompile_find_binding(tobj_ctr *counter, const tstring *name,
 			  tobj_ctr **owner, uint_objs *slot);

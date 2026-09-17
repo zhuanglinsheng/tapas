@@ -61,13 +61,14 @@ types::pair(first: Type, second: Type) -> Type
 types::dictionary(key: Type, value: Type) -> Type
 types::rule(...parameters: Type) -> Type
 types::rule_instance(...parameters: Type) -> Type
+types::instance_of(rule: Rule) -> Type
 ```
 
 `make_type` 从至少一个具名字段创建结构 Type。普通字段写作 `'name': FieldType`；将字段 Pair 传给 `optional` 后，该字段在结构匹配中可以缺省。字段名称必须是 String，字段值必须是 Type。
 
 `union` 从至少两个 Type 创建联合 Type。`enum` 从至少一个 String 创建有限字符串 Enum Type。
 
-`list`、`iterator`、`pair` 与 `dictionary` 创建带元素、两侧或键值参数的容器 Type。`rule` 与 `rule_instance` 按参数顺序创建 Rule 和 RuleInstance Type；允许零个参数。
+`list`、`iterator`、`pair` 与 `dictionary` 创建带元素、两侧或键值参数的容器 Type。`rule` 与 `rule_instance` 按参数顺序创建 Rule 和 RuleInstance Type；允许零个参数。`instance_of` 显式创建仅匹配指定运行时 Rule 身份的 Type；该身份只在当前进程内有意义，不是可移植的 Rule IR 数据。
 
 ### 用户定义 Type 模板
 

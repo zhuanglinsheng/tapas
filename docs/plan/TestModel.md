@@ -452,7 +452,7 @@ $
 | 模型角色 | 当前对应 | 下一步缺口 |
 |---|---|---|
 | 基础状态 | `model/model.tap` 中的扁平 `State`、状态和初始 Rule | 单商品订单及可信上下文；固定目录不属于可变状态 |
-| 参数空间 | `Exchange(parameters)` 与 `InstanceOf[model::Exchange]` | 参数签名从 Rule 推导，调用边界检查同一运行时规则身份；约束成立单独检查，通用角色登记仍未实现 |
+| 参数空间 | `Exchange(parameters)` 与 `InstanceOf[model::Exchange]` | 参数签名从 Rule 推导，静态调用边界检查规则身份；动态边界显式使用 `types::matches`，约束成立单独检查，通用角色登记仍未实现 |
 | 状态相关允许条件 | `ExchangeAllowed(previous_state, action_parameters)` | 用于判定成功/拒绝分支，不用于阻止测试执行 |
 | 实现 | `implementation.tap` 的正确与缺陷实现 | 仅使用模型的基础类型、不调用规则；仅支持本地、无外部副作用的行为 |
 | 转移约束 | `ExchangeTransition(before, parameters, output, after)` | 成功/拒绝蕴含及共同 frame 字段检查，与状态不变量分离 |

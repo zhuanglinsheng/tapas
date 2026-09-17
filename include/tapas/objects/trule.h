@@ -47,9 +47,8 @@ struct trule_instance {
 
 /** 内建 Rule 可调用对象。 */
 struct trule_builtin {
-	tcompo_v base;                /**< 引用对象共有的对象头。 */
-	trule_builtin_kind kind;      /**< 内建操作类别。 */
-	tfunction_metadata *metadata; /**< 函数元数据。 */
+	tcompo_v base;           /**< 引用对象共有的对象头。 */
+	trule_builtin_kind kind; /**< 内建操作类别。 */
 };
 
 /* 共享 vtable */

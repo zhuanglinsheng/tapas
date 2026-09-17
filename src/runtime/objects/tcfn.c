@@ -1,6 +1,5 @@
 #include "tapas/objects/tcfn.h"
 #include "tapas/dsa/tstring.h"
-#include "tfunction_metadata.h"
 
 #include <stdlib.h>
 
@@ -38,9 +37,7 @@ static void *tcppgenf_copy(void *self)
 	tcppgenf *n = (tcppgenf *)calloc(1, sizeof(tcppgenf));
 	n->base.vtable = g->base.vtable;
 	n->f = g->f;
-	n->metadata = tfunction_metadata_retain(g->metadata);
 	n->name = tstring_dup(g->name);
-	n->signature_type = tstring_dup(g->signature_type);
 	n->minimum_parameters = g->minimum_parameters;
 	n->maximum_parameters = g->maximum_parameters;
 	return n;
@@ -50,8 +47,6 @@ static void tcppgenf_free(void *self)
 {
 	tcppgenf *g = (tcppgenf *)self;
 	tstring_free(g->name);
-	tstring_free(g->signature_type);
-	tfunction_metadata_release(g->metadata);
 	free(g);
 }
 
@@ -104,8 +99,6 @@ tcppgenf *tcppgenf_new_descriptor(const tcfn_descriptor *descriptor)
 	g->f = descriptor ? descriptor->function : nullptr;
 	g->name = tstring_new(descriptor && descriptor->name ?
 		descriptor->name : "");
-	g->signature_type = tstring_new(descriptor && descriptor->signature.type ?
-		descriptor->signature.type : "");
 	g->minimum_parameters = descriptor ?
 		descriptor->signature.minimum_parameters : 0;
 	g->maximum_parameters = descriptor ?
@@ -122,11 +115,6 @@ uint_regs tcppgenf_get_nparams_sig(tcppgenf *g)
 {
 	return g->minimum_parameters == g->maximum_parameters ?
 		g->minimum_parameters : UNDEF_NPARAMS;
-}
-
-const char *tcppgenf_get_signature_type(const tcppgenf *g)
-{
-	return g ? tstring_cstr(g->signature_type) : nullptr;
 }
 
 uint_regs tcppgenf_get_minimum_parameters(const tcppgenf *g)
@@ -170,9 +158,7 @@ static void *tcppsessf_copy(void *self)
 	tcppsessf *n = (tcppsessf *)calloc(1, sizeof(tcppsessf));
 	n->base.vtable = s->base.vtable;
 	n->f = s->f;
-	n->metadata = tfunction_metadata_retain(s->metadata);
 	n->name = tstring_dup(s->name);
-	n->signature_type = tstring_dup(s->signature_type);
 	n->minimum_parameters = s->minimum_parameters;
 	n->maximum_parameters = s->maximum_parameters;
 	return n;
@@ -182,8 +168,6 @@ static void tcppsessf_free(void *self)
 {
 	tcppsessf *s = (tcppsessf *)self;
 	tstring_free(s->name);
-	tstring_free(s->signature_type);
-	tfunction_metadata_release(s->metadata);
 	free(s);
 }
 
@@ -234,8 +218,6 @@ tcppsessf *tcppsessf_new_descriptor(const tcfn_descriptor *descriptor)
 	s->f = descriptor ? descriptor->session_function : nullptr;
 	s->name = tstring_new(descriptor && descriptor->name ?
 		descriptor->name : "");
-	s->signature_type = tstring_new(descriptor && descriptor->signature.type ?
-		descriptor->signature.type : "");
 	s->minimum_parameters = descriptor ?
 		descriptor->signature.minimum_parameters : 0;
 	s->maximum_parameters = descriptor ?
@@ -246,11 +228,6 @@ tcppsessf *tcppsessf_new_descriptor(const tcfn_descriptor *descriptor)
 sessf_t tcppsessf_get_f(tcppsessf *s)
 {
 	return s->f;
-}
-
-const char *tcppsessf_get_signature_type(const tcppsessf *s)
-{
-	return s ? tstring_cstr(s->signature_type) : nullptr;
 }
 
 int tcppsessf_accepts(const tcppsessf *s, uint_regs count)

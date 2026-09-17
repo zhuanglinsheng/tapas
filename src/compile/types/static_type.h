@@ -112,6 +112,11 @@ tstatic_type_id tstatic_type_make(tstatic_type_arena *arena,
 				  tstatic_type_kind kind,
 				  const tstatic_type_id *children,
 				  uint32_t child_count, int variadic);
+tstatic_type_id tstatic_type_with_value_reference(
+	tstatic_type_arena *arena, tstatic_type_id id, const char *reference);
+tstatic_type_id tstatic_type_make_instance_of(
+	tstatic_type_arena *arena, const tstatic_type_id *parameters,
+	uint32_t parameter_count, const char *reference);
 tstatic_type_id tstatic_type_make_fields(tstatic_type_arena *arena,
 					 const tstatic_field *fields,
 					 uint32_t field_count);

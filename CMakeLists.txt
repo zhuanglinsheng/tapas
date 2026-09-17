@@ -3,6 +3,7 @@ project(tapas VERSION 0.1.0 LANGUAGES C)
 
 include(CTest)
 include(GNUInstallDirs)
+include(CheckIPOSupported)
 
 # ============================================================================
 # 1. Project Configuration
@@ -90,7 +91,6 @@ set(TAPAS_RUNTIME_SOURCES
     src/runtime/objects/tarray.c
     src/runtime/objects/ttime.c
     src/runtime/objects/tcfn.c
-    src/runtime/objects/tfunction_metadata.c
     src/runtime/objects/ttype.c
     src/runtime/objects/trule.c
     src/runtime/objects/trule_ir.c
@@ -100,7 +100,6 @@ set(TAPAS_RUNTIME_SOURCES
 
 set(TAPAS_STDLIB_SOURCES
     src/stdlib/tstdlib.c
-    src/stdlib/function_metadata.c
     src/stdlib/builtins/console.c
     src/stdlib/builtins/conversion.c
     src/stdlib/builtins/list.c
@@ -246,6 +245,23 @@ target_link_libraries(tapas-language-server PRIVATE tapas_frontend)
 set_target_properties(tapas-language-server PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
 )
+
+# Keep runtime components independently testable while allowing Release builds
+# to inline small value, metadata, and container operations across static-library
+# boundaries. Unsupported toolchains retain the normal per-file optimization.
+option(TAPAS_ENABLE_IPO "Enable interprocedural optimization in Release builds" ON)
+if(TAPAS_ENABLE_IPO)
+    check_ipo_supported(RESULT TAPAS_IPO_SUPPORTED OUTPUT TAPAS_IPO_ERROR)
+    if(TAPAS_IPO_SUPPORTED)
+        foreach(TAPAS_IPO_TARGET IN ITEMS
+                tapas_strings tapas_runtime tapas)
+            set_property(TARGET ${TAPAS_IPO_TARGET} PROPERTY
+                INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE)
+        endforeach()
+    else()
+        message(STATUS "Tapas Release IPO disabled: ${TAPAS_IPO_ERROR}")
+    endif()
+endif()
 
 if(BUILD_TESTING)
     function(tapas_enable_test_assertions target)
@@ -461,6 +477,14 @@ add_custom_target(format_bytecode ALL DEPENDS
 
 install(TARGETS tapas tapas-language-server
     RUNTIME DESTINATION bin
+)
+install(DIRECTORY include/tapas
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+    FILES_MATCHING
+        PATTERN "*.h"
+)
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/generated/tapas/version.h"
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/tapas
 )
 install(DIRECTORY src/stdlib/format
     DESTINATION ${CMAKE_INSTALL_DATADIR}/tapas/stdlib

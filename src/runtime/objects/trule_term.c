@@ -146,6 +146,7 @@ int trule_antecedent_type(const ttypeval *type)
 	if (!type) return 0;
 	if (ttypeval_equal(type, ttypeval_builtin(tbuiltintype_bool)) ||
 	    type->kind == ttype_kind_rule_instance ||
+	    type->kind == ttype_kind_instance_of ||
 	    (type->kind == ttype_kind_builtin &&
 	     type->builtin == tbuiltintype_rule_instance))
 		return 1;

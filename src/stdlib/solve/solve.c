@@ -17,7 +17,6 @@
 #include "tapas/vm_service.h"
 #include "tapas/textension.h"
 #include "runtime/tenv.h"
-#include "runtime/objects/tfunction_metadata.h"
 #include "../modules.h"
 #include "solve_backend.h"
 
@@ -885,18 +884,8 @@ static void create_hold(tobj *result)
 			.maximum_parameters = 1
 		}
 	};
-	tcppsessf *hold = tcppsessf_new_descriptor(&descriptor);
-	ttypeval *members[] = {
-		ttypeval_builtin(tbuiltintype_rule),
-		ttypeval_builtin(tbuiltintype_rule_instance)
-	};
-	ttypeval *parameter = ttypeval_new_union(members, 2);
-	ttypeval *signature = ttypeval_retain(ttypeval_new_function(
-		&parameter, 1, tsolve_result_type(), 0));
-	hold->metadata = tfunction_metadata_from_type(
-		"solve::hold\x1e" "rule", signature);
-	ttypeval_release(signature);
-	tobj_set_compo(result, (tcompo_v *)hold);
+	tobj_set_compo(result,
+		(tcompo_v *)tcppsessf_new_descriptor(&descriptor));
 }
 
 static void create_sample(tobj *result)

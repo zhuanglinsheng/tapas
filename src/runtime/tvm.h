@@ -24,6 +24,9 @@ typedef void (*binopf)(const tobj *v1, const tobj *v2, tobj *vre);
 
 typedef struct {
 	long  pos;
+	long  range_start;
+	long  range_step;
+	long  range_end;
 	tobj *iterator_slot;
 } tloop_state;
 

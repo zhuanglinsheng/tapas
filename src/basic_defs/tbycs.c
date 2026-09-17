@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+static_assert(OP_COUNT <= 64, "bytecode opcode exceeds its 6-bit encoding");
 
 /*===========================================================================*
  * 1. Single Bytecode (tbycode)
@@ -77,10 +78,10 @@ void tbycode_tostring(tbycode c, char *buf, size_t buf_size)
 		snprintf(buf, buf_size, "OP_PASS     ");
 		break;
 	case OP_VCRT:
-		snprintf(buf, buf_size,
-			"OP_VCRT     %u  %u",
+		snprintf(buf, buf_size, "OP_VCRT     %u  %s%s",
 			(unsigned)tbycode_get_L(c),
-			(unsigned)tbycode_get_R(c));
+			tbycode_get_R(c) & TVCRT_ENV_FLAG ? "env" : "tmp",
+			tbycode_get_R(c) & TVCRT_INIT_FLAG ? "  init" : "");
 		break;
 	case OP_TMPDEL:
 		snprintf(buf, buf_size, "OP_TMPDEL   %u", (unsigned)tbycode_get_U(c));
@@ -127,6 +128,12 @@ void tbycode_tostring(tbycode c, char *buf, size_t buf_size)
 	case OP_LOOPAS:
 		snprintf(buf, buf_size,
 			"OP_LOOPAS   %u  %u",
+			(unsigned)tbycode_get_L(c),
+			(unsigned)tbycode_get_R(c));
+		break;
+	case OP_LOOPRANGE:
+		snprintf(buf, buf_size,
+			"OP_LOOPRANGE %u  %u",
 			(unsigned)tbycode_get_L(c),
 			(unsigned)tbycode_get_R(c));
 		break;
@@ -179,19 +186,37 @@ void tbycode_tostring(tbycode c, char *buf, size_t buf_size)
 		snprintf(buf, buf_size, "OP_IMPORT   %u", (unsigned)tbycode_get_U(c));
 		break;
 	case OP_IDXR:
-		snprintf(buf, buf_size, "OP_IDXR     %u", (unsigned)tbycode_get_U(c));
-		break;
-	case OP_EVAL:
-		snprintf(buf, buf_size, "OP_EVAL     %u", (unsigned)tbycode_get_U(c));
+		snprintf(buf, buf_size, "OP_IDXR     %u%s",
+			(unsigned)tbycode_idxr_count(c),
+			tbycode_idxr_compare(c) ? "  compare" : "");
 		break;
 	case OP_EVALSF:
-		snprintf(buf, buf_size, "OP_EVALSF   %u", (unsigned)tbycode_get_U(c));
+		if (tbycode_get_i(c))
+			snprintf(buf, buf_size,
+				"OP_EVALSF   %u  direct %u  depth %u",
+				(unsigned)tbycode_get_b(c),
+				(unsigned)tbycode_get_L(c),
+				(unsigned)tbycode_get_i(c) - 1);
+		else
+			snprintf(buf, buf_size, "OP_EVALSF   %u",
+				(unsigned)tbycode_get_U(c));
 		break;
 	case OP_EVALCF:
-		snprintf(buf, buf_size, "OP_EVALCF   %u", (unsigned)tbycode_get_U(c));
+		if (tbycode_get_i(c))
+			snprintf(buf, buf_size,
+				"OP_EVALCF   %u  direct %u  depth %u",
+				(unsigned)tbycode_get_b(c),
+				(unsigned)tbycode_get_L(c),
+				(unsigned)tbycode_get_i(c) - 1);
+		else
+			snprintf(buf, buf_size, "OP_EVALCF   %u",
+				(unsigned)tbycode_get_U(c));
 		break;
 	case OP_EVALTF:
 		snprintf(buf, buf_size, "OP_EVALTF   %u", (unsigned)tbycode_get_U(c));
+		break;
+	case OP_EVAL:
+		snprintf(buf, buf_size, "OP_EVAL     %u", (unsigned)tbycode_get_U(c));
 		break;
 	case OP_IDXL:
 		snprintf(buf, buf_size,
@@ -203,29 +228,14 @@ void tbycode_tostring(tbycode c, char *buf, size_t buf_size)
 	case OP_PUSHF:
 		snprintf(buf, buf_size, "OP_PUSHF    %u", (unsigned)tbycode_get_U(c));
 		break;
-	case OP_FUNCMETA:
-		snprintf(buf, buf_size, "OP_FUNCMETA");
-		break;
-	case OP_BINDTYPE:
-		snprintf(buf, buf_size, "OP_BINDTYPE");
-		break;
-	case OP_CHECKTYPE:
-		snprintf(buf, buf_size, "OP_CHECKTYPE");
-		break;
-	case OP_RULETYPE:
-		snprintf(buf, buf_size, "OP_RULETYPE");
-		break;
 	case OP_PUSHRULE:
 		snprintf(buf, buf_size, "OP_PUSHRULE %u", (unsigned)tbycode_get_U(c));
 		break;
-	case OP_RULECOND:
-		snprintf(buf, buf_size, "OP_RULECOND %u", (unsigned)tbycode_get_U(c));
+	case OP_RULEVALUE:
+		snprintf(buf, buf_size, "OP_RULEVALUE %u", (unsigned)tbycode_get_U(c));
 		break;
 	case OP_RULENOT:
 		snprintf(buf, buf_size, "OP_RULENOT %u", (unsigned)tbycode_get_U(c));
-		break;
-	case OP_RULEVALUE:
-		snprintf(buf, buf_size, "OP_RULEVALUE %u", (unsigned)tbycode_get_U(c));
 		break;
 	case OP_RULETRUTH:
 		snprintf(buf, buf_size, "OP_RULETRUTH %u", (unsigned)tbycode_get_U(c));
@@ -233,8 +243,8 @@ void tbycode_tostring(tbycode c, char *buf, size_t buf_size)
 	case OP_RULEITEM:
 		snprintf(buf, buf_size, "OP_RULEITEM %u", (unsigned)tbycode_get_U(c));
 		break;
-	case OP_RULEREQ:
-		snprintf(buf, buf_size, "OP_RULEREQ");
+	case OP_RULEIMPLY:
+		snprintf(buf, buf_size, "OP_RULEIMPLY %u", (unsigned)tbycode_get_U(c));
 		break;
 	case OP_ADD:
 		snprintf(buf, buf_size,
@@ -489,21 +499,20 @@ void tvmcmd_vect_insert_vect(tvmcmd_vect *v, uint32_t pos, const tvmcmd_vect *sr
 void tvmcmd_vect_resolve_loop_control(tvmcmd_vect *v, uint32_t begin,
 				      uint32_t end, uint32_t continue_target,
 				      uint32_t break_target,
-				      uint8_t continue_marker,
-				      uint8_t break_marker)
+				      tbycode continue_marker,
+				      tbycode break_marker)
 {
 	if (!v || begin > end || end > v->size || continue_target > v->size ||
 	    break_target > v->size)
 		twarn(ErrCompile_Other, "loop control", "invalid jump range");
 
 	for (uint32_t i = begin; i < end; i++) {
-		uint8_t instruction = (uint8_t)tbycode_ins(v->data[i]);
-		if (instruction == break_marker) {
+		if (v->data[i] == break_marker) {
 			if (break_target <= i)
 				twarn(ErrCompile_Other, "break", "invalid jump target");
 			v->data[i] = tbycode_make_u(
 				OP_JPF, break_target - i - 1);
-		} else if (instruction == continue_marker) {
+		} else if (v->data[i] == continue_marker) {
 			if (continue_target <= i)
 				v->data[i] = tbycode_make_u(
 					OP_JPB, i - continue_target + 1);
@@ -750,7 +759,7 @@ wrap_err:
 }
 
 #define TAPC_FILE_MAGIC       ((uint64_t)0x5441504153424331ULL)
-#define TAPC_FORMAT_VERSION   ((uint32_t)1)
+#define TAPC_FORMAT_VERSION   ((uint32_t)2)
 #define TAPC_SOURCE_MAP_MAGIC ((uint64_t)0x5450415352433031ULL)
 
 static int tapc_write_header(FILE *f, const twrapper *wrapper)

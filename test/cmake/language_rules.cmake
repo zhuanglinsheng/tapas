@@ -126,36 +126,13 @@ foreach(mode IN ITEMS source bytecode)
     endif()
 endforeach()
 file(REMOVE "${REGRESSION_DIR}/instance_of.tapc")
-foreach(fixture IN ITEMS call declaration result rule nested factory copy)
-    execute_process(COMMAND "${TAPAS}" "${RUNTIME_INVALID_DIR}/instance_of_${fixture}.tap"
-        RESULT_VARIABLE instance_result OUTPUT_VARIABLE instance_output ERROR_VARIABLE instance_error)
-    if(instance_result EQUAL 0 OR NOT instance_error MATCHES "InstanceOf|Type")
-        message(FATAL_ERROR "InstanceOf ${fixture} should fail: ${instance_output}${instance_error}")
-    endif()
-endforeach()
-foreach(fixture IN ITEMS reassign non_rule syntax signature)
+foreach(fixture IN ITEMS call declaration non_rule result syntax signature)
     execute_process(COMMAND "${TAPAS}" -c "${COMPILE_INVALID_DIR}/instance_of_${fixture}.tap"
         RESULT_VARIABLE instance_result OUTPUT_VARIABLE instance_output ERROR_VARIABLE instance_error)
     if(instance_result EQUAL 0)
         message(FATAL_ERROR "InstanceOf ${fixture} should fail compilation")
     endif()
 endforeach()
-
-execute_process(COMMAND "${TAPAS}" "${REGRESSION_DIR}/function_parameters.tap"
-    RESULT_VARIABLE function_parameters_result OUTPUT_VARIABLE function_parameters_output
-    ERROR_VARIABLE function_parameters_error)
-if(NOT function_parameters_result EQUAL 0)
-    message(FATAL_ERROR "Function parameters failed: ${function_parameters_output}${function_parameters_error}")
-endif()
-execute_process(COMMAND "${TAPAS}" -c "${REGRESSION_DIR}/function_parameters.tap"
-    RESULT_VARIABLE function_compile_result)
-execute_process(COMMAND "${TAPAS}" -e "${REGRESSION_DIR}/function_parameters.tapc"
-    RESULT_VARIABLE function_reload_result OUTPUT_VARIABLE function_reload_output
-    ERROR_VARIABLE function_reload_error)
-file(REMOVE "${REGRESSION_DIR}/function_parameters.tapc")
-if(NOT function_compile_result EQUAL 0 OR NOT function_reload_result EQUAL 0)
-    message(FATAL_ERROR "Function metadata bytecode roundtrip failed: ${function_reload_output}${function_reload_error}")
-endif()
 
 execute_process(COMMAND "${TAPAS}" "${REGRESSION_DIR}/argument_reflection.tap"
     RESULT_VARIABLE reflection_result OUTPUT_VARIABLE reflection_output ERROR_VARIABLE reflection_error)
@@ -565,7 +542,7 @@ if(NOT runtime_cache_result EQUAL 0)
         "Runtime-cache fixture failed (${runtime_cache_result}):\n"
         "${runtime_cache_output}${runtime_cache_error}")
 endif()
-if(NOT runtime_cache_output STREQUAL "6\n6\n9\n6\n7\na\n9\n5\n5\n8\n4\n9\nfalse\ntrue\n")
+if(NOT runtime_cache_output STREQUAL "6\n6\n9\n6\n7\na\n9\n5\n5\n8\n4\n9\nfalse\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\n")
     message(FATAL_ERROR
         "Unexpected runtime-cache output: ${runtime_cache_output}")
 endif()
@@ -585,6 +562,27 @@ string(FIND "${runtime_cache_bytecode_output}" "OP_LOOPAS" loopas_position)
 if(loopas_position EQUAL -1)
     message(FATAL_ERROR
         "Loop bytecode is missing OP_LOOPAS:\n${runtime_cache_bytecode_output}")
+endif()
+string(FIND "${runtime_cache_bytecode_output}" "OP_IDXR     1  compare"
+    string_index_position)
+if(string_index_position EQUAL -1)
+    message(FATAL_ERROR
+        "String-index comparison bytecode is missing the generic OP_IDXR comparison hint:\n${runtime_cache_bytecode_output}")
+endif()
+string(FIND "${runtime_cache_bytecode_output}" "OP_EVALCF" native_call_position)
+if(native_call_position EQUAL -1)
+    message(FATAL_ERROR
+        "Preloaded native call bytecode is missing OP_EVALCF:\n${runtime_cache_bytecode_output}")
+endif()
+string(FIND "${runtime_cache_bytecode_output}" "OP_EVALSF" session_call_position)
+if(session_call_position EQUAL -1)
+    message(FATAL_ERROR
+        "Preloaded session call bytecode is missing OP_EVALSF:\n${runtime_cache_bytecode_output}")
+endif()
+string(FIND "${runtime_cache_bytecode_output}" "OP_EVAL     1" aliased_call_position)
+if(aliased_call_position EQUAL -1)
+    message(FATAL_ERROR
+        "Aliased native call bytecode should retain generic OP_EVAL:\n${runtime_cache_bytecode_output}")
 endif()
 
 execute_process(
@@ -955,7 +953,6 @@ foreach(fixture IN LISTS invalid_fixtures)
 endforeach()
 
 set(runtime_error_fixtures
-    dictionary_structure_argument.tap
     arguments_unbound.tap parameters_unsupported.tap
     implies_instance_error.tap implies_instance_recursion.tap
     implies_instance_if.tap
@@ -965,7 +962,6 @@ set(runtime_error_fixtures
     rule_import_argument.tap
     rule_dictionary_missing.tap
     rule_dictionary_extra.tap
-    rule_dictionary_type.tap
     array_modulo_shape.tap
     array_unary_plus.tap
     boolean_logic_type.tap

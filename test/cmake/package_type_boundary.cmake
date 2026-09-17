@@ -41,7 +41,6 @@ foreach(PRIVATE_HEADER IN ITEMS
 		include/tapas/tblas.h
 		include/tapas/dsa/tblas.h
 		include/tapas/dsa/tobj_array.h
-		include/tapas/objects/tfunction_metadata.h
 		include/tapas/cli/input_state.h
 		include/tapas/lsp/server.h)
 	if(EXISTS "${SOURCE_ROOT}/${PRIVATE_HEADER}")
@@ -205,8 +204,7 @@ foreach(CONCRETE_FORMAT_DEPENDENCY IN ITEMS
 		trule_item
 		trule_instance
 		tdomain
-		ttype_kind
-		tfunction_metadata)
+		ttype_kind)
 	if(GENERIC_FORMAT_SOURCE MATCHES "${CONCRETE_FORMAT_DEPENDENCY}")
 		message(FATAL_ERROR
 			"generic formatter knows concrete object: ${CONCRETE_FORMAT_DEPENDENCY}")
@@ -222,14 +220,6 @@ file(READ "${SOURCE_ROOT}/src/runtime/objects/ttype.c" TYPE_OBJECT_SOURCE)
 if(NOT TYPE_OBJECT_SOURCE MATCHES "tformat_type[\t ]*\\(")
 	message(FATAL_ERROR "Type object does not own Type formatting")
 endif()
-file(READ "${SOURCE_ROOT}/src/runtime/objects/tfunction_metadata.c"
-	FUNCTION_METADATA_SOURCE)
-if(NOT FUNCTION_METADATA_SOURCE MATCHES
-   "tformat_function_signature[\t ]*\\(")
-	message(FATAL_ERROR
-		"function metadata does not own signature formatting")
-endif()
-
 file(READ "${SOURCE_ROOT}/src/stdlib/rules/hash.c" RULES_HASH_SOURCE)
 file(READ "${SOURCE_ROOT}/src/stdlib/rules/codec.c" RULES_CODEC_SOURCE)
 foreach(HASH_OPERATION IN ITEMS

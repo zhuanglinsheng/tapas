@@ -111,6 +111,7 @@ static void tcompile_binding_clear(tcompile_binding *binding)
 	binding->has_annotation = 0;
 	binding->is_types_package = 0;
 	binding->initialized = 0;
+	binding->call_kind = tcompile_call_generic;
 }
 
 void tobj_ctr_init_preload(
@@ -299,6 +300,27 @@ void tcp_init_preload(
 {
 	tobj_ctr_init_preload(
 		&cp->objctr, default_objs, ndefault, father_objctr);
+	if (library && !father_objctr) {
+		for (uint_objs i = 0; i < ndefault; i++) {
+			const tobj *value = tlib_find(
+				library, tstring_cstr(default_objs[i]));
+			if (!value || value->type != tcompo ||
+			    !value->val.v_tcompo)
+				continue;
+			switch (tobj_compo_type(value)) {
+			case compo_cppfunc:
+				cp->objctr.bindings[i].call_kind =
+					tcompile_call_native;
+				break;
+			case compo_sessfunc:
+				cp->objctr.bindings[i].call_kind =
+					tcompile_call_session;
+				break;
+			default:
+				break;
+			}
+		}
+	}
 	tobj_ctr_init(&cp->tmpctr, nullptr);
 	treg_ctr_init(&cp->regctr);
 	cp->n_default_objs = ndefault;
@@ -307,6 +329,9 @@ void tcp_init_preload(
 	cp->preload_library = library;
 	cp->owns_imports = 1;
 	cp->in_loop = 0;
+	cp->loop_tmp_bases = nullptr;
+	cp->loop_tmp_base_count = 0;
+	cp->loop_tmp_base_cap = 0;
 	cp->interactive = interactive;
 }
 
@@ -362,6 +387,10 @@ void tcp_free(tcp *cp)
 		tcompile_import_stack_free(cp->imports);
 	cp->imports = nullptr;
 	cp->owns_imports = 0;
+	free(cp->loop_tmp_bases);
+	cp->loop_tmp_bases = nullptr;
+	cp->loop_tmp_base_count = 0;
+	cp->loop_tmp_base_cap = 0;
 }
 
 void tcp_delete(tcp *cp)

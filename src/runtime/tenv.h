@@ -103,8 +103,6 @@ struct tfunc {
 	tcompo_env env;
 	uint_cmds cmdloc;
 	uint_cmds ncmds;
-	/* Declaration metadata survives closure capture/copy and bytecode loading. */
-	tfunction_metadata *metadata;
 };
 
 extern tcompo_vtable tfunc_vtable;
@@ -119,6 +117,11 @@ tcompo_env *tfunc_get_env(tfunc *f);
 /*===========================================================================*
  * 4. Library (tlib) — string fields now use tstring
  *===========================================================================*/
+
+typedef struct {
+	tstring *name;
+	tstring *type;
+} tnative_declaration;
 
 struct tlib {
 	tcompo_v compo_base;
@@ -135,6 +138,11 @@ struct tlib {
 	twrapper *wrapper;
 
 	tdict *exposed;
+
+	/* Compile-time declarations live on the library, never on callable values. */
+	tnative_declaration *native_declarations;
+	uint32_t native_declaration_count;
+	uint32_t native_declaration_capacity;
 };
 
 extern tcompo_vtable tlib_vtable;
@@ -152,6 +160,8 @@ int tlib_install_extension(tlib *lb,
 			   const textension_descriptor *extension);
 void tlib_add_cppf(tlib *lb, const char *name, genf_t f, uint_regs nparams_sig);
 const tobj *tlib_find(const tlib *lb, const char *name);
+const char *tlib_find_native_declaration(const tlib *lb,
+					 const char *qualified_name);
 void tlib_add_path(tlib *lb, const char *paths_str);
 tstring **tlib_get_paths(tlib *lb);
 uint_lexs tlib_get_npaths(tlib *lb);
