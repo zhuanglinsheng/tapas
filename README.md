@@ -117,7 +117,7 @@ Tapas 的 Visual Studio Code 扩展提供语法高亮、实时诊断、类型悬
 - [Rule](docs/Rules_zh.md)：Rule 字面量、规则组合、标准检查和 Rule IR。
 - [C 交互](docs/Foreign_zh.md)：嵌入会话、注册 C 函数、值操作和复合类型扩展。
 - [运行机制](docs/Mechanism_zh.md)：编译器、字节码、虚拟机、环境和引用计数。
-- [性能基准](test/benchmarks/Results_zh.md)：Tapas 与 Python 在 VM 热路径、函数调用、递归、列表访问和埃氏筛等负载上的逐项比较。
+- [性能基准](test/benchmarks/README.md)：Tapas 与 Python 在 VM 热路径、函数调用、递归、列表访问和埃氏筛等负载上的逐项比较。
 
 ## 许可证
 

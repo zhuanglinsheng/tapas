@@ -168,7 +168,7 @@ for VSIX installation and runtime or language-server path configuration.
   functions, working with values, and extending composite types.
 - [Runtime Mechanism](docs/Mechanism_en.md) — compiler, bytecode, virtual machine,
   environments, and reference counting.
-- [Performance Benchmarks](test/benchmarks/Results_en.md) — per-workload Tapas
+- [Performance Benchmarks](test/benchmarks/README_en.md) — per-workload Tapas
   and Python comparisons for algorithms and VM hot paths.
 
 ## License
