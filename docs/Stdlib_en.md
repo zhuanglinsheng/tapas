@@ -94,7 +94,8 @@ error.
 |---|---|---|
 | `push_front(list: List, value: AnyType)` | `Nil` | Inserts `value` at the front. |
 | `push_back(list: List, value: AnyType)` | `Nil` | Inserts `value` at the back. |
-| `append(target: Appendable, value: AnyType)` | `Nil` | Appends text, an item, or a pair. |
+| `join(values: List[String], separator: String)` | `String` | Joins a list of strings with a separator, which may be empty. |
+| `append(target: Appendable, value: AnyType)` | `Nil` | Appends an item or a pair to a container such as a List or Dictionary. Strings are immutable; use `join` for composition. |
 | `insert(list: List, value: AnyType, index: Int)` | `Nil` | Inserts before `index`. |
 | `pop_front(list: List[T])` | `T` | Removes and returns the first item. |
 | `pop_back(list: List[T])` | `T` | Removes and returns the last item. |

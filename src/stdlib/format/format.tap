@@ -9,15 +9,15 @@ let MappedSource = types::make_type(
 
 function expand_indentation(indentation: String) -> String
 {
-    let expanded = ''
+    let parts = []
     for (let index in 0 to indentation.len()) {
         if (indentation[index] == syntax::horizontal_tab) {
-            expanded.append('    ')
+            parts.append('    ')
         } else {
-            expanded.append(indentation[index])
+            parts.append(indentation[index])
         }
     }
-    return expanded.copy()
+    return join(parts, '')
 }
 
 function whitespace_edits(
@@ -187,8 +187,7 @@ function parameter_indentation(
         indentation: String,
 ) -> Nil {
     let header_indent = expand_indentation(indentation)
-    let continuation = header_indent.copy()
-    continuation.append('        ')
+    let continuation = join([header_indent, '        '], '')
     let line_start = 0
     let first = true
     for (let token in tokens) {
@@ -317,8 +316,7 @@ function structural_edits(
         let header = function_braces[brace]
         let prefix = ' '
         if (lines[header] == lines[brace - 1]) {
-            prefix = line_break.copy()
-            prefix.append(expand_indentation(indents[header]))
+            prefix = join([line_break, expand_indentation(indents[header])], '')
         }
         put_edit(
             edits, clean_before, tokens,
@@ -330,20 +328,20 @@ function structural_edits(
 
 function apply_edits(source: String, edits: Dictionary[Int, Dictionary]) -> String
 {
-    let output = ''
+    let parts: List[String] = []
     let position = 0
     while (position < source.len()) {
         if (position in edits) {
             let edit = edits[position]
             delete(edits, position)
-            output.append(edit['text'])
+            parts.append(edit['text'])
             position = edit['end']
         } else {
-            output.append(source[position])
+            parts.append(source[position])
             position = position + 1
         }
     }
-    return output.copy()
+    return join(parts, '')
 }
 
 function source_origins(source: String) -> List[Int]
@@ -360,26 +358,26 @@ function apply_mapped_edits(
         origins: List[Int],
         edits: Dictionary[Int, Dictionary],
 ) -> MappedSource {
-    let output = ''
+    let parts: List[String] = []
     let output_origins: List[Int] = []
     let position = 0
     while (position < source.len()) {
         if (position in edits) {
             let edit = edits[position]
             delete(edits, position)
-            output.append(edit['text'])
+            parts.append(edit['text'])
             for (let index in 0 to edit['text'].len()) {
                 output_origins.append(-1)
             }
             position = edit['end']
         } else {
-            output.append(source[position])
+            parts.append(source[position])
             output_origins.append(origins[position])
             position = position + 1
         }
     }
     return {
-        'source': output.copy(),
+        'source': join(parts, ''),
         'origins': output_origins.copy(),
     }
 }
@@ -489,15 +487,15 @@ function implication_edits(
             last = last - 1
         }
         let antecedent = source[tokens[first]['start']:tokens[last]['end']]
-        let replacement = ''
+        let parts: List[String] = []
         if (first == last and tokens[first]['kind'] == 'identifier') {
-            replacement.append(antecedent)
+            parts.append(antecedent)
         } else {
-            replacement.append('(')
-            replacement.append(antecedent)
-            replacement.append(')')
+            parts.append('(')
+            parts.append(antecedent)
+            parts.append(')')
         }
-        replacement.append(' implies ')
+        parts.append(' implies ')
         first = right
         last = end
         if (braced) { first = first + 1; last = last - 1 }
@@ -506,19 +504,20 @@ function implication_edits(
             last = last - 1
         }
         if (first == last and tokens[first]['kind'] == 'identifier') {
-            replacement.append(source[tokens[first]['start']:tokens[first]['end']])
+            parts.append(source[tokens[first]['start']:tokens[first]['end']])
         } elif (braced) {
-            replacement.append(source[tokens[right]['start']:tokens[end]['end']])
+            parts.append(source[tokens[right]['start']:tokens[end]['end']])
         } else {
-            replacement.append('{')
-            replacement.append(line_break)
-            replacement.append(indents[left])
-            replacement.append('    ')
-            replacement.append(source[tokens[right]['start']:tokens[end]['end']])
-            replacement.append(line_break)
-            replacement.append(indents[left])
-            replacement.append('}')
+            parts.append('{')
+            parts.append(line_break)
+            parts.append(indents[left])
+            parts.append('    ')
+            parts.append(source[tokens[right]['start']:tokens[end]['end']])
+            parts.append(line_break)
+            parts.append(indents[left])
+            parts.append('}')
         }
+        let replacement = join(parts, '')
         edits[tokens[left]['start']] = {
             'end': tokens[end]['end'],
             'text': replacement.copy(),

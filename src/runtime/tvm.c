@@ -3005,6 +3005,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 	long *cints = wrapper->consts.cints;
 	double *cflts = wrapper->consts.cflts;
 	tstring **cstrs = wrapper->consts.cstrs;
+	tstr **csobjs = wrapper->consts.csobjs;
 	uint_cmds i = from;
 	uint_cmds end = from + ncmds;
 	tsource_loc *previous_source_locs = vm->error_source_locs;
@@ -3294,7 +3295,10 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 		case OP_PUSHS: {
 			tobj v;
 			tobj_set_nil(&v);
-			tobj_set_compo(&v, (tcompo_v *)tstr_new(tstring_cstr(cstrs[tbycode_get_U(*iter)])));
+			/* Constant strings are interned at load time and immutable:
+			 * pushing shares the pooled object without allocation. */
+			tobj_set_compo(
+				&v, (tcompo_v *)csobjs[tbycode_get_U(*iter)]);
 			stk_push(vm, &v);
 			tobj_set_nil(&v);
 		}
@@ -3683,6 +3687,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 			cints = wrapper->consts.cints;
 			cflts = wrapper->consts.cflts;
 			cstrs = wrapper->consts.cstrs;
+			csobjs = wrapper->consts.csobjs;
 			vm->error_source_locs = wrapper->source_locs;
 			vm->error_source_loc_count = wrapper->ncmds;
 		}
@@ -3711,6 +3716,7 @@ resume_caller:
 			cints = wrapper->consts.cints;
 			cflts = wrapper->consts.cflts;
 			cstrs = wrapper->consts.cstrs;
+			csobjs = wrapper->consts.csobjs;
 			vm->error_source_locs = wrapper->source_locs;
 			vm->error_source_loc_count = wrapper->ncmds;
 		}

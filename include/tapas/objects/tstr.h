@@ -24,6 +24,7 @@ struct tstr {
 	tcompo_v base;   /**< 引用对象共有的对象头。 */
 	tstring storage; /**< 对象内嵌的字符串存储。 */
 	tstring *data;   /**< 指向 `storage` 的兼容访问指针。 */
+	uint64_t hash;   /**< 惰性缓存的内容哈希；零表示尚未计算。 */
 };
 
 /* 共享 vtable */
@@ -49,6 +50,17 @@ tstr *tstr_new(const char *s);
  * @return 新对象，由 Tapas 引用计数管理。
  */
 tstr *tstr_new_len(const char *s, size_t len);
+
+/**
+ * @brief 创建常量池驻留 String 对象。
+ *
+ * @details String 不可变，驻留对象可安全共享：内容哈希在建池时缓存，
+ * 并由所属常量池持有一个引用，随常量池一并释放。
+ *
+ * @param s 以空字符结尾的源字符串。
+ * @return 新驻留对象，随所属常量池释放。
+ */
+tstr *tstr_new_interned(const char *s);
 
 /**
  * @brief 以两个整型边界执行切片读取（专用切片指令的运行期入口）。

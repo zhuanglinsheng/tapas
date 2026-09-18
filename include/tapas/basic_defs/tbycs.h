@@ -433,6 +433,8 @@ typedef struct {
 
 /* 可序列化字节码封装 */
 
+struct tstr; /**< String 对象；完整定义位于 `objects/tstr.h`。 */
+
 /** 可序列化常量池的连续数组表示。 */
 typedef struct {
 	uint_csts ncints; /**< 整数常量数量。 */
@@ -441,6 +443,7 @@ typedef struct {
 	long *cints;      /**< 整数常量数组。 */
 	tstring **cstrs;  /**< 字符串常量数组。 */
 	double *cflts;    /**< 浮点常量数组。 */
+	struct tstr **csobjs; /**< 驻留字符串常量对象数组，与 `cstrs` 平行。 */
 } twrapper_consts;
 
 /** 可保存到 `.tapc` 文件或交给 VM 执行的字节码封装。 */

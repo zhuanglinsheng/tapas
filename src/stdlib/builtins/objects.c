@@ -69,6 +69,35 @@ static void builtin_identical(tobj *params, uint_regs len, tobj *vre)
 	tobj_set_bool(vre, tobj_identical(&params[0], &params[1]));
 }
 
+static void builtin_join(tobj *params, uint_regs len, tobj *vre)
+{
+	tstdlib_require_arguments("join", len, 2);
+	if (params[0].type != tcompo ||
+	    tobj_compo_type(&params[0]) != compo_tlist)
+		twarn(ErrRuntime_ParamsType, "join", "List required");
+	if (params[1].type != tcompo ||
+	    tobj_compo_type(&params[1]) != compo_tstr)
+		twarn(ErrRuntime_ParamsType, "join", "String separator required");
+	tlist *values = (tlist *)params[0].val.v_tcompo;
+	tstring *separator = ((tstr *)params[1].val.v_tcompo)->data;
+	tstring *out = tstring_new("");
+	if (!out)
+		twarn(ErrRuntime_Other, "join", "out of memory");
+	for (uint_objs i = 0; i < values->items.len; i++) {
+		const tobj *element = &values->items.data[i];
+		if (element->type != tcompo ||
+		    tobj_compo_type(element) != compo_tstr)
+			twarn(ErrRuntime_ParamsType, "join",
+			      "String elements required");
+		if (i > 0)
+			tstring_append_ts(out, separator);
+		tstring_append_ts(out, ((tstr *)element->val.v_tcompo)->data);
+	}
+	tobj_set_compo(vre, (tcompo_v *)tstr_new_len(
+		tstring_cstr(out), tstring_len(out)));
+	tstring_free(out);
+}
+
 
 static const textension_symbol symbols[] = {
 	{
@@ -99,6 +128,15 @@ static const textension_symbol symbols[] = {
 		.maximum_arguments = 1,
 		.result_relation = tnative_result_argument,
 		.result_argument = 0
+	},
+	{
+		.name = "join",
+		.type = "Function[List, String] -> String",
+		.detail = "join(values: List[String], separator: String) -> String",
+		.kind = textension_function,
+		.function = builtin_join,
+		.minimum_arguments = 2,
+		.maximum_arguments = 2
 	},
 	{
 		.name = "identical",

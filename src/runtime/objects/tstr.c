@@ -6,14 +6,32 @@
 #include <stdlib.h>
 #include <string.h>
 
-tstr *tstr_new_len(const char *text, size_t length)
+/* Strings are immutable, so two mechanisms make the common short-lived
+ * cases cheap: a freelist recycles fixed-size objects (as titer/tpair do),
+ * and a canonical byte table makes every one-byte string a shared object,
+ * so dictionary keys built from reads and slices compare by pointer. */
+
+#define TSTR_POOL_MAX 256u
+static _Thread_local tstr *tstr_pool;
+static _Thread_local unsigned tstr_pool_len;
+
+static tstr *tstr_byte_canonical[256];
+
+static tstr *tstr_alloc_raw(const char *text, size_t length)
 {
-	tstr *string = (tstr *)malloc(sizeof(tstr));
-	if (!string)
-		return nullptr;
+	tstr *string = tstr_pool;
+	if (string) {
+		memcpy(&tstr_pool, &string->base.vtable, sizeof(tstr_pool));
+		tstr_pool_len--;
+	} else {
+		string = (tstr *)malloc(sizeof(tstr));
+		if (!string)
+			return nullptr;
+	}
 	string->base.vtable = &tstr_vtable;
 	string->base.refctr = 0;
 	string->data = &string->storage;
+	string->hash = 0;
 	if (!tstring_init_len(string->data, text, length)) {
 		free(string);
 		return nullptr;
@@ -21,9 +39,42 @@ tstr *tstr_new_len(const char *text, size_t length)
 	return string;
 }
 
+/* Canonical objects live for the process: they are created with one
+ * baseline reference and their free is a no-op. */
+static tstr *tstr_byte_string(unsigned char byte)
+{
+	tstr *string = tstr_byte_canonical[byte];
+	if (string)
+		return string;
+	string = tstr_alloc_raw((const char *)&byte, 1);
+	if (!string)
+		return nullptr;
+	string->hash = tstring_hash(string->data);
+	string->base.refctr = 1;
+	tstr_byte_canonical[byte] = string;
+	return string;
+}
+
+tstr *tstr_new_len(const char *text, size_t length)
+{
+	if (length == 1)
+		return tstr_byte_string((unsigned char)text[0]);
+	return tstr_alloc_raw(text, length);
+}
+
 tstr *tstr_new(const char *text)
 {
 	return tstr_new_len(text ? text : "", text ? strlen(text) : 0);
+}
+
+tstr *tstr_new_interned(const char *text)
+{
+	tstr *string = tstr_new(text);
+	if (string) {
+		string->hash = tstring_hash(string->data);
+		string->base.refctr = 1;
+	}
+	return string;
 }
 
 /*----------------------- Required Vtable Operations -----------------------*/
@@ -33,10 +84,12 @@ static const char *tstr_get_type(void)
 	return "String";
 }
 
+
 static tcompo_type tstr_get_code(void)
 {
 	return compo_tstr;
 }
+
 
 static long tstr_len(void *self)
 {
@@ -47,24 +100,23 @@ static long tstr_len(void *self)
 static void *tstr_copy(void *self)
 {
 	tstr *s = (tstr *)self;
-	tstr *n = (tstr *)malloc(sizeof(tstr));
-	if (!n)
-		return nullptr;
-	n->base.vtable = s->base.vtable;
-	n->base.refctr = 0;
-	n->data = &n->storage;
-	if (!tstring_init_len(n->data, tstring_cstr(s->data),
-			      tstring_len(s->data))) {
-		free(n);
-		return nullptr;
-	}
-	return n;
+	return tstr_new_len(tstring_cstr(s->data), tstring_len(s->data));
 }
 
 static void tstr_free(void *self)
 {
 	tstr *s = (tstr *)self;
+	/* Canonical byte strings are immortal. */
+	if (tstring_len(s->data) == 1 &&
+	    tstr_byte_canonical[(unsigned char)tstring_cstr(s->data)[0]] == s)
+		return;
 	tstring_deinit(&s->storage);
+	if (tstr_pool_len < TSTR_POOL_MAX) {
+		memcpy(&s->base.vtable, &tstr_pool, sizeof(tstr_pool));
+		tstr_pool = s;
+		tstr_pool_len++;
+		return;
+	}
 	free(s);
 }
 
@@ -72,6 +124,8 @@ static int tstr_identical(void *self, void *other)
 {
 	tstr *a = (tstr *)self;
 	tstr *b = (tstr *)other;
+	if (a == b)
+		return 1;
 	return tstring_eq(a->data, b->data) ? 1 : 0;
 }
 
@@ -90,22 +144,11 @@ static tstring *tstr_tostring_full(void *self)
 /*------------------------------ Capabilities ------------------------------*/
 
 /*
- * String supports indexed reads and writes, including Pair ranges, and
- * append. It is not Iterable because Tapas has not defined byte, code-point,
- * or grapheme iteration semantics.
+ * String is immutable: it supports indexed reads, including Pair ranges,
+ * but no in-place writes or appends. Composition goes through join() and
+ * friends, which allocate fresh strings. It is not Iterable because Tapas
+ * has not defined byte, code-point, or grapheme iteration semantics.
  */
-
-static void string_append(void *self, const tobj *value)
-{
-	tstr *string = (tstr *)self;
-	if (value->type == tcompo && tobj_compo_type(value) == compo_tstr) {
-		tstring_append_ts(string->data, ((tstr *)value->val.v_tcompo)->data);
-		return;
-	}
-	tstring *rendered = tobj_tostring_full(value);
-	tstring_append_ts(string->data, rendered);
-	tstring_free(rendered);
-}
 
 static int pair_to_range(const tobj *param, long len, long *start, long *end)
 {
@@ -128,20 +171,6 @@ static int pair_to_range(const tobj *param, long len, long *start, long *end)
 	return 1;
 }
 
-static void tstr_replace_range(tstr *s, long start, long end, const char *repl)
-{
-	size_t slen = tstring_len(s->data);
-	size_t rlen = strlen(repl);
-	tstring *next = tstring_new_cap((size_t)start + rlen +
-					(slen - (size_t)end) + 1);
-	tstring_append_len(next, tstring_cstr(s->data), (size_t)start);
-	tstring_append_len(next, repl, rlen);
-	tstring_append_len(next,
-			   tstring_cstr(s->data) + end,
-			   slen - (size_t)end);
-	tstring_assign_ts(s->data, next);
-	tstring_free(next);
-}
 
 /* String indexing helper */
 void tstr_slice_index(tstr *s, const tobj *params, tobj *vre)
@@ -191,49 +220,15 @@ tstr_idx(tstr *s, const tobj *params, uint_regs np, tobj *vre)
 		(tcompo_v *)tstr_new_len(tstring_cstr(s->data) + idx, 1));
 }
 
-static void
-tstr_iset(tstr *s, const tobj *params, uint_regs np, const tobj *vright)
-{
-	if (np != 1)
-		twarn(ErrRuntime_ParamsCtr, "tstr_iset", "");
-	if (vright->type != tcompo || tobj_compo_type(vright) != compo_tstr)
-		twarn(ErrRuntime_ParamsType, "tstr_iset", "");
-	const char *repl = tstring_cstr(((tstr *)vright->val.v_tcompo)->data);
-	long start, end;
-	if (pair_to_range(&params[0],
-			  (long)tstring_len(s->data),
-			  &start,
-			  &end)) {
-		tstr_replace_range(s, start, end, repl);
-		return;
-	}
-	if (params[0].type != tint)
-		twarn(ErrRuntime_ParamsType, "tstr_iset", "");
-	long idx = params[0].val.v_tint;
-	long slen = (long)tstring_len(s->data);
-	if (idx < 0)
-		idx += slen;
-	if (idx < 0 || idx >= slen)
-		twarn(ErrRuntime_IdxOutRange, "tstr_iset", "");
-	tstr_replace_range(s, idx, idx + 1, repl);
-}
-
 static void string_index(void *self, const tobj *arguments,
 			 uint_regs argument_count, tobj *result)
 {
 	tstr_idx((tstr *)self, arguments, argument_count, result);
 }
 
-static void string_index_set(void *self, const tobj *arguments,
-			     uint_regs argument_count, const tobj *value)
-{
-	tstr_iset((tstr *)self, arguments, argument_count, value);
-}
 
 static const tcompo_capabilities string_capabilities = {
-	.indexable = string_index,
-	.index_settable = string_index_set,
-	.appendable = string_append
+	.indexable = string_index
 };
 
 tcompo_vtable tstr_vtable = {

@@ -39,11 +39,11 @@ function longest_common_subsequence(left: String, right: String) -> String
         }
     }
 
-    let result: String = ''
+    let ordered: List[String] = []
     for (let index in iter(reversed.len() - 1, -1, -1)) {
-        result.append(reversed[index])
+        ordered.append(reversed[index])
     }
-    return str(result)
+    return join(ordered, '')
 }
 
 let left: String = 'ALGORITHM'

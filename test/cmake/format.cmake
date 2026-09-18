@@ -43,7 +43,7 @@ file(WRITE "${EDITS_CHECK}" "import format as formatter
 
 let source = io::read_text('${SAMPLE}')
 let changes = formatter::edits(source)
-let output = ''
+let parts = []
 let position = 0
 let valid = true
 for (let change in changes) {
@@ -51,18 +51,18 @@ for (let change in changes) {
         change['start'] < position or change['end'] < change['start']) {
         valid = false
     }
-    output.append(source[position:change['start']])
-    output.append(change['text'])
+    parts.append(source[position:change['start']])
+    parts.append(change['text'])
     position = change['end']
 }
-output.append(source[position:source.len()])
+parts.append(source[position:source.len()])
+let output = join(parts, '')
 let formatted = formatter::source(source)
 print(valid and len(changes) > 0)
 print(output == formatted)
 let first = changes[0]
-let partial = source[0:first['start']]
-partial.append(first['text'])
-partial.append(source[first['end']:source.len()])
+let partial_parts = [source[0:first['start']], first['text'], source[first['end']:source.len()]]
+let partial = join(partial_parts, '')
 print(len(changes) > 1 and partial != source and partial != formatted)
 print(len(formatter::edits(formatted)) == 0)
 ")

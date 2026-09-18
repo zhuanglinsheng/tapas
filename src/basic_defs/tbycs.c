@@ -1,6 +1,7 @@
 #include "tapas/basic_defs/tbycs.h"
 #include "tapas/basic_defs/tbasis.h"
 #include "tapas/dsa/tstring.h"
+#include "tapas/objects/tstr.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -721,8 +722,19 @@ twrapper *tanalyser_wrap(tvmcmd_vect *tcmds, tconsts *consts, tcinfo *info)
 			if (!wrapper->consts.cstrs[i])
 				goto wrap_err;
 		}
+		wrapper->consts.csobjs =
+			(tstr **)calloc(wrapper->consts.ncstrs, sizeof(tstr *));
+		if (!wrapper->consts.csobjs)
+			goto wrap_err;
+		for (i = 0; i < wrapper->consts.ncstrs; i++) {
+			wrapper->consts.csobjs[i] = tstr_new_interned(
+				tstring_cstr(wrapper->consts.cstrs[i]));
+			if (!wrapper->consts.csobjs[i])
+				goto wrap_err;
+		}
 	} else {
 		wrapper->consts.cstrs = nullptr;
+		wrapper->consts.csobjs = nullptr;
 	}
 
 	/* Integers */
@@ -1072,6 +1084,25 @@ twrapper *tanalyser_load_bin_file(const char *filename)
 	}
 load_done:;
 
+	/* Interned string objects */
+	if (wrapper->consts.ncstrs > 0) {
+		uint_csts ncstrs = wrapper->consts.ncstrs;
+		wrapper->consts.csobjs = (tstr **)calloc(ncstrs, sizeof(tstr *));
+		if (wrapper->consts.csobjs) {
+			for (i = 0; i < ncstrs; i++) {
+				wrapper->consts.csobjs[i] = tstr_new_interned(
+					tstring_cstr(wrapper->consts.cstrs[i]));
+				if (!wrapper->consts.csobjs[i])
+					break;
+			}
+		}
+		if (!wrapper->consts.csobjs || i < ncstrs) {
+			tanalyser_clean_wrapper(wrapper);
+			fclose(f);
+			return nullptr;
+		}
+	}
+
 	tapc_read_source_map(f, wrapper);
 
 	fclose(f);
@@ -1096,6 +1127,18 @@ void tanalyser_clean_wrapper(twrapper *wrapper)
 		for (i = 0; i < wrapper->consts.ncstrs; i++)
 			tstring_free(wrapper->consts.cstrs[i]);
 		free(wrapper->consts.cstrs);
+		if (wrapper->consts.csobjs) {
+			for (i = 0; i < wrapper->consts.ncstrs; i++) {
+				tstr *shared = wrapper->consts.csobjs[i];
+				if (!shared)
+					continue;
+				if (shared->base.refctr > 0)
+					shared->base.refctr--;
+				if (shared->base.refctr == 0)
+					shared->base.vtable->free(shared);
+			}
+			free(wrapper->consts.csobjs);
+		}
 	}
 	free(wrapper);
 }

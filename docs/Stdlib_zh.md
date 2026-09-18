@@ -82,7 +82,8 @@
 |---|---|---|
 | `push_front(list: List, value: AnyType)` | `Nil` | 在列表开头插入元素。 |
 | `push_back(list: List, value: AnyType)` | `Nil` | 在列表末尾插入元素。 |
-| `append(target: Appendable, value: AnyType)` | `Nil` | 追加文本、元素或对。 |
+| `join(values: List[String], separator: String)` | `String` | 用分隔符拼接字符串列表，分隔符可为空串。 |
+| `append(target: Appendable, value: AnyType)` | `Nil` | 追加元素或对（列表、字典等容器）。String 不可变，拼接请使用 `join`。 |
 | `insert(list: List, value: AnyType, index: Int)` | `Nil` | 在索引前插入。 |
 | `pop_front(List[T])` | `T` | 删除并返回第一个元素。 |
 | `pop_back(List[T])` | `T` | 删除并返回最后一个元素。 |
