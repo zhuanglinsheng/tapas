@@ -1,0 +1,52 @@
+function count_kmers(sequence, k)
+{
+    let counts = {}
+    for (let i in 0 to (sequence.len() - k + 1)) {
+        let key = sequence[i:i + k]
+        if (key in counts) {
+            counts[key] = counts[key] + 1
+        } else {
+            counts[key] = 1
+        }
+    }
+    return counts.copy()
+}
+
+let probes = []
+for (let index in 0 to 4) {
+    probes.append('ACGT'[index])
+}
+for (let a in 0 to 4) {
+    for (let b in 0 to 4) {
+        probes.append(join(['ACGT'[a], 'ACGT'[b]], ''))
+    }
+}
+
+let parts = []
+let seed = 42
+for (let index in 0 to 120000) {
+    seed = (seed * 1103515245 + 12345) % 2147483648
+    parts.append('ACGT'[seed % 4])
+}
+let sequence = join(parts, '')
+
+let started = clock_ns()
+let result = 0
+for (let round in 0 to 6) {
+    let single = count_kmers(sequence, 1)
+    for (let i in 0 to 4) {
+        if (probes[i] in single) {
+            result = result + single[probes[i]]
+        }
+    }
+    let pairs = count_kmers(sequence, 2)
+    for (let i in 4 to 20) {
+        if (probes[i] in pairs) {
+            result = result + pairs[probes[i]]
+        }
+    }
+}
+let elapsed = clock_ns() - started
+
+print(result)
+print(elapsed)

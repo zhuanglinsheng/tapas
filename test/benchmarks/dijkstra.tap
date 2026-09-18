@@ -1,0 +1,65 @@
+function dijkstra(graph, source, size)
+{
+    let dist = []
+    let visited = []
+    for (let i in 0 to size) {
+        dist.append(1000000000000)
+        visited.append(false)
+    }
+    dist[source] = 0
+    for (let step in 0 to size) {
+        let best = -1
+        let best_dist = 1000000000000
+        for (let i in 0 to size) {
+            if (not visited[i] and dist[i] < best_dist) {
+                best = i
+                best_dist = dist[i]
+            }
+        }
+        if (best < 0) {
+            break
+        }
+        visited[best] = true
+        if (best in graph) {
+            for (let edge in graph[best]) {
+                let target = edge[0]
+                let alt = dist[best] + edge[1]
+                if (alt < dist[target]) {
+                    dist[target] = alt
+                }
+            }
+        }
+    }
+    return copy(dist)
+}
+
+let size = 250
+let degree = 6
+let graph = {}
+for (let i in 0 to size) {
+    let edges = []
+    edges.append([(i + 1) % size, 1])
+    for (let k in 0 to degree) {
+        let j = (i * 7 + k * 13 + 3) % size
+        let w = (i * 5 + k * 11 + 7) % 19 + 1
+        edges.append([j, w])
+    }
+    graph[i] = edges
+}
+let sources = [0, size / 4, size / 2, size * 3 / 4]
+let rounds = 4
+
+let started = clock_ns()
+var checksum = 0
+for (let round in 0 to rounds) {
+    for (let s in 0 to len(sources)) {
+        let dist = dijkstra(graph, sources[s], size)
+        for (let i in 0 to size) {
+            checksum = checksum + dist[i]
+        }
+    }
+}
+let elapsed = clock_ns() - started
+
+print(checksum)
+print(elapsed)

@@ -16,6 +16,16 @@ ALGORITHM_BENCHMARKS = (
     "n_queens",
     "longest_common_subsequence",
     "matrix_multiply",
+    "sudoku",
+    "dijkstra",
+    "optimize",
+    "kmp",
+    "k_nucleotide",
+    "binary_trees",
+    "lru_cache",
+    "huffman",
+    "fannkuch",
+    "n_body",
 )
 
 HOT_PATH_BENCHMARKS = (
@@ -31,6 +41,8 @@ BENCHMARKS = ALGORITHM_BENCHMARKS + HOT_PATH_BENCHMARKS
 
 
 def lua_version_text(lua: str) -> str:
+    # Lua versions differ in where `-v` writes: 5.4 prints to stderr,
+    # newer builds to stdout. Try both so the report records one line.
     probe = subprocess.run(
         [lua, "-v"], check=True, capture_output=True, text=True
     )
@@ -51,7 +63,6 @@ def write_markdown(
     lua_version: str,
     runs: int,
     rows: list[tuple[str, int, int, int, float, float]],
-    means: dict[str, float],
     language: str,
 ) -> None:
     tapas_version = subprocess.run(
@@ -61,7 +72,7 @@ def write_markdown(
         separator = "："
         period = "。"
         title = "# Tapas 与 Python、Lua 性能比较"
-        navigation = "简体中文 | [English](Results_en.md) | [项目主页](../../README.md)"
+        navigation = "简体中文 | [English](README_en.md) | [项目主页](../../README.md)"
         date_label = "测试日期"
         environment_title = "## 测试环境"
         system_label = "系统"
@@ -78,18 +89,35 @@ def write_markdown(
         hot_path_title = "基础热路径"
         hot_path_description = "这些程序分别放大某一种常见 VM 操作，用来定位解释器的基础开销。"
         group_mean = "本组几何平均数"
-        total_mean = "全部项目的几何平均数"
+        usage_title = "## 用法"
+        usage = (
+            "测试应使用 Release 构建，并需要 `PATH` 中的 `lua` 可执行文件（可用 `--lua` 指定）。",
+            "",
+            "```sh",
+            "python3 test/benchmarks/compare_script.py build-release/bin/tapas",
+            "```",
+            "",
+            ("脚本先预热一次，再比较每项 3 次有效运行的中位数（可用 `--runs` "
+             "调整），打印摘要并更新本目录的两份 README 文档。"),
+            ("只查看控制台输出、不更新文档时，加 `--no-markdown`；"
+             "用 `--markdown 路径` 可指定其他报告位置。"),
+            ("重复 `--markdown` 会用同一组测量数据生成多份报告，"
+             "避免数字因重复运行而不同。"),
+            "要求每一项都快于 Python 时，使用 `--require-faster`。",
+            ("性能门槛不属于常规测试，因为 CPU 负载、电源状态、编译器和 "
+             "Python 版本都会影响结果；发布比较结果时应同时记录运行环境。"),
+        )
         notes_title = "## 说明"
         notes = (
             "这些程序用于比较三种实现执行相同算法时的解释器开销，不代表大型应用的完整性能。",
             "结果会受系统负载、电源状态、编译器版本、Python 版本和 Lua 版本影响。",
-            "更新 VM 或运行环境后，应使用本目录 README 中的命令重新生成。",
+            "更新 VM 或运行环境后，应使用上文「用法」中的命令重新生成。",
         )
     else:
         separator = ": "
         period = "."
         title = "# Tapas, Python, and Lua Performance Comparison"
-        navigation = "[简体中文](Results_zh.md) | English | [Project Home](../../README_en.md)"
+        navigation = "[简体中文](README.md) | English | [Project Home](../../README_en.md)"
         date_label = "Test date"
         environment_title = "## Test Environment"
         system_label = "System"
@@ -108,12 +136,35 @@ def write_markdown(
         hot_path_title = "VM Hot Paths"
         hot_path_description = "Each program amplifies one common VM operation to help isolate interpreter overhead."
         group_mean = "The geometric mean ratio for this group"
-        total_mean = "The geometric mean ratio across all benchmarks"
+        usage_title = "## Usage"
+        usage = (
+            ("Use a Release build and a `lua` executable on `PATH` "
+             "(override with `--lua`)."),
+            "",
+            "```sh",
+            "python3 test/benchmarks/compare_script.py build-release/bin/tapas",
+            "```",
+            "",
+            ("The script performs one warm-up and compares the median of "
+             "three measured runs per benchmark (tune with `--runs`), prints "
+             "a summary, and updates both README documents in this directory."),
+            ("Add `--no-markdown` for console output only, or pass "
+             "`--markdown PATH` to write a report elsewhere."),
+            ("Repeating `--markdown` writes multiple reports from the same "
+             "measurements, so their numbers cannot diverge because of a "
+             "second run."),
+            ("To require Tapas to be faster than Python in every benchmark, "
+             "use `--require-faster`."),
+            ("Performance thresholds are not part of the regular test suite "
+             "because CPU load, power settings, compiler version, and Python "
+             "version affect the results; published comparisons should "
+             "always include the runtime environment."),
+        )
         notes_title = "## Notes"
         notes = (
             "These programs compare interpreter overhead while all implementations execute the same algorithms; they do not represent complete application performance.",
             "Results depend on system load, power settings, compiler version, Python version, and Lua version.",
-            "Regenerate the reports with the commands in this directory's README after changing the VM or runtime environment.",
+            "Regenerate the reports with the commands in the Usage section after changing the VM or runtime environment.",
         )
     lines = [
         title,
@@ -188,9 +239,9 @@ def write_markdown(
     )
     lines.extend(
         [
-            (f"{total_mean}{separator}Tapas/Python "
-             f"**{means['python']:.3f}×**，Tapas/Lua "
-             f"**{means['lua']:.3f}×**{period}"),
+            usage_title,
+            "",
+            *usage,
             "",
             notes_title,
             "",
@@ -235,8 +286,8 @@ def main() -> int:
     parser.add_argument(
         "--runs",
         type=int,
-        default=11,
-        help="valid runs per benchmark (default: 11)",
+        default=3,
+        help="valid runs per benchmark (default: 3)",
     )
     parser.add_argument(
         "--require-faster",
@@ -249,7 +300,7 @@ def main() -> int:
         action="append",
         help=("write the comparison and environment to a Markdown file; "
               "repeat for additional reports; by default both "
-              "Results_zh.md and Results_en.md next to this script are "
+              "README.md and README_en.md next to this script are "
               "updated from one run"),
     )
     parser.add_argument(
@@ -306,10 +357,6 @@ def main() -> int:
         if args.require_faster and ratio_python >= 1.0:
             failed = True
 
-    means = {
-        "python": statistics.geometric_mean(python_ratios),
-        "lua": statistics.geometric_mean(lua_ratios),
-    }
     ratios_by_name = {row[0]: (row[4], row[5]) for row in rows}
 
     def family_mean(runtimes: "list[tuple[str, ...]]", index: int) -> float:
@@ -325,12 +372,10 @@ def main() -> int:
           f"{family_mean(list(ALGORITHM_BENCHMARKS), 1):.3f}x")
     print("hot-path geometric mean Tapas/Lua: "
           f"{family_mean(list(HOT_PATH_BENCHMARKS), 1):.3f}x")
-    print(f"geometric mean Tapas/Python: {means['python']:.3f}x")
-    print(f"geometric mean Tapas/Lua: {means['lua']:.3f}x")
 
     markdowns = args.markdown
     if markdowns is None and not args.no_markdown:
-        markdowns = [HERE / "Results_zh.md", HERE / "Results_en.md"]
+        markdowns = [HERE / "README.md", HERE / "README_en.md"]
     for markdown in markdowns or ():
         markdown_language = "en" if markdown.name.endswith("_en.md") else "zh"
         write_markdown(
@@ -339,7 +384,6 @@ def main() -> int:
             lua_version,
             args.runs,
             rows,
-            means,
             markdown_language,
         )
         print(f"wrote Markdown report: {markdown}")

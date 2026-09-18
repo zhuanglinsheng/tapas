@@ -1,0 +1,36 @@
+function make_tree(depth)
+{
+    if (depth == 0) {
+        return []
+    }
+    let left = this(depth - 1)
+    let right = this(depth - 1)
+    return [left, right]
+}
+
+function checksum(node)
+{
+    if (node.len() == 0) {
+        return 1
+    }
+    return 1 + this(node[0]) + this(node[1])
+}
+
+let max_depth = 16
+
+let started = clock_ns()
+let result = 0
+for (let depth in 4 to (max_depth + 1)) {
+    let iterations = 1
+    for (let i in 0 to (max_depth - depth + 2)) {
+        iterations = iterations * 2
+    }
+    for (let iteration in 0 to iterations) {
+        let tree = make_tree(depth)
+        result = result + checksum(tree)
+    }
+}
+let elapsed = clock_ns() - started
+
+print(result)
+print(elapsed)

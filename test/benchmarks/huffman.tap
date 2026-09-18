@@ -1,0 +1,79 @@
+function find_min(nodes)
+{
+    let best = -1
+    for (let i in 0 to nodes.len()) {
+        if (best < 0 or nodes[i][0] < nodes[best][0]) {
+            best = i
+        }
+    }
+    return best + 0
+}
+
+function remove_at(nodes, index)
+{
+    let rest = []
+    for (let i in 0 to nodes.len()) {
+        if (i != index) {
+            rest.append(nodes[i])
+        }
+    }
+    return rest.copy()
+}
+
+function total_length(node, depth)
+{
+    if (types::matches(node[1], types::String)) {
+        return node[0] * depth
+    }
+    let children = node[1]
+    return this(children[0], depth + 1) + this(children[1], depth + 1)
+}
+
+function huffman_total(text)
+{
+    let freq = {}
+    for (let i in 0 to text.len()) {
+        let ch = text[i]
+        if (ch in freq) {
+            freq[ch] = freq[ch] + 1
+        } else {
+            freq[ch] = 1
+        }
+    }
+
+    // Fixed symbol order makes ties in the minimum scan deterministic.
+    let nodes = []
+    for (let i in 0 to 8) {
+        let ch = 'abcdefgh'[i]
+        if (ch in freq) {
+            nodes.append(freq[ch] : ch)
+        }
+    }
+
+    while (nodes.len() > 1) {
+        let first = find_min(nodes)
+        let left = nodes[first]
+        nodes = remove_at(nodes, first)
+        let second = find_min(nodes)
+        let right = nodes[second]
+        nodes = remove_at(nodes, second)
+        nodes.append((left[0] + right[0]) : (left : right))
+    }
+
+    return total_length(nodes[0], 0) + 0
+}
+
+let chars = []
+let seed = 42
+for (let index in 0 to 40000) {
+    seed = (seed * 1103515245 + 12345) % 2147483648
+    chars.append('abcdefgh'[seed % 8])
+}
+let text = join(chars, '')
+
+let started = clock_ns()
+let result = huffman_total(text)
+let elapsed = clock_ns() - started
+
+print(result)
+print(elapsed)

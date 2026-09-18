@@ -1,0 +1,51 @@
+function kmp_search(text, pattern)
+{
+    let pi = []
+    for (let i in 0 to pattern.len()) {
+        pi.append(0)
+    }
+    let j = 0
+    for (let i in 1 to pattern.len()) {
+        while (j > 0 and pattern[i] != pattern[j]) {
+            j = pi[j - 1]
+        }
+        if (pattern[i] == pattern[j]) {
+            j = j + 1
+        }
+        pi[i] = j
+    }
+
+    let total = 0
+    j = 0
+    for (let i in 0 to text.len()) {
+        while (j > 0 and text[i] != pattern[j]) {
+            j = pi[j - 1]
+        }
+        if (text[i] == pattern[j]) {
+            j = j + 1
+        }
+        if (j == pattern.len()) {
+            total = total + i - pattern.len() + 1
+            j = pi[j - 1]
+        }
+    }
+    return total + 0
+}
+
+let text_parts = []
+for (let i in 0 to 500) {
+    text_parts.append('ABCABABCAB')
+}
+let text = join(text_parts, '')
+let pattern = 'ABCAB'
+let rounds = 60
+
+let started = clock_ns()
+let result = 0
+for (let round in 0 to rounds) {
+    result = result + kmp_search(text, pattern)
+}
+let elapsed = clock_ns() - started
+
+print(result)
+print(elapsed)

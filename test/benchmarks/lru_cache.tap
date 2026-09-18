@@ -1,0 +1,57 @@
+// The linear-scan move is in place, like order.remove in Python and
+// table.remove in Lua: delete by index, then append.
+// The linear-scan move is in place, like order.remove in Python and
+// table.remove in Lua: delete by index, then append.
+function move_to_end(order, key)
+{
+    for (let i in 0 to order.len()) {
+        if (order[i] == key) {
+            delete(order, i)
+            order.append(key)
+            return
+        }
+    }
+}
+
+function lru_work(capacity, operations)
+{
+    let order = []
+    let values = {}
+    let checksum = 0
+    let seed = 12345
+    for (let op in 0 to operations) {
+        seed = (seed * 1103515245 + 12345) % 2147483648
+        let key = seed % 256
+        if (seed % 10 < 7) {
+            if (key in values) {
+                move_to_end(order, key)
+                checksum = checksum + values[key]
+            }
+        } else {
+            if (key in values) {
+                move_to_end(order, key)
+                values[key] = key * 3
+            } else {
+                if (order.len() >= capacity) {
+                    let evicted = order[0]
+                    delete(order, 0)
+                    delete(values, evicted)
+                    checksum = checksum - evicted
+                }
+                order.append(key)
+                values[key] = key * 3
+            }
+        }
+    }
+    return checksum + 0
+}
+
+let capacity = 64
+let operations = 300000
+
+let started = clock_ns()
+let result = lru_work(capacity, operations)
+let elapsed = clock_ns() - started
+
+print(result)
+print(elapsed)
