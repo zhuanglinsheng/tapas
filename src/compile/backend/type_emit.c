@@ -55,14 +55,14 @@ static const tcompile_export *module_member_export(
 	return exported;
 }
 
-void tast_free_field_order(tstring **order, uint_objs count)
+void tast_free_field_order(tstring **order, uint_count count)
 {
-	for (uint_objs i = 0; i < count; i++) tstring_free(order[i]);
+	for (uint_count i = 0; i < count; i++) tstring_free(order[i]);
 	free(order);
 }
 
 static void copy_binding_field_order(const tcompile_binding *binding,
-				     tstring ***order, uint_objs *count)
+				     tstring ***order, uint_count *count)
 {
 	*order = nullptr;
 	*count = 0;
@@ -70,13 +70,13 @@ static void copy_binding_field_order(const tcompile_binding *binding,
 	*order = (tstring **)calloc(
 		binding->field_order_count, sizeof(**order));
 	if (!*order) abort();
-	for (uint_objs i = 0; i < binding->field_order_count; i++)
+	for (uint_count i = 0; i < binding->field_order_count; i++)
 		(*order)[i] = tstring_dup(binding->field_order[i]);
 	*count = binding->field_order_count;
 }
 
 static void copy_export_field_order(const tcompile_export *exported,
-				    tstring ***order, uint_objs *count)
+				    tstring ***order, uint_count *count)
 {
 	*order = nullptr;
 	*count = 0;
@@ -84,13 +84,13 @@ static void copy_export_field_order(const tcompile_export *exported,
 	*order = (tstring **)calloc(
 		exported->field_order_count, sizeof(**order));
 	if (!*order) abort();
-	for (uint_objs i = 0; i < exported->field_order_count; i++)
+	for (uint_count i = 0; i < exported->field_order_count; i++)
 		(*order)[i] = tstring_dup(exported->field_order[i]);
 	*count = exported->field_order_count;
 }
 
 static void copy_static_field_order(tast_emitter *emitter, tast_id id,
-				    tstring ***order, uint_objs *count)
+				    tstring ***order, uint_count *count)
 {
 	tstatic_type_id type_id = ttype_info_node_static_value(
 		&emitter->frontend->types, id);
@@ -112,7 +112,7 @@ static void copy_static_field_order(tast_emitter *emitter, tast_id id,
 }
 
 void tast_static_type_field_order(tast_emitter *emitter, tast_id id,
-				  tstring ***order, uint_objs *count)
+				  tstring ***order, uint_count *count)
 {
 	*order = nullptr;
 	*count = 0;
@@ -139,7 +139,7 @@ void tast_static_type_field_order(tast_emitter *emitter, tast_id id,
 
 void tast_annotation_field_order(tast_emitter *emitter,
 				 tsource_span annotation,
-				 tstring ***order, uint_objs *count)
+				 tstring ***order, uint_count *count)
 {
 	*order = nullptr;
 	*count = 0;

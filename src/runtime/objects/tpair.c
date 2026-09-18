@@ -35,10 +35,6 @@ static const char *tpair_get_type(void)
 	return "Pair";
 }
 
-static tcompo_type tpair_get_code(void)
-{
-	return compo_tpair;
-}
 
 static long tpair_len(void *self)
 {
@@ -180,7 +176,7 @@ static const tcompo_capabilities pair_capabilities = {
 
 tcompo_vtable tpair_vtable = {
 	.get_type = tpair_get_type,
-	.get_compo_type_code = tpair_get_code,
+	.compo_code = compo_tpair,
 	.len = tpair_len,
 	.copy = tpair_copy,
 	.free = tpair_free,

@@ -890,10 +890,6 @@ static const char *distribution_type(void)
 	return "finite::Distribution";
 }
 
-static tcompo_type finite_code(void)
-{
-	return compo_extension;
-}
 
 static long index_len(void *self)
 {
@@ -993,7 +989,7 @@ static tstring *distribution_string(void *self)
 
 tcompo_vtable tfinite_index_vtable = {
 	.get_type = index_type,
-	.get_compo_type_code = finite_code,
+	.compo_code = compo_extension,
 	.len = index_len,
 	.copy = index_copy,
 	.free = index_free,
@@ -1005,7 +1001,7 @@ tcompo_vtable tfinite_index_vtable = {
 
 tcompo_vtable tfinite_distribution_vtable = {
 	.get_type = distribution_type,
-	.get_compo_type_code = finite_code,
+	.compo_code = compo_extension,
 	.len = distribution_len,
 	.copy = distribution_copy,
 	.free = distribution_free,

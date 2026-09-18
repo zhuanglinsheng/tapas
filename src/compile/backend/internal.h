@@ -16,7 +16,7 @@ void tcompile_set_metadata(tobj_ctr *counter, uint_objs slot,
 			   ttypeval *value_type, ttypeval *type_value,
 			   int has_annotation);
 void tcompile_set_field_order(tobj_ctr *counter, uint_objs slot,
-			      tstring *const *field_order, uint_objs count);
+			      tstring *const *field_order, uint_count count);
 void tcompile_module_interface_free(tcompile_module_interface *interface);
 const tcompile_export *tcompile_module_export(
 	const tcompile_module_interface *interface, const char *name);

@@ -111,7 +111,6 @@ void trule_ir_add_item(trule_ir *ir, trule_item *item)
 /*----------------------- Required Vtable Operations -----------------------*/
 
 static const char *ir_type(void) { return "RuleIR"; }
-static tcompo_type ir_code(void) { return compo_trule_ir; }
 static long ir_len(void *self) { (void)self; return 0; }
 
 static void *ir_copy(void *self)
@@ -267,7 +266,7 @@ static const tcompo_capabilities ir_capabilities = {
 
 tcompo_vtable trule_ir_vtable = {
 	.get_type = ir_type,
-	.get_compo_type_code = ir_code,
+	.compo_code = compo_trule_ir,
 	.len = ir_len,
 	.copy = ir_copy,
 	.free = ir_free,

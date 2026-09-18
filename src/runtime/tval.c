@@ -112,9 +112,9 @@ int tobj_identical(const tobj *a, const tobj *b)
 			return 1;
 		if (a->val.v_tcompo && b->val.v_tcompo &&
 		    a->val.v_tcompo->vtable && b->val.v_tcompo->vtable &&
-		    a->val.v_tcompo->vtable->get_compo_type_code() ==
-			    b->val.v_tcompo->vtable->get_compo_type_code() &&
-		    (a->val.v_tcompo->vtable->get_compo_type_code() !=
+		    a->val.v_tcompo->vtable->compo_code ==
+			    b->val.v_tcompo->vtable->compo_code &&
+		    (a->val.v_tcompo->vtable->compo_code !=
 			    compo_extension ||
 		     a->val.v_tcompo->vtable == b->val.v_tcompo->vtable))
 			return a->val.v_tcompo->vtable->identical(
@@ -211,7 +211,7 @@ int tobj_is_nil(const tobj *v)
 tcompo_type tobj_compo_type(const tobj *v)
 {
 	if (v->type == tcompo && v->val.v_tcompo && v->val.v_tcompo->vtable)
-		return v->val.v_tcompo->vtable->get_compo_type_code();
+		return v->val.v_tcompo->vtable->compo_code;
 	return (tcompo_type)(-1);
 }
 

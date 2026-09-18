@@ -20,8 +20,8 @@ typedef struct tobj tobj; /**< Tapas 值，完整定义见 `tval.h`。 */
 /** @brief Tapas 值动态数组的公开布局。 */
 typedef struct {
 	tobj *data;          /**< 连续元素存储区。 */
-	uint_objs len;       /**< 当前元素数量。 */
-	uint_objs capacity;  /**< 已分配的元素容量。 */
+	uint_count len;       /**< 当前元素数量。 */
+	uint_count capacity;  /**< 已分配的元素容量。 */
 	uint8_t embedded;    /**< data 指向所属外层分配的内嵌存储：增长时先迁移，释放时跳过 free。 */
 } tobj_vec;
 
@@ -38,7 +38,7 @@ void tobj_vec_init(tobj_vec *v);
  * @param v 待初始化数组。
  * @param cap 初始容量。
  */
-void tobj_vec_init_cap(tobj_vec *v, uint_objs cap);
+void tobj_vec_init_cap(tobj_vec *v, uint_count cap);
 
 /**
  * @brief 释放元素引用和动态存储区，但不释放 v 本身。
@@ -53,7 +53,7 @@ void tobj_vec_free(tobj_vec *v);
  * @param v 数组。
  * @return 当前长度。
  */
-uint_objs tobj_vec_len(const tobj_vec *v);
+uint_count tobj_vec_len(const tobj_vec *v);
 
 /**
  * @brief 返回已分配容量。
@@ -61,7 +61,7 @@ uint_objs tobj_vec_len(const tobj_vec *v);
  * @param v 数组。
  * @return 当前容量。
  */
-uint_objs tobj_vec_cap(const tobj_vec *v);
+uint_count tobj_vec_cap(const tobj_vec *v);
 
 /**
  * @brief 取得可修改元素指针。
@@ -70,7 +70,7 @@ uint_objs tobj_vec_cap(const tobj_vec *v);
  * @param idx 索引。
  * @return 第 idx 个元素。
  */
-tobj *tobj_vec_at(tobj_vec *v, uint_objs idx);
+tobj *tobj_vec_at(tobj_vec *v, uint_count idx);
 
 /**
  * @brief 取得只读元素指针。
@@ -79,7 +79,7 @@ tobj *tobj_vec_at(tobj_vec *v, uint_objs idx);
  * @param idx 索引。
  * @return 第 idx 个元素。
  */
-const tobj *tobj_vec_at_const(const tobj_vec *v, uint_objs idx);
+const tobj *tobj_vec_at_const(const tobj_vec *v, uint_count idx);
 
 /**
  * @brief 取得连续存储区首地址。
@@ -95,7 +95,7 @@ tobj *tobj_vec_data(tobj_vec *v);
  * @param v 数组。
  * @param cap 所需最小容量。
  */
-void tobj_vec_reserve(tobj_vec *v, uint_objs cap);
+void tobj_vec_reserve(tobj_vec *v, uint_count cap);
 
 /**
  * @brief 在末尾复制加入一个值。
@@ -112,7 +112,7 @@ void tobj_vec_push(tobj_vec *v, const tobj *obj);
  * @param idx 索引。
  * @param obj 新值。
  */
-void tobj_vec_set(tobj_vec *v, uint_objs idx, const tobj *obj);
+void tobj_vec_set(tobj_vec *v, uint_count idx, const tobj *obj);
 
 /**
  * @brief 在指定位置插入值。
@@ -121,7 +121,7 @@ void tobj_vec_set(tobj_vec *v, uint_objs idx, const tobj *obj);
  * @param idx 插入位置。
  * @param obj 要复制的值。
  */
-void tobj_vec_insert(tobj_vec *v, uint_objs idx, const tobj *obj);
+void tobj_vec_insert(tobj_vec *v, uint_count idx, const tobj *obj);
 
 /**
  * @brief 删除指定元素并释放其引用。
@@ -129,7 +129,7 @@ void tobj_vec_insert(tobj_vec *v, uint_objs idx, const tobj *obj);
  * @param v 数组。
  * @param idx 索引。
  */
-void tobj_vec_pop(tobj_vec *v, uint_objs idx);
+void tobj_vec_pop(tobj_vec *v, uint_count idx);
 
 /**
  * @brief 从数组中移出元素而不额外复制引用。
@@ -138,7 +138,7 @@ void tobj_vec_pop(tobj_vec *v, uint_objs idx);
  * @param idx 索引。
  * @param result 接收被移出值的已分配位置；调用者随后拥有该值。
  */
-void tobj_vec_take(tobj_vec *v, uint_objs idx, tobj *result);
+void tobj_vec_take(tobj_vec *v, uint_count idx, tobj *result);
 
 /**
  * @brief 复制整个数组。
@@ -157,7 +157,7 @@ void tobj_vec_copy(tobj_vec *dst, const tobj_vec *src);
  * @param count 要复制的元素数量。
  */
 void tobj_vec_copy_range(tobj_vec *dst, const tobj_vec *src,
-			 uint_objs start, uint_objs count);
+			 uint_count start, uint_count count);
 
 #ifdef __cplusplus
 }

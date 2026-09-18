@@ -150,10 +150,10 @@ static void emit_rule_implication(tast_emitter *emitter, const tast_node *node)
 		tvmcmd_vect_size32(code) - end_jump - 1);
 }
 
-static uint_objs field_order_index(tstring *const *order, uint_objs count,
+static uint_count field_order_index(tstring *const *order, uint_count count,
 				   const tstring *name)
 {
-	for (uint_objs i = 0; i < count; i++)
+	for (uint_count i = 0; i < count; i++)
 		if (tstring_eq(order[i], name))
 			return i;
 	return count;
@@ -161,7 +161,7 @@ static uint_objs field_order_index(tstring *const *order, uint_objs count,
 
 static void emit_structure(tast_emitter *emitter, const tast_node *structure,
 			   const ttypeval *target,
-			   tstring *const *order, uint_objs order_count)
+			   tstring *const *order, uint_count order_count)
 {
 	if (!target || target->kind != ttype_kind_fields || !order ||
 	    order_count != ttypeval_field_count(target))
@@ -176,7 +176,7 @@ static void emit_structure(tast_emitter *emitter, const tast_node *structure,
 	for (uint32_t i = 0; i < structure->aggregate.count; i++) {
 		const tast_node *item = tast_get(emitter->arena, items[i]);
 		tast_id value = items[i];
-		uint_objs field = order_count;
+		uint_count field = order_count;
 		if (item && item->kind == tast_named_field) {
 			tstring *name = tast_emitter_text(emitter, item->named_field.name);
 			field = field_order_index(order, order_count, name);
@@ -256,15 +256,12 @@ static void emit_conditional(tast_emitter *emitter,
 	for (uint32_t i = 0; branches && i < count; i++) {
 		const tast_node *branch = tast_get(emitter->arena, branches[i]);
 		if (!branch) continue;
-		uint_cmds condition_jump = UINT32_MAX;
+		tvmcmd_vect condition_jumps;
+		tvmcmd_vect_init(&condition_jumps);
 		if (branch->conditional_branch.has_condition) {
-			tast_emit_expression(
-				emitter, branch->conditional_branch.condition);
-			tvmcmd_vect_append(emitter->instructions,
-				tbycode_make_u(OP_CJPFPOP, 0));
-			condition_jump = tvmcmd_vect_size32(
-				emitter->instructions) - 1;
-			treg_ctr_ddt(&emitter->cp->regctr);
+			tast_emit_test(emitter,
+				branch->conditional_branch.condition, 0,
+				&condition_jumps);
 		}
 		tast_emit_block(emitter, tast_get(
 			emitter->arena, branch->conditional_branch.body), 1);
@@ -274,11 +271,19 @@ static void emit_conditional(tast_emitter *emitter,
 			end_jumps[end_jump_count++] = tvmcmd_vect_size32(
 				emitter->instructions) - 1;
 		}
-		if (condition_jump != UINT32_MAX) {
+		{
 			uint_cmds after = tvmcmd_vect_size32(emitter->instructions);
-			emitter->instructions->data[condition_jump] = tbycode_make_u(
-				OP_CJPFPOP, after - condition_jump - 1);
+			for (uint_cmds k = 0;
+			     k < tvmcmd_vect_size32(&condition_jumps); k++) {
+				uint_cmds pos = (uint_cmds)tbycode_get_U(
+					condition_jumps.data[k]);
+				emitter->instructions->data[pos] = tbycode_make_u(
+					tbycode_ins(
+						emitter->instructions->data[pos]),
+					after - pos - 1);
+			}
 		}
+		tvmcmd_vect_free(&condition_jumps);
 	}
 	uint_cmds end = tvmcmd_vect_size32(emitter->instructions);
 	for (uint32_t i = 0; i < end_jump_count; i++)
@@ -290,8 +295,10 @@ static void emit_conditional(tast_emitter *emitter,
 static void emit_while(tast_emitter *emitter, const tast_node *statement)
 {
 	uint_cmds loop_start = tvmcmd_vect_size32(emitter->instructions);
-	tast_emit_expression(emitter, statement->control_statement.condition);
-	treg_ctr_ddt(&emitter->cp->regctr);
+	tvmcmd_vect condition_jumps;
+	tvmcmd_vect_init(&condition_jumps);
+	tast_emit_test(emitter, statement->control_statement.condition, 0,
+		       &condition_jumps);
 
 	tvmcmd_vect body;
 	tvmcmd_vect_init(&body);
@@ -305,12 +312,19 @@ static void emit_while(tast_emitter *emitter, const tast_node *statement)
 	emitter->cp->in_loop--;
 	emitter->instructions = outer;
 
-	tvmcmd_vect_append(outer, tbycode_make_u(
-		OP_CJPFPOP, tvmcmd_vect_size32(&body) + 1));
 	uint_cmds body_start = tvmcmd_vect_size32(outer);
 	tvmcmd_vect_insert_vect(outer, tvmcmd_vect_size32(outer), &body);
 	uint_cmds back = 1 + tvmcmd_vect_size32(outer) - loop_start;
 	tvmcmd_vect_append(outer, tbycode_make_u(OP_JPB, back));
+	uint_cmds loop_end = tvmcmd_vect_size32(outer);
+	for (uint_cmds k = 0; k < tvmcmd_vect_size32(&condition_jumps); k++) {
+		uint_cmds pos = (uint_cmds)tbycode_get_U(
+			condition_jumps.data[k]);
+		outer->data[pos] = tbycode_make_u(
+			tbycode_ins(outer->data[pos]),
+			loop_end - pos - 1);
+	}
+	tvmcmd_vect_free(&condition_jumps);
 	tvmcmd_vect_resolve_loop_control(
 		outer, body_start, body_start + tvmcmd_vect_size32(&body),
 		loop_start, tvmcmd_vect_size32(outer),
@@ -387,6 +401,7 @@ static void emit_for(tast_emitter *emitter, const tast_node *statement)
 	tvmcmd_vect *outer = emitter->instructions;
 	emitter->instructions = &body;
 	emitter->cp->in_loop++;
+	emitter->cp->loop_stack_depth++;
 	loop_tmp_base_push(emitter->cp);
 	tast_emit_block(emitter,
 		tast_get(emitter->arena, statement->for_statement.body), 1);
@@ -406,6 +421,7 @@ static void emit_for(tast_emitter *emitter, const tast_node *statement)
 		TCOMPILE_CONTINUE_MARK, TCOMPILE_BREAK_MARK);
 	tvmcmd_vect_append(outer, tbycode_make_lr(OP_POPN, 1, 0));
 	treg_ctr_ddt(&emitter->cp->regctr);
+	emitter->cp->loop_stack_depth--;
 
 	uint_objs new_temporaries =
 		tobj_ctr_obj_len_cur(&emitter->cp->tmpctr) - original_temporaries;
@@ -446,7 +462,7 @@ static void emit_declaration(tast_emitter *emitter,
 		ttypeval_builtin(tbuiltintype_type)))
 		static_value = ttypeval_new_recursive();
 	tstring **field_order = nullptr;
-	uint_objs field_order_count = 0;
+	uint_count field_order_count = 0;
 	if (has_initializer &&
 	    (static_value || (inferred && inferred->kind == ttype_kind_fields)))
 		tast_static_type_field_order(
@@ -553,8 +569,14 @@ static void emit_return(tast_emitter *emitter, const tast_node *statement)
 		tast_emit_expression(emitter, value_id);
 	}
 	tvmcmd_vect_append(emitter->instructions, tbycode_make(OP_RET));
-	treg_ctr_ddt_n(&emitter->cp->regctr,
-			  treg_ctr_get(&emitter->cp->regctr));
+	/* OP_RET empties the value stack at runtime, but the trailing loop
+	 * bookkeeping still consumes the enclosing loops' iteration slots;
+	 * leave those on the compile-time counter. */
+	uint_regs stack_depth = treg_ctr_get(&emitter->cp->regctr);
+	uint_regs loop_slots = emitter->cp->loop_stack_depth;
+	if (stack_depth < loop_slots)
+		twarn(ErrCompile_REGOutOfLimit, "return", "");
+	treg_ctr_ddt_n(&emitter->cp->regctr, stack_depth - loop_slots);
 }
 
 static void emit_import(tast_emitter *emitter, const tast_node *statement,
@@ -625,7 +647,7 @@ static void emit_assignment(tast_emitter *emitter, const tast_node *statement,
 			tcompile_set_metadata(
 				owner, owner_slot, actual, nullptr, 0);
 			tstring **new_order = nullptr;
-			uint_objs new_order_count = 0;
+			uint_count new_order_count = 0;
 			if (actual && actual->kind == ttype_kind_fields)
 				tast_static_type_field_order(
 					emitter, statement->assignment_statement.value,
@@ -902,7 +924,7 @@ tcompile_module_interface *tcompile_extract_module_interface(
 			exported->field_order = (tstring **)calloc(
 				exported->field_order_count, sizeof(tstring *));
 			if (!exported->field_order) abort();
-			for (uint_objs j = 0; j < exported->field_order_count; j++)
+			for (uint_count j = 0; j < exported->field_order_count; j++)
 				exported->field_order[j] = tstring_dup(
 					owner->bindings[slot].field_order[j]);
 		}

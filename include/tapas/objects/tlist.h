@@ -55,7 +55,7 @@ void tlist_slice_index(tlist *list, const tobj *params, tobj *vre);
  * @param l 列表。
  * @return 元素数量。
  */
-uint_objs tlist_size(const tlist *l);
+uint_count tlist_size(const tlist *l);
 
 /**
  * @brief 取得指定位置的只读元素。
@@ -64,7 +64,7 @@ uint_objs tlist_size(const tlist *l);
  * @param idx 有效的元素索引。
  * @return 由列表持有的借用指针。
  */
-const tobj *tlist_at(const tlist *l, uint_objs idx);
+const tobj *tlist_at(const tlist *l, uint_count idx);
 
 /**
  * @brief 替换指定位置的元素。
@@ -73,7 +73,7 @@ const tobj *tlist_at(const tlist *l, uint_objs idx);
  * @param idx 有效的元素索引。
  * @param v 新值；列表取得独立引用。
  */
-void tlist_set_at(tlist *l, uint_objs idx, const tobj *v);
+void tlist_set_at(tlist *l, uint_count idx, const tobj *v);
 
 #ifdef __cplusplus
 }

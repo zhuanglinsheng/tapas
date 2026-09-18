@@ -42,7 +42,6 @@ typedef struct trule_term trule_term;             /**< RuleTerm 对象。 */
 typedef struct trule_item trule_item;             /**< RuleItem 对象。 */
 
 typedef const char *(*compo_get_type_fn)(void); /**< 返回对象类别名称。 */
-typedef tcompo_type (*compo_get_code_fn)(void); /**< 返回对象表示编号。 */
 typedef long (*compo_len_fn)(void *self);       /**< 返回对象长度。 */
 typedef void *(*compo_copy_fn)(void *self);     /**< 创建对象副本。 */
 typedef void (*compo_free_fn)(void *self);      /**< 销毁对象。 */
@@ -119,7 +118,7 @@ typedef struct {
 	/* 必需的对象操作 */
 
 	compo_get_type_fn get_type;              /**< 返回对象类别名称。 */
-	compo_get_code_fn get_compo_type_code;   /**< 返回运行时表示编号。 */
+	const tcompo_type compo_code;              /**< 运行时表示编号。 */
 	compo_len_fn len;                        /**< 返回对象长度。 */
 	compo_copy_fn copy;                      /**< 创建对象副本。 */
 	compo_free_fn free;                      /**< 销毁对象。 */

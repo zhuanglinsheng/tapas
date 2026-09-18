@@ -63,7 +63,7 @@ static void dense_cols(tobj *p, uint_regs n, tobj *r)
 static void dense_transpose(tobj *p, uint_regs n, tobj *r)
 {
 	tcompo_v *arr = array_param(p, n, "dense::transpose");
-	if (arr->vtable->get_compo_type_code() == compo_tdarr) {
+	if (arr->vtable->compo_code == compo_tdarr) {
 		tdarr *source = (tdarr *)arr;
 		tdarr *result = tdarr_new_uninitialized(source->cols, source->rows);
 		for (size_t row = 0; row < source->rows; row++)

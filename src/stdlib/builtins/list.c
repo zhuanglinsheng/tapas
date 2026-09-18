@@ -40,7 +40,7 @@ static void pop_at(tobj *params, uint_regs len, tobj *result,
 {
 	tstdlib_require_arguments(function, len, 1);
 	tlist *list = require_list(&params[0], function);
-	uint_objs size = tlist_size(list);
+	uint_count size = tlist_size(list);
 	if (!size)
 		twarn(ErrRuntime_IdxOutRange, function, "list is empty");
 	tobj_vec_take(&list->items, back ? size - 1 : 0, result);

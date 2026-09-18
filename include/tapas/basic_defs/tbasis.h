@@ -50,6 +50,7 @@ typedef uint32_t uint_cmds; /**< 字节码指令位置与数量。 */
 typedef uint32_t uint_csts; /**< 常量池位置与数量。 */
 
 typedef uint16_t uint_objs; /**< 环境对象位置与数量。 */
+typedef uint32_t uint_count; /**< 集合元素计数与容量，上限由 32 位表示决定。 */
 
 typedef uint8_t uint_regs;  /**< 寄存器位置与参数数量。 */
 
@@ -226,6 +227,7 @@ typedef enum {
 	OP_NEG,        /**< 一元负号。 */
 	OP_BAND,       /**< 短路逻辑与。 */
 	OP_BOR,        /**< 短路逻辑或。 */
+	OP_NOT,        /**< 一元逻辑非。 */
 	OP_COUNT       /**< 操作码数量，不是可执行指令。 */
 } tins;
 

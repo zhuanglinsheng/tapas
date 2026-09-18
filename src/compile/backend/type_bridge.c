@@ -504,7 +504,7 @@ static tstatic_type_id external_binding_type(
 				cp->preload_library, tstring_cstr(owner_name));
 			tstring_free(owner_name);
 			if (owner && owner->type == tcompo && owner->val.v_tcompo &&
-			    owner->val.v_tcompo->vtable->get_compo_type_code() == compo_tdict) {
+			    owner->val.v_tcompo->vtable->compo_code == compo_tdict) {
 				tobj key;
 				tobj_set_nil(&key);
 				tobj_set_compo(&key, (tcompo_v *)tstr_new(scope + 2));
@@ -520,7 +520,7 @@ static tstatic_type_id external_binding_type(
 		}
 		if (static_value && value && value->type == tcompo &&
 		    value->val.v_tcompo &&
-		    value->val.v_tcompo->vtable->get_compo_type_code() ==
+		    value->val.v_tcompo->vtable->compo_code ==
 			    compo_ttypeval) {
             tstatic_type_id declared = tstandard_type_resolve(arena,qualified_name,1);
             if (declared != TSTATIC_TYPE_UNKNOWN) {
@@ -536,15 +536,15 @@ static tstatic_type_id external_binding_type(
 			return result;
 		}
         if (!static_value && value && value->type == tcompo && value->val.v_tcompo &&
-            value->val.v_tcompo->vtable->get_compo_type_code() == compo_trule_builtin) {
+            value->val.v_tcompo->vtable->compo_code == compo_trule_builtin) {
             tstatic_type_id result = tstandard_type_resolve(arena,qualified_name,0);
             tobj_try_clear(&member_value);
             return result;
         }
 		if (!static_value && value && value->type == tcompo &&
 		    value->val.v_tcompo &&
-		    (value->val.v_tcompo->vtable->get_compo_type_code() == compo_cppfunc ||
-		     value->val.v_tcompo->vtable->get_compo_type_code() == compo_sessfunc)) {
+		    (value->val.v_tcompo->vtable->compo_code == compo_cppfunc ||
+		     value->val.v_tcompo->vtable->compo_code == compo_sessfunc)) {
 			const char *signature = tlib_find_native_declaration(
 				cp->preload_library, qualified_name);
 			tstatic_type_id result = signature && *signature ?

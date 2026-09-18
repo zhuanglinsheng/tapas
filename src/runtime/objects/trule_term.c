@@ -60,7 +60,7 @@ static ttypeval *value_type(const tobj *value)
 					ttypeval_builtin(tbuiltintype_any));
 			ttypeval **members = calloc(tlist_size(list),
 				sizeof(*members));
-			uint_objs count = 0;
+			uint_count count = 0;
 			for (uint_objs i = 0; i < tlist_size(list); i++) {
 				ttypeval *item = value_type(tlist_at(list, i));
 				int present = 0;
@@ -87,7 +87,7 @@ static ttypeval *value_type(const tobj *value)
 		case compo_ttypeval: return ttypeval_builtin(tbuiltintype_type);
 		case compo_trule: {
 			trule *rule = (trule *)value->val.v_tcompo;
-			uint_objs count = rule->ir ? rule->ir->parameters.len : 0;
+			uint_count count = rule->ir ? rule->ir->parameters.len : 0;
 			ttypeval **parameters = count ? calloc(count,
 				sizeof(*parameters)) : nullptr;
 			for (uint_objs i = 0; i < count; i++)
@@ -100,7 +100,7 @@ static ttypeval *value_type(const tobj *value)
 		case compo_trule_instance: {
 			trule *rule = (trule *)((trule_instance *)value->val.v_tcompo)
 				->rule.val.v_tcompo;
-			uint_objs count = rule->ir ? rule->ir->parameters.len : 0;
+			uint_count count = rule->ir ? rule->ir->parameters.len : 0;
 			ttypeval **parameters = count ? calloc(count,
 				sizeof(*parameters)) : nullptr;
 			for (uint_objs i = 0; i < count; i++)
@@ -151,7 +151,7 @@ int trule_antecedent_type(const ttypeval *type)
 	     type->builtin == tbuiltintype_rule_instance))
 		return 1;
 	if (type->kind != ttype_kind_union) return 0;
-	uint_objs count = ttypeval_member_count(type);
+	uint_count count = ttypeval_member_count(type);
 	for (uint_objs i = 0; i < count; i++)
 		if (!trule_antecedent_type(ttypeval_member_at(type, i))) return 0;
 	return count != 0;
@@ -253,7 +253,6 @@ const char *trule_term_kind_name(trule_term_kind kind)
 /*----------------------- Required Vtable Operations -----------------------*/
 
 static const char *term_type(void) { return "RuleTerm"; }
-static tcompo_type term_code(void) { return compo_trule_term; }
 static long term_len(void *self) { (void)self; return 0; }
 
 static void *term_copy(void *self)
@@ -523,7 +522,7 @@ static const tcompo_capabilities term_capabilities = {
 
 tcompo_vtable trule_term_vtable = {
 	.get_type = term_type,
-	.get_compo_type_code = term_code,
+	.compo_code = compo_trule_term,
 	.len = term_len,
 	.copy = term_copy,
 	.free = term_free,

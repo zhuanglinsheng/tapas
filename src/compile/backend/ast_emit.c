@@ -187,6 +187,68 @@ static void emit_short_circuit(tast_emitter *emitter,
 	if (rule_logic) tvmcmd_vect_append(outer, tbycode_make_u(OP_RULETRUTH, slot));
 }
 
+/* Emit a boolean condition as a test that jumps out on the requested
+ * polarity. and/or/not thread their jumps to the shared patch target so no
+ * intermediate Bool materialization remains; plain operands fall back to
+ * value + conditional jump. Each jump consumes exactly the value its
+ * operand produced, keeping the register depth balanced; every placeholder
+ * position is collected in `jumps` for the caller to patch once the exit
+ * target is known. Rule conditions keep their dedicated logic opcodes. */
+void tast_emit_test(tast_emitter *emitter, tast_id id,
+		    int jump_when_true, tvmcmd_vect *jumps)
+{
+	const tast_node *node = tast_get(emitter->arena, id);
+	const tast_node *owner = tast_get(emitter->arena,
+		tcontrol_enclosing_function(&emitter->frontend->flow, id));
+	int rule_logic = owner && owner->kind == tast_rule;
+	if (!rule_logic && node && node->kind == tast_unary &&
+	    node->unary.op == tsyntax_kw_not) {
+		tast_emit_test(emitter, node->unary.operand,
+			       !jump_when_true, jumps);
+		return;
+	}
+	if (!rule_logic && node && node->kind == tast_binary &&
+	    (node->binary.op == tsyntax_kw_and ||
+	     node->binary.op == tsyntax_kw_or)) {
+		int is_and = node->binary.op == tsyntax_kw_and;
+		int direct = (is_and && !jump_when_true) ||
+			     (!is_and && jump_when_true);
+		if (direct) {
+			/* and jumps on false, or on true: both sides share
+			 * the exit target. */
+			tast_emit_test(emitter, node->binary.left,
+				       jump_when_true, jumps);
+			tast_emit_test(emitter, node->binary.right,
+				       jump_when_true, jumps);
+			return;
+		}
+		/* Opposite polarity: the left side's failing exits skip the
+		 * right side entirely. */
+		tvmcmd_vect left_jumps;
+		tvmcmd_vect_init(&left_jumps);
+		tast_emit_test(emitter, node->binary.left,
+			       is_and ? 0 : 1, &left_jumps);
+		tast_emit_test(emitter, node->binary.right,
+			       jump_when_true, jumps);
+		uint_cmds end = tvmcmd_vect_size32(emitter->instructions);
+		for (uint_cmds k = 0; k < tvmcmd_vect_size32(&left_jumps); k++) {
+			uint_cmds pos = (uint_cmds)tbycode_get_U(
+				left_jumps.data[k]);
+			emitter->instructions->data[pos] = tbycode_make_u(
+				tbycode_ins(emitter->instructions->data[pos]),
+				end - pos - 1);
+		}
+		tvmcmd_vect_free(&left_jumps);
+		return;
+	}
+	tast_emit_expression(emitter, id);
+	tvmcmd_vect_append(emitter->instructions,
+		tbycode_make_u(jump_when_true ? OP_CJPBPOP : OP_CJPFPOP, 0));
+	tvmcmd_vect_append(jumps, tbycode_make_u(
+		OP_PASS, tvmcmd_vect_size32(emitter->instructions) - 1));
+	treg_ctr_ddt(&emitter->cp->regctr);
+}
+
 static void emit_binary(tast_emitter *emitter, const tast_node *node)
 {
 	int instruction = binary_instruction(node->binary.op);
@@ -523,7 +585,7 @@ static void emit_function(tast_emitter *emitter, const tast_node *node)
 		ttypeval *parameter_type =
 			ttypeval_function_parameter_at(signature, i);
 		if (parameter_type)
-			tcompile_set_metadata(&function_cp.objctr, i,
+			tcompile_set_metadata(&function_cp.objctr, (uint_objs)i,
 				parameter_type, nullptr, 1);
 	}
 	tvmcmd_vect body;
@@ -874,7 +936,7 @@ static void emit_rule(tast_emitter *emitter, const tast_node *node)
 		const tast_node *parameter = tast_get(emitter->arena, parameter_ids[i]);
 		ttypeval *type = tast_resolve_annotation(
 			emitter, parameter->parameter.annotation);
-		tcompile_set_metadata(&rule_cp.objctr, i, type, nullptr, 1);
+		tcompile_set_metadata(&rule_cp.objctr, (uint_objs)i, type, nullptr, 1);
 		if (i) tstring_append_c(signature, '\x1f');
 		tstring_append_ts(signature, type->canonical);
 		if (i) tstring_append_c(parameter_names, '\x1f');
@@ -1100,16 +1162,8 @@ void tast_emit_expression(tast_emitter *emitter, tast_id id)
 					tbycode_make_u(OP_RULENOT, source_logic_index(emitter, id)));
 				break;
 			}
-			/* The existing conditional jump checks Bool and consumes the
-			 * operand. Both branches replace it with its negation. */
 			tvmcmd_vect_append(emitter->instructions,
-				tbycode_make_u(OP_CJPFPOP, 2));
-			tvmcmd_vect_append(emitter->instructions,
-				tbycode_make_u(OP_PUSHB, 0));
-			tvmcmd_vect_append(emitter->instructions,
-				tbycode_make_u(OP_JPF, 1));
-			tvmcmd_vect_append(emitter->instructions,
-				tbycode_make_u(OP_PUSHB, 1));
+				tbycode_make(OP_NOT));
 		} else {
 			tvmcmd_vect_append(emitter->instructions,
 				tbycode_make(node->unary.op == tsyntax_plus ? OP_POS : OP_NEG));

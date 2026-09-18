@@ -40,10 +40,6 @@ static const char *tdict_get_type(void)
 	return "Dictionary";
 }
 
-static tcompo_type tdict_get_code(void)
-{
-	return compo_tdict;
-}
 
 static long tdict_len(void *self)
 {
@@ -74,8 +70,8 @@ static int tdict_identical(void *self, void *other)
 
 typedef struct {
 	tstring *out;
-	uint_objs idx;
-	uint_objs len;
+	uint_count idx;
+	uint_count len;
 	int multiline;
 } tdict_string_ctx;
 
@@ -110,7 +106,7 @@ static tstring *tdict_tostring_abbr(void *self)
 static tstring *tdict_tostring_full(void *self)
 {
 	tdict *d = (tdict *)self;
-	uint_objs len = thashtbl_len(d->items);
+	uint_count len = thashtbl_len(d->items);
 	tstring *out = tstring_new("{");
 	tdict_string_ctx ctx = { out, 0, len, len > 1 };
 	if (ctx.multiline)
@@ -191,7 +187,7 @@ static const tcompo_capabilities dictionary_capabilities = {
 
 tcompo_vtable tdict_vtable = {
 	.get_type = tdict_get_type,
-	.get_compo_type_code = tdict_get_code,
+	.compo_code = compo_tdict,
 	.len = tdict_len,
 	.copy = tdict_copy,
 	.free = tdict_free,

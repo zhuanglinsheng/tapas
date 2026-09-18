@@ -102,7 +102,6 @@ trule_item *trule_requirement_new(trule_term *rule,
 /*----------------------- Required Vtable Operations -----------------------*/
 
 static const char *item_type(void) { return "RuleItem"; }
-static tcompo_type item_code(void) { return compo_trule_item; }
 static long item_len(void *self) { (void)self; return 0; }
 
 static void *item_copy(void *self)
@@ -231,7 +230,7 @@ static const tcompo_capabilities item_capabilities = {
 
 tcompo_vtable trule_item_vtable = {
 	.get_type = item_type,
-	.get_compo_type_code = item_code,
+	.compo_code = compo_trule_item,
 	.len = item_len,
 	.copy = item_copy,
 	.free = item_free,

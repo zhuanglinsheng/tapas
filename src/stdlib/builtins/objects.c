@@ -83,7 +83,7 @@ static void builtin_join(tobj *params, uint_regs len, tobj *vre)
 	tstring *out = tstring_new("");
 	if (!out)
 		twarn(ErrRuntime_Other, "join", "out of memory");
-	for (uint_objs i = 0; i < values->items.len; i++) {
+	for (uint_count i = 0; i < values->items.len; i++) {
 		const tobj *element = &values->items.data[i];
 		if (element->type != tcompo ||
 		    tobj_compo_type(element) != compo_tstr)

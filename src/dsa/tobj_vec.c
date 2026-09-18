@@ -18,7 +18,7 @@ void tobj_vec_init(tobj_vec *v)
 	v->embedded = 0;
 }
 
-void tobj_vec_init_cap(tobj_vec *v, uint_objs cap)
+void tobj_vec_init_cap(tobj_vec *v, uint_count cap)
 {
 	v->data = nullptr;
 	v->len = 0;
@@ -31,7 +31,7 @@ void tobj_vec_init_cap(tobj_vec *v, uint_objs cap)
 void tobj_vec_free(tobj_vec *v)
 {
 	if (v->data) {
-		for (uint_objs i = 0; i < v->len; i++)
+		for (uint_count i = 0; i < v->len; i++)
 			if (v->data[i].type == tcompo)
 				tobj_ddc_ref_clear(&v->data[i]);
 		if (!v->embedded)
@@ -43,22 +43,22 @@ void tobj_vec_free(tobj_vec *v)
 	v->embedded = 0;
 }
 
-uint_objs tobj_vec_len(const tobj_vec *v)
+uint_count tobj_vec_len(const tobj_vec *v)
 {
 	return v->len;
 }
 
-uint_objs tobj_vec_cap(const tobj_vec *v)
+uint_count tobj_vec_cap(const tobj_vec *v)
 {
 	return v->capacity;
 }
 
-tobj *tobj_vec_at(tobj_vec *v, uint_objs idx)
+tobj *tobj_vec_at(tobj_vec *v, uint_count idx)
 {
 	return &v->data[idx];
 }
 
-const tobj *tobj_vec_at_const(const tobj_vec *v, uint_objs idx)
+const tobj *tobj_vec_at_const(const tobj_vec *v, uint_count idx)
 {
 	return &v->data[idx];
 }
@@ -68,7 +68,7 @@ tobj *tobj_vec_data(tobj_vec *v)
 	return v->data;
 }
 
-void tobj_vec_reserve(tobj_vec *v, uint_objs cap)
+void tobj_vec_reserve(tobj_vec *v, uint_count cap)
 {
 	if (cap <= v->capacity)
 		return;
@@ -86,16 +86,28 @@ void tobj_vec_reserve(tobj_vec *v, uint_objs cap)
 	v->capacity = cap;
 }
 
+/* Doubling must stay inside the count domain; clamp at the practical
+ * maximum instead of wrapping around. */
+#define TOBJ_VEC_MAX_CAP (1u << 30)
+static uint_count tobj_vec_grown_cap(uint_count cap)
+{
+	if (cap == 0)
+		return 16;
+	if (cap >= TOBJ_VEC_MAX_CAP)
+		return TOBJ_VEC_MAX_CAP;
+	return cap * 2;
+}
+
 void tobj_vec_push(tobj_vec *v, const tobj *obj)
 {
 	if (v->len >= v->capacity)
-		tobj_vec_reserve(v, v->capacity ? v->capacity * 2 : 16);
+		tobj_vec_reserve(v, tobj_vec_grown_cap(v->capacity));
 	v->data[v->len] = *obj;
 	tobj_vec_retain(obj);
 	v->len++;
 }
 
-void tobj_vec_set(tobj_vec *v, uint_objs idx, const tobj *obj)
+void tobj_vec_set(tobj_vec *v, uint_count idx, const tobj *obj)
 {
 	if (v->data[idx].type != tcompo && obj->type != tcompo) {
 		v->data[idx] = *obj;
@@ -109,10 +121,10 @@ void tobj_vec_set(tobj_vec *v, uint_objs idx, const tobj *obj)
 	v->data[idx] = *obj;
 }
 
-void tobj_vec_insert(tobj_vec *v, uint_objs idx, const tobj *obj)
+void tobj_vec_insert(tobj_vec *v, uint_count idx, const tobj *obj)
 {
 	if (v->len >= v->capacity)
-		tobj_vec_reserve(v, v->capacity ? v->capacity * 2 : 16);
+		tobj_vec_reserve(v, tobj_vec_grown_cap(v->capacity));
 	memmove(v->data + idx + 1,
 		v->data + idx,
 		(v->len - idx) * sizeof(tobj));
@@ -121,7 +133,7 @@ void tobj_vec_insert(tobj_vec *v, uint_objs idx, const tobj *obj)
 	v->len++;
 }
 
-static tobj tobj_vec_remove(tobj_vec *v, uint_objs idx)
+static tobj tobj_vec_remove(tobj_vec *v, uint_count idx)
 {
 	tobj removed = v->data[idx];
 	memmove(v->data + idx,
@@ -131,13 +143,13 @@ static tobj tobj_vec_remove(tobj_vec *v, uint_objs idx)
 	return removed;
 }
 
-void tobj_vec_pop(tobj_vec *v, uint_objs idx)
+void tobj_vec_pop(tobj_vec *v, uint_count idx)
 {
 	tobj removed = tobj_vec_remove(v, idx);
 	tobj_ddc_ref_clear(&removed);
 }
 
-void tobj_vec_take(tobj_vec *v, uint_objs idx, tobj *result)
+void tobj_vec_take(tobj_vec *v, uint_count idx, tobj *result)
 {
 	tobj_ddc_ref_clear(result);
 	*result = tobj_vec_remove(v, idx);
@@ -149,7 +161,7 @@ void tobj_vec_copy(tobj_vec *dst, const tobj_vec *src)
 }
 
 void tobj_vec_copy_range(tobj_vec *dst, const tobj_vec *src,
-			 uint_objs start, uint_objs count)
+			 uint_count start, uint_count count)
 {
 	if (start > src->len || count > src->len - start)
 		twarn(ErrRuntime_IdxOutRange, "tobj_vec_copy_range", "");
@@ -158,6 +170,6 @@ void tobj_vec_copy_range(tobj_vec *dst, const tobj_vec *src,
 		return;
 	memcpy(dst->data, src->data + start, count * sizeof(tobj));
 	dst->len = count;
-	for (uint_objs i = 0; i < count; i++)
+	for (uint_count i = 0; i < count; i++)
 		tobj_vec_retain(&dst->data[i]);
 }

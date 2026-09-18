@@ -33,10 +33,6 @@ static const char *ttime_type(void)
 	return "Time";
 }
 
-static tcompo_type ttime_code(void)
-{
-	return compo_time;
-}
 
 static long ttime_len(void *self)
 {
@@ -193,7 +189,7 @@ static void ttime_le(void *s, const tobj *v, int rhs, tobj *out)
 
 tcompo_vtable ttime_vtable = {
 	.get_type = ttime_type,
-	.get_compo_type_code = ttime_code,
+	.compo_code = compo_time,
 	.len = ttime_len,
 	.copy = ttime_copy_impl,
 	.free = ttime_free_impl,

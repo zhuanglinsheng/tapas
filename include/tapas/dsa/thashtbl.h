@@ -48,7 +48,7 @@ void thashtbl_free(thashtbl *tbl);
  * @param tbl 哈希表。
  * @return 键值对数量。
  */
-uint_objs thashtbl_len(const thashtbl *tbl);
+uint_count thashtbl_len(const thashtbl *tbl);
 
 /**
  * @brief 写入或替换一个键值对。
@@ -57,7 +57,22 @@ uint_objs thashtbl_len(const thashtbl *tbl);
  * @param key 要保存的键；函数取得独立引用。
  * @param value 要保存的值；函数取得独立引用。
  */
-void thashtbl_set(thashtbl *tbl, const tobj *key, const tobj *value);
+uint_count thashtbl_set(thashtbl *tbl, const tobj *key, const tobj *value);
+
+/**
+ * @brief 在缓存槽位写入或替换一个键值对。
+ *
+ * @details 供内联缓存使用：槽位失效（重哈希、删除或键不匹配）时
+ * 不做任何修改并返回零，调用方回退到 `thashtbl_set`。
+ *
+ * @param tbl 哈希表。
+ * @param slot 缓存的候选槽位。
+ * @param key 要保存的键。
+ * @param value 要保存的值；写入成功时取得独立引用。
+ * @return 成功返回非零，槽位无效返回零。
+ */
+int thashtbl_set_at(thashtbl *tbl, uint_count slot, const tobj *key,
+		    const tobj *value);
 
 /**
  * @brief 查询键对应的值。
@@ -67,6 +82,40 @@ void thashtbl_set(thashtbl *tbl, const tobj *key, const tobj *value);
  * @return 表内只读值指针；键不存在时返回 `nullptr`。调用者不得释放该指针。
  */
 const tobj *thashtbl_get(const thashtbl *tbl, const tobj *key);
+
+/**
+ * @brief 查询键对应的值并报告其槽位。
+ *
+ * @param tbl 哈希表。
+ * @param key 要查询的键。
+ * @param slot 输出命中槽位；键不存在时输出未定义值。
+ * @return 表内只读值指针；键不存在时返回 `nullptr`。
+ */
+const tobj *thashtbl_find(const thashtbl *tbl, const tobj *key,
+			  uint_count *slot);
+
+/**
+ * @brief 读取指定槽位的值并校验其键。
+ *
+ * @details 供内联缓存使用：槽位可能因重哈希或删除而失效，
+ * 返回前会复核该槽位仍存有指定键。
+ *
+ * @param tbl 哈希表。
+ * @param slot 候选槽位。
+ * @param key 期望的键。
+ * @return 槽位复核通过时返回表内只读值指针，否则返回 `nullptr`。
+ */
+const tobj *thashtbl_get_entry_at(const thashtbl *tbl, uint_count slot,
+				  const tobj *key);
+
+
+/**
+ * @brief 返回哈希表容量。
+ *
+ * @param tbl 哈希表。
+ * @return 槽位容量（2 的幂）。
+ */
+uint_count thashtbl_capacity(const thashtbl *tbl);
 
 /**
  * @brief 判断键是否存在。

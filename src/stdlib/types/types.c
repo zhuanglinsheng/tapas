@@ -323,7 +323,7 @@ static ttypeval *type_of_value(const tobj *value)
 			(trule *)value->val.v_tcompo :
 			(trule *)((trule_instance *)value->val.v_tcompo)
 				->rule.val.v_tcompo;
-		uint_objs count = rule->ir ? rule->ir->parameters.len : 0;
+		uint_count count = rule->ir ? rule->ir->parameters.len : 0;
 		ttypeval **parameters = count ? calloc(count,
 			sizeof(*parameters)) : nullptr;
 		for (uint_objs i = 0; i < count; i++)
@@ -392,7 +392,7 @@ static void types_fields(tobj *params, uint_regs len, tobj *result)
 	require_count("types::fields", len, 1);
 	ttypeval *type = require_type(&params[0], "types::fields");
 	tdict *fields = tdict_new();
-	for (uint_objs i = 0; i < ttypeval_field_count(type); i++) {
+	for (uint_count i = 0; i < ttypeval_field_count(type); i++) {
 		const tobj *name;
 		ttypeval *field;
 		ttypeval_field_at(type, i, &name, &field);
@@ -421,7 +421,7 @@ static void types_members(tobj *params, uint_regs len, tobj *result)
 		tobj_set_compo(result, (tcompo_v *)members);
 		return;
 	}
-	uint_objs count = ttypeval_member_count(type);
+	uint_count count = ttypeval_member_count(type);
 	if (count == 0) {
 		tobj_vec_push(&members->items, &params[0]);
 	} else {
@@ -448,7 +448,7 @@ static void types_optional_fields(tobj *params, uint_regs len, tobj *result)
 	require_count("types::optional_fields", len, 1);
 	ttypeval *type = require_type(&params[0], "types::optional_fields");
 	tlist *names = tlist_new();
-	for (uint_objs i = 0; i < ttypeval_field_count(type); i++) {
+	for (uint_count i = 0; i < ttypeval_field_count(type); i++) {
 		const tobj *name = nullptr;
 		ttypeval_field_at(type, i, &name, nullptr);
 		if (name && name->type == tcompo &&

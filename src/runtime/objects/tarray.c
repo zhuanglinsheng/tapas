@@ -34,7 +34,7 @@ static tcompo_type array_code(const tcompo_v *array, const char *where)
 {
 	if (!array || !array->vtable)
 		twarn(ErrRuntime_ParamsType, where, "array required");
-	tcompo_type code = array->vtable->get_compo_type_code();
+	tcompo_type code = array->vtable->compo_code;
 	if (!is_array_code(code))
 		twarn(ErrRuntime_ParamsType, where, "array required");
 	return code;
@@ -42,13 +42,13 @@ static tcompo_type array_code(const tcompo_v *array, const char *where)
 
 static size_t array_rows(const tcompo_v *arr)
 {
-	return arr->vtable->get_compo_type_code() == compo_tdarr
+	return arr->vtable->compo_code == compo_tdarr
 		       ? ((const tdarr *)arr)->rows : ((const tbarr *)arr)->rows;
 }
 
 static size_t array_cols(const tcompo_v *arr)
 {
-	return arr->vtable->get_compo_type_code() == compo_tdarr
+	return arr->vtable->compo_code == compo_tdarr
 		       ? ((const tdarr *)arr)->cols : ((const tbarr *)arr)->cols;
 }
 
@@ -154,15 +154,7 @@ static const char *tbarr_type(void)
 	return "Boolean Array";
 }
 
-static tcompo_type tdarr_code(void)
-{
-	return compo_tdarr;
-}
 
-static tcompo_type tbarr_code(void)
-{
-	return compo_tbarr;
-}
 
 static long tdarr_len(void *self)
 {
@@ -593,7 +585,7 @@ static void tarr_idx(void *self, const tobj *arguments,
 				    &row_begin, &row_end);
 	int column_slice = range_param(&arguments[1], array_cols(arr),
 				       &column_begin, &column_end);
-	tcompo_type code = arr->vtable->get_compo_type_code();
+	tcompo_type code = arr->vtable->compo_code;
 	if (!row_slice && !column_slice) {
 		if (code == compo_tdarr)
 			tobj_set_float(result, tdarr_at((tdarr *)arr,
@@ -625,7 +617,7 @@ static void tarr_iset(void *self, const tobj *arguments,
 				    &row_begin, &row_end);
 	int column_slice = range_param(&arguments[1], array_cols(arr),
 				       &column_begin, &column_end);
-	tcompo_type code = arr->vtable->get_compo_type_code();
+	tcompo_type code = arr->vtable->compo_code;
 	if (!row_slice && !column_slice) {
 		if (code == compo_tdarr &&
 		    (value->type == tint || value->type == tfloat))
@@ -671,7 +663,7 @@ static const tcompo_capabilities array_capabilities = {
 
 tcompo_vtable tdarr_vtable = {
 	.get_type = tdarr_type,
-	.get_compo_type_code = tdarr_code,
+	.compo_code = compo_tdarr,
 	.len = tdarr_len,
 	.copy = tdarr_copy_impl,
 	.free = tdarr_free,
@@ -697,7 +689,7 @@ tcompo_vtable tdarr_vtable = {
 
 tcompo_vtable tbarr_vtable = {
 	.get_type = tbarr_type,
-	.get_compo_type_code = tbarr_code,
+	.compo_code = compo_tbarr,
 	.len = tbarr_len,
 	.copy = tbarr_copy_impl,
 	.free = tbarr_free,

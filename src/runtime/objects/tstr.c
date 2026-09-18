@@ -85,12 +85,6 @@ static const char *tstr_get_type(void)
 }
 
 
-static tcompo_type tstr_get_code(void)
-{
-	return compo_tstr;
-}
-
-
 static long tstr_len(void *self)
 {
 	tstr *s = (tstr *)self;
@@ -233,7 +227,7 @@ static const tcompo_capabilities string_capabilities = {
 
 tcompo_vtable tstr_vtable = {
 	.get_type = tstr_get_type,
-	.get_compo_type_code = tstr_get_code,
+	.compo_code = compo_tstr,
 	.len = tstr_len,
 	.copy = tstr_copy,
 	.free = tstr_free,

@@ -72,7 +72,7 @@ struct ttypeval {
 	thashtbl *definition;                  /**< 结构成员与参数定义。 */
 	tstring *canonical;                    /**< 缓存的规范表示。 */
 	uint64_t canonical_hash;               /**< 规范表示的缓存哈希。 */
-	uint_objs function_parameter_count;    /**< 函数参数数量。 */
+	uint_count function_parameter_count;    /**< 函数参数数量。 */
 	uint8_t function_variadic;             /**< 函数是否接受可变参数。 */
 	uint8_t contains_recursive;            /**< 是否包含递归节点。 */
 	uint8_t recursive_defined;             /**< 递归体是否已定义。 */
@@ -81,22 +81,22 @@ struct ttypeval {
 	tstring *named_identity;               /**< 限定命名 Type 身份。 */
 	tstring **named_parameter_names;       /**< 命名参数名称数组。 */
 	ttypeval **named_parameter_types;      /**< 命名参数 Type 数组。 */
-	uint_objs named_parameter_count;       /**< 命名参数数量。 */
+	uint_count named_parameter_count;       /**< 命名参数数量。 */
 	uint32_t capabilities;                 /**< 命名 Type 声明的对象能力。 */
 	tobj instance_rule;                    /**< instance-of Type 持有的 Rule。 */
 	tstring *instance_reference;           /**< 尚未解析的 Rule 符号名。 */
 	uint8_t contains_instance;             /**< 是否包含实例 Type。 */
 	uint8_t contains_custom;               /**< 是否包含包定义 Type。 */
 	tstring **optional_fields;             /**< 可选字段名称数组。 */
-	uint_objs optional_field_count;        /**< 可选字段数量。 */
+	uint_count optional_field_count;        /**< 可选字段数量。 */
 	tstring **enum_members;                /**< 枚举成员名称数组。 */
-	uint_objs enum_member_count;           /**< 枚举成员数量。 */
+	uint_count enum_member_count;           /**< 枚举成员数量。 */
 	tstring *parameter_name;               /**< 模板参数占位符名称。 */
 	ttypeval *template_body;               /**< 模板实例化前的 Type 主体。 */
 	tstring **template_type_parameters;    /**< Type 参数名称数组。 */
-	uint_objs template_type_parameter_count; /**< Type 参数数量。 */
+	uint_count template_type_parameter_count; /**< Type 参数数量。 */
 	ttype_value_parameter *template_value_parameters; /**< 值参数描述数组。 */
-	uint_objs template_value_parameter_count; /**< 值参数数量。 */
+	uint_count template_value_parameter_count; /**< 值参数数量。 */
 	tobj exact_value;                      /**< 精确值 Type 持有的值。 */
 };
 
@@ -151,7 +151,7 @@ ttypeval *ttypeval_new_named(const char *qualified_name);
  * @return 新 Type。
  */
 ttypeval *ttypeval_new_named_application(const char *qualified_name,
-	const ttype_field *parameters, uint_objs parameter_count,
+	const ttype_field *parameters, uint_count parameter_count,
 	uint32_t capabilities);
 
 /**
@@ -206,9 +206,9 @@ const tobj *ttypeval_exact_value(const ttypeval *type);
  * @return 新 Type 模板。
  */
 ttypeval *ttypeval_new_template(const tstring *const *type_parameters,
-	uint_objs type_parameter_count,
+	uint_count type_parameter_count,
 	const ttype_value_parameter *value_parameters,
-	uint_objs value_parameter_count, ttypeval *body);
+	uint_count value_parameter_count, ttypeval *body);
 
 /**
  * @brief 将 Type 实参与值实参代入模板。
@@ -221,8 +221,8 @@ ttypeval *ttypeval_new_template(const tstring *const *type_parameters,
  * @return 实例化后的新 Type；数量或约束不符时报告错误。
  */
 ttypeval *ttypeval_apply_template(ttypeval *template_type,
-	ttypeval *const *type_arguments, uint_objs type_argument_count,
-	const tobj *value_arguments, uint_objs value_argument_count);
+	ttypeval *const *type_arguments, uint_count type_argument_count,
+	const tobj *value_arguments, uint_count value_argument_count);
 
 /**
  * @brief 判断对象是否为 Type 模板。
@@ -266,7 +266,7 @@ void ttypeval_release(ttypeval *type);
  * @param count 字段数量。
  * @return 新 Type。
  */
-ttypeval *ttypeval_new_fields(const ttype_field *fields, uint_objs count);
+ttypeval *ttypeval_new_fields(const ttype_field *fields, uint_count count);
 
 /**
  * @brief 创建 List Type。
@@ -312,7 +312,7 @@ ttypeval *ttypeval_new_dictionary(ttypeval *key, ttypeval *value);
  * @return 新 Type。
  */
 ttypeval *ttypeval_new_function(ttypeval *const *parameters,
-				uint_objs parameter_count,
+				uint_count parameter_count,
 				ttypeval *result,
 				int variadic);
 
@@ -324,7 +324,7 @@ ttypeval *ttypeval_new_function(ttypeval *const *parameters,
  * @return 新 Type。
  */
 ttypeval *ttypeval_new_rule(ttypeval *const *parameters,
-			    uint_objs parameter_count);
+			    uint_count parameter_count);
 
 /**
  * @brief 创建 RuleInstance Type。
@@ -334,7 +334,7 @@ ttypeval *ttypeval_new_rule(ttypeval *const *parameters,
  * @return 新 Type。
  */
 ttypeval *ttypeval_new_rule_instance(ttypeval *const *parameters,
-				     uint_objs parameter_count);
+				     uint_count parameter_count);
 
 /**
  * @brief 创建尚未解析具体 Rule 的符号实例 Type。
@@ -345,7 +345,7 @@ ttypeval *ttypeval_new_rule_instance(ttypeval *const *parameters,
  * @return 新 Type。
  */
 ttypeval *ttypeval_new_instance_reference(const char *name,
-	ttypeval *const *parameters, uint_objs count);
+	ttypeval *const *parameters, uint_count count);
 
 /**
  * @brief 根据具体 Rule 值创建实例 Type。
@@ -387,7 +387,7 @@ ttypeval *ttypeval_new_rule_term(ttypeval *result);
  * @param count 成员数量。
  * @return 规范化后的新 Type。
  */
-ttypeval *ttypeval_new_union(ttypeval *const *members, uint_objs count);
+ttypeval *ttypeval_new_union(ttypeval *const *members, uint_count count);
 
 /**
  * @brief 创建字符串成员枚举 Type。
@@ -396,7 +396,7 @@ ttypeval *ttypeval_new_union(ttypeval *const *members, uint_objs count);
  * @param count 成员数量。
  * @return 新 Type。
  */
-ttypeval *ttypeval_new_enum(const tstring *const *members, uint_objs count);
+ttypeval *ttypeval_new_enum(const tstring *const *members, uint_count count);
 
 /**
  * @brief 创建尚未定义主体的递归 Type。
@@ -471,7 +471,7 @@ void ttypeval_idx(ttypeval *type, const tobj *params, uint_regs np,
  * @param type 字段结构 Type。
  * @return 字段数量。
  */
-uint_objs ttypeval_field_count(const ttypeval *type);
+uint_count ttypeval_field_count(const ttypeval *type);
 
 /**
  * @brief 按索引取得字段名称与 Type。
@@ -482,7 +482,7 @@ uint_objs ttypeval_field_count(const ttypeval *type);
  * @param field_type 接收字段 Type 的借用指针。
  * @return 索引有效返回非零，否则返回零。
  */
-int ttypeval_field_at(const ttypeval *type, uint_objs index,
+int ttypeval_field_at(const ttypeval *type, uint_count index,
 		      const tobj **name, ttypeval **field_type);
 
 /**
@@ -509,7 +509,7 @@ int ttypeval_field_optional(const ttypeval *type, const char *name);
  * @param type Type 对象。
  * @return 成员数量。
  */
-uint_objs ttypeval_member_count(const ttypeval *type);
+uint_count ttypeval_member_count(const ttypeval *type);
 
 /**
  * @brief 按索引取得成员 Type。
@@ -518,7 +518,7 @@ uint_objs ttypeval_member_count(const ttypeval *type);
  * @param index 成员索引。
  * @return 成员 Type 的借用指针；索引无效时返回空指针。
  */
-ttypeval *ttypeval_member_at(const ttypeval *type, uint_objs index);
+ttypeval *ttypeval_member_at(const ttypeval *type, uint_count index);
 
 /**
  * @brief 取得枚举 Type 的成员数量。
@@ -526,7 +526,7 @@ ttypeval *ttypeval_member_at(const ttypeval *type, uint_objs index);
  * @param type 枚举 Type。
  * @return 成员数量。
  */
-uint_objs ttypeval_enum_member_count(const ttypeval *type);
+uint_count ttypeval_enum_member_count(const ttypeval *type);
 
 /**
  * @brief 按索引取得枚举成员名称。
@@ -535,7 +535,7 @@ uint_objs ttypeval_enum_member_count(const ttypeval *type);
  * @param index 成员索引。
  * @return 名称的借用指针；索引无效时返回空指针。
  */
-const tstring *ttypeval_enum_member_at(const ttypeval *type, uint_objs index);
+const tstring *ttypeval_enum_member_at(const ttypeval *type, uint_count index);
 
 /**
  * @brief 判断枚举 Type 是否包含指定名称。
@@ -569,7 +569,7 @@ ttypeval *ttypeval_parameter(const ttypeval *type, const char *name);
  * @param type Function Type。
  * @return 参数数量。
  */
-uint_objs ttypeval_function_parameter_count(const ttypeval *type);
+uint_count ttypeval_function_parameter_count(const ttypeval *type);
 
 /**
  * @brief 按索引取得 Function Type 的参数 Type。
@@ -579,7 +579,7 @@ uint_objs ttypeval_function_parameter_count(const ttypeval *type);
  * @return 参数 Type 的借用指针；索引无效时返回空指针。
  */
 ttypeval *ttypeval_function_parameter_at(const ttypeval *type,
-					 uint_objs index);
+					 uint_count index);
 
 /**
  * @brief 取得 Function Type 的返回 Type。

@@ -37,7 +37,7 @@ static int ttype_is_value(const tobj *value)
 {
 	return value && value->type == tcompo && value->val.v_tcompo &&
 	       value->val.v_tcompo->vtable &&
-	       value->val.v_tcompo->vtable->get_compo_type_code() ==
+	       value->val.v_tcompo->vtable->compo_code ==
 		       compo_ttypeval;
 }
 
@@ -121,7 +121,7 @@ static int ttype_compare_string_ptr(const void *left, const void *right)
 }
 
 static ttype_entry *ttype_sorted_entries(const ttypeval *type,
-					 uint_objs *count)
+					 uint_count *count)
 {
 	*count = thashtbl_len(type->definition);
 	if (*count == 0)
@@ -156,11 +156,11 @@ static void ttype_finish_canonical(ttypeval *type, tstring *canonical)
 
 static void ttype_build_fields_canonical(ttypeval *type)
 {
-	uint_objs count;
+	uint_count count;
 	ttype_entry *entries = ttype_sorted_entries(type, &count);
 	tstring *canonical = tstring_new("F");
 	tstring_append_fmt(canonical, "%u:", (unsigned)count);
-	for (uint_objs i = 0; i < count; i++) {
+	for (uint_count i = 0; i < count; i++) {
 		const tstr *key = (const tstr *)entries[i].key->val.v_tcompo;
 		const ttypeval *field =
 			(const ttypeval *)entries[i].value->val.v_tcompo;
@@ -220,12 +220,12 @@ ttypeval *ttypeval_builtin_named(const char *name)
 	return nullptr;
 }
 
-static int canonical_number(const char **cursor, uint_objs *value)
+static int canonical_number(const char **cursor, uint_count *value)
 {
-	uint_objs number = 0;
+	uint_count number = 0;
 	if (**cursor < '0' || **cursor > '9') return 0;
 	while (**cursor >= '0' && **cursor <= '9') {
-		number = number * 10 + (uint_objs)(*(*cursor)++ - '0');
+		number = number * 10 + (uint_count)(*(*cursor)++ - '0');
 	}
 	if (*(*cursor)++ != ':') return 0;
 	*value = number;
@@ -234,7 +234,7 @@ static int canonical_number(const char **cursor, uint_objs *value)
 
 static tstring *canonical_string(const char **cursor)
 {
-	uint_objs length;
+	uint_count length;
 	if (!canonical_number(cursor, &length) || strlen(*cursor) < length)
 		return nullptr;
 	tstring *value = tstring_new_len(*cursor, length);
@@ -244,7 +244,7 @@ static tstring *canonical_string(const char **cursor)
 
 static ttypeval *canonical_wrapped(const char **cursor)
 {
-	uint_objs length;
+	uint_count length;
 	if (!canonical_number(cursor, &length) || strlen(*cursor) < length)
 		return nullptr;
 	char *text = calloc(length + 1, 1);
@@ -269,10 +269,10 @@ ttypeval *ttypeval_from_canonical(const char *canonical)
 		if (!signature || *cursor || signature->kind != ttype_kind_rule_instance) {
 			tstring_free(name); ttypeval_release(signature); return nullptr;
 		}
-		uint_objs count = ttypeval_function_parameter_count(signature);
+		uint_count count = ttypeval_function_parameter_count(signature);
 		ttypeval **parameters = count ? calloc(count, sizeof(*parameters)) : nullptr;
 		if (count && !parameters) abort();
-		for (uint_objs i = 0; i < count; i++) parameters[i] = ttypeval_function_parameter_at(signature, i);
+		for (uint_count i = 0; i < count; i++) parameters[i] = ttypeval_function_parameter_at(signature, i);
 		ttypeval *result = ttypeval_new_instance_reference(tstring_cstr(name), parameters, count);
 		free(parameters); ttypeval_release(signature); tstring_free(name);
 		return result;
@@ -296,8 +296,8 @@ ttypeval *ttypeval_from_canonical(const char *canonical)
 	if (*cursor == 'K') {
 		cursor++;
 		tstring *name = canonical_string(&cursor);
-		uint_objs count;
-		uint_objs capabilities;
+		uint_count count;
+		uint_count capabilities;
 		if (!name || !canonical_number(&cursor, &count) || !count ||
 		    !canonical_number(&cursor, &capabilities)) {
 			tstring_free(name);
@@ -305,7 +305,7 @@ ttypeval *ttypeval_from_canonical(const char *canonical)
 		}
 		ttype_field *parameters = calloc(count, sizeof(*parameters));
 		if (!parameters) abort();
-		for (uint_objs i = 0; i < count; i++) {
+		for (uint_count i = 0; i < count; i++) {
 			parameters[i].name = canonical_string(&cursor);
 			parameters[i].type = canonical_wrapped(&cursor);
 			if (!parameters[i].name || !parameters[i].type) goto named_invalid;
@@ -313,13 +313,13 @@ ttypeval *ttypeval_from_canonical(const char *canonical)
 		if (*cursor) goto named_invalid;
 		ttypeval *type = ttypeval_new_named_application(
 			tstring_cstr(name), parameters, count, capabilities);
-		for (uint_objs i = 0; i < count; i++)
+		for (uint_count i = 0; i < count; i++)
 			tstring_free((tstring *)parameters[i].name);
 		free(parameters);
 		tstring_free(name);
 		return type;
 	named_invalid:
-		for (uint_objs i = 0; i < count; i++)
+		for (uint_count i = 0; i < count; i++)
 			tstring_free((tstring *)parameters[i].name);
 		free(parameters);
 		tstring_free(name);
@@ -369,12 +369,12 @@ ttypeval *ttypeval_from_canonical(const char *canonical)
 	}
 	if (*cursor == 'G') {
 		cursor++;
-		uint_objs type_count, value_count;
+		uint_count type_count, value_count;
 		if (!canonical_number(&cursor, &type_count)) return nullptr;
 		tstring **type_names = type_count ? calloc(type_count,
 			sizeof(*type_names)) : nullptr;
 		if (type_count && !type_names) abort();
-		for (uint_objs i = 0; i < type_count; i++) {
+		for (uint_count i = 0; i < type_count; i++) {
 			type_names[i] = canonical_string(&cursor);
 			if (!type_names[i]) goto template_invalid;
 		}
@@ -382,7 +382,7 @@ ttypeval *ttypeval_from_canonical(const char *canonical)
 		ttype_value_parameter *values = value_count ? calloc(value_count,
 			sizeof(*values)) : nullptr;
 		if (value_count && !values) abort();
-		for (uint_objs i = 0; i < value_count; i++) {
+		for (uint_count i = 0; i < value_count; i++) {
 			values[i].name = canonical_string(&cursor);
 			if (!values[i].name) goto template_values_invalid;
 			values[i].type = canonical_wrapped(&cursor);
@@ -393,18 +393,18 @@ ttypeval *ttypeval_from_canonical(const char *canonical)
 		ttypeval *type = ttypeval_new_template(
 			(const tstring *const *)type_names, type_count, values,
 			value_count, body);
-		for (uint_objs i = 0; i < type_count; i++) tstring_free(type_names[i]);
-		for (uint_objs i = 0; i < value_count; i++)
+		for (uint_count i = 0; i < type_count; i++) tstring_free(type_names[i]);
+		for (uint_count i = 0; i < value_count; i++)
 			tstring_free((tstring *)values[i].name);
 		free(type_names);
 		free(values);
 		return type;
 	template_values_invalid:
-		for (uint_objs i = 0; i < value_count; i++)
+		for (uint_count i = 0; i < value_count; i++)
 			tstring_free((tstring *)values[i].name);
 		free(values);
 	template_invalid:
-		for (uint_objs i = 0; i < type_count; i++) tstring_free(type_names[i]);
+		for (uint_count i = 0; i < type_count; i++) tstring_free(type_names[i]);
 		free(type_names);
 		return nullptr;
 	}
@@ -419,10 +419,10 @@ ttypeval *ttypeval_from_canonical(const char *canonical)
 	if (strncmp(cursor, "FF", 2) == 0 || strncmp(cursor, "FV", 2) == 0) {
 		int variadic = cursor[1] == 'V';
 		cursor += 2;
-		uint_objs count;
+		uint_count count;
 		if (!canonical_number(&cursor, &count)) return nullptr;
 		ttypeval **parameters = count ? calloc(count, sizeof(*parameters)) : nullptr;
-		for (uint_objs i = 0; i < count; i++) {
+		for (uint_count i = 0; i < count; i++) {
 			if (*cursor == '?') { cursor++; continue; }
 			if (*cursor++ != 'T' ||
 			    !(parameters[i] = canonical_wrapped(&cursor))) {
@@ -441,15 +441,15 @@ ttypeval *ttypeval_from_canonical(const char *canonical)
 	}
 	if (*cursor == 'F') {
 		cursor++;
-		uint_objs count;
+		uint_count count;
 		if (!canonical_number(&cursor, &count) || count == 0) return nullptr;
 		ttype_field *fields = calloc(count, sizeof(*fields));
 		tstring **names = calloc(count, sizeof(*names));
-		for (uint_objs i = 0; i < count; i++) {
+		for (uint_count i = 0; i < count; i++) {
 			fields[i].optional = *cursor == '?';
 			if (*cursor != '?' && *cursor != '!') goto fields_invalid;
 			cursor++;
-			uint_objs name_length;
+			uint_count name_length;
 			if (!canonical_number(&cursor, &name_length) ||
 			    strlen(cursor) < name_length) goto fields_invalid;
 			char *name = calloc(name_length + 1, 1);
@@ -463,38 +463,38 @@ ttypeval *ttypeval_from_canonical(const char *canonical)
 		}
 		if (*cursor) goto fields_invalid;
 		ttypeval *type = ttypeval_new_fields(fields, count);
-		for (uint_objs i = 0; i < count; i++) tstring_free(names[i]);
+		for (uint_count i = 0; i < count; i++) tstring_free(names[i]);
 		free(names); free(fields);
 		return type;
 	fields_invalid:
-		for (uint_objs i = 0; i < count; i++) tstring_free(names[i]);
+		for (uint_count i = 0; i < count; i++) tstring_free(names[i]);
 		free(names); free(fields);
 		return nullptr;
 	}
 	if (*cursor == 'E') {
 		cursor++;
-		uint_objs count;
+		uint_count count;
 		if (!canonical_number(&cursor, &count) || count == 0) return nullptr;
 		tstring **members = calloc(count, sizeof(*members));
 		if (!members) abort();
-		for (uint_objs i = 0; i < count; i++) {
+		for (uint_count i = 0; i < count; i++) {
 			members[i] = canonical_string(&cursor);
 			if (!members[i]) goto enum_invalid;
 		}
 		if (*cursor) goto enum_invalid;
 		ttypeval *type = ttypeval_new_enum(
 			(const tstring *const *)members, count);
-		for (uint_objs i = 0; i < count; i++) tstring_free(members[i]);
+		for (uint_count i = 0; i < count; i++) tstring_free(members[i]);
 		free(members);
 		return type;
 	enum_invalid:
-		for (uint_objs i = 0; i < count; i++) tstring_free(members[i]);
+		for (uint_count i = 0; i < count; i++) tstring_free(members[i]);
 		free(members);
 		return nullptr;
 	}
 	if (*cursor == 'M') {
 		cursor++;
-		uint_objs ignored;
+		uint_count ignored;
 		if (!canonical_number(&cursor, &ignored)) return nullptr;
 		ttypeval *body = canonical_wrapped(&cursor);
 		if (!body || *cursor) return nullptr;
@@ -513,10 +513,10 @@ ttypeval *ttypeval_from_canonical(const char *canonical)
 	int rule_instance = strncmp(cursor, "QI", 2) == 0;
 	if (*cursor == 'Q') {
 		cursor += rule_instance ? 2 : 1;
-		uint_objs count;
+		uint_count count;
 		if (!canonical_number(&cursor, &count)) return nullptr;
 		ttypeval **parameters = count ? calloc(count, sizeof(*parameters)) : nullptr;
-		for (uint_objs i = 0; i < count; i++)
+		for (uint_count i = 0; i < count; i++)
 			if (!(parameters[i] = canonical_wrapped(&cursor))) {
 				free(parameters);
 				return nullptr;
@@ -530,10 +530,10 @@ ttypeval *ttypeval_from_canonical(const char *canonical)
 	}
 	if (*cursor == 'U') {
 		cursor++;
-		uint_objs count;
+		uint_count count;
 		if (!canonical_number(&cursor, &count) || count < 2) return nullptr;
 		ttypeval **members = calloc(count, sizeof(*members));
-		for (uint_objs i = 0; i < count; i++)
+		for (uint_count i = 0; i < count; i++)
 			if (!(members[i] = canonical_wrapped(&cursor))) {
 				free(members);
 				return nullptr;
@@ -584,7 +584,7 @@ ttypeval *ttypeval_new_named(const char *qualified_name)
 }
 
 ttypeval *ttypeval_new_named_application(const char *qualified_name,
-	const ttype_field *parameters, uint_objs parameter_count,
+	const ttype_field *parameters, uint_count parameter_count,
 	uint32_t capabilities)
 {
 	if (!qualified_name || !*qualified_name || !strstr(qualified_name, "::") ||
@@ -607,13 +607,13 @@ ttypeval *ttypeval_new_named_application(const char *qualified_name,
 	tstring_append(canonical, qualified_name);
 	tstring_append_fmt(canonical, "%u:", (unsigned)parameter_count);
 	tstring_append_fmt(canonical, "%u:", (unsigned)capabilities);
-	for (uint_objs i = 0; i < parameter_count; i++) {
+	for (uint_count i = 0; i < parameter_count; i++) {
 		const char *name = parameters[i].name ?
 			tstring_cstr(parameters[i].name) : nullptr;
 		if (!name || !*name || !parameters[i].type)
 			twarn(ErrRuntime_ParamsType, "package Type",
 			      "named Type parameter requires a name and Type");
-		for (uint_objs j = 0; j < i; j++)
+		for (uint_count j = 0; j < i; j++)
 			if (tstring_eq_cstr(type->named_parameter_names[j], name))
 				twarn(ErrRuntime_ParamsType, "package Type",
 				      "duplicate named Type parameter");
@@ -647,7 +647,7 @@ ttypeval *ttypeval_new_extension_template(
 	if (!schema || !schema->identity || !strstr(schema->identity, "::") ||
 	    (!schema->type_parameter_count && !schema->value_parameter_count))
 		return nullptr;
-	uint_objs count = schema->type_parameter_count +
+	uint_count count = schema->type_parameter_count +
 		schema->value_parameter_count;
 	ttype_field *body_parameters = calloc(count, sizeof(*body_parameters));
 	const tstring **type_names = schema->type_parameter_count ? calloc(
@@ -656,7 +656,7 @@ ttypeval *ttypeval_new_extension_template(
 		calloc(schema->value_parameter_count, sizeof(*value_parameters)) : nullptr;
 	if (!body_parameters || (schema->type_parameter_count && !type_names) ||
 	    (schema->value_parameter_count && !value_parameters)) abort();
-	for (uint_objs i = 0; i < schema->type_parameter_count; i++) {
+	for (uint_count i = 0; i < schema->type_parameter_count; i++) {
 		const textension_template_type_parameter *parameter =
 			&schema->type_parameters[i];
 		if (!parameter->name || !*parameter->name ||
@@ -666,7 +666,7 @@ ttypeval *ttypeval_new_extension_template(
 		body_parameters[i] = (ttype_field){
 			.name = tstring_new(parameter->slot), .type = placeholder };
 	}
-	for (uint_objs i = 0; i < schema->value_parameter_count; i++) {
+	for (uint_count i = 0; i < schema->value_parameter_count; i++) {
 		const textension_template_value_parameter *parameter =
 			&schema->value_parameters[i];
 		ttypeval *constraint = extension_constraint(parameter->constraint);
@@ -684,7 +684,7 @@ ttypeval *ttypeval_new_extension_template(
 	ttypeval *result = ttypeval_new_template(type_names,
 		schema->type_parameter_count, value_parameters,
 		schema->value_parameter_count, body);
-	for (uint_objs i = 0; i < count; i++)
+	for (uint_count i = 0; i < count; i++)
 		tstring_free((tstring *)body_parameters[i].name);
 	free(body_parameters);
 	free(type_names);
@@ -692,7 +692,7 @@ ttypeval *ttypeval_new_extension_template(
 	return result;
 
 invalid:
-	for (uint_objs i = 0; i < count; i++)
+	for (uint_count i = 0; i < count; i++)
 		tstring_free((tstring *)body_parameters[i].name);
 	free(body_parameters);
 	free(type_names);
@@ -738,17 +738,17 @@ ttypeval *ttypeval_new_value_parameter(const char *name)
 
 static int template_has_name(const ttypeval *type, const char *name)
 {
-	for (uint_objs i = 0; i < type->template_type_parameter_count; i++)
+	for (uint_count i = 0; i < type->template_type_parameter_count; i++)
 		if (tstring_eq_cstr(type->template_type_parameters[i], name)) return 1;
-	for (uint_objs i = 0; i < type->template_value_parameter_count; i++)
+	for (uint_count i = 0; i < type->template_value_parameter_count; i++)
 		if (tstring_eq_cstr(type->template_value_parameters[i].name, name)) return 1;
 	return 0;
 }
 
 ttypeval *ttypeval_new_template(const tstring *const *type_parameters,
-	uint_objs type_parameter_count,
+	uint_count type_parameter_count,
 	const ttype_value_parameter *value_parameters,
-	uint_objs value_parameter_count, ttypeval *body)
+	uint_count value_parameter_count, ttypeval *body)
 {
 	if (!body || (!type_parameter_count && !value_parameter_count))
 		twarn(ErrRuntime_ParamsCtr, "types::template",
@@ -768,7 +768,7 @@ ttypeval *ttypeval_new_template(const tstring *const *type_parameters,
 			sizeof(*type->template_value_parameters));
 		if (!type->template_value_parameters) abort();
 	}
-	for (uint_objs i = 0; i < type_parameter_count; i++) {
+	for (uint_count i = 0; i < type_parameter_count; i++) {
 		const char *name = type_parameters[i] ?
 			tstring_cstr(type_parameters[i]) : nullptr;
 		if (!template_parameter_name_valid(name) || template_has_name(type, name))
@@ -776,7 +776,7 @@ ttypeval *ttypeval_new_template(const tstring *const *type_parameters,
 			      "invalid or duplicate Type parameter");
 		type->template_type_parameters[i] = tstring_new(name);
 	}
-	for (uint_objs i = 0; i < value_parameter_count; i++) {
+	for (uint_count i = 0; i < value_parameter_count; i++) {
 		const char *name = value_parameters[i].name ?
 			tstring_cstr(value_parameters[i].name) : nullptr;
 		if (!template_parameter_name_valid(name) || !value_parameters[i].type ||
@@ -790,13 +790,13 @@ ttypeval *ttypeval_new_template(const tstring *const *type_parameters,
 	}
 	tstring *canonical = tstring_new("G");
 	tstring_append_fmt(canonical, "%u:", (unsigned)type_parameter_count);
-	for (uint_objs i = 0; i < type_parameter_count; i++) {
+	for (uint_count i = 0; i < type_parameter_count; i++) {
 		tstring *name = type->template_type_parameters[i];
 		tstring_append_fmt(canonical, "%zu:", tstring_len(name));
 		tstring_append_ts(canonical, name);
 	}
 	tstring_append_fmt(canonical, "%u:", (unsigned)value_parameter_count);
-	for (uint_objs i = 0; i < value_parameter_count; i++) {
+	for (uint_count i = 0; i < value_parameter_count; i++) {
 		tstring *name = type->template_value_parameters[i].name;
 		tstring_append_fmt(canonical, "%zu:", tstring_len(name));
 		tstring_append_ts(canonical, name);
@@ -849,7 +849,7 @@ static ttypeval *substitute_template(const ttypeval *source,
 	const tobj *values)
 {
 	if (source->kind == ttype_kind_parameter) {
-		for (uint_objs i = 0; i < template_type->template_type_parameter_count; i++)
+		for (uint_count i = 0; i < template_type->template_type_parameter_count; i++)
 			if (tstring_eq(source->parameter_name,
 			    template_type->template_type_parameters[i]))
 				return ttypeval_retain(types[i]);
@@ -857,7 +857,7 @@ static ttypeval *substitute_template(const ttypeval *source,
 		      "undeclared Type parameter in definition");
 	}
 	if (source->kind == ttype_kind_value_parameter) {
-		for (uint_objs i = 0; i < template_type->template_value_parameter_count; i++)
+		for (uint_count i = 0; i < template_type->template_value_parameter_count; i++)
 			if (tstring_eq(source->parameter_name,
 			    template_type->template_value_parameters[i].name))
 				return ttypeval_retain(ttypeval_new_exact_value(&values[i]));
@@ -868,7 +868,7 @@ static ttypeval *substitute_template(const ttypeval *source,
 		ttype_field *parameters = calloc(source->named_parameter_count,
 			sizeof(*parameters));
 		if (!parameters) abort();
-		for (uint_objs i = 0; i < source->named_parameter_count; i++) {
+		for (uint_count i = 0; i < source->named_parameter_count; i++) {
 			parameters[i].name = source->named_parameter_names[i];
 			parameters[i].type = substitute_template(
 				source->named_parameter_types[i], template_type,
@@ -877,16 +877,16 @@ static ttypeval *substitute_template(const ttypeval *source,
 		ttypeval *result = ttypeval_new_named_application(
 			tstring_cstr(source->named_identity), parameters,
 			source->named_parameter_count, source->capabilities);
-		for (uint_objs i = 0; i < source->named_parameter_count; i++)
+		for (uint_count i = 0; i < source->named_parameter_count; i++)
 			ttypeval_release(parameters[i].type);
 		free(parameters);
 		return ttypeval_retain(result);
 	}
 	if (source->kind == ttype_kind_fields) {
-		uint_objs count = ttypeval_field_count(source);
+		uint_count count = ttypeval_field_count(source);
 		ttype_field *fields = calloc(count, sizeof(*fields));
 		if (!fields) abort();
-		for (uint_objs i = 0; i < count; i++) {
+		for (uint_count i = 0; i < count; i++) {
 			const tobj *name;
 			ttypeval *field;
 			ttypeval_field_at(source, i, &name, &field);
@@ -897,7 +897,7 @@ static ttypeval *substitute_template(const ttypeval *source,
 				tstring_cstr(fields[i].name));
 		}
 		ttypeval *result = ttypeval_new_fields(fields, count);
-		for (uint_objs i = 0; i < count; i++) ttypeval_release(fields[i].type);
+		for (uint_count i = 0; i < count; i++) ttypeval_release(fields[i].type);
 		free(fields);
 		return ttypeval_retain(result);
 	}
@@ -925,25 +925,25 @@ static ttypeval *substitute_template(const ttypeval *source,
 		return ttypeval_retain(result);
 	}
 	if (source->kind == ttype_kind_union) {
-		uint_objs count = ttypeval_member_count(source);
+		uint_count count = ttypeval_member_count(source);
 		ttypeval **members = calloc(count, sizeof(*members));
 		if (!members) abort();
-		for (uint_objs i = 0; i < count; i++)
+		for (uint_count i = 0; i < count; i++)
 			members[i] = substitute_template(ttypeval_member_at(source, i),
 				template_type, types, values);
 		ttypeval *result = ttypeval_new_union(members, count);
-		for (uint_objs i = 0; i < count; i++) ttypeval_release(members[i]);
+		for (uint_count i = 0; i < count; i++) ttypeval_release(members[i]);
 		free(members);
 		return ttypeval_retain(result);
 	}
 	if (source->kind == ttype_kind_function || source->kind == ttype_kind_rule ||
 	    source->kind == ttype_kind_rule_instance ||
 	    source->kind == ttype_kind_instance_of) {
-		uint_objs parameter_count = ttypeval_function_parameter_count(source);
+		uint_count parameter_count = ttypeval_function_parameter_count(source);
 		ttypeval **parameters = parameter_count ? calloc(parameter_count,
 			sizeof(*parameters)) : nullptr;
 		if (parameter_count && !parameters) abort();
-		for (uint_objs i = 0; i < parameter_count; i++)
+		for (uint_count i = 0; i < parameter_count; i++)
 			parameters[i] = substitute_template(
 				ttypeval_function_parameter_at(source, i), template_type,
 				types, values);
@@ -965,7 +965,7 @@ static ttypeval *substitute_template(const ttypeval *source,
 		} else {
 			result = (ttypeval *)source;
 		}
-		for (uint_objs i = 0; i < parameter_count; i++)
+		for (uint_count i = 0; i < parameter_count; i++)
 			ttypeval_release(parameters[i]);
 		free(parameters);
 		return ttypeval_retain(result);
@@ -974,19 +974,19 @@ static ttypeval *substitute_template(const ttypeval *source,
 }
 
 ttypeval *ttypeval_apply_template(ttypeval *template_type,
-	ttypeval *const *type_arguments, uint_objs type_argument_count,
-	const tobj *value_arguments, uint_objs value_argument_count)
+	ttypeval *const *type_arguments, uint_count type_argument_count,
+	const tobj *value_arguments, uint_count value_argument_count)
 {
 	if (!ttypeval_is_template(template_type) ||
 	    type_argument_count != template_type->template_type_parameter_count ||
 	    value_argument_count != template_type->template_value_parameter_count)
 		twarn(ErrRuntime_ParamsCtr, "Type template",
 		      "template argument count mismatch");
-	for (uint_objs i = 0; i < type_argument_count; i++)
+	for (uint_count i = 0; i < type_argument_count; i++)
 		if (!type_arguments[i])
 			twarn(ErrRuntime_ParamsType, "Type template",
 			      "Type argument required");
-	for (uint_objs i = 0; i < value_argument_count; i++)
+	for (uint_count i = 0; i < value_argument_count; i++)
 		if (!ttypeval_matches(&value_arguments[i],
 		    template_type->template_value_parameters[i].type))
 			twarn(ErrRuntime_ParamsType, "Type template",
@@ -995,13 +995,13 @@ ttypeval *ttypeval_apply_template(ttypeval *template_type,
 		type_arguments, value_arguments);
 }
 
-ttypeval *ttypeval_new_fields(const ttype_field *fields, uint_objs count)
+ttypeval *ttypeval_new_fields(const ttype_field *fields, uint_count count)
 {
 	if (!fields || count == 0)
 		twarn(ErrRuntime_ParamsCtr, "types::make_type",
 		      "at least one field is required");
 	ttypeval *type = ttype_new(ttype_kind_fields);
-	for (uint_objs i = 0; i < count; i++) {
+	for (uint_count i = 0; i < count; i++) {
 		const char *name = tstring_cstr(fields[i].name);
 		if (!name || name[0] == '@')
 			twarn(ErrRuntime_ParamsType, "types::make_type",
@@ -1027,7 +1027,7 @@ ttypeval *ttypeval_new_fields(const ttype_field *fields, uint_objs count)
 	return type;
 }
 
-ttypeval *ttypeval_new_enum(const tstring *const *members, uint_objs count)
+ttypeval *ttypeval_new_enum(const tstring *const *members, uint_count count)
 {
 	if (!members || count == 0)
 		twarn(ErrRuntime_ParamsCtr, "types::enum",
@@ -1037,11 +1037,11 @@ ttypeval *ttypeval_new_enum(const tstring *const *members, uint_objs count)
 	if (!type->enum_members)
 		twarn(ErrRuntime_Other, "types::enum", "out of memory");
 	type->enum_member_count = count;
-	for (uint_objs i = 0; i < count; i++) {
+	for (uint_count i = 0; i < count; i++) {
 		if (!members[i])
 			twarn(ErrRuntime_ParamsType, "types::enum",
 			      "String member required");
-		for (uint_objs j = 0; j < i; j++)
+		for (uint_count j = 0; j < i; j++)
 			if (tstring_eq(members[i], members[j]))
 				twarn(ErrRuntime_Other, "types::enum",
 				      "duplicate enum member");
@@ -1050,11 +1050,11 @@ ttypeval *ttypeval_new_enum(const tstring *const *members, uint_objs count)
 	ttype_set_definition(type, "@base", ttypeval_builtin(tbuiltintype_string));
 	tstring **sorted = (tstring **)calloc(count, sizeof(*sorted));
 	if (!sorted) abort();
-	for (uint_objs i = 0; i < count; i++) sorted[i] = type->enum_members[i];
+	for (uint_count i = 0; i < count; i++) sorted[i] = type->enum_members[i];
 	qsort(sorted, count, sizeof(*sorted), ttype_compare_string_ptr);
 	tstring *canonical = tstring_new("E");
 	tstring_append_fmt(canonical, "%u:", (unsigned)count);
-	for (uint_objs i = 0; i < count; i++) {
+	for (uint_count i = 0; i < count; i++) {
 		tstring_append_fmt(canonical, "%zu:", tstring_len(sorted[i]));
 		tstring_append_ts(canonical, sorted[i]);
 	}
@@ -1116,7 +1116,7 @@ ttypeval *ttypeval_new_rule_term(ttypeval *result)
 }
 
 ttypeval *ttypeval_new_function(ttypeval *const *parameters,
-				uint_objs parameter_count,
+				uint_count parameter_count,
 				ttypeval *result,
 				int variadic)
 {
@@ -1127,7 +1127,7 @@ ttypeval *ttypeval_new_function(ttypeval *const *parameters,
 			     ttypeval_builtin(tbuiltintype_function));
 	tstring *canonical = tstring_new(variadic ? "FV" : "FF");
 	tstring_append_fmt(canonical, "%u:", (unsigned)parameter_count);
-	for (uint_objs i = 0; i < parameter_count; i++) {
+	for (uint_count i = 0; i < parameter_count; i++) {
 		if (parameters && parameters[i]) {
 			char key[32];
 			snprintf(key, sizeof(key), "@parameter/%u", (unsigned)i);
@@ -1150,14 +1150,14 @@ ttypeval *ttypeval_new_function(ttypeval *const *parameters,
 static ttypeval *ttype_new_rule_type(ttype_kind kind, tbuiltintype_id base,
 				     const char *tag,
 				     ttypeval *const *parameters,
-				     uint_objs parameter_count)
+				     uint_count parameter_count)
 {
 	ttypeval *type = ttype_new(kind);
 	type->function_parameter_count = parameter_count;
 	ttype_set_definition(type, "@base", ttypeval_builtin(base));
 	tstring *canonical = tstring_new(tag);
 	tstring_append_fmt(canonical, "%u:", (unsigned)parameter_count);
-	for (uint_objs i = 0; i < parameter_count; i++) {
+	for (uint_count i = 0; i < parameter_count; i++) {
 		char key[32];
 		snprintf(key, sizeof(key), "@parameter/%u", (unsigned)i);
 		ttype_set_definition(type, key, parameters[i]);
@@ -1168,21 +1168,21 @@ static ttypeval *ttype_new_rule_type(ttype_kind kind, tbuiltintype_id base,
 }
 
 ttypeval *ttypeval_new_rule(ttypeval *const *parameters,
-			    uint_objs parameter_count)
+			    uint_count parameter_count)
 {
 	return ttype_new_rule_type(ttype_kind_rule, tbuiltintype_rule, "Q",
 		parameters, parameter_count);
 }
 
 ttypeval *ttypeval_new_rule_instance(ttypeval *const *parameters,
-				     uint_objs parameter_count)
+				     uint_count parameter_count)
 {
 	return ttype_new_rule_type(ttype_kind_rule_instance,
 		tbuiltintype_rule_instance, "QI", parameters, parameter_count);
 }
 
 ttypeval *ttypeval_new_instance_reference(const char *name,
-	ttypeval *const *parameters, uint_objs count)
+	ttypeval *const *parameters, uint_count count)
 {
 	ttypeval *type = ttype_new_rule_type(ttype_kind_instance_of,
 		tbuiltintype_rule_instance, "QI", parameters, count);
@@ -1203,10 +1203,10 @@ ttypeval *ttypeval_new_instance_of(const tobj *value)
 	if (!value || value->type != tcompo || tobj_compo_type(value) != compo_trule)
 		twarn(ErrRuntime_ParamsType, "InstanceOf", "Rule value required");
 	trule *rule = (trule *)value->val.v_tcompo;
-	uint_objs count = rule->ir->parameters.len;
+	uint_count count = rule->ir->parameters.len;
 	ttypeval **parameters = count ? calloc(count, sizeof(*parameters)) : nullptr;
 	if (count && !parameters) abort();
-	for (uint_objs i = 0; i < count; i++)
+	for (uint_count i = 0; i < count; i++)
 		parameters[i] = ((trule_term *)rule->ir->parameters.data[i].val.v_tcompo)->type;
 	ttypeval *type = ttype_new_rule_type(ttype_kind_instance_of,
 		tbuiltintype_rule_instance, "QI", parameters, count);
@@ -1235,7 +1235,7 @@ ttypeval *ttypeval_resolve_instances(ttypeval *type, ttype_instance_resolver res
 			calloc(type->template_value_parameter_count, sizeof(*parameters)) :
 			nullptr;
 		if (type->template_value_parameter_count && !parameters) abort();
-		for (uint_objs i = 0; i < type->template_value_parameter_count; i++) {
+		for (uint_count i = 0; i < type->template_value_parameter_count; i++) {
 			parameters[i].name = type->template_value_parameters[i].name;
 			parameters[i].type = ttypeval_resolve_instances(
 				type->template_value_parameters[i].type, resolver, context);
@@ -1246,7 +1246,7 @@ ttypeval *ttypeval_resolve_instances(ttypeval *type, ttype_instance_resolver res
 			(const tstring *const *)type->template_type_parameters,
 			type->template_type_parameter_count, parameters,
 			type->template_value_parameter_count, body);
-		for (uint_objs i = 0; i < type->template_value_parameter_count; i++)
+		for (uint_count i = 0; i < type->template_value_parameter_count; i++)
 			ttypeval_release(parameters[i].type);
 		ttypeval_release(body);
 		free(parameters);
@@ -1256,7 +1256,7 @@ ttypeval *ttypeval_resolve_instances(ttypeval *type, ttype_instance_resolver res
 		ttype_field *parameters = calloc(type->named_parameter_count,
 			sizeof(*parameters));
 		if (!parameters) abort();
-		for (uint_objs i = 0; i < type->named_parameter_count; i++) {
+		for (uint_count i = 0; i < type->named_parameter_count; i++) {
 			parameters[i].name = type->named_parameter_names[i];
 			parameters[i].type = ttypeval_resolve_instances(
 				type->named_parameter_types[i], resolver, context);
@@ -1264,12 +1264,12 @@ ttypeval *ttypeval_resolve_instances(ttypeval *type, ttype_instance_resolver res
 		ttypeval *result = ttypeval_new_named_application(
 			tstring_cstr(type->named_identity), parameters,
 			type->named_parameter_count, type->capabilities);
-		for (uint_objs i = 0; i < type->named_parameter_count; i++)
+		for (uint_count i = 0; i < type->named_parameter_count; i++)
 			ttypeval_release(parameters[i].type);
 		free(parameters);
 		return ttypeval_retain(result);
 	}
-	uint_objs count = type->kind == ttype_kind_fields ? ttypeval_field_count(type) :
+	uint_count count = type->kind == ttype_kind_fields ? ttypeval_field_count(type) :
 		type->kind == ttype_kind_union ? ttypeval_member_count(type) :
 		type->kind == ttype_kind_function ? ttypeval_function_parameter_count(type) + 1 :
 		type->kind == ttype_kind_rule || type->kind == ttype_kind_rule_instance ?
@@ -1280,7 +1280,7 @@ ttypeval *ttypeval_resolve_instances(ttypeval *type, ttype_instance_resolver res
 		calloc(count, sizeof(*fields)) : nullptr;
 	if ((count && !children) ||
 		(type->kind == ttype_kind_fields && count && !fields)) abort();
-	for (uint_objs i = 0; i < count; i++) {
+	for (uint_count i = 0; i < count; i++) {
 		ttypeval *child = nullptr;
 		if (type->kind == ttype_kind_fields) {
 			const tobj *name;
@@ -1312,7 +1312,7 @@ ttypeval *ttypeval_resolve_instances(ttypeval *type, ttype_instance_resolver res
 	default: twarn(ErrRuntime_ParamsType, "InstanceOf", "unsupported enclosing Type");
 	}
 	ttypeval_retain(result);
-	for (uint_objs i = 0; i < count; i++) ttypeval_release(children[i]);
+	for (uint_count i = 0; i < count; i++) ttypeval_release(children[i]);
 	free(fields); free(children);
 	return result;
 }
@@ -1326,18 +1326,18 @@ static int ttype_compare_member(const void *left, const void *right)
 
 static void ttype_union_collect(ttypeval *type,
 				ttypeval ***members,
-				uint_objs *count,
-				uint_objs *capacity)
+				uint_count *count,
+				uint_count *capacity)
 {
 	if (type->kind == ttype_kind_union) {
-		uint_objs n = ttypeval_member_count(type);
-		for (uint_objs i = 0; i < n; i++)
+		uint_count n = ttypeval_member_count(type);
+		for (uint_count i = 0; i < n; i++)
 			ttype_union_collect(ttypeval_member_at(type, i), members,
 					    count, capacity);
 		return;
 	}
 	if (*count >= *capacity) {
-		uint_objs grown = *capacity ? (uint_objs)(*capacity * 2) : 8;
+		uint_count grown = *capacity ? (uint_count)(*capacity * 2) : 8;
 		ttypeval **next =
 			(ttypeval **)realloc(*members, grown * sizeof(ttypeval *));
 		if (!next)
@@ -1348,20 +1348,20 @@ static void ttype_union_collect(ttypeval *type,
 	(*members)[(*count)++] = type;
 }
 
-ttypeval *ttypeval_new_union(ttypeval *const *input, uint_objs input_count)
+ttypeval *ttypeval_new_union(ttypeval *const *input, uint_count input_count)
 {
 	if (!input || input_count < 2)
 		twarn(ErrRuntime_ParamsCtr, "types::union",
 		      "at least two Type values are required");
 	ttypeval **members = nullptr;
-	uint_objs count = 0;
-	uint_objs capacity = 0;
-	for (uint_objs i = 0; i < input_count; i++)
+	uint_count count = 0;
+	uint_count capacity = 0;
+	for (uint_count i = 0; i < input_count; i++)
 		ttype_union_collect(input[i], &members, &count, &capacity);
 	qsort(members, count, sizeof(ttypeval *), ttype_compare_member);
 
-	uint_objs unique = 0;
-	for (uint_objs i = 0; i < count; i++) {
+	uint_count unique = 0;
+	for (uint_count i = 0; i < count; i++) {
 		if (members[i]->kind == ttype_kind_any) {
 			free(members);
 			return ttypeval_builtin(tbuiltintype_any);
@@ -1378,7 +1378,7 @@ ttypeval *ttypeval_new_union(ttypeval *const *input, uint_objs input_count)
 	ttypeval *type = ttype_new(ttype_kind_union);
 	tstring *canonical = tstring_new("U");
 	tstring_append_fmt(canonical, "%u:", (unsigned)unique);
-	for (uint_objs i = 0; i < unique; i++) {
+	for (uint_count i = 0; i < unique; i++) {
 		char key[32];
 		snprintf(key, sizeof(key), "@union/%u", (unsigned)i);
 		ttype_set_definition(type, key, members[i]);
@@ -1436,16 +1436,16 @@ static const ttypeval *ttype_unwrap(const ttypeval *type)
 }
 
 static int ttype_equal_graph(const ttypeval *left, const ttypeval *right,
-			     ttype_compare_pair **seen, uint_objs *count,
-			     uint_objs *capacity)
+			     ttype_compare_pair **seen, uint_count *count,
+			     uint_count *capacity)
 {
 	if (left == right) return left != nullptr;
 	if (!left || !right) return 0;
-	for (uint_objs i = 0; i < *count; i++)
+	for (uint_count i = 0; i < *count; i++)
 		if ((*seen)[i].left == left && (*seen)[i].right == right)
 			return 1;
 	if (*count == *capacity) {
-		uint_objs grown = *capacity ? *capacity * 2 : 16;
+		uint_count grown = *capacity ? *capacity * 2 : 16;
 		ttype_compare_pair *items = (ttype_compare_pair *)realloc(
 			*seen, grown * sizeof(*items));
 		if (!items) abort();
@@ -1468,7 +1468,7 @@ static int ttype_equal_graph(const ttypeval *left, const ttypeval *right,
 		return 0;
 	if (left->kind == ttype_kind_fields) {
 		if (ttypeval_field_count(left) != ttypeval_field_count(right)) return 0;
-		for (uint_objs i = 0; i < ttypeval_field_count(left); i++) {
+		for (uint_count i = 0; i < ttypeval_field_count(left); i++) {
 			const tobj *name = nullptr;
 			ttypeval *member = nullptr;
 			ttypeval_field_at(left, i, &name, &member);
@@ -1483,12 +1483,12 @@ static int ttype_equal_graph(const ttypeval *left, const ttypeval *right,
 		return 1;
 	}
 	if (left->kind == ttype_kind_union) {
-		uint_objs n = ttypeval_member_count(left);
+		uint_count n = ttypeval_member_count(left);
 		if (n != ttypeval_member_count(right)) return 0;
-		for (uint_objs i = 0; i < n; i++) {
+		for (uint_count i = 0; i < n; i++) {
 			int found = 0;
-			for (uint_objs j = 0; j < n && !found; j++) {
-				uint_objs saved = *count;
+			for (uint_count j = 0; j < n && !found; j++) {
+				uint_count saved = *count;
 				found = ttype_equal_graph(ttypeval_member_at(left, i),
 					ttypeval_member_at(right, j), seen, count, capacity);
 				if (!found) *count = saved;
@@ -1497,11 +1497,11 @@ static int ttype_equal_graph(const ttypeval *left, const ttypeval *right,
 		}
 		return 1;
 	}
-	uint_objs entries = thashtbl_len(left->definition);
+	uint_count entries = thashtbl_len(left->definition);
 	if (entries != thashtbl_len(right->definition)) return 0;
-	uint_objs count_left = 0;
+	uint_count count_left = 0;
 	ttype_entry *items = ttype_sorted_entries(left, &count_left);
-	for (uint_objs i = 0; i < count_left; i++) {
+	for (uint_count i = 0; i < count_left; i++) {
 		const tstr *key = (const tstr *)items[i].key->val.v_tcompo;
 		ttypeval *a = (ttypeval *)items[i].value->val.v_tcompo;
 		ttypeval *b = ttype_definition_get_type(right, tstring_cstr(key->data));
@@ -1521,7 +1521,7 @@ int ttypeval_equal(const ttypeval *left, const ttypeval *right)
 	if (!ttype_contains_recursive(left) && !ttype_contains_recursive(right))
 		return tstring_cmp(left->canonical, right->canonical) == 0;
 	ttype_compare_pair *seen = nullptr;
-	uint_objs count = 0, capacity = 0;
+	uint_count count = 0, capacity = 0;
 	int equal = ttype_equal_graph(left, right, &seen, &count, &capacity);
 	free(seen);
 	return equal;
@@ -1533,20 +1533,20 @@ uint64_t ttypeval_hash(const ttypeval *type)
 		0x7265637572736976ULL : type->canonical_hash) : 0;
 }
 
-uint_objs ttypeval_field_count(const ttypeval *type)
+uint_count ttypeval_field_count(const ttypeval *type)
 {
 	type = ttype_unwrap(type);
 	return type && type->kind == ttype_kind_fields ?
 		       thashtbl_len(type->definition) : 0;
 }
 
-int ttypeval_field_at(const ttypeval *type, uint_objs index,
+int ttypeval_field_at(const ttypeval *type, uint_count index,
 		      const tobj **name, ttypeval **field_type)
 {
 	type = ttype_unwrap(type);
 	if (!type || type->kind != ttype_kind_fields)
 		return 0;
-	uint_objs count;
+	uint_count count;
 	ttype_entry *entries = ttype_sorted_entries(type, &count);
 	if (index >= count) {
 		free(entries);
@@ -1572,19 +1572,19 @@ int ttypeval_field_optional(const ttypeval *type, const char *name)
 {
 	type = ttype_unwrap(type);
 	if (!type || type->kind != ttype_kind_fields || !name) return 0;
-	for (uint_objs i = 0; i < type->optional_field_count; i++)
+	for (uint_count i = 0; i < type->optional_field_count; i++)
 		if (tstring_eq_cstr(type->optional_fields[i], name)) return 1;
 	return 0;
 }
 
-uint_objs ttypeval_member_count(const ttypeval *type)
+uint_count ttypeval_member_count(const ttypeval *type)
 {
 	type = ttype_unwrap(type);
 	return type && type->kind == ttype_kind_union ?
 		       thashtbl_len(type->definition) : 0;
 }
 
-ttypeval *ttypeval_member_at(const ttypeval *type, uint_objs index)
+ttypeval *ttypeval_member_at(const ttypeval *type, uint_count index)
 {
 	type = ttype_unwrap(type);
 	if (!type || type->kind != ttype_kind_union)
@@ -1594,13 +1594,13 @@ ttypeval *ttypeval_member_at(const ttypeval *type, uint_objs index)
 	return ttype_definition_get_type(type, key);
 }
 
-uint_objs ttypeval_enum_member_count(const ttypeval *type)
+uint_count ttypeval_enum_member_count(const ttypeval *type)
 {
 	type = ttype_unwrap(type);
 	return type && type->kind == ttype_kind_enum ? type->enum_member_count : 0;
 }
 
-const tstring *ttypeval_enum_member_at(const ttypeval *type, uint_objs index)
+const tstring *ttypeval_enum_member_at(const ttypeval *type, uint_count index)
 {
 	type = ttype_unwrap(type);
 	return type && type->kind == ttype_kind_enum &&
@@ -1610,7 +1610,7 @@ const tstring *ttypeval_enum_member_at(const ttypeval *type, uint_objs index)
 int ttypeval_enum_contains(const ttypeval *type, const tstring *member)
 {
 	if (!member) return 0;
-	for (uint_objs i = 0; i < ttypeval_enum_member_count(type); i++)
+	for (uint_count i = 0; i < ttypeval_enum_member_count(type); i++)
 		if (tstring_eq(ttypeval_enum_member_at(type, i), member)) return 1;
 	return 0;
 }
@@ -1650,7 +1650,7 @@ ttypeval *ttypeval_parameter(const ttypeval *type, const char *name)
 	return ttype_definition_get_type(type, key);
 }
 
-uint_objs ttypeval_function_parameter_count(const ttypeval *type)
+uint_count ttypeval_function_parameter_count(const ttypeval *type)
 {
 	type = ttype_unwrap(type);
 	return type && (type->kind == ttype_kind_function ||
@@ -1660,7 +1660,7 @@ uint_objs ttypeval_function_parameter_count(const ttypeval *type)
 }
 
 ttypeval *ttypeval_function_parameter_at(const ttypeval *type,
-					  uint_objs index)
+					  uint_count index)
 {
 	type = ttype_unwrap(type);
 	if (!type || (type->kind != ttype_kind_function &&
@@ -1725,7 +1725,7 @@ static int ttypeval_next_key(const ttypeval *type, long *position, tobj *result)
 		return 0;
 	if (type->kind == ttype_kind_enum) {
 		const tstring *member = ttypeval_enum_member_at(type,
-			(uint_objs)*position);
+			(uint_count)*position);
 		if (!member) return 0;
 		tobj_set_compo(result, (tcompo_v *)tstr_new(tstring_cstr(member)));
 		result->val.v_tcompo->refctr++;
@@ -1734,7 +1734,7 @@ static int ttypeval_next_key(const ttypeval *type, long *position, tobj *result)
 	}
 	if (type->kind != ttype_kind_fields) return 0;
 	const tobj *key = nullptr;
-	if (!ttypeval_field_at(type, (uint_objs)*position, &key, nullptr))
+	if (!ttypeval_field_at(type, (uint_count)*position, &key, nullptr))
 		return 0;
 	*result = *key;
 	if (result->type == tcompo && result->val.v_tcompo)
@@ -1849,8 +1849,8 @@ typedef struct {
 
 typedef struct ttype_match_state {
 	ttype_match_pair *seen;
-	uint_objs count;
-	uint_objs capacity;
+	uint_count count;
+	uint_count capacity;
 } ttype_match_state;
 
 static int ttype_matches_internal(const tobj *value,
@@ -1880,12 +1880,12 @@ static int ttype_matches_internal(const tobj *value,
 		const tcompo_v *identity = value && value->type == tcompo ?
 			value->val.v_tcompo : nullptr;
 		if (identity) {
-			for (uint_objs i = 0; i < state->count; i++)
+			for (uint_count i = 0; i < state->count; i++)
 				if (state->seen[i].value == identity &&
 				    state->seen[i].type == expected)
 					return 1;
 			if (state->count == state->capacity) {
-				uint_objs grown = state->capacity ? state->capacity * 2 : 16;
+				uint_count grown = state->capacity ? state->capacity * 2 : 16;
 				ttype_match_pair *items = (ttype_match_pair *)realloc(
 					state->seen, grown * sizeof(*items));
 				if (!items) abort();
@@ -1949,8 +1949,8 @@ static int ttype_matches_internal(const tobj *value,
 			(trule *)((trule_instance *)value->val.v_tcompo)
 				->rule.val.v_tcompo;
 		const char *cursor = tstring_cstr(rule->signature);
-		uint_objs count = ttypeval_function_parameter_count(expected);
-		for (uint_objs i = 0; i < count; i++) {
+		uint_count count = ttypeval_function_parameter_count(expected);
+		for (uint_count i = 0; i < count; i++) {
 			const char *end = strchr(cursor, '\x1f');
 			size_t length = end ? (size_t)(end - cursor) : strlen(cursor);
 			ttypeval *parameter = ttypeval_function_parameter_at(expected, i);
@@ -1974,8 +1974,8 @@ static int ttype_matches_internal(const tobj *value,
 			ttypeval_parameter(expected, "item"));
 	}
 	if (expected->kind == ttype_kind_union) {
-		uint_objs count = ttypeval_member_count(expected);
-		for (uint_objs i = 0; i < count; i++) {
+		uint_count count = ttypeval_member_count(expected);
+		for (uint_count i = 0; i < count; i++) {
 			if (ttype_matches_internal(
 				value, ttypeval_member_at(expected, i), state))
 				return 1;
@@ -1996,7 +1996,7 @@ static int ttype_matches_internal(const tobj *value,
 			return 0;
 		tlist *list = (tlist *)value->val.v_tcompo;
 		ttypeval *item = ttypeval_parameter(expected, "item");
-		for (uint_objs i = 0; i < tlist_size(list); i++) {
+		for (uint_count i = 0; i < tlist_size(list); i++) {
 			if (!ttype_matches_internal(tlist_at(list, i), item, state))
 				return 0;
 		}
@@ -2033,8 +2033,8 @@ static int ttype_matches_internal(const tobj *value,
 		if (tobj_compo_type(value) != compo_tdict)
 			return 0;
 		tdict *dictionary = (tdict *)value->val.v_tcompo;
-		uint_objs count = ttypeval_field_count(expected);
-		for (uint_objs i = 0; i < count; i++) {
+		uint_count count = ttypeval_field_count(expected);
+		for (uint_count i = 0; i < count; i++) {
 			const tobj *name;
 			ttypeval *field_type;
 			ttypeval_field_at(expected, i, &name, &field_type);
@@ -2065,10 +2065,6 @@ static const char *ttypeval_get_type(void)
 	return "Type";
 }
 
-static tcompo_type ttypeval_get_code(void)
-{
-	return compo_ttypeval;
-}
 
 static long ttypeval_len(void *self)
 {
@@ -2102,7 +2098,7 @@ static void *ttypeval_copy(void *self)
 		copy->named_parameter_types = calloc(source->named_parameter_count,
 			sizeof(*copy->named_parameter_types));
 		if (!copy->named_parameter_names || !copy->named_parameter_types) abort();
-		for (uint_objs i = 0; i < source->named_parameter_count; i++) {
+		for (uint_count i = 0; i < source->named_parameter_count; i++) {
 			copy->named_parameter_names[i] = tstring_dup(
 				source->named_parameter_names[i]);
 			copy->named_parameter_types[i] = ttype_definition_get_type(
@@ -2121,7 +2117,7 @@ static void *ttypeval_copy(void *self)
 			source->template_type_parameter_count,
 			sizeof(*copy->template_type_parameters));
 		if (!copy->template_type_parameters) abort();
-		for (uint_objs i = 0; i < source->template_type_parameter_count; i++)
+		for (uint_count i = 0; i < source->template_type_parameter_count; i++)
 			copy->template_type_parameters[i] =
 				tstring_dup(source->template_type_parameters[i]);
 	}
@@ -2131,7 +2127,7 @@ static void *ttypeval_copy(void *self)
 			source->template_value_parameter_count,
 			sizeof(*copy->template_value_parameters));
 		if (!copy->template_value_parameters) abort();
-		for (uint_objs i = 0; i < source->template_value_parameter_count; i++) {
+		for (uint_count i = 0; i < source->template_value_parameter_count; i++) {
 			copy->template_value_parameters[i].name = tstring_dup(
 				source->template_value_parameters[i].name);
 			copy->template_value_parameters[i].type = ttypeval_retain(
@@ -2152,7 +2148,7 @@ static void *ttypeval_copy(void *self)
 			sizeof(*copy->enum_members));
 		if (!copy->enum_members) abort();
 		copy->enum_member_count = source->enum_member_count;
-		for (uint_objs i = 0; i < source->enum_member_count; i++)
+		for (uint_count i = 0; i < source->enum_member_count; i++)
 			copy->enum_members[i] = tstring_dup(source->enum_members[i]);
 	}
 	if (source->optional_field_count) {
@@ -2160,7 +2156,7 @@ static void *ttypeval_copy(void *self)
 			source->optional_field_count, sizeof(*copy->optional_fields));
 		if (!copy->optional_fields) abort();
 		copy->optional_field_count = source->optional_field_count;
-		for (uint_objs i = 0; i < source->optional_field_count; i++)
+		for (uint_count i = 0; i < source->optional_field_count; i++)
 			copy->optional_fields[i] = tstring_dup(source->optional_fields[i]);
 	}
 	return copy;
@@ -2172,16 +2168,16 @@ static void ttypeval_free(void *self)
 	if (type->kind == ttype_kind_instance_of) tobj_try_clear(&type->instance_rule);
 	tstring_free(type->instance_reference);
 	tstring_free(type->named_identity);
-	for (uint_objs i = 0; i < type->named_parameter_count; i++)
+	for (uint_count i = 0; i < type->named_parameter_count; i++)
 		tstring_free(type->named_parameter_names[i]);
 	free(type->named_parameter_names);
 	free(type->named_parameter_types);
 	tstring_free(type->parameter_name);
 	ttypeval_release(type->template_body);
-	for (uint_objs i = 0; i < type->template_type_parameter_count; i++)
+	for (uint_count i = 0; i < type->template_type_parameter_count; i++)
 		tstring_free(type->template_type_parameters[i]);
 	free(type->template_type_parameters);
-	for (uint_objs i = 0; i < type->template_value_parameter_count; i++) {
+	for (uint_count i = 0; i < type->template_value_parameter_count; i++) {
 		tstring_free(type->template_value_parameters[i].name);
 		ttypeval_release(type->template_value_parameters[i].type);
 	}
@@ -2189,10 +2185,10 @@ static void ttypeval_free(void *self)
 	if (type->kind == ttype_kind_exact_value) tobj_try_clear(&type->exact_value);
 	thashtbl_free(type->definition);
 	tstring_free(type->canonical);
-	for (uint_objs i = 0; i < type->optional_field_count; i++)
+	for (uint_count i = 0; i < type->optional_field_count; i++)
 		tstring_free(type->optional_fields[i]);
 	free(type->optional_fields);
-	for (uint_objs i = 0; i < type->enum_member_count; i++)
+	for (uint_count i = 0; i < type->enum_member_count; i++)
 		tstring_free(type->enum_members[i]);
 	free(type->enum_members);
 	free(type);
@@ -2221,7 +2217,7 @@ static tstring *ttypeval_tostring(void *self)
 		tstring *out = tstring_dup(type->named_identity);
 		if (type->named_parameter_count) {
 			tstring_append_c(out, '[');
-			for (uint_objs i = 0; i < type->named_parameter_count; i++) {
+			for (uint_count i = 0; i < type->named_parameter_count; i++) {
 				if (i) tstring_append(out, ", ");
 				tstring *parameter = ttypeval_tostring(
 					type->named_parameter_types[i]);
@@ -2242,13 +2238,13 @@ static tstring *ttypeval_tostring(void *self)
 	}
 	if (type->kind == ttype_kind_template) {
 		tstring *out = tstring_new("TypeTemplate[");
-		for (uint_objs i = 0; i < type->template_type_parameter_count; i++) {
+		for (uint_count i = 0; i < type->template_type_parameter_count; i++) {
 			if (i) tstring_append(out, ", ");
 			tstring_append_ts(out, type->template_type_parameters[i]);
 		}
 		if (type->template_type_parameter_count &&
 		    type->template_value_parameter_count) tstring_append(out, "; ");
-		for (uint_objs i = 0; i < type->template_value_parameter_count; i++) {
+		for (uint_count i = 0; i < type->template_value_parameter_count; i++) {
 			if (i) tstring_append(out, ", ");
 			tstring_append_ts(out, type->template_value_parameters[i].name);
 		}
@@ -2319,7 +2315,7 @@ void tformat_type(tformat_context *context, ttypeval *type)
 		tformat_text(context, tstring_cstr(type->named_identity));
 		if (type->named_parameter_count) {
 			tformat_text(context, "[");
-			for (uint_objs i = 0; i < type->named_parameter_count; i++) {
+			for (uint_count i = 0; i < type->named_parameter_count; i++) {
 				if (i) tformat_text(context, ", ");
 				tformat_type(context, type->named_parameter_types[i]);
 			}
@@ -2327,7 +2323,7 @@ void tformat_type(tformat_context *context, ttypeval *type)
 		}
 	} else if (type->kind == ttype_kind_fields) {
 		tformat_text(context, "{");
-		for (uint_objs i = 0; i < ttypeval_field_count(type) &&
+		for (uint_count i = 0; i < ttypeval_field_count(type) &&
 		     !tformat_stopped(context); i++) {
 			const tobj *key;
 			ttypeval *field;
@@ -2345,7 +2341,7 @@ void tformat_type(tformat_context *context, ttypeval *type)
 		tformat_text(context, "}");
 	} else if (type->kind == ttype_kind_enum) {
 		tformat_text(context, "Enum[");
-		for (uint_objs i = 0; i < ttypeval_enum_member_count(type) &&
+		for (uint_count i = 0; i < ttypeval_enum_member_count(type) &&
 		     !tformat_stopped(context); i++) {
 			if (i) tformat_text(context, ", ");
 			tformat_quoted(context,
@@ -2371,7 +2367,7 @@ void tformat_type(tformat_context *context, ttypeval *type)
 		tformat_value(context, &type->exact_value);
 	} else if (type->kind == ttype_kind_template) {
 		tformat_text(context, "Template[");
-		for (uint_objs i = 0; i < type->template_type_parameter_count; i++) {
+		for (uint_count i = 0; i < type->template_type_parameter_count; i++) {
 			if (i) tformat_text(context, ", ");
 			tformat_text(context,
 				tstring_cstr(type->template_type_parameters[i]));
@@ -2379,7 +2375,7 @@ void tformat_type(tformat_context *context, ttypeval *type)
 		if (type->template_type_parameter_count &&
 		    type->template_value_parameter_count)
 			tformat_text(context, "; ");
-		for (uint_objs i = 0; i < type->template_value_parameter_count; i++) {
+		for (uint_count i = 0; i < type->template_value_parameter_count; i++) {
 			if (i) tformat_text(context, ", ");
 			tformat_text(context, tstring_cstr(
 				type->template_value_parameters[i].name));
@@ -2405,7 +2401,7 @@ void tformat_type(tformat_context *context, ttypeval *type)
 		    type->kind == ttype_kind_rule_instance) {
 			if (ttypeval_function_variadic(type))
 				tformat_text(context, "...");
-			else for (uint_objs i = 0;
+			else for (uint_count i = 0;
 				  i < ttypeval_function_parameter_count(type) &&
 				  !tformat_stopped(context); i++) {
 				if (i) tformat_text(context, ", ");
@@ -2413,7 +2409,7 @@ void tformat_type(tformat_context *context, ttypeval *type)
 					ttypeval_function_parameter_at(type, i));
 			}
 		} else if (type->kind == ttype_kind_union) {
-			for (uint_objs i = 0; i < ttypeval_member_count(type) &&
+			for (uint_count i = 0; i < ttypeval_member_count(type) &&
 			     !tformat_stopped(context); i++) {
 				if (i) tformat_text(context, ", ");
 				tformat_type(context, ttypeval_member_at(type, i));
@@ -2439,7 +2435,7 @@ void tformat_type(tformat_context *context, ttypeval *type)
 
 tcompo_vtable ttypeval_vtable = {
 	.get_type = ttypeval_get_type,
-	.get_compo_type_code = ttypeval_get_code,
+	.compo_code = compo_ttypeval,
 	.len = ttypeval_len,
 	.copy = ttypeval_copy,
 	.free = ttypeval_free,

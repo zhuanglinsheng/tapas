@@ -77,7 +77,7 @@ static void export_type(export_context *ctx, const ttypeval *type)
     if (type->kind == ttype_kind_fields && ctx->depth < 32) {
         ctx->depth++;
         tstring_append(ctx->out, ",\"fields\":[");
-        for (uint_objs i = 0; i < ttypeval_field_count(type); i++) {
+        for (uint_count i = 0; i < ttypeval_field_count(type); i++) {
             const tobj *name; ttypeval *field_type;
             if (!ttypeval_field_at(type, i, &name, &field_type)) abort();
             if (i) tstring_append_c(ctx->out, ',');

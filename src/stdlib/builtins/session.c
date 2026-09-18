@@ -16,7 +16,7 @@ void lib_ls(tobj *params, uint_regs len, tobj *vre, tcompo_env *env)
 	if (len == 1) {
 		if (params->type != tcompo)
 			twarn(ErrRuntime_ParamsType, "lib_ls", "");
-		if (params->val.v_tcompo->vtable->get_compo_type_code() !=
+		if (params->val.v_tcompo->vtable->compo_code !=
 		    compo_tlib)
 			twarn(ErrRuntime_ParamsType, "lib_ls", "");
 		tlib *lib = (tlib *)params->val.v_tcompo;
@@ -42,7 +42,7 @@ void lib_path(tobj *params, uint_regs len, tobj *vre, tcompo_env *env)
 	if (len == 1) {
 		if (params->type != tcompo)
 			twarn(ErrRuntime_ParamsType, "lib_ls", "");
-		if (params->val.v_tcompo->vtable->get_compo_type_code() != compo_tlib)
+		if (params->val.v_tcompo->vtable->compo_code != compo_tlib)
 			twarn(ErrRuntime_ParamsType, "lib_ls", "");
 		tlib *lib = (tlib *)params->val.v_tcompo;
 		tlist *paths = tlib_listing_paths(lib);
@@ -146,7 +146,7 @@ void tf_binary(tobj *params, uint_regs len, tobj *vre, tcompo_env *env)
 	if (params[0].type != tcompo)
 		twarn(ErrRuntime_ParamsType, "tf_binary", "Library or Function");
 	tcompo_v *compo = params[0].val.v_tcompo;
-	switch (compo->vtable->get_compo_type_code()) {
+	switch (compo->vtable->compo_code) {
 	case compo_tlib: {
 		tlib *lib = (tlib *)compo;
 		wrapper = tlib_get_wrapper(lib);

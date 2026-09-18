@@ -295,6 +295,9 @@ void tbycode_tostring(tbycode c, char *buf, size_t buf_size)
 	case OP_NEG:
 		snprintf(buf, buf_size, "OP_NEG");
 		break;
+	case OP_NOT:
+		snprintf(buf, buf_size, "OP_NOT");
+		break;
 	case OP_EQ:
 		snprintf(buf, buf_size,
 			"OP_EQ       %u  %u",

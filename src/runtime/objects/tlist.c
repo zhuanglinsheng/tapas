@@ -10,7 +10,7 @@
  * migrates out of the embedded tail (see tobj_vec_reserve). */
 #define TLIST_INLINE_ITEMS 4
 
-static tlist *tlist_new_cap(uint_objs cap)
+static tlist *tlist_new_cap(uint_count cap)
 {
 	if (cap > TLIST_INLINE_ITEMS) {
 		tlist *list = (tlist *)calloc(1, sizeof(tlist));
@@ -32,14 +32,14 @@ static tlist *tlist_new_cap(uint_objs cap)
  * tobj_vec_copy_range, which re-initializes (and would discard) the
  * destination's embedded storage. */
 static void tlist_fill_range(tlist *dst, const tlist *src,
-			     uint_objs start, uint_objs count)
+			     uint_count start, uint_count count)
 {
 	dst->items.len = count;
 	if (!count)
 		return;
 	memcpy(dst->items.data, src->items.data + start,
 	       count * sizeof(tobj));
-	for (uint_objs i = 0; i < count; i++)
+	for (uint_count i = 0; i < count; i++)
 		if (dst->items.data[i].type == tcompo &&
 		    dst->items.data[i].val.v_tcompo)
 			dst->items.data[i].val.v_tcompo->refctr++;
@@ -62,23 +62,23 @@ void tlist_slice_index(tlist *l, const tobj *params, tobj *vre)
 		last += len;
 	if (first < 0 || last < first || last > len)
 		twarn(ErrRuntime_IdxOutRange, "pair_to_range", "");
-	tlist *slice = tlist_new_cap((uint_objs)(last - first));
-	tlist_fill_range(slice, l, (uint_objs)first,
-			 (uint_objs)(last - first));
+	tlist *slice = tlist_new_cap((uint_count)(last - first));
+	tlist_fill_range(slice, l, (uint_count)first,
+			 (uint_count)(last - first));
 	tobj_set_compo(vre, (tcompo_v *)slice);
 }
 
-uint_objs tlist_size(const tlist *list)
+uint_count tlist_size(const tlist *list)
 {
 	return tobj_vec_len(&list->items);
 }
 
-const tobj *tlist_at(const tlist *list, uint_objs index)
+const tobj *tlist_at(const tlist *list, uint_count index)
 {
 	return tobj_vec_at_const(&list->items, index);
 }
 
-void tlist_set_at(tlist *list, uint_objs index, const tobj *value)
+void tlist_set_at(tlist *list, uint_count index, const tobj *value)
 {
 	if (index >= tobj_vec_len(&list->items))
 		twarn(ErrRuntime_IdxOutRange, "tlist_set_at", "");
@@ -92,10 +92,6 @@ static const char *tlist_get_type(void)
 	return "List";
 }
 
-static tcompo_type tlist_get_code(void)
-{
-	return compo_tlist;
-}
 
 static long tlist_len(void *self)
 {
@@ -124,7 +120,7 @@ static int tlist_identical(void *self, void *other)
 	tlist *b = (tlist *)other;
 	if (tobj_vec_len(&a->items) != tobj_vec_len(&b->items))
 		return 0;
-	for (uint_objs i = 0; i < tobj_vec_len(&a->items); i++) {
+	for (uint_count i = 0; i < tobj_vec_len(&a->items); i++) {
 		if (!tobj_identical(tobj_vec_at(&a->items, i),
 				    tobj_vec_at(&b->items, i)))
 			return 0;
@@ -140,9 +136,9 @@ static tstring *tlist_tostring_abbr(void *self)
 static tstring *tlist_tostring_full(void *self)
 {
 	tlist *l = (tlist *)self;
-	uint_objs len = tobj_vec_len(&l->items);
+	uint_count len = tobj_vec_len(&l->items);
 	tstring *out = tstring_new("[");
-	for (uint_objs i = 0; i < len; i++) {
+	for (uint_count i = 0; i < len; i++) {
 		tstring *item = tobj_tostring_full(tobj_vec_at(&l->items, i));
 		tstring_append_ts(out, item);
 		tstring_free(item);
@@ -187,7 +183,7 @@ static int list_next(void *self, long *position, tobj *result)
 	tlist *list = (tlist *)self;
 	if (*position >= (long)tobj_vec_len(&list->items))
 		return 0;
-	*result = *tobj_vec_at(&list->items, (uint_objs)*position);
+	*result = *tobj_vec_at(&list->items, (uint_count)*position);
 	if (result->type == tcompo && result->val.v_tcompo)
 		result->val.v_tcompo->refctr++;
 	(*position)++;
@@ -207,15 +203,15 @@ static void list_delete(void *self, const tobj *key)
 	long index = key->val.v_tint;
 	if (index < 0)
 		index += (long)tobj_vec_len(&list->items);
-	if (index < 0 || (uint_objs)index >= tobj_vec_len(&list->items))
+	if (index < 0 || (uint_count)index >= tobj_vec_len(&list->items))
 		twarn(ErrRuntime_IdxOutRange, "delete", "");
-	tobj_vec_pop(&list->items, (uint_objs)index);
+	tobj_vec_pop(&list->items, (uint_count)index);
 }
 
 static int list_contains(void *self, const tobj *value)
 {
 	tlist *list = (tlist *)self;
-	for (uint_objs i = 0; i < tobj_vec_len(&list->items); i++)
+	for (uint_count i = 0; i < tobj_vec_len(&list->items); i++)
 		if (tobj_identical(tobj_vec_at(&list->items, i), value))
 			return 1;
 	return 0;
@@ -228,21 +224,21 @@ tlist_idx(tlist *l, const tobj *params, uint_regs np, tobj *vre)
 		twarn(ErrRuntime_ParamsCtr, "tlist_idx", "");
 	long start, end;
 	if (pair_to_range(&params[0], (long)tobj_vec_len(&l->items), &start, &end)) {
-		tlist *slice = tlist_new_cap((uint_objs)(end - start));
-		tlist_fill_range(slice, l, (uint_objs)start,
-				 (uint_objs)(end - start));
+		tlist *slice = tlist_new_cap((uint_count)(end - start));
+		tlist_fill_range(slice, l, (uint_count)start,
+				 (uint_count)(end - start));
 		tobj_set_compo(vre, (tcompo_v *)slice);
 		return;
 	}
 	if (params[0].type != tint)
 		twarn(ErrRuntime_ParamsType, "tlist_idx", "");
 	long idx = params[0].val.v_tint;
-	uint_objs len = tobj_vec_len(&l->items);
+	uint_count len = tobj_vec_len(&l->items);
 	if (idx < 0)
 		idx += (long)len;
-	if (idx < 0 || (uint_objs)idx >= len)
+	if (idx < 0 || (uint_count)idx >= len)
 		twarn(ErrRuntime_IdxOutRange, "tlist_idx", "");
-	*vre = *tobj_vec_at(&l->items, (uint_objs)idx);
+	*vre = *tobj_vec_at(&l->items, (uint_count)idx);
 	if (vre->type == tcompo && vre->val.v_tcompo)
 		vre->val.v_tcompo->refctr++;
 }
@@ -255,12 +251,12 @@ tlist_iset(tlist *l, const tobj *params, uint_regs np, const tobj *vright)
 	if (params[0].type != tint)
 		twarn(ErrRuntime_ParamsType, "tlist_iset", "");
 	long idx = params[0].val.v_tint;
-	uint_objs len = tobj_vec_len(&l->items);
+	uint_count len = tobj_vec_len(&l->items);
 	if (idx < 0)
 		idx += (long)len;
-	if (idx < 0 || (uint_objs)idx >= len)
+	if (idx < 0 || (uint_count)idx >= len)
 		twarn(ErrRuntime_IdxOutRange, "tlist_iset", "");
-	tlist_set_at(l, (uint_objs)idx, vright);
+	tlist_set_at(l, (uint_count)idx, vright);
 }
 
 static void list_index(void *self, const tobj *arguments,
@@ -286,7 +282,7 @@ static const tcompo_capabilities list_capabilities = {
 
 tcompo_vtable tlist_vtable = {
 	.get_type = tlist_get_type,
-	.get_compo_type_code = tlist_get_code,
+	.compo_code = compo_tlist,
 	.len = tlist_len,
 	.copy = tlist_copy,
 	.free = tlist_free,

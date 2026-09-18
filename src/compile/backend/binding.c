@@ -38,12 +38,12 @@ void tcompile_set_metadata(tobj_ctr *c, uint_objs slot,
 }
 
 void tcompile_set_field_order(tobj_ctr *c, uint_objs slot,
-			      tstring *const *field_order, uint_objs count)
+			      tstring *const *field_order, uint_count count)
 {
 	if (!c || slot >= c->len)
 		return;
 	tcompile_binding *binding = &c->bindings[slot];
-	for (uint_objs i = 0; i < binding->field_order_count; i++)
+	for (uint_count i = 0; i < binding->field_order_count; i++)
 		tstring_free(binding->field_order[i]);
 	free(binding->field_order);
 	binding->field_order = nullptr;

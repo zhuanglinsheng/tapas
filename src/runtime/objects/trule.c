@@ -22,9 +22,6 @@
 static const char *rule_type(void) { return "Rule"; }
 static const char *instance_type(void) { return "RuleInstance"; }
 static const char *builtin_type(void) { return "Rule Function"; }
-static tcompo_type rule_code(void) { return compo_trule; }
-static tcompo_type instance_code(void) { return compo_trule_instance; }
-static tcompo_type builtin_code(void) { return compo_trule_builtin; }
 static long zero_len(void *self) { (void)self; return 0; }
 static uint64_t next_rule_identity = 1;
 static int pointer_identical(void *self, void *other) { return self == other; }
@@ -115,7 +112,7 @@ static void rule_signature(tformat_context *context, const char *kind,
 static void rule_render(tformat_context *context, const void *self)
 {
 	const tcompo_v *object = self;
-	switch (object->vtable->get_compo_type_code()) {
+	switch (object->vtable->compo_code) {
 	case compo_trule: {
 		const trule *rule = self;
 		rule_signature(context, "Rule", rule->ir, rule->identity);
@@ -182,21 +179,21 @@ static tstring *rule_tostring_full(void *self)
 
 
 tcompo_vtable trule_vtable = {
-	.get_type = rule_type, .get_compo_type_code = rule_code,
+	.get_type = rule_type, .compo_code = compo_trule,
 	.len = zero_len, .copy = rule_copy, .free = rule_free,
 	.identical = pointer_identical,
 	.tostring_abbr = rule_tostring_abbr, .tostring_full = rule_tostring_full
 };
 
 tcompo_vtable trule_instance_vtable = {
-	.get_type = instance_type, .get_compo_type_code = instance_code,
+	.get_type = instance_type, .compo_code = compo_trule_instance,
 	.len = zero_len, .copy = instance_copy, .free = instance_free,
 	.identical = pointer_identical,
 	.tostring_abbr = rule_tostring_abbr, .tostring_full = rule_tostring_full
 };
 
 tcompo_vtable trule_builtin_vtable = {
-	.get_type = builtin_type, .get_compo_type_code = builtin_code,
+	.get_type = builtin_type, .compo_code = compo_trule_builtin,
 	.len = zero_len, .copy = builtin_copy, .free = builtin_free,
 	.identical = pointer_identical,
 	.tostring_abbr = rule_tostring_abbr, .tostring_full = rule_tostring_full

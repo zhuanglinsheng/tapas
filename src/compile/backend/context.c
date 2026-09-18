@@ -329,6 +329,7 @@ void tcp_init_preload(
 	cp->preload_library = library;
 	cp->owns_imports = 1;
 	cp->in_loop = 0;
+	cp->loop_stack_depth = 0;
 	cp->loop_tmp_bases = nullptr;
 	cp->loop_tmp_base_count = 0;
 	cp->loop_tmp_base_cap = 0;

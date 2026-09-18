@@ -14,7 +14,7 @@ typedef struct {
 	tstring *name;
 	ttypeval *type;
 	tstring **field_order;
-	uint_objs field_order_count;
+	uint_count field_order_count;
 } tcompile_export;
 
 typedef struct {
@@ -33,7 +33,7 @@ typedef struct {
 	ttypeval *value_type;
 	ttypeval *type_value;
 	tstring **field_order;
-	uint_objs field_order_count;
+	uint_count field_order_count;
 	tcompile_module_interface *module_interface;
 	uint8_t has_annotation;
 	uint8_t is_types_package;
@@ -71,6 +71,7 @@ struct tcp {
 	const tlib *preload_library;
 	uint8_t owns_imports;
 	int in_loop;
+	uint_regs loop_stack_depth; /**< 循环在值栈上驻留的迭代槽位数。 */
 	uint_objs *loop_tmp_bases;
 	uint32_t loop_tmp_base_count;
 	uint32_t loop_tmp_base_cap;

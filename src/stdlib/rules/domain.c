@@ -69,9 +69,9 @@ static int contains(void *self, const tobj *value)
 }
 
 trules_domain *trules_points_new(ttypeval *type, const tobj *values,
-	uint_regs count)
+	uint_count count)
 {
-	for (uint_regs i = 0; i < count; i++)
+	for (uint_count i = 0; i < count; i++)
 		if (!ttypeval_matches(&values[i], type))
 			twarn(ErrRuntime_ParamsType, "rules::points",
 				"point does not match declared element Type");
@@ -104,7 +104,6 @@ trules_domain *trules_range_new(long start, long end)
 
 static const char *points_name(void) { return "rules::PointsOf"; }
 static const char *range_name(void) { return "rules::RangeOf"; }
-static tcompo_type domain_code(void) { return compo_extension; }
 
 static long domain_len(void *self)
 {
@@ -249,7 +248,7 @@ static const tcompo_capabilities domain_capabilities = {
 
 #define DOMAIN_VTABLE(name) { \
 	.get_type = name, \
-	.get_compo_type_code = domain_code, \
+	.compo_code = compo_extension, \
 	.len = domain_len, \
 	.copy = domain_copy, \
 	.free = domain_free, \

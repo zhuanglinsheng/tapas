@@ -20,10 +20,6 @@ static const char *tcppgenf_get_type(void)
 	return "C Function";
 }
 
-static tcompo_type tcppgenf_get_code(void)
-{
-	return compo_cppfunc;
-}
 
 static long tcppgenf_len(void *self)
 {
@@ -75,7 +71,7 @@ static tstring *tcppgenf_tostring_full(void *self)
 
 tcompo_vtable tcppgenf_vtable = {
 	.get_type = tcppgenf_get_type,
-	.get_compo_type_code = tcppgenf_get_code,
+	.compo_code = compo_cppfunc,
 	.len = tcppgenf_len,
 	.copy = tcppgenf_copy,
 	.free = tcppgenf_free,
@@ -141,10 +137,6 @@ static const char *tcppsessf_get_type(void)
 	return "C Session Function";
 }
 
-static tcompo_type tcppsessf_get_code(void)
-{
-	return compo_sessfunc;
-}
 
 static long tcppsessf_len(void *self)
 {
@@ -195,7 +187,7 @@ static tstring *tcppsessf_tostring_full(void *self)
 
 tcompo_vtable tcppsessf_vtable = {
 	.get_type = tcppsessf_get_type,
-	.get_compo_type_code = tcppsessf_get_code,
+	.compo_code = compo_sessfunc,
 	.len = tcppsessf_len,
 	.copy = tcppsessf_copy,
 	.free = tcppsessf_free,

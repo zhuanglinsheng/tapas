@@ -13,7 +13,6 @@
 #include <stdlib.h>
 
 static const char *evaluator_type(void) { return "evaluators::Evaluator"; }
-static tcompo_type evaluator_code(void) { return compo_extension; }
 static long evaluator_len(void *self) { (void)self; return 0; }
 static int evaluator_identical(void *self, void *other) { return self == other; }
 
@@ -50,7 +49,7 @@ static tstring *evaluator_string(void *self)
 
 tcompo_vtable tevaluator_vtable = {
 	.get_type = evaluator_type,
-	.get_compo_type_code = evaluator_code,
+	.compo_code = compo_extension,
 	.len = evaluator_len,
 	.copy = evaluator_copy,
 	.free = evaluator_free,

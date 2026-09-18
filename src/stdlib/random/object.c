@@ -120,10 +120,6 @@ static const char *trandom_source_type(void)
 	return "random::Source";
 }
 
-static tcompo_type trandom_source_code(void)
-{
-	return compo_extension;
-}
 
 static long trandom_source_len(void *self)
 {
@@ -158,10 +154,6 @@ static const char *trandom_generator_type(void)
 	return "random::Generator";
 }
 
-static tcompo_type trandom_generator_code(void)
-{
-	return compo_extension;
-}
 
 static long trandom_generator_len(void *self)
 {
@@ -197,7 +189,7 @@ static tstring *trandom_generator_string(void *self)
 
 tcompo_vtable trandom_source_vtable = {
 	.get_type = trandom_source_type,
-	.get_compo_type_code = trandom_source_code,
+	.compo_code = compo_extension,
 	.len = trandom_source_len,
 	.copy = trandom_source_copy,
 	.free = trandom_free,
@@ -208,7 +200,7 @@ tcompo_vtable trandom_source_vtable = {
 
 tcompo_vtable trandom_generator_vtable = {
 	.get_type = trandom_generator_type,
-	.get_compo_type_code = trandom_generator_code,
+	.compo_code = compo_extension,
 	.len = trandom_generator_len,
 	.copy = trandom_generator_copy,
 	.free = trandom_free,

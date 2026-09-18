@@ -41,10 +41,6 @@ static const char *titer_get_type(void)
 	return "Iterator";
 }
 
-static tcompo_type titer_get_code(void)
-{
-	return compo_titer;
-}
 
 static long titer_len(void *self)
 {
@@ -143,7 +139,7 @@ static const tcompo_capabilities iterator_capabilities = {
 
 tcompo_vtable titer_vtable = {
 	.get_type = titer_get_type,
-	.get_compo_type_code = titer_get_code,
+	.compo_code = compo_titer,
 	.len = titer_len,
 	.copy = titer_copy,
 	.free = titer_free,

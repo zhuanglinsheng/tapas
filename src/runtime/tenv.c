@@ -414,10 +414,6 @@ static const char *tfunc_get_type(void)
 	return "Function";
 }
 
-static tcompo_type tfunc_get_code(void)
-{
-	return compo_tfunc;
-}
 
 static long tfunc_len(void *self)
 {
@@ -528,7 +524,7 @@ static tstring *tfunc_tostring_full(void *self)
 
 tcompo_vtable tfunc_vtable = {
 	.get_type = tfunc_get_type,
-	.get_compo_type_code = tfunc_get_code,
+	.compo_code = compo_tfunc,
 	.len = tfunc_len,
 	.copy = tfunc_copy,
 	.free = tfunc_free,
@@ -598,10 +594,6 @@ static const char *tlib_get_type(void)
 	return "Library";
 }
 
-static tcompo_type tlib_get_code(void)
-{
-	return compo_tlib;
-}
 
 static long tlib_len(void *self)
 {
@@ -684,7 +676,7 @@ static const tcompo_capabilities library_capabilities = {
 
 tcompo_vtable tlib_vtable = {
 	.get_type = tlib_get_type,
-	.get_compo_type_code = tlib_get_code,
+	.compo_code = compo_tlib,
 	.len = tlib_len,
 	.copy = tlib_copy,
 	.free = tlib_free,

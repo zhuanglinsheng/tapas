@@ -3,6 +3,7 @@
 #include "tapas/dsa/thashtbl.h"
 #include "tapas/objects/tarray.h"
 #include "tapas/objects/tdict.h"
+#include "tenv.h"
 #include "tapas/objects/titer.h"
 #include "tapas/objects/tlist.h"
 #include "tapas/objects/tcfn.h"
@@ -598,6 +599,7 @@ typedef enum {
 	tins_cache_loop_list,
 	tins_cache_idxr_list_int,
 	tins_cache_idxr_str_int,
+	tins_cache_idxr_dict_str,
 	tins_cache_idxr_dense_int2,
 	tins_cache_idxl_list_int,
 	tins_cache_idxl_dense_int2,
@@ -611,6 +613,8 @@ typedef struct {
 	tcompo_vtable *guard;
 	uint_cmds state_slot;
 	uint8_t kind;
+	const tcompo_v *key;   /* dict_str: the interned key object */
+	uint_count slot;       /* dict_str: learned entry slot */
 } tins_cache;
 
 struct tvm_code_cache {
@@ -1445,7 +1449,7 @@ static void tins_cache_observe(tins_cache *cache, tins_cache_kind kind,
 
 static void vm_list_idx_int(tlist *list, long index, tobj *result)
 {
-	uint_objs len = list->items.len;
+	uint_count len = list->items.len;
 	if (index < 0)
 		index += (long)len;
 	if (index < 0 || (uint_objs)index >= len)
@@ -1467,7 +1471,7 @@ static inline TVM_ALWAYS_INLINE int vm_idxr_fast(
 	long index = params[0].val.v_tint;
 	if (arr->vtable == &tlist_vtable) {
 		tlist *list = (tlist *)arr;
-		uint_objs len = list->items.len;
+		uint_count len = list->items.len;
 		if (index < 0)
 			index += (long)len;
 		if (index < 0 || (uint_objs)index >= len)
@@ -1601,6 +1605,55 @@ static void vm_idxr_value(tvm *vm, tcompo_v *arr, tobj *params,
 		tobj_try_clear(&pair);
 		return;
 	}
+	/* Dictionaries and libraries dominate struct-like member access;
+	 * read them directly instead of through the index capability. */
+	if (nparams == 1 && arr->vtable == &tdict_vtable) {
+		tdict *dict = (tdict *)arr;
+		const tobj *key = &params[0];
+		/* Constant-string keys (interned pool objects) hit the same
+		 * entry slot across structurally identical dictionaries, so
+		 * remember the slot per call site and re-validate it. */
+		if (cache && cache->kind == tins_cache_idxr_dict_str &&
+		    key->type == tcompo &&
+		    key->val.v_tcompo == cache->key &&
+		    cache->slot < thashtbl_capacity(dict->items)) {
+			const tobj *value = thashtbl_get_entry_at(
+				dict->items, cache->slot, key);
+			if (value) {
+				vm->rev = *value;
+				if (vm->rev.type == tcompo &&
+				    vm->rev.val.v_tcompo)
+					vm->rev.val.v_tcompo->refctr++;
+				return;
+			}
+		}
+		uint_count slot = 0;
+		const tobj *value = thashtbl_find(dict->items, key, &slot);
+		if (value) {
+			if (cache && cache->kind == tins_cache_empty) {
+				cache->kind = tins_cache_idxr_dict_str;
+				cache->guard = arr->vtable;
+				cache->key = key->val.v_tcompo;
+				cache->slot = slot;
+			} else if (cache &&
+				   (cache->kind != tins_cache_idxr_dict_str ||
+				    cache->guard != arr->vtable ||
+				    cache->key != key->val.v_tcompo)) {
+				cache->kind = tins_cache_polymorphic;
+				cache->guard = nullptr;
+				cache->key = nullptr;
+			}
+			vm->rev = *value;
+			if (vm->rev.type == tcompo && vm->rev.val.v_tcompo)
+				vm->rev.val.v_tcompo->refctr++;
+			return;
+		}
+		twarn(ErrRuntime_ObjUnfound, "tdict_get", "");
+	}
+	if (nparams == 1 && arr->vtable == &tlib_vtable) {
+		tlib_idx((tlib *)arr, &params[0], 1, &vm->rev);
+		return;
+	}
 	if (cache && cache->kind == tins_cache_idxr_list_int &&
 	    cache->guard == arr->vtable && nparams == 1 &&
 	    params[0].type == tint) {
@@ -1683,11 +1736,43 @@ static void vm_idxl(tvm *vm, uint_objs loc, uint_regs nparams, int isenv,
 	tcompo_v *arr = objp->val.v_tcompo;
 	tobj *rv = stk_at(vm, nparams);
 	tobj *params = stk_topn(vm, nparams);
+	/* Dictionary writes are struct-field assignments in the common case;
+	 * set the key directly instead of through the capability dispatch.
+	 * Constant-string keys hit the same entry slot across structurally
+	 * identical dictionaries, so remember the slot per call site. */
+	if (nparams == 1 && arr->vtable == &tdict_vtable) {
+		tdict *dict = (tdict *)arr;
+		const tobj *key = &params[0];
+		if (cache && cache->kind == tins_cache_idxr_dict_str &&
+		    key->type == tcompo &&
+		    key->val.v_tcompo == cache->key &&
+		    cache->slot < thashtbl_capacity(dict->items) &&
+		    thashtbl_set_at(dict->items, cache->slot, key, rv)) {
+			goto finish;
+		}
+		uint_count slot = thashtbl_set(dict->items, key, rv);
+		if (cache && cache->kind == tins_cache_empty) {
+			cache->kind = tins_cache_idxr_dict_str;
+			cache->guard = arr->vtable;
+			cache->key = key->type == tcompo ?
+				key->val.v_tcompo : nullptr;
+			cache->slot = slot;
+		} else if (cache &&
+			   (cache->kind != tins_cache_idxr_dict_str ||
+			    cache->guard != arr->vtable ||
+			    cache->key != (key->type == tcompo ?
+					key->val.v_tcompo : nullptr))) {
+			cache->kind = tins_cache_polymorphic;
+			cache->guard = nullptr;
+			cache->key = nullptr;
+		}
+		goto finish;
+	}
 	if (cache && cache->kind == tins_cache_idxl_list_int &&
 	    cache->guard == arr->vtable && nparams == 1 &&
 	    params[0].type == tint) {
 		long index = params[0].val.v_tint;
-		uint_objs len = ((tlist *)arr)->items.len;
+		uint_count len = ((tlist *)arr)->items.len;
 		if (index < 0)
 			index += (long)len;
 		if (index < 0 || (uint_objs)index >= len)
@@ -1701,13 +1786,13 @@ static void vm_idxl(tvm *vm, uint_objs loc, uint_regs nparams, int isenv,
 		vm_dense_iset_int2(arr, params, rv);
 		goto finish;
 	}
-	switch (arr->vtable->get_compo_type_code()) {
+	switch (arr->vtable->compo_code) {
 	case compo_tlist:
 		if (nparams == 1 && params[0].type == tint) {
 			tins_cache_observe(cache, tins_cache_idxl_list_int,
 					   arr->vtable);
 			long index = params[0].val.v_tint;
-			uint_objs len = ((tlist *)arr)->items.len;
+			uint_count len = ((tlist *)arr)->items.len;
 			if (index < 0)
 				index += (long)len;
 			if (index < 0 || (uint_objs)index >= len)
@@ -1738,7 +1823,7 @@ static void vm_idxl(tvm *vm, uint_objs loc, uint_regs nparams, int isenv,
 			cache->kind = tins_cache_polymorphic;
 		tcompo_index_set(arr, params, nparams, rv);
 	}
-finish:
+	finish:
 	stk_popcn(vm, 1 + nparams);
 }
 
@@ -1897,7 +1982,7 @@ static void vm_invoke(tvm *vm, const tobj *callable, tobj *arguments,
 
 static int rule_parameter_index(const trule_ir *ir, const trule_term *term)
 {
-	for (uint_objs i = 0; i < ir->parameters.len; i++)
+	for (uint_count i = 0; i < ir->parameters.len; i++)
 		if (((trule_term *)ir->parameters.data[i].val.v_tcompo)->id ==
 		    term->id)
 			return (int)i;
@@ -1930,7 +2015,7 @@ static void rule_eval_source_item(tvm *vm, trule_instance *instance,
 	 || strcmp(role, "negation-operand") == 0
 	 || strcmp(role, "expression-value") == 0) {
 		const tpair *record = nullptr;
-		for (uint_objs i = 0; i < tlist_size(negations); i++) {
+		for (uint_count i = 0; i < tlist_size(negations); i++) {
 			const tpair *entry = (tpair *)tlist_at(negations, i)->val.v_tcompo;
 			if (entry->first.val.v_tint == term->provider_version)
 				record = (tpair *)entry->second.val.v_tcompo;
@@ -2145,7 +2230,7 @@ static void rule_violation(tlist *violations, trule_item *condition,
 	tlist *arguments = tlist_new();
 	if (depth) {
 		trule_instance *current = path[depth - 1];
-		for (uint_objs i = 0; i < current->arguments.len; i++)
+		for (uint_count i = 0; i < current->arguments.len; i++)
 			tobj_vec_push(&arguments->items, &current->arguments.data[i]);
 	}
 	tobj_set_compo(&value, (tcompo_v *)arguments);
@@ -2230,7 +2315,7 @@ static void rule_check_implication(
 		tvm *vm, trule_instance *instance, trule_item *item,
 		tlist *violations, tlist *implications, trule_instance **path,
 		trule_item **requirement_path, uint32_t depth,
-		tcompo_env *environment, tlist *records, uint_objs *record_index)
+		tcompo_env *environment, tlist *records, uint_count *record_index)
 {
 	tobj guard;
 	tobj_set_nil(&guard);
@@ -2314,7 +2399,7 @@ static void rule_collect(tvm *vm, trule_instance *instance,
 	path[depth] = instance;
 	trule *rule = (trule *)instance->rule.val.v_tcompo;
 	if (rule->evaluate_ir) {
-		for (uint_objs i = 0; i < rule->ir->items.len; i++) {
+		for (uint_count i = 0; i < rule->ir->items.len; i++) {
 			trule_item *item =
 				(trule_item *)rule->ir->items.data[i].val.v_tcompo;
 			if (item->kind == trule_item_implication) {
@@ -2382,7 +2467,7 @@ static void rule_collect(tvm *vm, trule_instance *instance,
 	vm->rule_logic_values = saved_negations;
 
 	uint_objs metadata_index = 0;
-	for (uint_objs i = 0; i < tlist_size(output); i++) {
+	for (uint_count i = 0; i < tlist_size(output); i++) {
 		const tobj *item = tlist_at(output, i);
 		trule_item *metadata = metadata_index < rule->ir->items.len ?
 			(trule_item *)rule->ir->items.data[metadata_index++]
@@ -2593,7 +2678,7 @@ static int rule_uses_named_arguments(trule *rule, const tobj *arguments,
 	if (argument_count != 1 || arguments[0].type != tcompo ||
 	    tobj_compo_type(&arguments[0]) != compo_tdict)
 		return 0;
-	uint_objs count = rule->ir ? rule->ir->parameters.len : 0;
+	uint_count count = rule->ir ? rule->ir->parameters.len : 0;
 	if (count != 1)
 		return 1;
 	trule_term *parameter = (trule_term *)
@@ -2609,14 +2694,14 @@ static int rule_uses_named_arguments(trule *rule, const tobj *arguments,
 
 static trule_instance *rule_bind_named(trule *rule, tdict *arguments)
 {
-	uint_objs count = rule->ir ? rule->ir->parameters.len : 0;
+	uint_count count = rule->ir ? rule->ir->parameters.len : 0;
 	if (thashtbl_len(arguments->items) != count)
 		twarn(ErrRuntime_ParamsCtr, "Rule",
 		      "argument Dictionary must contain every parameter exactly once");
 	tobj *ordered = count ? calloc(count, sizeof(*ordered)) : nullptr;
 	if (count && !ordered)
 		abort();
-	for (uint_objs i = 0; i < count; i++) {
+	for (uint_count i = 0; i < count; i++) {
 		tobj_set_nil(&ordered[i]);
 		trule_term *parameter = (trule_term *)
 			rule->ir->parameters.data[i].val.v_tcompo;
@@ -2632,7 +2717,7 @@ static trule_instance *rule_bind_named(trule *rule, tdict *arguments)
 	}
 	trule_instance *instance = trule_bind(
 		rule, ordered, (uint_regs)count);
-	for (uint_objs i = 0; i < count; i++)
+	for (uint_count i = 0; i < count; i++)
 		tobj_ddc_ref_clear(&ordered[i]);
 	free(ordered);
 	return instance;
@@ -2696,7 +2781,7 @@ void vm_eval(tvm *vm, tbycode *iter, tcompo_env *env)
 		twarn(ErrRuntime_RefType, "vm_eval", "");
 	tcompo_v *v = obj->val.v_tcompo;
 
-	switch (v->vtable->get_compo_type_code()) {
+	switch (v->vtable->compo_code) {
 	case compo_trule: {
 		trule *rule = (trule *)v;
 		tobj_set_compo(&vm->rev,
@@ -2922,7 +3007,7 @@ static inline int vm_eval_generic_instruction(
 		return 1;
 	}
 	if (callable->type == tcompo && callable->val.v_tcompo &&
-	    callable->val.v_tcompo->vtable->get_compo_type_code() ==
+	    callable->val.v_tcompo->vtable->compo_code ==
 		    compo_tfunc) {
 		if (cache && cache->kind == tins_cache_empty) {
 			cache->kind = tins_cache_eval_tfunc;
@@ -3052,9 +3137,10 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 			i = receiver_instruction;
 		}
 		/* A named index receiver is emitted as PUSHX immediately followed by
-		 * IDXR. Borrow the stable local slot for the duration of the read so
-		 * every indexable type avoids a redundant stack copy and retain/release
-		 * pair. Arbitrary receiver expressions keep the ordinary stack path. */
+		 * IDXR or IDXL. Borrow the stable local slot for the duration of the
+		 * access so every indexable type avoids a redundant stack copy and
+		 * retain/release pair. Arbitrary receiver expressions keep the
+		 * ordinary stack path. */
 		if (instruction == OP_PUSHX && i + 1 < end &&
 		    tbycode_ins(cmdarr[i + 1]) == OP_IDXR) {
 			tbycode receiver = cmdarr[i];
@@ -3638,6 +3724,11 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 			break;
 		case OP_NEG:
 			operator_neg(stk_top(vm));
+			break;
+		case OP_NOT:
+			if (stk_top(vm)->type != tbool)
+				twarn(ErrRuntime_ParamsType, "OP_NOT", "");
+			stk_top(vm)->val.v_tbool = !stk_top(vm)->val.v_tbool;
 			break;
 		default:
 			twarn(ErrRuntime_Other, "exec_tins",

@@ -26,7 +26,7 @@ extern const textension_nominal_template trules_points_template;
 extern const textension_nominal_template trules_range_template;
 
 trules_domain *trules_points_new(ttypeval *type, const tobj *values,
-	uint_regs count);
+	uint_count count);
 trules_domain *trules_range_new(long start, long end);
 int trules_domain_is_points(const tobj *value);
 int trules_domain_is_range(const tobj *value);
