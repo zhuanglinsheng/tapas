@@ -596,6 +596,9 @@ int tanalyser_save_bin_file(const twrapper *wrapper, const char *filename);
  */
 twrapper *tanalyser_load_bin_file(const char *filename);
 
+/** Load a cache candidate without reporting missing or incompatible data. */
+twrapper *tanalyser_try_load_bin_file(const char *filename);
+
 /**
  * @brief 释放字节码封装及其持有的全部存储。
  *

@@ -152,7 +152,8 @@ static int has_tap_extension(const char *name)
 static int ignored_directory(const char *name)
 {
 	return strcmp(name, ".git") == 0 || strcmp(name, "build") == 0 ||
-		strcmp(name, "node_modules") == 0 || strcmp(name, ".vscode") == 0;
+		strcmp(name, "node_modules") == 0 || strcmp(name, ".vscode") == 0 ||
+		strcmp(name, "__tapas_build__") == 0;
 }
 
 static void index_directory(tworkspace *workspace, const char *path,

@@ -135,6 +135,13 @@ struct tlib {
 	uint_lexs npaths;
 	uint_lexs npaths_cap;
 
+	/* Automatic bytecode artifacts mirror source paths below build_root.
+	 * Explicit -c output remains independent of this cache. */
+	tstring *source_root;
+	tstring *build_root;
+	uint8_t build_interactive;
+	int64_t build_mtime;
+
 	twrapper *wrapper;
 
 	tdict *exposed;
@@ -165,6 +172,13 @@ const char *tlib_find_native_declaration(const tlib *lb,
 void tlib_add_path(tlib *lb, const char *paths_str);
 tstring **tlib_get_paths(tlib *lb);
 uint_lexs tlib_get_npaths(tlib *lb);
+void tlib_set_build_roots(tlib *lb, const char *source_root,
+			  const char *build_root, int interactive);
+const tstring *tlib_get_source_root(const tlib *lb);
+const tstring *tlib_get_build_root(const tlib *lb);
+int tlib_get_build_interactive(const tlib *lb);
+void tlib_set_build_mtime(tlib *lb, int64_t modification_time);
+int64_t tlib_get_build_mtime(const tlib *lb);
 tstring **tlib_get_default_v_names(tlib *lb);
 uint_objs tlib_get_ndefault(tlib *lb);
 tlib *tlib_recreate(tlib *lb);

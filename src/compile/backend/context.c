@@ -372,7 +372,7 @@ tcinfo tcp_get_compile_info(tcp *cp)
 	info.obj_max = tobj_ctr_obj_max_cur(&cp->objctr);
 	info.tmp_max = tobj_ctr_obj_max_cur(&cp->tmpctr);
 	info.reg_max = treg_ctr_get_max(&cp->regctr);
-	info.padding_1 = 0;
+	info.padding_1 = cp->interactive != 0;
 	return info;
 }
 

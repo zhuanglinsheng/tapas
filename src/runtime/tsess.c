@@ -3,6 +3,8 @@
 #include "tapas/tstdlib.h"
 #include "tapas/objects/tdict.h"
 #include "tvm.h"
+#include "tsess_internal.h"
+#include "compile/cache.h"
 #include "compile/compiler.h"
 #include "compile/frontend/workspace.h"
 #include "tapas/objects/tlist.h"
@@ -12,11 +14,32 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 struct tsession {
 	tlib *lib;
 };
+
+static tstring *session_resolve_source(const char *file)
+{
+	tstring *resolved = tworkspace_resolve_module_file(file, nullptr, 0);
+	return resolved ? resolved : tstring_new(file);
+}
+
+static twrapper *session_compile_cached(tsession *session, tcp *compiler,
+					tstring *source, int interactive)
+{
+	tcompile_cache_configure(session->lib, source, interactive);
+	twrapper *wrapper = tcompile_cache_load_current(session->lib, source);
+	if (wrapper)
+		return wrapper;
+	wrapper = compile_file(compiler, source, tlib_get_paths(session->lib),
+			       tlib_get_npaths(session->lib));
+	if (wrapper)
+		(void)tcompile_cache_save(session->lib, source, wrapper);
+	return wrapper;
+}
 
 /*===========================================================================*
  * 2. Session Management
@@ -53,6 +76,13 @@ tlib *tsession_get_lib(tsession *sess)
 	return sess->lib;
 }
 
+void tsession_set_build_file(tsession *session, const char *path)
+{
+	struct stat status;
+	if (session && path && stat(path, &status) == 0)
+		tlib_set_build_mtime(session->lib, (int64_t)status.st_mtime);
+}
+
 /** Compile a .tap file to .tapc */
 void tsession_compile_file(tsession *sess, const char *file, int interactive)
 {
@@ -60,7 +90,8 @@ void tsession_compile_file(tsession *sess, const char *file, int interactive)
 	tcp *cp = tcp_new_library(sess->lib, interactive);
 	tstring **paths = tlib_get_paths(sess->lib);
 	uint_lexs npaths = tlib_get_npaths(sess->lib);
-	tstring *file_ts = tstring_new(file);
+	tstring *file_ts = session_resolve_source(file);
+	tcompile_cache_configure(sess->lib, file_ts, interactive);
 	compile_file_save(cp, file_ts, paths, npaths);
 	tstring_free(file_ts);
 	tcp_delete(cp);
@@ -76,8 +107,13 @@ void tsession_eval_bycodes(tsession *sess, const char *file)
 	char *binf = (char *)malloc(baselen + 6);
 	memcpy(binf, file, baselen);
 	strcpy(binf + baselen, ".tapc");
-
 	twrapper *w = tanalyser_load_bin_file(binf);
+	if (w) {
+		tstring *binfile = tstring_new(binf);
+		tcompile_cache_configure(
+			sess->lib, binfile, w->info.padding_1 != 0);
+		tstring_free(binfile);
+	}
 	free(binf);
 	if (!w)
 		return;
@@ -100,11 +136,9 @@ void tsession_execute_file(tsession *sess, const char *file, int interactive)
 	tcp *cp = tcp_new_library(sess->lib, interactive);
 	(void)interactive;
 
-	tstring **paths = tlib_get_paths(sess->lib);
-	uint_lexs npaths = tlib_get_npaths(sess->lib);
-
-	tstring *file_ts = tstring_new(file);
-	twrapper *wrapper = compile_file(cp, file_ts, paths, npaths);
+	tstring *file_ts = session_resolve_source(file);
+	twrapper *wrapper = session_compile_cached(
+		sess, cp, file_ts, interactive);
 	tstring_free(file_ts);
 	if (!wrapper) {
 		tcp_delete(cp);
@@ -158,9 +192,16 @@ int tsession_execute_module(tsession *session, const char *name,
 	if (!file)
 		twarn(ErrCompile_UnfoundFile, "module", name);
 	tlib *module = tlib_recreate(session->lib);
+	tcompile_cache_configure(module, file, 0);
 	tcp *compiler = tcp_new_library(module, 0);
-	twrapper *wrapper = compile_file(
-		compiler, file, tlib_get_paths(module), tlib_get_npaths(module));
+	twrapper *wrapper = tcompile_cache_load_current(module, file);
+	if (!wrapper) {
+		wrapper = compile_file(
+			compiler, file, tlib_get_paths(module),
+			tlib_get_npaths(module));
+		if (wrapper)
+			(void)tcompile_cache_save(module, file, wrapper);
+	}
 	tcp_delete(compiler);
 	tstring_free(file);
 	tlib_set_wrapper(module, wrapper);

@@ -632,6 +632,8 @@ static void tlib_free(void *self)
 			tstring_free(l->paths[i]);
 		free(l->paths);
 	}
+	tstring_free(l->source_root);
+	tstring_free(l->build_root);
 	for (uint32_t i = 0; i < l->native_declaration_count; i++) {
 		tstring_free(l->native_declarations[i].name);
 		tstring_free(l->native_declarations[i].type);
@@ -697,6 +699,10 @@ tlib *tlib_new(void)
 	lb->paths = nullptr;
 	lb->npaths = 0;
 	lb->npaths_cap = 0;
+	lb->source_root = nullptr;
+	lb->build_root = nullptr;
+	lb->build_interactive = 0;
+	lb->build_mtime = 0;
 	lb->wrapper = nullptr;
 	lb->exposed = nullptr;
 	lb->native_declarations = nullptr;
@@ -1036,6 +1042,44 @@ uint_lexs tlib_get_npaths(tlib *lb)
 	return lb->npaths;
 }
 
+void tlib_set_build_roots(tlib *lb, const char *source_root,
+			  const char *build_root, int interactive)
+{
+	if (!lb)
+		return;
+	tstring_free(lb->source_root);
+	tstring_free(lb->build_root);
+	lb->source_root = source_root ? tstring_new(source_root) : nullptr;
+	lb->build_root = build_root ? tstring_new(build_root) : nullptr;
+	lb->build_interactive = interactive != 0;
+}
+
+const tstring *tlib_get_source_root(const tlib *lb)
+{
+	return lb ? lb->source_root : nullptr;
+}
+
+const tstring *tlib_get_build_root(const tlib *lb)
+{
+	return lb ? lb->build_root : nullptr;
+}
+
+int tlib_get_build_interactive(const tlib *lb)
+{
+	return lb ? lb->build_interactive != 0 : 0;
+}
+
+void tlib_set_build_mtime(tlib *lb, int64_t modification_time)
+{
+	if (lb)
+		lb->build_mtime = modification_time;
+}
+
+int64_t tlib_get_build_mtime(const tlib *lb)
+{
+	return lb ? lb->build_mtime : 0;
+}
+
 /** Get default variable names vector (as array of tstring*) */
 tstring **tlib_get_default_v_names(tlib *lb)
 {
@@ -1061,6 +1105,10 @@ tlib *tlib_recreate(tlib *lb)
 		tlib_add_native_declaration(lib_rct,
 			tstring_cstr(lb->native_declarations[j].name),
 			tstring_cstr(lb->native_declarations[j].type));
+	if (lb->source_root && lb->build_root)
+		tlib_set_build_roots(lib_rct, tstring_cstr(lb->source_root),
+			tstring_cstr(lb->build_root), lb->build_interactive);
+	lib_rct->build_mtime = lb->build_mtime;
 	return lib_rct;
 }
 

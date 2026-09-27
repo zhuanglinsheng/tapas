@@ -1,4 +1,5 @@
 #include "tapas/basic_defs/tbycs.h"
+#include "tapas/version.h"
 #include "tapas/basic_defs/tbasis.h"
 #include "tapas/dsa/tstring.h"
 #include "tapas/objects/tstr.h"
@@ -752,16 +753,17 @@ wrap_err:
 }
 
 #define TAPC_FILE_MAGIC       ((uint64_t)0x5441504153424331ULL)
-#define TAPC_FORMAT_VERSION   ((uint32_t)5)
 #define TAPC_SOURCE_MAP_MAGIC ((uint64_t)0x5450415352433031ULL)
+#define TAPC_VERSION_MAX      UINT32_C(1024)
 
 static int tapc_write_header(FILE *f, const twrapper *wrapper)
 {
 	uint64_t magic = TAPC_FILE_MAGIC;
-	uint32_t version = TAPC_FORMAT_VERSION;
-	uint8_t reserved[3] = { 0, 0, 0 };
+	uint32_t version_length = (uint32_t)strlen(TAPAS_VERSION);
+	uint8_t reserved[3] = { wrapper->info.padding_1, 0, 0 };
 	return fwrite(&magic, sizeof(magic), 1, f) == 1 &&
-	       fwrite(&version, sizeof(version), 1, f) == 1 &&
+	       fwrite(&version_length, sizeof(version_length), 1, f) == 1 &&
+	       fwrite(TAPAS_VERSION, 1, version_length, f) == version_length &&
 	       fwrite(&wrapper->ncmds, sizeof(wrapper->ncmds), 1, f) == 1 &&
 	       fwrite(&wrapper->consts.ncints,
 		      sizeof(wrapper->consts.ncints), 1, f) == 1 &&
@@ -781,13 +783,18 @@ static int tapc_write_header(FILE *f, const twrapper *wrapper)
 static int tapc_read_header(FILE *f, twrapper *wrapper)
 {
 	uint64_t magic = 0;
-	uint32_t version = 0;
+	uint32_t version_length = 0;
+	char version[TAPC_VERSION_MAX + 1];
 	uint8_t reserved[3];
 	if (fread(&magic, sizeof(magic), 1, f) != 1 ||
-	    fread(&version, sizeof(version), 1, f) != 1 ||
-	    magic != TAPC_FILE_MAGIC || version != TAPC_FORMAT_VERSION)
+	    fread(&version_length, sizeof(version_length), 1, f) != 1 ||
+	    magic != TAPC_FILE_MAGIC || version_length > TAPC_VERSION_MAX ||
+	    fread(version, 1, version_length, f) != version_length)
 		return 0;
-	return fread(&wrapper->ncmds, sizeof(wrapper->ncmds), 1, f) == 1 &&
+	version[version_length] = '\0';
+	if (strcmp(version, TAPAS_VERSION) != 0)
+		return 0;
+	int ok = fread(&wrapper->ncmds, sizeof(wrapper->ncmds), 1, f) == 1 &&
 	       fread(&wrapper->consts.ncints,
 		     sizeof(wrapper->consts.ncints), 1, f) == 1 &&
 	       fread(&wrapper->consts.ncstrs,
@@ -801,6 +808,9 @@ static int tapc_read_header(FILE *f, twrapper *wrapper)
 	       fread(&wrapper->info.reg_max,
 		     sizeof(wrapper->info.reg_max), 1, f) == 1 &&
 	       fread(reserved, sizeof(reserved), 1, f) == 1;
+	if (ok)
+		wrapper->info.padding_1 = reserved[0];
+	return ok;
 }
 
 static int tapc_write_tstring(FILE *f, const tstring *s)
@@ -1097,14 +1107,15 @@ int tanalyser_save_bin_file(const twrapper *wrapper, const char *filename)
  * Load wrapper from binary file (.tapc format).
  * Returns twrapper* on success, nullptr on error.
  */
-twrapper *tanalyser_load_bin_file(const char *filename)
+static twrapper *tapc_load_bin_file(const char *filename, int report_errors)
 {
 	FILE *f = fopen(filename, "rb");
 	twrapper *wrapper;
 	uint_csts i;
 
 	if (!f) {
-		twarn(ErrSession_IO, "tanalyser_load_bin_file", filename);
+		if (report_errors)
+			twarn(ErrSession_IO, "tanalyser_load_bin_file", filename);
 		return nullptr;
 	}
 
@@ -1115,8 +1126,9 @@ twrapper *tanalyser_load_bin_file(const char *filename)
 	}
 
 	if (!tapc_read_header(f, wrapper)) {
-		twarn(ErrSession_IO, "tanalyser_load_bin_file",
-		      "unsupported or truncated bytecode file");
+		if (report_errors)
+			twarn(ErrSession_IO, "tanalyser_load_bin_file",
+			      "unsupported or truncated bytecode file");
 		free(wrapper);
 		fclose(f);
 		return nullptr;
@@ -1140,8 +1152,9 @@ twrapper *tanalyser_load_bin_file(const char *filename)
 				free(cmdarr);
 				free(wrapper);
 				fclose(f);
-				twarn(ErrSession_IO, "tanalyser_load_bin_file",
-				      "invalid bytecode instruction");
+				if (report_errors)
+					twarn(ErrSession_IO, "tanalyser_load_bin_file",
+					      "invalid bytecode instruction");
 				return nullptr;
 			}
 		}
@@ -1243,13 +1256,24 @@ load_done:;
 	if (!tapc_read_source_map(f, wrapper)) {
 		tanalyser_clean_wrapper(wrapper);
 		fclose(f);
-		twarn(ErrSession_IO, "tanalyser_load_bin_file",
-		      "invalid or truncated source map");
+		if (report_errors)
+			twarn(ErrSession_IO, "tanalyser_load_bin_file",
+			      "invalid or truncated source map");
 		return nullptr;
 	}
 
 	fclose(f);
 	return wrapper;
+}
+
+twrapper *tanalyser_load_bin_file(const char *filename)
+{
+	return tapc_load_bin_file(filename, 1);
+}
+
+twrapper *tanalyser_try_load_bin_file(const char *filename)
+{
+	return tapc_load_bin_file(filename, 0);
 }
 
 /**

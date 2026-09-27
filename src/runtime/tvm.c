@@ -1,4 +1,6 @@
 #include "tvm.h"
+#include "compile/cache.h"
+#include "compile/compiler.h"
 #include "tapas/dsa/tstring.h"
 #include "tapas/dsa/thashtbl.h"
 #include "tapas/objects/tarray.h"
@@ -2752,18 +2754,26 @@ vm_import(tvm *vm, uint_csts cloc, tstring **cstrlsts, tcompo_env *env)
 	tlib *lib = tlib_recreate(current_lib);
 	tstring *file_ts = cstrlsts[cloc];
 	const char *file = tstring_cstr(file_ts);
-	char *dot = strrchr(file, '.');
-	size_t baselen = dot ? (size_t)(dot - file) : strlen(file);
-	char *binf = (char *)malloc(baselen + 6);
-	memcpy(binf, file, baselen);
-	strcpy(binf + baselen, ".tapc");
-	twrapper *w = tanalyser_load_bin_file(binf);
+	if (!tlib_get_build_root(current_lib))
+		tcompile_cache_configure(current_lib, file_ts,
+			tlib_get_build_interactive(current_lib));
+	if (!tlib_get_build_root(lib))
+		tcompile_cache_configure(lib, file_ts,
+			tlib_get_build_interactive(current_lib));
+	twrapper *w = tcompile_cache_load_current(current_lib, file_ts);
 	if (!w) {
-		free(binf);
-		twarn(ErrSession_IO, "vm_import", file);
-		return;
+		tcp *compiler = tcp_new_library(
+			current_lib, tlib_get_build_interactive(current_lib));
+		w = compile_file(compiler, file_ts,
+			tlib_get_paths(current_lib),
+			tlib_get_npaths(current_lib));
+		tcp_delete(compiler);
+		if (!w) {
+			twarn(ErrSession_IO, "vm_import", file);
+			return;
+		}
+		(void)tcompile_cache_save(current_lib, file_ts, w);
 	}
-	free(binf);
 	tlib_set_wrapper(lib, w);
 	tvm vm2;
 	tvm_init(&vm2, w->info.tmp_max);

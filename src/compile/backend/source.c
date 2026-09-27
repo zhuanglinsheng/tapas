@@ -1,5 +1,6 @@
 /** Internal compiler implementation. */
 #include "internal.h"
+#include "compile/cache.h"
 #include "tapas/dsa/tstring.h"
 #include "compile/frontend/workspace.h"
 
@@ -7,7 +8,6 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 
 static int find_imported_file(tstring **file_ptr, tstring **paths,
 			      uint_lexs npaths)
@@ -189,7 +189,9 @@ void tcompile_emit_import(
 	tstring **local_paths =
 		prepend_path(paths, npaths, import_dir, &nlocal_paths);
 
-	/* Parse the imported file and save its bytecode beside the source file. */
+	/* Parse the imported file and save its bytecode in the project's automatic
+	 * artifact tree. The source path remains in OP_IMPORT so cache validation
+	 * can follow the dependency graph without a sidecar manifest. */
 	tcinfo sub_info =
 		parse_source_stream(&sub_comp, file, f, &sub_cmds, &sub_consts, local_paths, nlocal_paths);
 	tcompile_module_interface *module_interface = sub_comp.module_interface;
@@ -213,16 +215,8 @@ void tcompile_emit_import(
 	{
 		twrapper *w = tanalyser_wrap(&sub_cmds, &sub_consts, &sub_info);
 		if (w) {
-			size_t dot = tstring_rfind_c(file, '.');
-			tstring *binfile = dot != SIZE_MAX ?
-				tstring_substr(file, 0, dot) :
-				tstring_dup(file);
-			tstring_append(binfile, ".tapc");
-			if (access(tstring_cstr(binfile), W_OK) == 0 ||
-			    access(tstring_cstr(binfile), F_OK) != 0)
-				tanalyser_save_bin_file(w, tstring_cstr(binfile));
+			(void)tcompile_cache_save(cp->preload_library, file, w);
 			tanalyser_clean_wrapper(w);
-			tstring_free(binfile);
 		}
 	}
 

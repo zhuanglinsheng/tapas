@@ -15,8 +15,8 @@ Test files are organized by purpose:
 - [`benchmarks/`](benchmarks/README_en.md) contains matching Tapas and Python
   performance programs and bilingual results.
 
-Some test and documentation commands create `.tapc` files beside their source.
-These are ignored build artifacts and can be deleted safely. Ordinary language
-tests compile Tapas source afresh on every run. Tests that require bytecode or
-an imported compiled module remove stale `.tapc` files, rebuild them from
-source, and remove the generated files after verification.
+Explicit bytecode tests may create `.tapc` files beside their source, while
+direct source execution and imported modules use `__tapas_build__` below the
+test working directory. These ignored build artifacts can be deleted safely;
+tests update timestamps or clear the relevant artifacts when they need to
+verify recompilation.

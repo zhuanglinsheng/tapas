@@ -13,6 +13,7 @@
 #include "tapas/tsession.h"
 #include "tapas/dsa/tstring.h"
 #include "tapas/version.h"
+#include "runtime/tsess_internal.h"
 #include "input_state.h"
 #include "compile/compiler.h"
 #include "runtime/tvm.h"
@@ -311,6 +312,7 @@ static void cope_with_2_params(tsession *sess, const char *p_i0, const char *p_i
 int main(int argc, char **argv)
 {
 	tsession * sess = tsession_new();
+	tsession_set_build_file(sess, argv[0]);
 	add_executable_standard_library(sess, argv[0]);
 	int exit_code = 0;
 	int markdown_stdout = 0;

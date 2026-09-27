@@ -159,8 +159,12 @@ Run it directly:
 build/bin/tapas hello.tap
 ```
 
-This compiles and executes the file in memory. It does not keep a `.tapc`
-bytecode file.
+Tapas keeps automatic bytecode artifacts below `__tapas_build__` in the
+directory where it was started. The directory mirrors the real source layout;
+it can be deleted at any time. A source file or any transitive import newer
+than its cached artifact is recompiled automatically. The command-line
+compiler's modification time also invalidates older artifacts during
+development builds.
 
 ## Execute a Source Package
 
@@ -415,8 +419,10 @@ build/bin/tapas -h
   before the file that needs the path.
 - `-e` and `-r` load `.tapc` bytecode. If a source filename is passed, Tapas
   replaces its suffix with `.tapc`.
-- A `.tapc` file is generated for a particular Tapas runtime and is not
-  guaranteed to be compatible across versions. After updating Tapas, rebuild it
-  from source with `-c` or `-ce`. The runtime rejects unsupported bytecode
-  format versions.
+- Automatic source execution stores project artifacts in `__tapas_build__`;
+  explicit `-c` output remains beside the requested source file. Automatic
+  artifacts are selected by source path and compilation mode.
+- A `.tapc` file records the Tapas version that produced it and is not
+  guaranteed to be compatible with another version. Automatic caches are
+  rebuilt after a mismatch; explicit bytecode loading reports an error.
 - Tapas exits with an error when compilation or runtime errors are raised.

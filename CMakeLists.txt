@@ -159,6 +159,7 @@ set(TAPAS_FRONTEND_SOURCES
 )
 
 set(TAPAS_BACKEND_SOURCES
+	src/compile/cache.c
     src/compile/backend/emit_helpers.c
     src/compile/backend/ast_emit.c
     src/compile/backend/type_emit.c
@@ -324,9 +325,10 @@ if(BUILD_TESTING)
 
     add_test(
         NAME language_rules
-        COMMAND ${CMAKE_COMMAND}
-            -DTAPAS=$<TARGET_FILE:tapas>
-            -DFIXTURE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/test/language_rules
+		COMMAND ${CMAKE_COMMAND}
+			-DTAPAS=$<TARGET_FILE:tapas>
+			-DBINARY_ROOT=${CMAKE_CURRENT_BINARY_DIR}
+			-DFIXTURE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/test/language_rules
             -DDOC_EXAMPLE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/docs/examples/syntax
             -DTEST_BLAS=$<TARGET_FILE:test_cblas>
             -P ${CMAKE_CURRENT_SOURCE_DIR}/test/cmake/language_rules.cmake

@@ -1,7 +1,7 @@
-if(NOT DEFINED TAPAS OR NOT DEFINED FIXTURE_DIR OR
+if(NOT DEFINED TAPAS OR NOT DEFINED BINARY_ROOT OR NOT DEFINED FIXTURE_DIR OR
    NOT DEFINED DOC_EXAMPLE_DIR OR NOT DEFINED TEST_BLAS)
     message(FATAL_ERROR
-        "TAPAS, FIXTURE_DIR, DOC_EXAMPLE_DIR, and TEST_BLAS are required")
+        "TAPAS, BINARY_ROOT, FIXTURE_DIR, DOC_EXAMPLE_DIR, and TEST_BLAS are required")
 endif()
 
 function(run_documented_example fixture expected)
@@ -23,6 +23,70 @@ set(SUPPORT_FIXTURE_DIR "${FIXTURE_DIR}/fixtures")
 set(COMPILE_INVALID_DIR "${FIXTURE_DIR}/invalid/compile")
 set(RUNTIME_INVALID_DIR "${FIXTURE_DIR}/invalid/runtime")
 set(ENVIRONMENT_INVALID_DIR "${FIXTURE_DIR}/invalid/environment")
+
+set(CACHE_TEST_DIR "${BINARY_ROOT}/automatic_bytecode_cache")
+set(CACHE_BUILD_DIR "${CACHE_TEST_DIR}/__tapas_build__")
+file(REMOVE_RECURSE "${CACHE_TEST_DIR}")
+file(MAKE_DIRECTORY "${CACHE_TEST_DIR}")
+file(WRITE "${CACHE_TEST_DIR}/dependency.tap"
+    "return {'value': 7}\n")
+file(WRITE "${CACHE_TEST_DIR}/main.tap"
+    "import dependency.tap as dependency\nprint(dependency::value)\n")
+execute_process(
+    COMMAND "${TAPAS}" main.tap
+    WORKING_DIRECTORY "${CACHE_TEST_DIR}"
+    RESULT_VARIABLE cache_first_result
+    OUTPUT_VARIABLE cache_first_output
+    ERROR_VARIABLE cache_first_error
+)
+if(NOT cache_first_result EQUAL 0 OR NOT cache_first_output STREQUAL "7\n" OR
+   NOT EXISTS "${CACHE_BUILD_DIR}/main.tapc" OR
+   NOT EXISTS "${CACHE_BUILD_DIR}/dependency.tapc" OR
+   EXISTS "${CACHE_TEST_DIR}/main.tapc" OR
+   EXISTS "${CACHE_TEST_DIR}/dependency.tapc")
+    message(FATAL_ERROR
+        "Automatic bytecode cache layout failed (${cache_first_result}):\n"
+        "${cache_first_output}${cache_first_error}")
+endif()
+file(TIMESTAMP "${CACHE_BUILD_DIR}/main.tapc" cache_first_main_time
+    "%Y%m%d%H%M%S")
+file(TIMESTAMP "${CACHE_BUILD_DIR}/dependency.tapc" cache_first_dep_time
+    "%Y%m%d%H%M%S")
+execute_process(
+    COMMAND "${TAPAS}" main.tap
+    WORKING_DIRECTORY "${CACHE_TEST_DIR}"
+    RESULT_VARIABLE cache_second_result
+    OUTPUT_QUIET ERROR_VARIABLE cache_second_error
+)
+file(TIMESTAMP "${CACHE_BUILD_DIR}/main.tapc" cache_second_main_time
+    "%Y%m%d%H%M%S")
+file(TIMESTAMP "${CACHE_BUILD_DIR}/dependency.tapc" cache_second_dep_time
+    "%Y%m%d%H%M%S")
+if(NOT cache_second_result EQUAL 0 OR
+   NOT cache_first_main_time STREQUAL cache_second_main_time OR
+   NOT cache_first_dep_time STREQUAL cache_second_dep_time)
+    message(FATAL_ERROR
+        "An unchanged automatic cache was rebuilt:\n${cache_second_error}")
+endif()
+execute_process(COMMAND "${CMAKE_COMMAND}" -E sleep 1)
+file(TOUCH "${CACHE_TEST_DIR}/dependency.tap")
+execute_process(
+    COMMAND "${TAPAS}" main.tap
+    WORKING_DIRECTORY "${CACHE_TEST_DIR}"
+    RESULT_VARIABLE cache_third_result
+    OUTPUT_QUIET ERROR_VARIABLE cache_third_error
+)
+file(TIMESTAMP "${CACHE_BUILD_DIR}/main.tapc" cache_third_main_time
+    "%Y%m%d%H%M%S")
+file(TIMESTAMP "${CACHE_BUILD_DIR}/dependency.tapc" cache_third_dep_time
+    "%Y%m%d%H%M%S")
+if(NOT cache_third_result EQUAL 0 OR
+   cache_third_main_time STREQUAL cache_second_main_time OR
+   cache_third_dep_time STREQUAL cache_second_dep_time)
+    message(FATAL_ERROR
+        "A newer dependency did not rebuild its import tree:\n${cache_third_error}")
+endif()
+file(REMOVE_RECURSE "${CACHE_TEST_DIR}")
 
 foreach(mode IN ITEMS source bytecode)
     if(mode STREQUAL "source")

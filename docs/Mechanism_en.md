@@ -35,6 +35,7 @@ The compiled bytecode wrapper contains:
 The compiler has already assigned ordinary names to slots, so the virtual machine does not look them up by source name during variable access.
 A wrapper can be executed immediately or saved as a `.tapc` file and loaded later; see [Usage](Usage_en.md#compile-and-run-bytecode) for the corresponding commands.
 Inside a `.tapc` file, the source map uses a shared string table and stores consecutive identical locations as one run. Loading restores the complete per-instruction locations, including 64-bit line and column values and nullable source and file fields, so compression does not change runtime error locations or context.
+Automatic source execution maps each compilation unit into one project-level `__tapas_build__` tree rooted at the process working directory. Cache validation follows `OP_IMPORT` source paths recursively and compares source, command-line compiler, and artifact modification times, so a newer transitive dependency or development build invalidates its importers. The header uses the Tapas release version as its compatibility identity rather than maintaining an independent bytecode version.
 
 ## Runtime State
 
