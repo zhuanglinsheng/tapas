@@ -1,6 +1,7 @@
 #include "../../src/stdlib/random/object.h"
 #include "../../src/stdlib/rules/codec.h"
 #include "../../src/stdlib/rules/hash.h"
+#include "tapas/basic_defs/tbycs.h"
 #include "tapas/dsa/tstring.h"
 #include "tapas/objects/tarray.h"
 #include "tapas/objects/tcfn.h"
@@ -20,7 +21,106 @@
 
 #include <assert.h>
 #include <math.h>
+#include <stdio.h>
 #include <string.h>
+
+static void test_compact_instruction_encodings(void) {
+  static const tins binary_operations[] = {
+    OP_ADD, OP_SUB, OP_MUL, OP_DIV, OP_MOD, OP_POW, OP_MMUL,
+    OP_EQ, OP_NE, OP_GE, OP_SG, OP_LE, OP_SL, OP_AND, OP_OR,
+    OP_BAND, OP_BOR
+  };
+  for (size_t i = 0;
+       i < sizeof(binary_operations) / sizeof(binary_operations[0]); i++) {
+    tbycode instruction = tbycode_make_named_binop(
+      binary_operations[i], UINT16_C(8191), TBYCODE_BINOP_ADDRESS_MAX);
+    assert(tbycode_ins(instruction) == binary_operations[i]);
+    assert(tbycode_binop_named(instruction));
+    assert(tbycode_get_L(instruction) == UINT16_C(8191));
+    assert(tbycode_binop_address(instruction) == TBYCODE_BINOP_ADDRESS_MAX);
+  }
+
+  tbycode index = tbycode_make_named_idxr(
+    UINT16_C(8191), TBYCODE_IDXR_NAMED_ADDRESS_MAX,
+    TBYCODE_IDXR_NAMED_COUNT_MAX, 1, 1);
+  assert(tbycode_ins(index) == OP_IDXR);
+  assert(tbycode_idxr_named(index));
+  assert(tbycode_idxr_named_slot(index) == UINT16_C(8191));
+  assert(tbycode_idxr_named_address(index) ==
+         TBYCODE_IDXR_NAMED_ADDRESS_MAX);
+  assert(tbycode_idxr_count(index) == TBYCODE_IDXR_NAMED_COUNT_MAX);
+  assert(tbycode_idxr_slice(index));
+  assert(tbycode_idxr_compare(index));
+
+  static const long integers[] = {
+    TBYCODE_PUSHI_IMMEDIATE_MIN, -1, 0, 1, TBYCODE_PUSHI_IMMEDIATE_MAX
+  };
+  for (size_t i = 0; i < sizeof(integers) / sizeof(integers[0]); i++) {
+    tbycode instruction = tbycode_make_pushi_immediate(integers[i]);
+    assert(tbycode_ins(instruction) == OP_PUSHI);
+    assert(tbycode_pushi_is_immediate(instruction));
+    assert(tbycode_pushi_immediate_value(instruction) == integers[i]);
+  }
+
+  tbycode cleanup = tbycode_make_popn(
+    UINT16_C(8191), 1, TBYCODE_POPN_TMP_MAX);
+  assert(tbycode_get_L(cleanup) == UINT16_C(8191));
+  assert(tbycode_popn_print(cleanup));
+  assert(tbycode_popn_temporary_count(cleanup) == TBYCODE_POPN_TMP_MAX);
+}
+
+static void test_bytecode_source_map_roundtrip(void) {
+  static const char *path = "test-bytecode-source-map.tapc";
+  static const uint64_t large_line = (UINT64_C(1) << 40) + 12;
+  static const uint64_t large_column = (UINT64_C(1) << 39) + 7;
+  tvmcmd_vect commands;
+  tvmcmd_vect_init(&commands);
+  terror_set_source_context("source-a");
+  terror_set_file_context("roundtrip.tap", large_line, large_column);
+  for (uint32_t i = 0; i < 32; i++)
+    tvmcmd_vect_append(&commands, tbycode_make(OP_PASS));
+  terror_set_source_context("source-b");
+  terror_set_file_context("roundtrip.tap", 42, 9);
+  for (uint32_t i = 0; i < 32; i++)
+    tvmcmd_vect_append(&commands, tbycode_make(OP_PASS));
+  terror_clear_source_context();
+  terror_clear_file_context();
+  tvmcmd_vect_append(&commands, tbycode_make(OP_PASS));
+
+  tconsts constants;
+  tconsts_init(&constants);
+  tcinfo info = {0};
+  twrapper *wrapper = tanalyser_wrap(&commands, &constants, &info);
+  assert(wrapper);
+  remove(path);
+  assert(tanalyser_save_bin_file(wrapper, path) == 0);
+
+  FILE *saved = fopen(path, "rb");
+  assert(saved);
+  assert(fseek(saved, 0, SEEK_END) == 0);
+  long size = ftell(saved);
+  assert(size > 0 && size < 1024);
+  fclose(saved);
+
+  twrapper *loaded = tanalyser_load_bin_file(path);
+  assert(loaded && loaded->ncmds == commands.size);
+  for (uint_cmds i = 0; i < loaded->ncmds; i++) {
+    const tsource_loc *expected = &wrapper->source_locs[i];
+    const tsource_loc *actual = &loaded->source_locs[i];
+    assert(actual->line == expected->line);
+    assert(actual->column == expected->column);
+    assert((actual->source == nullptr) == (expected->source == nullptr));
+    assert((actual->file == nullptr) == (expected->file == nullptr));
+    assert(!actual->source || tstring_eq(actual->source, expected->source));
+    assert(!actual->file || tstring_eq(actual->file, expected->file));
+  }
+
+  tanalyser_clean_wrapper(loaded);
+  tanalyser_clean_wrapper(wrapper);
+  tconsts_free(&constants);
+  tvmcmd_vect_free(&commands);
+  assert(remove(path) == 0);
+}
 
 static tobj integer(long value) {
   tobj out;
@@ -655,6 +755,8 @@ static void test_rule_representations(void) {
 }
 
 int main(void) {
+  test_compact_instruction_encodings();
+  test_bytecode_source_map_roundtrip();
   test_type_template_canonical_roundtrip();
   test_extension_nominal_template();
   test_rule_representations();

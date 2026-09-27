@@ -45,25 +45,35 @@ int str_to_float(const tstring *literal, double *value)
 	return 1;
 }
 
+int compile_reference_address(tcp *cp, const tstring *name,
+			      uint16_t *slot, uint16_t *address)
+{
+	uint_objs temporary = tobj_ctr_obj_loc(&cp->tmpctr, name);
+	if (temporary < tobj_ctr_obj_len_all(&cp->tmpctr)) {
+		*slot = (uint16_t)temporary;
+		*address = tpushx_tmp_addr();
+		return 1;
+	}
+	tobj_ctr_addr resolved;
+	if (!tobj_ctr_obj_addr(&cp->objctr, name, &resolved))
+		return 0;
+	*slot = (uint16_t)resolved.slot;
+	*address = resolved.depth == 0 ? tpushx_local_addr() :
+		tpushx_upval_addr(resolved.depth);
+	return 1;
+}
+
 void compile_emit_reference(tcp *cp, const tstring *name,
 			    tvmcmd_vect *instructions, tconsts *constants)
 {
 	if (tstring_empty(name))
 		twarn(ErrCompile_InvalidLiter, "reference", "empty name");
-	tobj_ctr_addr address;
-	uint_objs temporary = tobj_ctr_obj_loc(&cp->tmpctr, name);
-	if (temporary < tobj_ctr_obj_len_all(&cp->tmpctr)) {
-		tvmcmd_vect_append(instructions, tbycode_make_lr(
-			OP_PUSHX, (uint16_t)temporary, tpushx_tmp_addr())
-		);
-	} else if (tobj_ctr_obj_addr(&cp->objctr, name, &address)) {
-		uint16_t kind = address.depth == 0 ? tpushx_local_addr() :
-			tpushx_upval_addr(address.depth);
-		tvmcmd_vect_append(instructions, tbycode_make_lr(
-			OP_PUSHX, (uint16_t)address.slot, kind));
-	} else {
+	uint16_t slot = 0;
+	uint16_t address = 0;
+	if (!compile_reference_address(cp, name, &slot, &address))
 		twarn(ErrCompile_InvalidLiter, "reference", tstring_cstr(name));
-	}
+	tvmcmd_vect_append(instructions,
+		tbycode_make_lr(OP_PUSHX, slot, address));
 	(void)constants;
 	treg_ctr_add(&cp->regctr);
 }

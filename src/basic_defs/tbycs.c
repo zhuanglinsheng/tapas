@@ -65,6 +65,19 @@ tbycode tbycode_make_lbi(uint8_t ins, uint16_t L, uint8_t b, uint8_t i)
 	return tmp;
 }
 
+static void tbycode_tostring_binary(char *buf, size_t buf_size,
+				    const char *name, tbycode c)
+{
+	if (tbycode_binop_named(c))
+		snprintf(buf, buf_size, "%-11s %u  named %u", name,
+			(unsigned)tbycode_get_L(c),
+			(unsigned)tbycode_binop_address(c));
+	else
+		snprintf(buf, buf_size, "%-11s %u  %u", name,
+			(unsigned)tbycode_get_L(c),
+			(unsigned)tbycode_get_R(c));
+}
+
 /**
  * Convert bytecode to debug string representation.
  * Writes at most buf_size bytes, including the terminating null character.
@@ -107,9 +120,10 @@ void tbycode_tostring(tbycode c, char *buf, size_t buf_size)
 		break;
 	case OP_POPN:
 		snprintf(buf, buf_size,
-			"OP_POPN     %u  %u",
+			"OP_POPN     %u  print=%u  tmp=%u",
 			(unsigned)tbycode_get_L(c),
-			(unsigned)tbycode_get_R(c));
+			(unsigned)tbycode_popn_print(c),
+			(unsigned)tbycode_popn_temporary_count(c));
 		break;
 	case OP_POPCOV:
 		snprintf(buf, buf_size,
@@ -166,7 +180,12 @@ void tbycode_tostring(tbycode c, char *buf, size_t buf_size)
 				(unsigned)tpushx_depth(tbycode_get_R(c)));
 		break;
 	case OP_PUSHI:
-		snprintf(buf, buf_size, "OP_PUSHI    %u", (unsigned)tbycode_get_U(c));
+		if (tbycode_pushi_is_immediate(c))
+			snprintf(buf, buf_size, "OP_PUSHI    %ld  immediate",
+				tbycode_pushi_immediate_value(c));
+		else
+			snprintf(buf, buf_size, "OP_PUSHI    %u",
+				(unsigned)tbycode_get_U(c));
 		break;
 	case OP_PUSHFLT:
 		snprintf(buf, buf_size, "OP_PUSHFLT  %u", (unsigned)tbycode_get_U(c));
@@ -187,9 +206,19 @@ void tbycode_tostring(tbycode c, char *buf, size_t buf_size)
 		snprintf(buf, buf_size, "OP_IMPORT   %u", (unsigned)tbycode_get_U(c));
 		break;
 	case OP_IDXR:
-		snprintf(buf, buf_size, "OP_IDXR     %u%s",
-			(unsigned)tbycode_idxr_count(c),
-			tbycode_idxr_compare(c) ? "  compare" : "");
+		if (tbycode_idxr_named(c))
+			snprintf(buf, buf_size,
+				"OP_IDXR     %u  named %u %u%s%s",
+				(unsigned)tbycode_idxr_count(c),
+				(unsigned)tbycode_idxr_named_slot(c),
+				(unsigned)tbycode_idxr_named_address(c),
+				tbycode_idxr_slice(c) ? "  slice" : "",
+				tbycode_idxr_compare(c) ? "  compare" : "");
+		else
+			snprintf(buf, buf_size, "OP_IDXR     %u%s%s",
+				(unsigned)tbycode_idxr_count(c),
+				tbycode_idxr_slice(c) ? "  slice" : "",
+				tbycode_idxr_compare(c) ? "  compare" : "");
 		break;
 	case OP_EVALSF:
 		if (tbycode_get_i(c))
@@ -248,46 +277,25 @@ void tbycode_tostring(tbycode c, char *buf, size_t buf_size)
 		snprintf(buf, buf_size, "OP_RULEIMPLY %u", (unsigned)tbycode_get_U(c));
 		break;
 	case OP_ADD:
-		snprintf(buf, buf_size,
-			"OP_ADD      %u  %u",
-			(unsigned)tbycode_get_L(c),
-			(unsigned)tbycode_get_R(c));
+		tbycode_tostring_binary(buf, buf_size, "OP_ADD", c);
 		break;
 	case OP_SUB:
-		snprintf(buf, buf_size,
-			"OP_SUB      %u  %u",
-			(unsigned)tbycode_get_L(c),
-			(unsigned)tbycode_get_R(c));
+		tbycode_tostring_binary(buf, buf_size, "OP_SUB", c);
 		break;
 	case OP_MUL:
-		snprintf(buf, buf_size,
-			"OP_MUL      %u  %u",
-			(unsigned)tbycode_get_L(c),
-			(unsigned)tbycode_get_R(c));
+		tbycode_tostring_binary(buf, buf_size, "OP_MUL", c);
 		break;
 	case OP_DIV:
-		snprintf(buf, buf_size,
-			"OP_DIV      %u  %u",
-			(unsigned)tbycode_get_L(c),
-			(unsigned)tbycode_get_R(c));
+		tbycode_tostring_binary(buf, buf_size, "OP_DIV", c);
 		break;
 	case OP_MOD:
-		snprintf(buf, buf_size,
-			"OP_MOD      %u  %u",
-			(unsigned)tbycode_get_L(c),
-			(unsigned)tbycode_get_R(c));
+		tbycode_tostring_binary(buf, buf_size, "OP_MOD", c);
 		break;
 	case OP_POW:
-		snprintf(buf, buf_size,
-			"OP_POW      %u  %u",
-			(unsigned)tbycode_get_L(c),
-			(unsigned)tbycode_get_R(c));
+		tbycode_tostring_binary(buf, buf_size, "OP_POW", c);
 		break;
 	case OP_MMUL:
-		snprintf(buf, buf_size,
-			"OP_MMUL     %u  %u",
-			(unsigned)tbycode_get_L(c),
-			(unsigned)tbycode_get_R(c));
+		tbycode_tostring_binary(buf, buf_size, "OP_MMUL", c);
 		break;
 	case OP_POS:
 		snprintf(buf, buf_size, "OP_POS");
@@ -299,64 +307,34 @@ void tbycode_tostring(tbycode c, char *buf, size_t buf_size)
 		snprintf(buf, buf_size, "OP_NOT");
 		break;
 	case OP_EQ:
-		snprintf(buf, buf_size,
-			"OP_EQ       %u  %u",
-			(unsigned)tbycode_get_L(c),
-			(unsigned)tbycode_get_R(c));
+		tbycode_tostring_binary(buf, buf_size, "OP_EQ", c);
 		break;
 	case OP_NE:
-		snprintf(buf, buf_size,
-			"OP_NE       %u  %u",
-			(unsigned)tbycode_get_L(c),
-			(unsigned)tbycode_get_R(c));
+		tbycode_tostring_binary(buf, buf_size, "OP_NE", c);
 		break;
 	case OP_GE:
-		snprintf(buf, buf_size,
-			"OP_GE       %u  %u",
-			(unsigned)tbycode_get_L(c),
-			(unsigned)tbycode_get_R(c));
+		tbycode_tostring_binary(buf, buf_size, "OP_GE", c);
 		break;
 	case OP_SG:
-		snprintf(buf, buf_size,
-			"OP_SG       %u  %u",
-			(unsigned)tbycode_get_L(c),
-			(unsigned)tbycode_get_R(c));
+		tbycode_tostring_binary(buf, buf_size, "OP_SG", c);
 		break;
 	case OP_LE:
-		snprintf(buf, buf_size,
-			"OP_LE       %u  %u",
-			(unsigned)tbycode_get_L(c),
-			(unsigned)tbycode_get_R(c));
+		tbycode_tostring_binary(buf, buf_size, "OP_LE", c);
 		break;
 	case OP_SL:
-		snprintf(buf, buf_size,
-			"OP_SL       %u  %u",
-			(unsigned)tbycode_get_L(c),
-			(unsigned)tbycode_get_R(c));
+		tbycode_tostring_binary(buf, buf_size, "OP_SL", c);
 		break;
 	case OP_AND:
-		snprintf(buf, buf_size,
-			"OP_AND      %u  %u",
-			(unsigned)tbycode_get_L(c),
-			(unsigned)tbycode_get_R(c));
+		tbycode_tostring_binary(buf, buf_size, "OP_AND", c);
 		break;
 	case OP_OR:
-		snprintf(buf, buf_size,
-			"OP_OR       %u  %u",
-			(unsigned)tbycode_get_L(c),
-			(unsigned)tbycode_get_R(c));
+		tbycode_tostring_binary(buf, buf_size, "OP_OR", c);
 		break;
 	case OP_BAND:
-		snprintf(buf, buf_size,
-			"OP_BAND     %u  %u",
-			(unsigned)tbycode_get_L(c),
-			(unsigned)tbycode_get_R(c));
+		tbycode_tostring_binary(buf, buf_size, "OP_BAND", c);
 		break;
 	case OP_BOR:
-		snprintf(buf, buf_size,
-			"OP_BOR      %u  %u",
-			(unsigned)tbycode_get_L(c),
-			(unsigned)tbycode_get_R(c));
+		tbycode_tostring_binary(buf, buf_size, "OP_BOR", c);
 		break;
 	default:
 		buf[0] = '\0';
@@ -774,7 +752,7 @@ wrap_err:
 }
 
 #define TAPC_FILE_MAGIC       ((uint64_t)0x5441504153424331ULL)
-#define TAPC_FORMAT_VERSION   ((uint32_t)2)
+#define TAPC_FORMAT_VERSION   ((uint32_t)5)
 #define TAPC_SOURCE_MAP_MAGIC ((uint64_t)0x5450415352433031ULL)
 
 static int tapc_write_header(FILE *f, const twrapper *wrapper)
@@ -825,15 +803,20 @@ static int tapc_read_header(FILE *f, twrapper *wrapper)
 	       fread(reserved, sizeof(reserved), 1, f) == 1;
 }
 
-static void tapc_write_tstring(FILE *f, const tstring *s)
+static int tapc_write_tstring(FILE *f, const tstring *s)
 {
 	uint8_t has_value = s != nullptr;
-	fwrite(&has_value, sizeof(has_value), 1, f);
-	if (has_value) {
-		uint64_t len = tstring_len(s);
-		fwrite(&len, sizeof(len), 1, f);
-		fwrite(tstring_cstr(s), 1, len + 1, f);
-	}
+	if (fwrite(&has_value, sizeof(has_value), 1, f) != 1)
+		return 0;
+	if (!has_value)
+		return 1;
+	size_t bytes = tstring_len(s);
+	if (bytes == SIZE_MAX)
+		return 0;
+	uint64_t len = bytes;
+	bytes++;
+	return fwrite(&len, sizeof(len), 1, f) == 1 &&
+		fwrite(tstring_cstr(s), 1, bytes, f) == bytes;
 }
 
 static int tapc_read_tstring(FILE *f, tstring **out)
@@ -847,10 +830,17 @@ static int tapc_read_tstring(FILE *f, tstring **out)
 	uint64_t len = 0;
 	if (1 != fread(&len, sizeof(len), 1, f))
 		return 0;
-	char *raw = (char *)calloc((size_t)(len + 1), 1);
+	if (len > SIZE_MAX - 1)
+		return 0;
+	size_t bytes = (size_t)len + 1;
+	char *raw = (char *)calloc(bytes, 1);
 	if (!raw)
 		return 0;
-	if (len + 1 != fread(raw, 1, len + 1, f)) {
+	if (fread(raw, 1, bytes, f) != bytes) {
+		free(raw);
+		return 0;
+	}
+	if (raw[bytes - 1] != '\0') {
 		free(raw);
 		return 0;
 	}
@@ -859,53 +849,194 @@ static int tapc_read_tstring(FILE *f, tstring **out)
 	return *out != nullptr;
 }
 
-static void tapc_write_source_map(FILE *f, const twrapper *wrapper)
+typedef struct {
+	const tstring **items;
+	uint32_t count;
+	uint32_t capacity;
+} tapc_string_table;
+
+#define TAPC_NO_STRING UINT32_MAX
+
+/* The source-map payload stores one shared string table followed by runs of
+ * identical locations. Each run retains its full 64-bit line and column and
+ * references nullable source/file strings by table index. */
+
+static int tapc_string_table_id(tapc_string_table *table,
+				const tstring *value, uint32_t *id)
 {
-	uint64_t magic = TAPC_SOURCE_MAP_MAGIC;
-	uint64_t count = wrapper->source_locs ? wrapper->ncmds : 0;
-	fwrite(&magic, sizeof(magic), 1, f);
-	fwrite(&count, sizeof(count), 1, f);
-	for (uint_cmds i = 0; i < count; i++) {
-		tsource_loc *loc = &wrapper->source_locs[i];
-		fwrite(&loc->line, sizeof(loc->line), 1, f);
-		fwrite(&loc->column, sizeof(loc->column), 1, f);
-		tapc_write_tstring(f, loc->source);
-		tapc_write_tstring(f, loc->file);
+	if (!value) {
+		*id = TAPC_NO_STRING;
+		return 1;
 	}
+	for (uint32_t i = 0; i < table->count; i++) {
+		if (tstring_eq(table->items[i], value)) {
+			*id = i;
+			return 1;
+		}
+	}
+	if (table->count == table->capacity) {
+		if (table->capacity > UINT32_MAX / 2)
+			return 0;
+		uint32_t capacity = table->capacity ? table->capacity * 2 : 8;
+		const tstring **items = (const tstring **)realloc(
+			table->items, capacity * sizeof(*items));
+		if (!items)
+			return 0;
+		table->items = items;
+		table->capacity = capacity;
+	}
+	*id = table->count;
+	table->items[table->count++] = value;
+	return 1;
 }
 
-static void tapc_read_source_map(FILE *f, twrapper *wrapper)
+static int tapc_source_loc_equal(const tsource_loc *left,
+				 const tsource_loc *right)
+{
+	if (left->line != right->line || left->column != right->column)
+		return 0;
+	if ((left->source == nullptr) != (right->source == nullptr) ||
+	    (left->file == nullptr) != (right->file == nullptr))
+		return 0;
+	return (!left->source || tstring_eq(left->source, right->source)) &&
+		(!left->file || tstring_eq(left->file, right->file));
+}
+
+static int tapc_write_source_map(FILE *f, const twrapper *wrapper)
+{
+	uint64_t magic = TAPC_SOURCE_MAP_MAGIC;
+	uint_cmds count = wrapper->source_locs ? wrapper->ncmds : 0;
+	uint_cmds run_count = 0;
+	tapc_string_table strings = { 0 };
+	for (uint_cmds i = 0; i < count; i++) {
+		uint32_t ignored;
+		if (!tapc_string_table_id(
+				&strings, wrapper->source_locs[i].source, &ignored) ||
+		    !tapc_string_table_id(
+				&strings, wrapper->source_locs[i].file, &ignored)) {
+			free(strings.items);
+			return 0;
+		}
+		if (i == 0 || !tapc_source_loc_equal(
+				&wrapper->source_locs[i - 1],
+				&wrapper->source_locs[i]))
+			run_count++;
+	}
+	int ok = fwrite(&magic, sizeof(magic), 1, f) == 1 &&
+		fwrite(&count, sizeof(count), 1, f) == 1 &&
+		fwrite(&strings.count, sizeof(strings.count), 1, f) == 1 &&
+		fwrite(&run_count, sizeof(run_count), 1, f) == 1;
+	for (uint32_t i = 0; ok && i < strings.count; i++)
+		ok = tapc_write_tstring(f, strings.items[i]);
+	for (uint_cmds begin = 0; ok && begin < count;) {
+		uint_cmds end = begin + 1;
+		while (end < count && tapc_source_loc_equal(
+				&wrapper->source_locs[begin],
+				&wrapper->source_locs[end]))
+			end++;
+		uint_cmds length = end - begin;
+		uint32_t source_id;
+		uint32_t file_id;
+		ok = tapc_string_table_id(
+			&strings, wrapper->source_locs[begin].source, &source_id) &&
+			tapc_string_table_id(
+				&strings, wrapper->source_locs[begin].file, &file_id) &&
+			fwrite(&length, sizeof(length), 1, f) == 1 &&
+			fwrite(&source_id, sizeof(source_id), 1, f) == 1 &&
+			fwrite(&file_id, sizeof(file_id), 1, f) == 1 &&
+			fwrite(&wrapper->source_locs[begin].line,
+				sizeof(wrapper->source_locs[begin].line), 1, f) == 1 &&
+			fwrite(&wrapper->source_locs[begin].column,
+				sizeof(wrapper->source_locs[begin].column), 1, f) == 1;
+		begin = end;
+	}
+	free(strings.items);
+	return ok;
+}
+
+static void tapc_string_array_free(tstring **strings, uint32_t count)
+{
+	if (!strings)
+		return;
+	for (uint32_t i = 0; i < count; i++)
+		tstring_free(strings[i]);
+	free(strings);
+}
+
+static int tapc_read_source_map(FILE *f, twrapper *wrapper)
 {
 	uint64_t magic = 0;
-	uint64_t count = 0;
-	if (1 != fread(&magic, sizeof(magic), 1, f))
-		return;
-	if (magic != TAPC_SOURCE_MAP_MAGIC)
-		return;
-	if (1 != fread(&count, sizeof(count), 1, f))
-		return;
-	if (count != wrapper->ncmds)
-		return;
+	uint_cmds count = 0;
+	uint32_t string_count = 0;
+	uint_cmds run_count = 0;
+	if (fread(&magic, sizeof(magic), 1, f) != 1 ||
+	    magic != TAPC_SOURCE_MAP_MAGIC ||
+	    fread(&count, sizeof(count), 1, f) != 1 ||
+	    fread(&string_count, sizeof(string_count), 1, f) != 1 ||
+	    fread(&run_count, sizeof(run_count), 1, f) != 1)
+		return 0;
+	if (count != 0 && count != wrapper->ncmds)
+		return 0;
+	if (count == 0)
+		return string_count == 0 && run_count == 0;
+	if ((uint64_t)string_count > (uint64_t)count * 2 ||
+	    run_count == 0 || run_count > count)
+		return 0;
+	tstring **strings = string_count ?
+		(tstring **)calloc(string_count, sizeof(*strings)) : nullptr;
+	if (string_count && !strings)
+		return 0;
+	for (uint32_t i = 0; i < string_count; i++) {
+		if (!tapc_read_tstring(f, &strings[i]) || !strings[i]) {
+			tapc_string_array_free(strings, string_count);
+			return 0;
+		}
+	}
 	wrapper->source_locs =
 		(tsource_loc *)calloc(wrapper->ncmds, sizeof(tsource_loc));
-	if (!wrapper->source_locs)
-		return;
-	for (uint_cmds i = 0; i < wrapper->ncmds; i++) {
-		tsource_loc *loc = &wrapper->source_locs[i];
-		if (1 != fread(&loc->line, sizeof(loc->line), 1, f))
-			goto load_loc_err;
-		if (1 != fread(&loc->column, sizeof(loc->column), 1, f))
-			goto load_loc_err;
-		if (!tapc_read_tstring(f, &loc->source))
-			goto load_loc_err;
-		if (!tapc_read_tstring(f, &loc->file))
-			goto load_loc_err;
+	if (!wrapper->source_locs) {
+		tapc_string_array_free(strings, string_count);
+		return 0;
 	}
-	return;
+	uint_cmds cursor = 0;
+	for (uint_cmds run = 0; run < run_count; run++) {
+		uint_cmds length = 0;
+		uint32_t source_id = 0;
+		uint32_t file_id = 0;
+		uint64_t line = 0;
+		uint64_t column = 0;
+		if (fread(&length, sizeof(length), 1, f) != 1 ||
+		    fread(&source_id, sizeof(source_id), 1, f) != 1 ||
+		    fread(&file_id, sizeof(file_id), 1, f) != 1 ||
+		    fread(&line, sizeof(line), 1, f) != 1 ||
+		    fread(&column, sizeof(column), 1, f) != 1 ||
+		    length == 0 || length > count - cursor ||
+		    (source_id != TAPC_NO_STRING && source_id >= string_count) ||
+		    (file_id != TAPC_NO_STRING && file_id >= string_count))
+			goto load_loc_err;
+		for (uint_cmds i = 0; i < length; i++) {
+			tsource_loc *loc = &wrapper->source_locs[cursor++];
+			loc->line = line;
+			loc->column = column;
+			loc->source = source_id == TAPC_NO_STRING ? nullptr :
+				tstring_dup(strings[source_id]);
+			loc->file = file_id == TAPC_NO_STRING ? nullptr :
+				tstring_dup(strings[file_id]);
+			if ((source_id != TAPC_NO_STRING && !loc->source) ||
+			    (file_id != TAPC_NO_STRING && !loc->file))
+				goto load_loc_err;
+		}
+	}
+	if (cursor != count)
+		goto load_loc_err;
+	tapc_string_array_free(strings, string_count);
+	return 1;
 
 load_loc_err:
+	tapc_string_array_free(strings, string_count);
 	tsource_loc_array_clear(wrapper->source_locs, wrapper->ncmds);
 	wrapper->source_locs = nullptr;
+	return 0;
 }
 
 /**
@@ -953,9 +1084,12 @@ int tanalyser_save_bin_file(const twrapper *wrapper, const char *filename)
 		fwrite(tstring_cstr(ts), 1, len_i + 1, f);
 	}
 
-	tapc_write_source_map(f, wrapper);
-
-	fclose(f);
+	int source_map_saved = tapc_write_source_map(f, wrapper);
+	int close_result = fclose(f);
+	if (!source_map_saved || close_result != 0) {
+		twarn(ErrSession_IO, "tanalyser_save_bin_file", filename);
+		return -1;
+	}
 	return 0;
 }
 
@@ -1106,7 +1240,13 @@ load_done:;
 		}
 	}
 
-	tapc_read_source_map(f, wrapper);
+	if (!tapc_read_source_map(f, wrapper)) {
+		tanalyser_clean_wrapper(wrapper);
+		fclose(f);
+		twarn(ErrSession_IO, "tanalyser_load_bin_file",
+		      "invalid or truncated source map");
+		return nullptr;
+	}
 
 	fclose(f);
 	return wrapper;

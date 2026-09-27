@@ -249,7 +249,7 @@ void tcompile_emit_import(
 		tvmcmd_vect_append(tcmds,
 				   tbycode_make_u(OP_IMPORT, (uint32_t)sloc));
 		treg_ctr_add(&cp->regctr);
-		tvmcmd_vect_append(tcmds, tbycode_make_lr(OP_POPN, 1, 0));
+		tvmcmd_vect_append(tcmds, tbycode_make_popn(1, 0, 0));
 		treg_ctr_ddt(&cp->regctr);
 	}
 	tcompile_module_interface_free(module_interface);
@@ -296,14 +296,8 @@ void clean_stk(tcp *cp, tvmcmd_vect *tcmds, int isroot, uint_regs regs_ori)
 		return;
 
 	uint_regs regs_ddt = regs_now - regs_ori;
-	tvmcmd_vect_append(
-		tcmds,
-		tbycode_make_lr(
-			OP_POPN,
-			(uint16_t)regs_ddt,
-			(uint16_t)cp->interactive
-		)
-	);
+	tvmcmd_vect_append(tcmds, tbycode_make_popn(
+		(uint16_t)regs_ddt, cp->interactive, 0));
 	treg_ctr_ddt_n(&cp->regctr, regs_ddt);
 }
 

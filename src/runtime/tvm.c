@@ -23,12 +23,6 @@
 #define VM_UNLIKELY(condition) (condition)
 #endif
 
-/*===========================================================================*
- * 1. Binary Operator Function Type
- *===========================================================================*/
-
-typedef void (*binopf)(const tobj *v1, const tobj *v2, tobj *vre);
-
 /* Comparison-aware OP_IDXR may keep a one-byte String unboxed until EQ/NE.
  * No other instruction observes this private representation. */
 #define VM_INDEXED_BYTE_NAMELOC ((uint_csts)(UNDEF_NAMELOC + 1u))
@@ -1176,94 +1170,7 @@ static inline tobj *vm_direct_slot(tcompo_env *env, uint_objs slot, uint16_t dep
 	return vm_array_slot(&owner->objs, slot);
 }
 
-typedef struct {
-	const tobj *left;
-	const tobj *right;
-	tobj *result;
-	int pop_top;
-	int fill_stack;
-} tbinop_operands;
-
-#if defined(__GNUC__) || defined(__clang__)
-__attribute__((always_inline))
-#endif
-static inline tbinop_operands vm_binop_operands(
-		tvm *vm, tbycode code, uint_regs type, tcompo_env *env)
-{
-	uint16_t left = tbycode_get_L(code);
-	uint16_t right = tbycode_get_R(code);
-	tbinop_operands operands = { 0 };
-
-	switch (type) {
-	case 0: /* value value */
-		operands.left = stk_at(vm, (uint_regs)left);
-		operands.right = stk_at(vm, (uint_regs)right);
-		operands.result = stk_at(vm, (uint_regs)right);
-		operands.pop_top = 1;
-		break;
-	case 1: /* env value */
-		operands.left = tcompo_env_get_obj(env, left);
-		operands.right = stk_at(vm, (uint_regs)right);
-		operands.result = stk_at(vm, (uint_regs)right);
-		break;
-	case 2: /* value env */
-		operands.left = stk_at(vm, (uint_regs)left);
-		operands.right = tcompo_env_get_obj(env, right);
-		operands.result = stk_at(vm, (uint_regs)left);
-		break;
-	case 3: /* env env */
-		operands.left = tcompo_env_get_obj(env, left);
-		operands.right = tcompo_env_get_obj(env, right);
-		operands.result = stk_free(vm);
-		tobj_set_nil(operands.result);
-		operands.fill_stack = 1;
-		break;
-	case 4: /* tmp value */
-		operands.left = tmp_obj(vm, left);
-		operands.right = stk_at(vm, (uint_regs)right);
-		operands.result = stk_at(vm, (uint_regs)right);
-		break;
-	case 5: /* value tmp */
-		operands.left = stk_at(vm, (uint_regs)left);
-		operands.right = tmp_obj(vm, right);
-		operands.result = stk_at(vm, (uint_regs)left);
-		break;
-	case 6: /* tmp tmp */
-		operands.left = tmp_obj(vm, left);
-		operands.right = tmp_obj(vm, right);
-		operands.result = stk_free(vm);
-		tobj_set_nil(operands.result);
-		operands.fill_stack = 1;
-		break;
-	case 7: /* env tmp */
-		operands.left = tcompo_env_get_obj(env, left);
-		operands.right = tmp_obj(vm, right);
-		operands.result = stk_free(vm);
-		tobj_set_nil(operands.result);
-		operands.fill_stack = 1;
-		break;
-	case 8: /* tmp env */
-		operands.left = tmp_obj(vm, left);
-		operands.right = tcompo_env_get_obj(env, right);
-		operands.result = stk_free(vm);
-		tobj_set_nil(operands.result);
-		operands.fill_stack = 1;
-		break;
-	default:
-		twarn(ErrRuntime_Other, "vm_parse_binop", "invalid binop type");
-	}
-	return operands;
-}
-
-static inline void vm_finish_binop(tvm *vm, tbinop_operands operands)
-{
-	if (operands.pop_top)
-		stk_popc(vm);
-	else if (operands.fill_stack)
-		stk_fill(vm);
-}
-
-/* Scalar-only fast dispatch for the two peephole binop sites. The impls
+/* Scalar-only fast dispatch for the borrowed-left peephole. The impls
  * carry the full type matrix and error paths, so this re-dispatches rather
  * than re-implements; indexed bytes keep their string-aware EQ/NE slow path. */
 static inline TVM_ALWAYS_INLINE int vm_binop_fast(
@@ -1299,10 +1206,16 @@ static inline TVM_ALWAYS_INLINE int vm_binop_fast(
 	}
 }
 
+static inline int vm_is_binop_instruction(tins instruction)
+{
+	return (instruction >= OP_ADD && instruction <= OP_OR) ||
+		instruction == OP_BAND || instruction == OP_BOR;
+}
+
 static inline int vm_apply_binop(tins instruction, const tobj *left,
 				 const tobj *right, tobj *result)
 {
-	if (instruction < OP_ADD || instruction > OP_OR)
+	if (!vm_is_binop_instruction(instruction))
 		return 0;
 	switch (instruction) {
 	case OP_ADD:
@@ -1359,9 +1272,11 @@ static inline int vm_apply_binop(tins instruction, const tobj *left,
 			operator_le_slow(left, right, result);
 		break;
 	case OP_AND:
+	case OP_BAND:
 		operator_and(left, right, result);
 		break;
 	case OP_OR:
+	case OP_BOR:
 		operator_or(left, right, result);
 		break;
 	default:
@@ -1370,28 +1285,12 @@ static inline int vm_apply_binop(tins instruction, const tobj *left,
 	return 1;
 }
 
-static inline int vm_try_fused_binop(
-		tvm *vm, tbycode code, uint_regs type, tcompo_env *env)
-{
-	tins instruction = tbycode_ins(code);
-	if (instruction < OP_ADD || instruction > OP_OR)
-		return 0;
-
-	tbinop_operands operands = vm_binop_operands(vm, code, type, env);
-	if (!vm_binop_fast(instruction, operands.left, operands.right,
-			   operands.result) &&
-	    !vm_apply_binop(instruction, operands.left, operands.right,
-			    operands.result))
-		return 0;
-	vm_finish_binop(vm, operands);
-	return 1;
-}
-
 static inline int vm_try_borrowed_left_binop(
-		tvm *vm, const tobj *left, tbycode metadata, tbycode operation)
+		tvm *vm, const tobj *left, tbycode operation)
 {
-	if (tbycode_get_U(metadata) != 0 || tbycode_get_L(operation) != 0 ||
-	    tbycode_get_R(operation) != 1 || stk_len(vm) == 0)
+	if (!vm_is_binop_instruction(tbycode_ins(operation)) ||
+	    tbycode_get_L(operation) != 0 || tbycode_get_R(operation) != 1 ||
+	    stk_len(vm) == 0)
 		return 0;
 	tins instruction = tbycode_ins(operation);
 	return vm_binop_fast(instruction, left, stk_top(vm), stk_top(vm)) ||
@@ -2887,84 +2786,6 @@ vm_import(tvm *vm, uint_csts cloc, tstring **cstrlsts, tcompo_env *env)
 	stk_fill(vm);
 }
 
-/* Binop dispatch */
-void
-vm_binop(tvm *vm, binopf f, tbycode *iter, uint_regs type, tcompo_env *env)
-{
-	uint16_t left = tbycode_get_L(*iter), right = tbycode_get_R(*iter);
-	tobj lv, rv;
-	switch (type) {
-	case 0:
-		f(stk_at(vm, left), stk_at(vm, right), stk_at(vm, right));
-		stk_pop(vm);
-		break;
-	case 1:
-		tobj_set_nil(&lv);
-		tobj_copy(&lv, tcompo_env_get_obj(env, left));
-		f(&lv, stk_at(vm, right), stk_at(vm, right));
-		tobj_ddc_ref_clear(&lv);
-		break;
-	case 2:
-		tobj_set_nil(&rv);
-		tobj_copy(&rv, tcompo_env_get_obj(env, right));
-		f(stk_at(vm, left), &rv, stk_at(vm, left));
-		tobj_ddc_ref_clear(&rv);
-		break;
-	case 3:
-		tobj_set_nil(&lv);
-		tobj_set_nil(&rv);
-		tobj_copy(&lv, tcompo_env_get_obj(env, left));
-		tobj_copy(&rv, tcompo_env_get_obj(env, right));
-		f(&lv, &rv, stk_free(vm));
-		stk_fill(vm);
-		tobj_ddc_ref_clear(&lv);
-		tobj_ddc_ref_clear(&rv);
-		break;
-	case 4:
-		tobj_set_nil(&lv);
-		tobj_copy(&lv, tmp_obj(vm, left));
-		f(&lv, stk_at(vm, right), stk_at(vm, right));
-		tobj_ddc_ref_clear(&lv);
-		break;
-	case 5:
-		tobj_set_nil(&rv);
-		tobj_copy(&rv, tmp_obj(vm, right));
-		f(stk_at(vm, left), &rv, stk_at(vm, left));
-		tobj_ddc_ref_clear(&rv);
-		break;
-	case 6:
-		tobj_set_nil(&lv);
-		tobj_set_nil(&rv);
-		tobj_copy(&lv, tmp_obj(vm, left));
-		tobj_copy(&rv, tmp_obj(vm, right));
-		f(&lv, &rv, stk_free(vm));
-		stk_fill(vm);
-		tobj_ddc_ref_clear(&lv);
-		tobj_ddc_ref_clear(&rv);
-		break;
-	case 7:
-		tobj_set_nil(&lv);
-		tobj_set_nil(&rv);
-		tobj_copy(&lv, tcompo_env_get_obj(env, left));
-		tobj_copy(&rv, tmp_obj(vm, right));
-		f(&lv, &rv, stk_free(vm));
-		stk_fill(vm);
-		tobj_ddc_ref_clear(&lv);
-		tobj_ddc_ref_clear(&rv);
-		break;
-	case 8:
-		tobj_set_nil(&lv);
-		tobj_set_nil(&rv);
-		tobj_copy(&lv, tmp_obj(vm, left));
-		tobj_copy(&rv, tcompo_env_get_obj(env, right));
-		f(&lv, &rv, stk_free(vm));
-		stk_fill(vm);
-		tobj_ddc_ref_clear(&lv);
-		tobj_ddc_ref_clear(&rv);
-		break;
-	}
-}
-
 /* Single ins execution */
 typedef struct {
 	tfunc *function;
@@ -3051,8 +2872,6 @@ static inline int vm_eval_generic_instruction(
 	return 0;
 }
 
-#undef VM_PARSE_BINOP
-
 static void tvm_resolve_error_context(
 		void *opaque, const char **source, const char **file,
 		uint64_t *line, uint64_t *column, uint_cmds *instruction)
@@ -3071,12 +2890,20 @@ static void tvm_resolve_error_context(
 	*column = location->column;
 }
 
-#define VM_PARSE_BINOP(vm, fn, code, type, env)                             \
+#define VM_PARSE_BINOP(vm, fn, code, env)                                  \
 	do {                                                                 \
-		tbinop_operands operands__ =                                  \
-			vm_binop_operands((vm), (code), (type), (env));         \
-		(fn)(operands__.left, operands__.right, operands__.result);     \
-		vm_finish_binop((vm), operands__);                              \
+		uint_regs left__ = (uint_regs)tbycode_get_L(code);          \
+		uint16_t right__ = tbycode_get_R(code);                     \
+		if (tbycode_binop_named(code)) {                             \
+			const tobj *left_value__ = vm_pushx_source(            \
+				(vm), (env), left__, tbycode_binop_address(code)); \
+			(fn)(left_value__, stk_top(vm), stk_top(vm));           \
+		} else {                                                     \
+			const tobj *left_value__ = stk_at((vm), left__);       \
+			const tobj *right_value__ = stk_at((vm), right__);     \
+			(fn)(left_value__, right_value__, stk_at((vm), right__)); \
+			stk_popc(vm);                                           \
+		}                                                            \
 	} while (0)
 
 
@@ -3107,7 +2934,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 
 	uint32_t base_frame_depth = vm->frame_len;
 	for (;;) {
-		dispatch:
+	dispatch:
 		if (i >= end) {
 			if (vm->frame_len == base_frame_depth)
 				break;
@@ -3115,58 +2942,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 			goto resume_caller;
 		}
 
-		tins instruction = tbycode_ins(cmdarr[i]);
 		tbycode *iter = &cmdarr[i];
-		/* Binary expressions commonly end in PUSHX, PUSHINFO, BINOP. The
-		 * value already on the stack is the right operand; borrow the named
-		 * left operand directly instead of retaining it only to release it
-		 * again after one operation. */
-		if (instruction == OP_PUSHX && i + 2 < end &&
-		    tbycode_ins(cmdarr[i + 1]) == OP_PUSHINFO) {
-			uint_cmds receiver_instruction = i;
-			tbycode receiver = cmdarr[i];
-			const tobj *left = vm_pushx_source(
-				vm, env, tbycode_get_L(receiver),
-				tbycode_get_R(receiver));
-			i += 2;
-			if (vm_try_borrowed_left_binop(
-				vm, left, cmdarr[i - 1], cmdarr[i])) {
-				i++;
-				continue;
-			}
-			i = receiver_instruction;
-		}
-		/* A named index receiver is emitted as PUSHX immediately followed by
-		 * IDXR or IDXL. Borrow the stable local slot for the duration of the
-		 * access so every indexable type avoids a redundant stack copy and
-		 * retain/release pair. Arbitrary receiver expressions keep the
-		 * ordinary stack path. */
-		if (instruction == OP_PUSHX && i + 1 < end &&
-		    tbycode_ins(cmdarr[i + 1]) == OP_IDXR) {
-			tbycode receiver = cmdarr[i];
-			const tobj *object = vm_pushx_source(
-				vm, env, tbycode_get_L(receiver),
-				tbycode_get_R(receiver));
-			i++;
-			vm_idxr_borrowed(
-				vm, object, cmdarr[i],
-				tvm_instruction_cache(&code_cache, i));
-			i++;
-			goto dispatch;
-		}
-		if (instruction == OP_PUSHINFO && i + 1 < end) {
-			uint_cmds metadata_instruction = i;
-			i++;
-			if (vm_try_fused_binop(vm,
-						   cmdarr[i],
-						   (uint_regs)tbycode_get_U(
-							   cmdarr[metadata_instruction]),
-						   env)) {
-				i++;
-				continue;
-			}
-			i = metadata_instruction;
-		}
 		tcall_request call;
 		switch (tbycode_ins(cmdarr[i])) {
 		case OP_PASS:
@@ -3256,7 +3032,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 		}
 		break;
 		case OP_POPN: {
-			int print = tbycode_get_R(*iter);
+			int print = tbycode_popn_print(*iter);
 			uint_regs i, n = (uint_regs)tbycode_get_L(*iter);
 			for (i = 0; i < n; i++) {
 				tvm_release_loop_iterator(vm, stk_top(vm));
@@ -3267,6 +3043,8 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 				}
 				stk_popc(vm);
 			}
+			vm_del_slots(&vm->tmps,
+				(uint_objs)tbycode_popn_temporary_count(*iter));
 		}
 		break;
 		case OP_POPCOV:
@@ -3351,6 +3129,20 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 			uint_objs loc = tbycode_get_L(*iter);
 			uint16_t addr = tbycode_get_R(*iter);
 			tobj *src = vm_pushx_source(vm, env, loc, addr);
+			if (i + 1 < end &&
+			    vm_try_borrowed_left_binop(vm, src, cmdarr[i + 1])) {
+				i++;
+				break;
+			}
+			if (i + 1 < end &&
+			    tbycode_ins(cmdarr[i + 1]) == OP_IDXR &&
+			    !tbycode_idxr_named(cmdarr[i + 1])) {
+				i++;
+				vm_idxr_borrowed(
+					vm, src, cmdarr[i],
+					tvm_instruction_cache(&code_cache, i));
+				break;
+			}
 			vm->stk[vm->stklen] = *src;
 			if (src->type == tcompo && src->val.v_tcompo)
 				src->val.v_tcompo->refctr++;
@@ -3360,7 +3152,10 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 		case OP_PUSHI: {
 			tobj v;
 			tobj_set_nil(&v);
-			vm_set_int_result(&v, cints[tbycode_get_U(*iter)]);
+			long value = tbycode_pushi_is_immediate(*iter) ?
+				tbycode_pushi_immediate_value(*iter) :
+				cints[tbycode_get_U(*iter)];
+			vm_set_int_result(&v, value);
 			stk_push(vm, &v);
 		}
 		break;
@@ -3418,7 +3213,16 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 			vm_import(vm, (uint_csts)tbycode_get_U(*iter), cstrs, env);
 			break;
 		case OP_IDXR:
-			vm_idxr(vm, *iter, tvm_instruction_cache(&code_cache, i));
+			if (tbycode_idxr_named(*iter)) {
+				const tobj *object = vm_pushx_source(
+					vm, env, tbycode_idxr_named_slot(*iter),
+					tbycode_idxr_named_address(*iter));
+				vm_idxr_borrowed(
+					vm, object, *iter,
+					tvm_instruction_cache(&code_cache, i));
+			} else
+				vm_idxr(vm, *iter,
+					tvm_instruction_cache(&code_cache, i));
 			break;
 		case OP_EVALSF: {
 			int direct = tbycode_get_i(*iter) != 0;
@@ -3618,105 +3422,71 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 		}
 		break;
 		case OP_ADD: {
-			uint_regs type = (uint_regs)stk_top(vm)->val.v_tint;
-			stk_popc(vm);
-			VM_PARSE_BINOP(vm, operator_add, *iter, type, env);
+			VM_PARSE_BINOP(vm, operator_add, *iter, env);
 		}
 		break;
 		case OP_SUB: {
-			uint_regs type = (uint_regs)stk_top(vm)->val.v_tint;
-			stk_popc(vm);
-			VM_PARSE_BINOP(vm, operator_sub, *iter, type, env);
+			VM_PARSE_BINOP(vm, operator_sub, *iter, env);
 		}
 		break;
 		case OP_MUL: {
-			uint_regs type = (uint_regs)stk_top(vm)->val.v_tint;
-			stk_popc(vm);
-			VM_PARSE_BINOP(vm, operator_mul, *iter, type, env);
+			VM_PARSE_BINOP(vm, operator_mul, *iter, env);
 		}
 		break;
 		case OP_DIV: {
-			uint_regs type = (uint_regs)stk_top(vm)->val.v_tint;
-			stk_popc(vm);
-			VM_PARSE_BINOP(vm, operator_div, *iter, type, env);
+			VM_PARSE_BINOP(vm, operator_div, *iter, env);
 		}
 		break;
 		case OP_MOD: {
-			uint_regs type = (uint_regs)stk_top(vm)->val.v_tint;
-			stk_popc(vm);
-			VM_PARSE_BINOP(vm, operator_mod, *iter, type, env);
+			VM_PARSE_BINOP(vm, operator_mod, *iter, env);
 		}
 		break;
 		case OP_POW: {
-			uint_regs type = (uint_regs)stk_top(vm)->val.v_tint;
-			stk_popc(vm);
-			VM_PARSE_BINOP(vm, operator_pow, *iter, type, env);
+			VM_PARSE_BINOP(vm, operator_pow, *iter, env);
 		}
 		break;
 		case OP_MMUL: {
-			uint_regs type = (uint_regs)stk_top(vm)->val.v_tint;
-			stk_popc(vm);
-			VM_PARSE_BINOP(vm, operator_mmul, *iter, type, env);
+			VM_PARSE_BINOP(vm, operator_mmul, *iter, env);
 		}
 		break;
 		case OP_EQ: {
-			uint_regs type = (uint_regs)stk_top(vm)->val.v_tint;
-			stk_popc(vm);
-			VM_PARSE_BINOP(vm, operator_eq, *iter, type, env);
+			VM_PARSE_BINOP(vm, operator_eq, *iter, env);
 		}
 		break;
 		case OP_NE: {
-			uint_regs type = (uint_regs)stk_top(vm)->val.v_tint;
-			stk_popc(vm);
-			VM_PARSE_BINOP(vm, operator_ne, *iter, type, env);
+			VM_PARSE_BINOP(vm, operator_ne, *iter, env);
 		}
 		break;
 		case OP_GE: {
-			uint_regs type = (uint_regs)stk_top(vm)->val.v_tint;
-			stk_popc(vm);
-			VM_PARSE_BINOP(vm, operator_ge, *iter, type, env);
+			VM_PARSE_BINOP(vm, operator_ge, *iter, env);
 		}
 		break;
 		case OP_SG: {
-			uint_regs type = (uint_regs)stk_top(vm)->val.v_tint;
-			stk_popc(vm);
-			VM_PARSE_BINOP(vm, operator_sg, *iter, type, env);
+			VM_PARSE_BINOP(vm, operator_sg, *iter, env);
 		}
 		break;
 		case OP_LE: {
-			uint_regs type = (uint_regs)stk_top(vm)->val.v_tint;
-			stk_popc(vm);
-			VM_PARSE_BINOP(vm, operator_le, *iter, type, env);
+			VM_PARSE_BINOP(vm, operator_le, *iter, env);
 		}
 		break;
 		case OP_SL: {
-			uint_regs type = (uint_regs)stk_top(vm)->val.v_tint;
-			stk_popc(vm);
-			VM_PARSE_BINOP(vm, operator_sl, *iter, type, env);
+			VM_PARSE_BINOP(vm, operator_sl, *iter, env);
 		}
 		break;
 		case OP_AND: {
-			uint_regs type = (uint_regs)stk_top(vm)->val.v_tint;
-			stk_popc(vm);
-			VM_PARSE_BINOP(vm, operator_and, *iter, type, env);
+			VM_PARSE_BINOP(vm, operator_and, *iter, env);
 		}
 		break;
 		case OP_OR: {
-			uint_regs type = (uint_regs)stk_top(vm)->val.v_tint;
-			stk_popc(vm);
-			VM_PARSE_BINOP(vm, operator_or, *iter, type, env);
+			VM_PARSE_BINOP(vm, operator_or, *iter, env);
 		}
 		break;
 		case OP_BAND: {
-			uint_regs type = (uint_regs)stk_top(vm)->val.v_tint;
-			stk_popc(vm);
-			VM_PARSE_BINOP(vm, operator_and, *iter, type, env);
+			VM_PARSE_BINOP(vm, operator_and, *iter, env);
 		}
 		break;
 		case OP_BOR: {
-			uint_regs type = (uint_regs)stk_top(vm)->val.v_tint;
-			stk_popc(vm);
-			VM_PARSE_BINOP(vm, operator_or, *iter, type, env);
+			VM_PARSE_BINOP(vm, operator_or, *iter, env);
 		}
 		break;
 		case OP_POS:

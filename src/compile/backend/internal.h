@@ -44,6 +44,8 @@ void tcompile_ast_module(tcp *cp, const tstring *source,
 
 void compile_emit_reference(tcp *cp, const tstring *name,
 			    tvmcmd_vect *instructions, tconsts *constants);
+int compile_reference_address(tcp *cp, const tstring *name,
+			      uint16_t *slot, uint16_t *address);
 void tcompile_emit_import(tcp *cp, const tstring *path,
 			  const tstring *alias, tvmcmd_vect *instructions,
 			  tconsts *constants, tstring **paths,

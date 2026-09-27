@@ -60,6 +60,21 @@ static void emit_name(tast_emitter *emitter, const tast_node *node)
 	tstring_free(name);
 }
 
+static int compact_named_address(tast_emitter *emitter, tast_id id,
+				 uint16_t *slot, uint16_t *address)
+{
+	const tast_node *node = tast_get(emitter->arena, id);
+	if (!node || node->kind != tast_name)
+		return 0;
+	tstring *name = tast_emitter_text(emitter, node->span);
+	int found = strcmp(tstring_cstr(name), "this") != 0 &&
+		strcmp(tstring_cstr(name), "base") != 0 &&
+		compile_reference_address(
+			emitter->cp, name, slot, address);
+	tstring_free(name);
+	return found;
+}
+
 /* A call whose callee resolves to an immutable preloaded native binding can
  * use a kind-specific opcode. The binding metadata comes from the actual
  * preload library, so standard-library and host-extension functions follow
@@ -101,9 +116,15 @@ static void emit_number(tast_emitter *emitter, const tast_node *node)
 		if (!str_to_long_int(literal, &value))
 			twarn(ErrCompile_InvalidLiter, "emit_number",
 			      tstring_cstr(literal));
-		uint_csts index = tconsts_add_int_const(emitter->constants, value);
-		tvmcmd_vect_append(emitter->instructions,
-				   tbycode_make_u(OP_PUSHI, index));
+		if (tbycode_pushi_immediate_fits(value))
+			tvmcmd_vect_append(emitter->instructions,
+				tbycode_make_pushi_immediate(value));
+		else {
+			uint_csts index = tconsts_add_int_const(
+				emitter->constants, value);
+			tvmcmd_vect_append(emitter->instructions,
+				tbycode_make_u(OP_PUSHI, index));
+		}
 	} else {
 		double value = 0.0;
 		if (!str_to_float(literal, &value))
@@ -257,35 +278,56 @@ static void emit_binary(tast_emitter *emitter, const tast_node *node)
 		return;
 	}
 
-    if (instruction == OP_IN) {
-        tast_id id = (tast_id)(node - emitter->arena->nodes);
-        const tast_node *owner = tast_get(emitter->arena, tcontrol_enclosing_function(&emitter->frontend->flow, id));
-        if (owner && owner->kind == tast_rule) {
-            uint32_t slot = source_logic_index(emitter, id);
-            tast_emit_expression(emitter, node->binary.right);
-            tvmcmd_vect_append(emitter->instructions, tbycode_make_u(OP_RULEVALUE, slot + 2));
-            tast_emit_expression(emitter, node->binary.left);
-            tvmcmd_vect_append(emitter->instructions, tbycode_make_u(OP_RULEVALUE, slot + 1));
-            tvmcmd_vect_append(emitter->instructions, tbycode_make(OP_IN));
-            treg_ctr_ddt(&emitter->cp->regctr);
-            tvmcmd_vect_append(emitter->instructions, tbycode_make_u(OP_RULEVALUE, slot));
-            return;
-        }
+	if (instruction == OP_IN) {
+		tast_id id = (tast_id)(node - emitter->arena->nodes);
+		const tast_node *owner = tast_get(
+			emitter->arena, tcontrol_enclosing_function(
+				&emitter->frontend->flow, id));
+		if (owner && owner->kind == tast_rule) {
+			uint32_t slot = source_logic_index(emitter, id);
+			tast_emit_expression(emitter, node->binary.right);
+			tvmcmd_vect_append(emitter->instructions,
+				tbycode_make_u(OP_RULEVALUE, slot + 2));
+			tast_emit_expression(emitter, node->binary.left);
+			tvmcmd_vect_append(emitter->instructions,
+				tbycode_make_u(OP_RULEVALUE, slot + 1));
+			tvmcmd_vect_append(emitter->instructions,
+				tbycode_make(OP_IN));
+			treg_ctr_ddt(&emitter->cp->regctr);
+			tvmcmd_vect_append(emitter->instructions,
+				tbycode_make_u(OP_RULEVALUE, slot));
+			return;
+		}
 	}
 	/* The VM's binary convention places the left operand at the stack top. */
 	int comparison = instruction == OP_EQ || instruction == OP_NE;
-	emit_binary_operand(emitter, node->binary.right, comparison);
-	emit_binary_operand(emitter, node->binary.left, comparison);
+	if (instruction >= OP_ADD && instruction <= OP_BOR) {
+		uint16_t slot = 0;
+		uint16_t address = 0;
+
+		/* Resolve the left operand after emitting the right one. Emission can
+		 * add compiler temporaries, so resolving it earlier would not match
+		 * the slot selected by the ordinary PUSHX path. */
+		emit_binary_operand(emitter, node->binary.right, comparison);
+		if (compact_named_address(emitter, node->binary.left,
+					  &slot, &address) &&
+		    address <= TBYCODE_BINOP_ADDRESS_MAX) {
+			tvmcmd_vect_append(emitter->instructions,
+				tbycode_make_named_binop(
+					(tins)instruction, slot, address));
+			return;
+		}
+		emit_binary_operand(emitter, node->binary.left, comparison);
+	} else {
+		emit_binary_operand(emitter, node->binary.right, comparison);
+		emit_binary_operand(emitter, node->binary.left, comparison);
+	}
 	if (instruction == OP_IN || instruction == OP_PAIR || instruction == OP_TO) {
 		tvmcmd_vect_append(emitter->instructions,
 				   tbycode_make((uint8_t)instruction));
 	} else {
 		tvmcmd_vect_append(emitter->instructions,
-				   tbycode_make_u(OP_PUSHINFO, 0));
-		treg_ctr_add(&emitter->cp->regctr);
-		tvmcmd_vect_append(emitter->instructions,
 				   tbycode_make_lr((uint8_t)instruction, 0, 1));
-		treg_ctr_ddt(&emitter->cp->regctr);
 	}
 	treg_ctr_ddt_n(&emitter->cp->regctr, 2);
 	treg_ctr_add(&emitter->cp->regctr);
@@ -447,9 +489,8 @@ static void emit_slice_bounds(tast_emitter *emitter, const tast_node *node,
 	if (argument->slice.has_start)
 		tast_emit_expression(emitter, argument->slice.start);
 	else {
-		uint_csts zero = tconsts_add_int_const(emitter->constants, 0);
 		tvmcmd_vect_append(emitter->instructions,
-			tbycode_make_u(OP_PUSHI, zero));
+			tbycode_make_pushi_immediate(0));
 		treg_ctr_add(&emitter->cp->regctr);
 	}
 }
@@ -465,13 +506,29 @@ static void emit_index(tast_emitter *emitter, const tast_node *node,
 			tast_get(emitter->arena, children[0]);
 		if (argument && argument->kind == tast_slice) {
 			emit_slice_bounds(emitter, node, argument);
-			tast_emit_expression(emitter, node->aggregate.receiver);
-			uint32_t operand = 2u | TBYCODE_IDXR_SLICE_FLAG;
-			if (comparison_hint)
-				operand |= TBYCODE_IDXR_COMPARE_FLAG;
-			tvmcmd_vect_append(emitter->instructions,
-					   tbycode_make_u(OP_IDXR, operand));
-			treg_ctr_ddt_n(&emitter->cp->regctr, 3);
+			uint16_t receiver_slot = 0;
+			uint16_t receiver_address = 0;
+			int direct_receiver = compact_named_address(
+				emitter, node->aggregate.receiver, &receiver_slot,
+				&receiver_address) &&
+				receiver_address <=
+					TBYCODE_IDXR_NAMED_ADDRESS_MAX;
+			if (direct_receiver)
+				tvmcmd_vect_append(emitter->instructions,
+					tbycode_make_named_idxr(receiver_slot,
+						receiver_address, 2, 1,
+						comparison_hint));
+			else {
+				tast_emit_expression(
+					emitter, node->aggregate.receiver);
+				uint32_t operand = 2u | TBYCODE_IDXR_SLICE_FLAG;
+				if (comparison_hint)
+					operand |= TBYCODE_IDXR_COMPARE_FLAG;
+				tvmcmd_vect_append(emitter->instructions,
+					tbycode_make_u(OP_IDXR, operand));
+			}
+			treg_ctr_ddt_n(&emitter->cp->regctr,
+				direct_receiver ? 2 : 3);
 			treg_ctr_add(&emitter->cp->regctr);
 			return;
 		}
@@ -487,14 +544,30 @@ static void emit_index(tast_emitter *emitter, const tast_node *node,
 		treg_ctr_ddt_n(&emitter->cp->regctr, 2);
 		treg_ctr_add(&emitter->cp->regctr);
 	}
-	tast_emit_expression(emitter, node->aggregate.receiver);
-	uint32_t operand = node->aggregate.count;
-	if (comparison_hint)
-		operand |= TBYCODE_IDXR_COMPARE_FLAG;
-	tvmcmd_vect_append(emitter->instructions,
-			   tbycode_make_u(OP_IDXR, operand));
+	/* Resolve the receiver only after its arguments have been emitted. This
+	 * deliberately mirrors the ordinary PUSHX path because argument emission
+	 * may allocate compiler temporaries and move the receiver's slot. */
+	uint16_t receiver_slot = 0;
+	uint16_t receiver_address = 0;
+	int direct_receiver =
+		node->aggregate.count <= TBYCODE_IDXR_NAMED_COUNT_MAX &&
+		compact_named_address(emitter, node->aggregate.receiver,
+			&receiver_slot, &receiver_address) &&
+		receiver_address <= TBYCODE_IDXR_NAMED_ADDRESS_MAX;
+	if (direct_receiver)
+		tvmcmd_vect_append(emitter->instructions,
+			tbycode_make_named_idxr(receiver_slot, receiver_address,
+				node->aggregate.count, 0, comparison_hint));
+	else {
+		tast_emit_expression(emitter, node->aggregate.receiver);
+		uint32_t operand = node->aggregate.count;
+		if (comparison_hint)
+			operand |= TBYCODE_IDXR_COMPARE_FLAG;
+		tvmcmd_vect_append(emitter->instructions,
+			tbycode_make_u(OP_IDXR, operand));
+	}
 	treg_ctr_ddt_n(&emitter->cp->regctr,
-			  (uint_regs)(node->aggregate.count + 1));
+		(uint_regs)(node->aggregate.count + (direct_receiver ? 0 : 1)));
 	treg_ctr_add(&emitter->cp->regctr);
 }
 

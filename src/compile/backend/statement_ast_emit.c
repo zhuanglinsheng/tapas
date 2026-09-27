@@ -35,6 +35,15 @@ static void loop_tmp_base_pop(tcp *cp)
 		cp->loop_tmp_base_count--;
 }
 
+static void emit_temporary_cleanup(tvmcmd_vect *instructions,
+				   uint_objs count)
+{
+	if (count == 0)
+		return;
+	tvmcmd_vect_append(instructions,
+		tbycode_make_u(OP_TMPDEL, (uint32_t)count));
+}
+
 static void emit_loop_body_cleanup(tast_emitter *emitter)
 {
 	tcp *cp = emitter->cp;
@@ -42,9 +51,7 @@ static void emit_loop_body_cleanup(tast_emitter *emitter)
 		return;
 	uint_objs base = cp->loop_tmp_bases[cp->loop_tmp_base_count - 1];
 	uint_objs live = tobj_ctr_obj_len_cur(&cp->tmpctr) - base;
-	if (live > 0)
-		tvmcmd_vect_append(
-			emitter->instructions, tbycode_make_u(OP_TMPDEL, live));
+	emit_temporary_cleanup(emitter->instructions, live);
 }
 
 static void sync_initialization(tast_emitter *emitter)
@@ -238,9 +245,8 @@ void tast_emit_block(tast_emitter *emitter, const tast_node *block, int inblk)
 		tobj_ctr_obj_len_all(&emitter->cp->tmpctr) - original_temporaries;
 	if (new_temporaries > 0) {
 		tobj_ctr_obj_del_last_n(&emitter->cp->tmpctr, new_temporaries);
-		tvmcmd_vect_append(
-			emitter->instructions,
-			tbycode_make_u(OP_TMPDEL, (uint32_t)new_temporaries));
+		emit_temporary_cleanup(
+			emitter->instructions, new_temporaries);
 	}
 }
 
@@ -419,16 +425,20 @@ static void emit_for(tast_emitter *emitter, const tast_node *statement)
 		outer, body_start, body_start + tvmcmd_vect_size32(&body),
 		loop_start, tvmcmd_vect_size32(outer),
 		TCOMPILE_CONTINUE_MARK, TCOMPILE_BREAK_MARK);
-	tvmcmd_vect_append(outer, tbycode_make_lr(OP_POPN, 1, 0));
+	uint_objs new_temporaries =
+		tobj_ctr_obj_len_cur(&emitter->cp->tmpctr) - original_temporaries;
+	uint16_t folded_temporaries =
+		new_temporaries <= TBYCODE_POPN_TMP_MAX ?
+			(uint16_t)new_temporaries : 0;
+	tvmcmd_vect_append(outer,
+		tbycode_make_popn(1, 0, folded_temporaries));
 	treg_ctr_ddt(&emitter->cp->regctr);
 	emitter->cp->loop_stack_depth--;
 
-	uint_objs new_temporaries =
-		tobj_ctr_obj_len_cur(&emitter->cp->tmpctr) - original_temporaries;
 	if (new_temporaries > 0) {
 		tobj_ctr_obj_del_last_n(&emitter->cp->tmpctr, new_temporaries);
-		tvmcmd_vect_append(
-			outer, tbycode_make_u(OP_TMPDEL, (uint32_t)new_temporaries));
+		if (folded_temporaries == 0)
+			emit_temporary_cleanup(outer, new_temporaries);
 	}
 	tvmcmd_vect_free(&body);
 }

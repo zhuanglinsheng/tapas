@@ -16,12 +16,6 @@ extern "C" {
 #endif
 
 
-/*===========================================================================*
- * 1. Binary Operation Function Type
- *===========================================================================*/
-
-typedef void (*binopf)(const tobj *v1, const tobj *v2, tobj *vre);
-
 typedef struct {
 	long  pos;
 	long  range_start;
@@ -60,7 +54,7 @@ typedef struct {
 
 
 /*===========================================================================*
- * 2. Virtual Machine (tvm)
+ * 1. Virtual Machine (tvm)
  *===========================================================================*/
 
 typedef struct tvm {
@@ -96,7 +90,7 @@ void tvm_clean(tvm *vm);
 
 
 /*===========================================================================*
- * 3. Temp Object Management
+ * 2. Temp Object Management
  *===========================================================================*/
 
 tobj *tmp_obj(tvm *vm, uint_objs loc);
@@ -105,7 +99,7 @@ void tmp_del(tvm *vm, uint_objs n);
 
 
 /*===========================================================================*
- * 4. VM Operations — cstrlsts now uses tstring
+ * 3. VM Operations — cstrlsts now uses tstring
  *===========================================================================*/
 
 void vm_eval(tvm *vm, tbycode *iter, tcompo_env *env);
@@ -113,11 +107,10 @@ void tvm_call(tvm *vm, const tobj *callable, tobj *arguments,
 	      uint_regs argument_count, tcompo_env *environment,
 	      tobj *result);
 void vm_import(tvm *vm, uint_csts cloc, tstring **cstrlsts, tcompo_env *env);
-void vm_binop(tvm *vm, binopf f, tbycode *iter, uint_regs type, tcompo_env *env);
 
 
 /*===========================================================================*
- * 5. Instruction Execution
+ * 4. Instruction Execution
  *===========================================================================*/
 
 void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env);

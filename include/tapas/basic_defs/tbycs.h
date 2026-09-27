@@ -136,6 +136,29 @@ static inline uint8_t tbycode_get_i(tbycode c)
 #define TVCRT_ENV_FLAG  UINT16_C(1)
 #define TVCRT_INIT_FLAG UINT16_C(2)
 
+/* OP_POPN keeps printing in bit 0 and uses the remaining R bits to fold an
+ * immediately following temporary-slot cleanup into the same instruction. */
+#define TBYCODE_POPN_PRINT_FLAG UINT16_C(1)
+#define TBYCODE_POPN_TMP_MAX    UINT16_C(4095)
+
+static inline tbycode tbycode_make_popn(uint16_t count, int print,
+					 uint16_t temporary_count)
+{
+	return tbycode_make_lr(OP_POPN, count,
+		(uint16_t)((temporary_count << 1) |
+			(print ? TBYCODE_POPN_PRINT_FLAG : 0)));
+}
+
+static inline int tbycode_popn_print(tbycode c)
+{
+	return (tbycode_get_R(c) & TBYCODE_POPN_PRINT_FLAG) != 0;
+}
+
+static inline uint16_t tbycode_popn_temporary_count(tbycode c)
+{
+	return (uint16_t)(tbycode_get_R(c) >> 1);
+}
+
 /* OP_IDXR reserves the high U bit as a representation hint when the indexed
  * value is consumed immediately by equality or inequality. The language-level
  * result remains unchanged; the VM masks the hint before reading the argument
@@ -149,10 +172,20 @@ static inline uint8_t tbycode_get_i(tbycode c)
  * must stay inside the U field's 26 bits; bit 25 is the compare hint. */
 #define TBYCODE_IDXR_SLICE_FLAG UINT32_C(0x01000000)
 
+/* Named receivers use bit 23 and repack the lower payload as a 13-bit slot,
+ * 7-bit compact OP_PUSHX address and 3-bit parameter count. */
+#define TBYCODE_IDXR_NAMED_FLAG UINT32_C(0x00800000)
+#define TBYCODE_IDXR_NAMED_COUNT_MAX UINT32_C(7)
+#define TBYCODE_IDXR_NAMED_ADDRESS_MAX UINT16_C(127)
+
 static inline uint32_t tbycode_idxr_count(tbycode c)
 {
+	if (tbycode_get_U(c) & TBYCODE_IDXR_NAMED_FLAG)
+		return (tbycode_get_U(c) >> 20) &
+			TBYCODE_IDXR_NAMED_COUNT_MAX;
 	return tbycode_get_U(c) & ~(TBYCODE_IDXR_COMPARE_FLAG |
-				    TBYCODE_IDXR_SLICE_FLAG);
+				    TBYCODE_IDXR_SLICE_FLAG |
+				    TBYCODE_IDXR_NAMED_FLAG);
 }
 
 static inline int tbycode_idxr_compare(tbycode c)
@@ -163,6 +196,85 @@ static inline int tbycode_idxr_compare(tbycode c)
 static inline int tbycode_idxr_slice(tbycode c)
 {
 	return (tbycode_get_U(c) & TBYCODE_IDXR_SLICE_FLAG) != 0;
+}
+
+static inline int tbycode_idxr_named(tbycode c)
+{
+	return (tbycode_get_U(c) & TBYCODE_IDXR_NAMED_FLAG) != 0;
+}
+
+static inline tbycode tbycode_make_named_idxr(uint16_t slot,
+					       uint16_t address, uint32_t count,
+					       int slice, int comparison)
+{
+	uint32_t payload = (uint32_t)slot | ((uint32_t)address << 13) |
+		(count << 20) | TBYCODE_IDXR_NAMED_FLAG;
+	if (slice)
+		payload |= TBYCODE_IDXR_SLICE_FLAG;
+	if (comparison)
+		payload |= TBYCODE_IDXR_COMPARE_FLAG;
+	return tbycode_make_u(OP_IDXR, payload);
+}
+
+static inline uint16_t tbycode_idxr_named_slot(tbycode c)
+{
+	return (uint16_t)(tbycode_get_U(c) & UINT32_C(0x1fff));
+}
+
+static inline uint16_t tbycode_idxr_named_address(tbycode c)
+{
+	return (uint16_t)((tbycode_get_U(c) >> 13) & UINT32_C(0x7f));
+}
+
+/* Binary instructions reserve the high R bit for a named left operand. The
+ * remaining 12 address bits still cover capture depths through 1023. */
+#define TBYCODE_BINOP_NAMED_FLAG UINT16_C(0x1000)
+#define TBYCODE_BINOP_ADDRESS_MAX UINT16_C(0x0fff)
+
+static inline tbycode tbycode_make_named_binop(tins instruction,
+						uint16_t slot,
+						uint16_t address)
+{
+	return tbycode_make_lr((uint8_t)instruction, slot,
+		(uint16_t)(TBYCODE_BINOP_NAMED_FLAG | address));
+}
+
+static inline int tbycode_binop_named(tbycode c)
+{
+	return (tbycode_get_R(c) & TBYCODE_BINOP_NAMED_FLAG) != 0;
+}
+
+static inline uint16_t tbycode_binop_address(tbycode c)
+{
+	return (uint16_t)(tbycode_get_R(c) & TBYCODE_BINOP_ADDRESS_MAX);
+}
+
+#define TBYCODE_PUSHI_IMMEDIATE_FLAG UINT32_C(0x02000000)
+#define TBYCODE_PUSHI_IMMEDIATE_MIN (-16777216L)
+#define TBYCODE_PUSHI_IMMEDIATE_MAX 16777215L
+
+static inline int tbycode_pushi_immediate_fits(long value)
+{
+	return value >= TBYCODE_PUSHI_IMMEDIATE_MIN &&
+		value <= TBYCODE_PUSHI_IMMEDIATE_MAX;
+}
+
+static inline tbycode tbycode_make_pushi_immediate(long value)
+{
+	return tbycode_make_u(OP_PUSHI, TBYCODE_PUSHI_IMMEDIATE_FLAG |
+		((uint32_t)value & UINT32_C(0x01ffffff)));
+}
+
+static inline int tbycode_pushi_is_immediate(tbycode c)
+{
+	return (tbycode_get_U(c) & TBYCODE_PUSHI_IMMEDIATE_FLAG) != 0;
+}
+
+static inline long tbycode_pushi_immediate_value(tbycode c)
+{
+	uint32_t value = tbycode_get_U(c) & UINT32_C(0x01ffffff);
+	return (value & (UINT32_C(1) << 24)) ?
+		(long)value - 33554432L : (long)value;
 }
 
 /**

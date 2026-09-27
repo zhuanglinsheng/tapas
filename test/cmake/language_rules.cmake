@@ -563,11 +563,29 @@ if(loopas_position EQUAL -1)
     message(FATAL_ERROR
         "Loop bytecode is missing OP_LOOPAS:\n${runtime_cache_bytecode_output}")
 endif()
-string(FIND "${runtime_cache_bytecode_output}" "OP_IDXR     1  compare"
+string(FIND "${runtime_cache_bytecode_output}" "OP_IDXR     1  named"
     string_index_position)
 if(string_index_position EQUAL -1)
     message(FATAL_ERROR
-        "String-index comparison bytecode is missing the generic OP_IDXR comparison hint:\n${runtime_cache_bytecode_output}")
+        "Named string-index bytecode is missing direct IDXR addressing:\n${runtime_cache_bytecode_output}")
+endif()
+string(FIND "${runtime_cache_bytecode_output}" "OP_ADD      1  named"
+    compact_binary_position)
+if(compact_binary_position EQUAL -1)
+    message(FATAL_ERROR
+        "Named binary bytecode is missing its compact ADD:\n${runtime_cache_bytecode_output}")
+endif()
+string(FIND "${runtime_cache_bytecode_output}" "immediate"
+    compact_integer_position)
+if(compact_integer_position EQUAL -1)
+    message(FATAL_ERROR
+        "Small integer bytecode is missing immediate PUSHI:\n${runtime_cache_bytecode_output}")
+endif()
+string(FIND "${runtime_cache_bytecode_output}" "tmp=1"
+    combined_cleanup_position)
+if(combined_cleanup_position EQUAL -1)
+    message(FATAL_ERROR
+        "Loop cleanup bytecode did not combine POPN and TMPDEL:\n${runtime_cache_bytecode_output}")
 endif()
 string(FIND "${runtime_cache_bytecode_output}" "OP_EVALCF" native_call_position)
 if(native_call_position EQUAL -1)
@@ -583,6 +601,30 @@ string(FIND "${runtime_cache_bytecode_output}" "OP_EVAL     1" aliased_call_posi
 if(aliased_call_position EQUAL -1)
     message(FATAL_ERROR
         "Aliased native call bytecode should retain generic OP_EVAL:\n${runtime_cache_bytecode_output}")
+endif()
+
+execute_process(
+    COMMAND "${TAPAS}" "${REGRESSION_DIR}/compact_bytecode_fallback.tap"
+    RESULT_VARIABLE compact_fallback_result
+    OUTPUT_VARIABLE compact_fallback_output
+    ERROR_VARIABLE compact_fallback_error
+)
+if(NOT compact_fallback_result EQUAL 0)
+    message(FATAL_ERROR
+        "Compact-bytecode fallback fixture failed (${compact_fallback_result}):\n"
+        "${compact_fallback_output}${compact_fallback_error}")
+endif()
+string(FIND "${compact_fallback_output}" "OP_IDXR     8"
+    wide_index_fallback_position)
+if(wide_index_fallback_position EQUAL -1)
+    message(FATAL_ERROR
+        "Wide named index did not retain the generic IDXR fallback:\n${compact_fallback_output}")
+endif()
+string(FIND "${compact_fallback_output}" "OP_PUSHI    0"
+    large_integer_fallback_position)
+if(large_integer_fallback_position EQUAL -1)
+    message(FATAL_ERROR
+        "Large integer did not retain the constant-pool PUSHI fallback:\n${compact_fallback_output}")
 endif()
 
 execute_process(

@@ -34,6 +34,7 @@ The compiled bytecode wrapper contains:
 
 The compiler has already assigned ordinary names to slots, so the virtual machine does not look them up by source name during variable access.
 A wrapper can be executed immediately or saved as a `.tapc` file and loaded later; see [Usage](Usage_en.md#compile-and-run-bytecode) for the corresponding commands.
+Inside a `.tapc` file, the source map uses a shared string table and stores consecutive identical locations as one run. Loading restores the complete per-instruction locations, including 64-bit line and column values and nullable source and file fields, so compression does not change runtime error locations or context.
 
 ## Runtime State
 
@@ -141,6 +142,10 @@ Instructions broadly cover:
 - Rule construction, Conditions, and child Requirements;
 - indexed reads, indexed writes, and imports;
 - arithmetic, comparison, logical, and matrix operations.
+
+For ordinary binary operations, the two operands directly encode the left and right runtime-stack offsets; an extra `PUSHINFO 0` is no longer used to describe stack-to-stack mode. `PUSHINFO` remains in use for the object-slot, temporary-slot, stack-capacity, and parameter-count metadata needed when creating functions.
+
+When a binary expression's left operand is a compactly addressable temporary, local, or captured name, the binary instruction stores that named slot directly in its own operands; `IDXR` can likewise address a named receiver. `PUSHI` embeds common small integers in the instruction, and a linear `for` exit can use one `POPN` to release both stack values and temporary slots. Capture depths, index counts, integers, and cleanup counts outside the compact ranges retain their original instruction sequences and the VM keeps the corresponding fusion paths, so fallback does not reduce language capability.
 
 Opcodes evolve with the implementation.
 The complete enumeration is defined by [`tins`](../include/tapas/basic_defs/tbasis.h), while the [bytecode interface](../include/tapas/basic_defs/tbycs.h) defines operand layouts and wrapper structures.
