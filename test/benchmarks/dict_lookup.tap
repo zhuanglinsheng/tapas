@@ -1,0 +1,14 @@
+let values = {}
+for (let index in 0 to 4096) {
+    values[index] = index % 97
+}
+
+let started = clock_ns()
+let result = 0
+for (let index in 0 to 1000000) {
+    result = result + values[index % 4096]
+}
+let elapsed = clock_ns() - started
+
+print(result)
+print(elapsed)

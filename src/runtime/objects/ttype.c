@@ -2290,6 +2290,32 @@ static void type_index(void *self, const tobj *arguments,
 	ttypeval_idx((ttypeval *)self, arguments, argument_count, result);
 }
 
+static int type_try_index(void *self, const tobj *arguments,
+			  uint_regs argument_count, tobj *result)
+{
+	ttypeval *type = (ttypeval *)ttype_unwrap((ttypeval *)self);
+	if (argument_count != 1)
+		twarn(ErrRuntime_ParamsCtr, "idx_or", "Type needs one key");
+	if (!type || (type->kind != ttype_kind_fields &&
+	    type->kind != ttype_kind_enum) || arguments[0].type != tcompo ||
+	    tobj_compo_type(&arguments[0]) != compo_tstr)
+		twarn(ErrRuntime_ParamsType, "idx_or", "Type needs a String member");
+	if (type->kind == ttype_kind_enum) {
+		const tstring *member = ((const tstr *)
+			arguments[0].val.v_tcompo)->data;
+		if (!ttypeval_enum_contains(type, member))
+			return 0;
+		tobj_set_compo(result,
+			(tcompo_v *)tstr_new(tstring_cstr(member)));
+		return 1;
+	}
+	const tobj *value = thashtbl_get(type->definition, &arguments[0]);
+	if (!value)
+		return 0;
+	tobj_copy(result, value);
+	return 1;
+}
+
 static int type_next(void *self, long *position, tobj *result)
 {
 	return ttypeval_next_key((ttypeval *)self, position, result);
@@ -2297,6 +2323,7 @@ static int type_next(void *self, long *position, tobj *result)
 
 static const tcompo_capabilities type_capabilities = {
 	.indexable = type_index,
+	.try_indexable = type_try_index,
 	.iterable = type_next
 };
 

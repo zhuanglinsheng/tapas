@@ -15,6 +15,7 @@ void tobj_vec_init(tobj_vec *v)
 	v->data = nullptr;
 	v->len = 0;
 	v->capacity = 0;
+	v->compo_count = 0;
 	v->embedded = 0;
 }
 
@@ -23,6 +24,7 @@ void tobj_vec_init_cap(tobj_vec *v, uint_count cap)
 	v->data = nullptr;
 	v->len = 0;
 	v->capacity = 0;
+	v->compo_count = 0;
 	v->embedded = 0;
 	if (cap)
 		tobj_vec_reserve(v, cap);
@@ -31,15 +33,17 @@ void tobj_vec_init_cap(tobj_vec *v, uint_count cap)
 void tobj_vec_free(tobj_vec *v)
 {
 	if (v->data) {
-		for (uint_count i = 0; i < v->len; i++)
-			if (v->data[i].type == tcompo)
-				tobj_ddc_ref_clear(&v->data[i]);
+		if (v->compo_count)
+			for (uint_count i = 0; i < v->len; i++)
+				if (v->data[i].type == tcompo)
+					tobj_ddc_ref_clear(&v->data[i]);
 		if (!v->embedded)
 			free(v->data);
 	}
 	v->data = nullptr;
 	v->len = 0;
 	v->capacity = 0;
+	v->compo_count = 0;
 	v->embedded = 0;
 }
 
@@ -104,11 +108,14 @@ void tobj_vec_push(tobj_vec *v, const tobj *obj)
 		tobj_vec_reserve(v, tobj_vec_grown_cap(v->capacity));
 	v->data[v->len] = *obj;
 	tobj_vec_retain(obj);
+	if (obj->type == tcompo)
+		v->compo_count++;
 	v->len++;
 }
 
 void tobj_vec_set(tobj_vec *v, uint_count idx, const tobj *obj)
 {
+	ttypes old_type = v->data[idx].type;
 	if (v->data[idx].type != tcompo && obj->type != tcompo) {
 		v->data[idx] = *obj;
 		return;
@@ -119,6 +126,10 @@ void tobj_vec_set(tobj_vec *v, uint_count idx, const tobj *obj)
 	tobj_vec_retain(obj);
 	tobj_ddc_ref_clear(&v->data[idx]);
 	v->data[idx] = *obj;
+	if (old_type != tcompo && obj->type == tcompo)
+		v->compo_count++;
+	else if (old_type == tcompo && obj->type != tcompo)
+		v->compo_count--;
 }
 
 void tobj_vec_insert(tobj_vec *v, uint_count idx, const tobj *obj)
@@ -130,12 +141,16 @@ void tobj_vec_insert(tobj_vec *v, uint_count idx, const tobj *obj)
 		(v->len - idx) * sizeof(tobj));
 	v->data[idx] = *obj;
 	tobj_vec_retain(obj);
+	if (obj->type == tcompo)
+		v->compo_count++;
 	v->len++;
 }
 
 static tobj tobj_vec_remove(tobj_vec *v, uint_count idx)
 {
 	tobj removed = v->data[idx];
+	if (removed.type == tcompo)
+		v->compo_count--;
 	memmove(v->data + idx,
 		v->data + idx + 1,
 		(v->len - idx - 1) * sizeof(tobj));
@@ -170,6 +185,10 @@ void tobj_vec_copy_range(tobj_vec *dst, const tobj_vec *src,
 		return;
 	memcpy(dst->data, src->data + start, count * sizeof(tobj));
 	dst->len = count;
-	for (uint_count i = 0; i < count; i++)
-		tobj_vec_retain(&dst->data[i]);
+	if (src->compo_count)
+		for (uint_count i = 0; i < count; i++) {
+			tobj_vec_retain(&dst->data[i]);
+			if (dst->data[i].type == tcompo)
+				dst->compo_count++;
+		}
 }

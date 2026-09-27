@@ -1,0 +1,15 @@
+let values = replicate([0], 1024)
+
+let started = clock_ns()
+for (let index in 0 to 500000) {
+    let slot = index % 1024
+    values[slot] = (values[slot] + index) % 1000003
+}
+let elapsed = clock_ns() - started
+
+let result = 0
+for (let index in 0 to 1024) {
+    result = result + values[index]
+}
+print(result)
+print(elapsed)

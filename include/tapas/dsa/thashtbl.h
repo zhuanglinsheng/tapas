@@ -36,6 +36,14 @@ typedef void (*thashtbl_each_fn)(const tobj *key, const tobj *value, void *ctx);
 thashtbl *thashtbl_new(void);
 
 /**
+ * @brief 创建按预期元素数预留容量的空哈希表。
+ *
+ * @param expected_items 无需扩容即可写入的预期元素数。
+ * @return 新哈希表，由调用者使用 thashtbl_free() 释放。
+ */
+thashtbl *thashtbl_new_sized(uint_count expected_items);
+
+/**
  * @brief 释放哈希表及其持有的键和值引用。
  *
  * @param tbl 可为空的哈希表指针。

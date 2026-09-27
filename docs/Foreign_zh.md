@@ -508,6 +508,7 @@ typedef struct {
 ```c
 typedef struct {
     tcompo_index_fn indexable;
+    tcompo_try_index_fn try_indexable;
     tcompo_index_set_fn index_settable;
     tcompo_append_fn appendable;
     tcompo_delete_fn deletable;
@@ -515,6 +516,10 @@ typedef struct {
     tcompo_next_fn iterable;
 } tcompo_capabilities;
 ```
+
+`try_indexable`用于`idx_or`：找到索引时写入结果并返回 1，索引不存在时返回
+0；参数 Type 或参数数量错误仍然产生运行时错误。声明为`Indexable`的新对象应
+同时实现严格的`indexable`和非抛错的`try_indexable`。
 
 对象不支持的槽保持为空。
 索引读取、索引写入、`append`、`delete`、`in`和`for`都通过这些槽分派，不检查对象的具体类型。

@@ -260,8 +260,22 @@ static void ir_index(void *self, const tobj *arguments, uint_regs count, tobj *r
 	else twarn(ErrRuntime_Other, "RuleIR", name);
 }
 
+static int ir_try_index(void *self, const tobj *arguments, uint_regs count,
+			 tobj *result)
+{
+	const char *name = index_name(arguments, count);
+	if (strcmp(name, "display_name") && strcmp(name, "source") &&
+	    strcmp(name, "version") && strcmp(name, "parameters") &&
+	    strcmp(name, "captures") && strcmp(name, "terms") &&
+	    strcmp(name, "items") && strcmp(name, "origins"))
+		return 0;
+	ir_index(self, arguments, count, result);
+	return 1;
+}
+
 static const tcompo_capabilities ir_capabilities = {
-	.indexable = ir_index
+	.indexable = ir_index,
+	.try_indexable = ir_try_index
 };
 
 tcompo_vtable trule_ir_vtable = {

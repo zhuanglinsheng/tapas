@@ -1,0 +1,12 @@
+let source = list(0 to 1024)
+
+let started = clock_ns()
+let result = 0
+for (let repetition in 0 to 20000) {
+    let copied = source.copy()
+    result = result + copied[repetition % 1024]
+}
+let elapsed = clock_ns() - started
+
+print(result)
+print(elapsed)

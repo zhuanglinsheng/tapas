@@ -1,0 +1,61 @@
+function identity(value)
+{
+    return value
+}
+
+function pack(first, second, third, fourth)
+{
+    return [first, second, third, fourth]
+}
+
+function invoke(callback, value)
+{
+    return callback(value)
+}
+
+function fresh()
+{
+    return [7]
+}
+
+let original = [1, 2, 3]
+let direct = identity(original)
+direct[1] = 9
+print(original[1])
+
+let alias = identity
+let dynamic = alias(original)
+dynamic.append(4)
+print(len(original))
+
+let indirect = invoke(identity, original)
+indirect[0] = 5
+print(original[0])
+
+let packed = pack(original, {'answer': 42}, 'text', [8])
+print(packed[0][2])
+print(packed[1]['answer'])
+print(packed[2])
+print(packed[3][0])
+
+let make_reader = (value)
+{
+    return ()
+    {
+        return value
+    }
+}
+let reader = make_reader(original)
+print(reader()[0])
+print(fresh()[0])
+
+function rebind_during_call(value)
+{
+    var callback = ()
+    {
+        callback = identity
+        return value
+    }
+    return callback()
+}
+print(rebind_during_call(11))

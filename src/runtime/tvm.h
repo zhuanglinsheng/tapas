@@ -48,6 +48,8 @@ typedef struct {
 	uint_cmds    return_pc;
 	uint_cmds    return_end;
 	uint_regs    return_stack_values;
+	int          return_has_callable;
+	tobj         retained_callable;
 	tcompo_env  *return_env;
 	twrapper    *return_wrapper;
 } tcall_frame;

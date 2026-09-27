@@ -3,6 +3,7 @@
 
 #include "tapas/objects/tpair.h"
 
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -24,6 +25,7 @@ static tlist *tlist_new_cap(uint_count cap)
 	list->items.data = (tobj *)(list + 1);
 	list->items.len = 0;
 	list->items.capacity = TLIST_INLINE_ITEMS;
+	list->items.compo_count = 0;
 	list->items.embedded = 1;
 	return list;
 }
@@ -39,15 +41,56 @@ static void tlist_fill_range(tlist *dst, const tlist *src,
 		return;
 	memcpy(dst->items.data, src->items.data + start,
 	       count * sizeof(tobj));
-	for (uint_count i = 0; i < count; i++)
-		if (dst->items.data[i].type == tcompo &&
-		    dst->items.data[i].val.v_tcompo)
-			dst->items.data[i].val.v_tcompo->refctr++;
+	if (src->items.compo_count)
+		for (uint_count i = 0; i < count; i++)
+			if (dst->items.data[i].type == tcompo &&
+			    dst->items.data[i].val.v_tcompo) {
+				dst->items.data[i].val.v_tcompo->refctr++;
+				dst->items.compo_count++;
+			}
 }
 
 tlist *tlist_new(void)
 {
 	return tlist_new_cap(0);
+}
+
+tlist *tlist_new_sized(uint_count capacity)
+{
+	return tlist_new_cap(capacity);
+}
+
+tlist *tlist_replicate(const tlist *source, uint_count repetitions)
+{
+	uint_count source_len = tobj_vec_len(&source->items);
+	if (source_len && repetitions > UINT32_MAX / source_len)
+		twarn(ErrRuntime_Other, "replicate", "resulting list is too large");
+	uint_count result_len = source_len * repetitions;
+	tlist *result = tlist_new_cap(result_len);
+	result->items.len = result_len;
+	if (result_len) {
+		memcpy(result->items.data, source->items.data,
+		       source_len * sizeof(tobj));
+		/* Re-copy the prefix already produced. This preserves the source
+		 * pattern while reducing small memcpy calls from repetitions to
+		 * logarithmic growth. */
+		uint_count filled = source_len;
+		while (filled < result_len) {
+			uint_count copied = filled < result_len - filled ?
+				filled : result_len - filled;
+			memcpy(result->items.data + filled, result->items.data,
+			       copied * sizeof(tobj));
+			filled += copied;
+		}
+	}
+	if (source->items.compo_count)
+		for (uint_count i = 0; i < result_len; i++)
+			if (result->items.data[i].type == tcompo &&
+			    result->items.data[i].val.v_tcompo) {
+				result->items.data[i].val.v_tcompo->refctr++;
+				result->items.compo_count++;
+			}
+	return result;
 }
 
 void tlist_slice_index(tlist *l, const tobj *params, tobj *vre)
@@ -265,6 +308,44 @@ static void list_index(void *self, const tobj *arguments,
 	tlist_idx((tlist *)self, arguments, argument_count, result);
 }
 
+static int list_try_index(void *self, const tobj *arguments,
+			  uint_regs argument_count, tobj *result)
+{
+	tlist *list = (tlist *)self;
+	if (argument_count != 1)
+		twarn(ErrRuntime_ParamsCtr, "idx_or", "List needs one index");
+	long len = (long)tobj_vec_len(&list->items);
+	if (arguments[0].type == tint) {
+		long index = arguments[0].val.v_tint;
+		if (index < 0)
+			index += len;
+		if (index < 0 || index >= len)
+			return 0;
+		tobj_copy(result, &list->items.data[index]);
+		return 1;
+	}
+	if (arguments[0].type == tcompo &&
+	    tobj_compo_type(&arguments[0]) == compo_tpair) {
+		tpair *range = (tpair *)arguments[0].val.v_tcompo;
+		if (range->first.type != tint || range->second.type != tint)
+			twarn(ErrRuntime_ParamsType, "idx_or",
+			      "List slice bounds must be integers");
+		long start = range->first.val.v_tint;
+		long end = range->second.val.v_tint;
+		if (start < 0) start += len;
+		if (end < 0) end += len;
+		if (start < 0 || end < start || end > len)
+			return 0;
+		tlist *slice = tlist_new_cap((uint_count)(end - start));
+		tlist_fill_range(slice, list, (uint_count)start,
+				 (uint_count)(end - start));
+		tobj_set_compo(result, (tcompo_v *)slice);
+		return 1;
+	}
+	twarn(ErrRuntime_ParamsType, "idx_or", "List index must be Int or Pair");
+	return 0;
+}
+
 static void list_index_set(void *self, const tobj *arguments,
 			   uint_regs argument_count, const tobj *value)
 {
@@ -273,6 +354,7 @@ static void list_index_set(void *self, const tobj *arguments,
 
 static const tcompo_capabilities list_capabilities = {
 	.indexable = list_index,
+	.try_indexable = list_try_index,
 	.index_settable = list_index_set,
 	.appendable = list_append,
 	.deletable = list_delete,

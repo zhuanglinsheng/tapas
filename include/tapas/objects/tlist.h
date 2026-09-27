@@ -39,6 +39,25 @@ extern tcompo_vtable tlist_vtable;
 tlist *tlist_new(void);
 
 /**
+ * @brief 创建具有指定预留容量的空列表。
+ *
+ * @param capacity 无需扩容即可容纳的元素数量。
+ * @return 新对象，由 Tapas 引用计数管理。
+ */
+tlist *tlist_new_sized(uint_count capacity);
+
+/**
+ * @brief 将源列表的全部内容重复指定次数。
+ *
+ * @details 采用浅复制语义；复合对象元素的引用会被重复保留。
+ *
+ * @param source 源列表。
+ * @param repetitions 非负重复次数。
+ * @return 新对象，由 Tapas 引用计数管理。
+ */
+tlist *tlist_replicate(const tlist *source, uint_count repetitions);
+
+/**
  * @brief 以两个整型边界执行切片读取（专用切片指令的运行期入口）。
  *
  * @param list 列表。

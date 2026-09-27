@@ -5,12 +5,17 @@
 
 #include <stdlib.h>
 
-tdict *tdict_new(void)
+tdict *tdict_new_sized(uint_count expected_items)
 {
 	tdict *dictionary = (tdict *)calloc(1, sizeof(tdict));
 	dictionary->base.vtable = &tdict_vtable;
-	dictionary->items = thashtbl_new();
+	dictionary->items = thashtbl_new_sized(expected_items);
 	return dictionary;
+}
+
+tdict *tdict_new(void)
+{
+	return tdict_new_sized(0);
 }
 
 void tdict_set(tdict *dictionary, const tobj *key, const tobj *value)
@@ -20,12 +25,20 @@ void tdict_set(tdict *dictionary, const tobj *key, const tobj *value)
 
 void tdict_get(tdict *dictionary, const tobj *key, tobj *result)
 {
+	if (!tdict_try_get(dictionary, key, result))
+		twarn(ErrRuntime_ObjUnfound, "tdict_get", "");
+
+}
+
+int tdict_try_get(tdict *dictionary, const tobj *key, tobj *result)
+{
 	const tobj *value = thashtbl_get(dictionary->items, key);
 	if (!value)
-		twarn(ErrRuntime_ObjUnfound, "tdict_get", "");
+		return 0;
 	*result = *value;
 	if (result->type == tcompo && result->val.v_tcompo)
 		result->val.v_tcompo->refctr++;
+	return 1;
 }
 
 int tdict_contains(tdict *dictionary, const tobj *key)
@@ -134,7 +147,7 @@ static void dictionary_append(void *self, const tobj *value)
 	tdict_set((tdict *)self, &pair->first, &pair->second);
 }
 
-static int tdict_delete(tdict *dictionary, const tobj *key)
+int tdict_delete(tdict *dictionary, const tobj *key)
 {
 	return thashtbl_delete(dictionary->items, key);
 }
@@ -163,6 +176,14 @@ static void dictionary_index(void *self, const tobj *arguments,
 	tdict_idx((tdict *)self, arguments, argument_count, result);
 }
 
+static int dictionary_try_index(void *self, const tobj *arguments,
+				uint_regs argument_count, tobj *result)
+{
+	if (argument_count != 1)
+		twarn(ErrRuntime_ParamsCtr, "idx_or", "Dictionary needs one key");
+	return tdict_try_get((tdict *)self, &arguments[0], result);
+}
+
 static void tdict_iset(tdict *d, const tobj *params, uint_regs np,
 		       const tobj *vright)
 {
@@ -179,6 +200,7 @@ static void dictionary_index_set(void *self, const tobj *arguments,
 
 static const tcompo_capabilities dictionary_capabilities = {
 	.indexable = dictionary_index,
+	.try_indexable = dictionary_try_index,
 	.index_settable = dictionary_index_set,
 	.appendable = dictionary_append,
 	.deletable = dictionary_delete,

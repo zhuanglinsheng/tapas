@@ -101,6 +101,7 @@ void tcompo_env_copy_to_obj(tcompo_env *env, tobj *vre);
 struct tfunc {
 	tcompo_v compo_base;
 	tcompo_env env;
+	struct tlib *library;
 	uint_cmds cmdloc;
 	uint_cmds ncmds;
 };

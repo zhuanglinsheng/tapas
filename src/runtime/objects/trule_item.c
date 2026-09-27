@@ -224,8 +224,28 @@ static void item_index(void *self, const tobj *arguments, uint_regs count,
 	else twarn(ErrRuntime_Other, "RuleItem", name);
 }
 
+static int item_try_index(void *self, const tobj *arguments, uint_regs count,
+			  tobj *result)
+{
+	trule_item *item = self;
+	const char *name = index_name(arguments, count);
+	int present = !strcmp(name, "kind") || !strcmp(name, "arguments") ||
+		!strcmp(name, "description") ||
+		(!strcmp(name, "antecedent") &&
+		 item->kind == trule_item_implication) ||
+		(!strcmp(name, "consequents") &&
+		 item->kind == trule_item_implication) ||
+		(!strcmp(name, "term") && item->term) ||
+		(!strcmp(name, "rule") && item->rule);
+	if (!present)
+		return 0;
+	item_index(self, arguments, count, result);
+	return 1;
+}
+
 static const tcompo_capabilities item_capabilities = {
-	.indexable = item_index
+	.indexable = item_index,
+	.try_indexable = item_try_index
 };
 
 tcompo_vtable trule_item_vtable = {

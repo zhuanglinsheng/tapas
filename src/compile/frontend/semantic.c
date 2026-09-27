@@ -313,6 +313,12 @@ static void analyze_node(semantic_analyzer *analyzer, tast_id id,
 				const tsemantic_symbol *target = tsemantic_resolved_symbol(
 					analyzer->model,
 					node->assignment_statement.target);
+				if (target) {
+					uint32_t symbol = analyzer->model->resolutions[
+						node->assignment_statement.target];
+					if (symbol < analyzer->model->symbol_count)
+						analyzer->model->symbols[symbol].assigned = 1;
+				}
 				if (target && target->kind == tsemantic_symbol_function)
 					tdiagnostics_add(analyzer->diagnostics,
 						tdiagnostic_error, target_node->span,

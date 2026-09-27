@@ -1,0 +1,24 @@
+let values = {'present': 7}
+print(idx_or(values, 'present', 99))
+print(idx_or(values, 'missing', 99))
+print(idx_or([4, 5], -1, 99))
+print(idx_or([4, 5], 2, 99))
+print(idx_or('ab', 1, '?'))
+print(idx_or('ab', 2, '?'))
+
+let iterable: Iterable = 'abc'
+let bytes = list(iterable)
+print(join(bytes, ''))
+print(len(bytes))
+
+let utf8_bytes = list('中文')
+print(len(utf8_bytes))
+print(join(utf8_bytes, '') == '中文')
+
+var combinations = 0
+for (let left in 'ab') {
+    for (let right in 'cd') {
+        combinations = combinations + len(left) + len(right) - 1
+    }
+}
+print(combinations)

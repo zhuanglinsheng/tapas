@@ -2,6 +2,7 @@
 
 #include "../arguments.h"
 #include "tapas/dsa/tobj_vec.h"
+#include "tapas/objects/tdict.h"
 #include "tapas/objects/tlist.h"
 #include "tapas/tval.h"
 
@@ -17,6 +18,13 @@ static void builtin_idx(tobj *params, uint_regs count, tobj *result)
 {
 	tstdlib_require_arguments("idx", count, 2);
 	tcompo_index(target(params, "idx"), &params[1], 1, result);
+}
+
+static void builtin_idx_or(tobj *params, uint_regs count, tobj *result)
+{
+	tstdlib_require_arguments("idx_or", count, 3);
+	if (!tcompo_try_index(target(params, "idx_or"), &params[1], 1, result))
+		tobj_copy(result, &params[2]);
 }
 
 static void builtin_append(tobj *params, uint_regs count, tobj *result)
@@ -35,7 +43,15 @@ static void builtin_append(tobj *params, uint_regs count, tobj *result)
 static void builtin_delete(tobj *params, uint_regs count, tobj *result)
 {
 	tstdlib_require_arguments("delete", count, 2);
-	tcompo_delete(target(params, "delete"), &params[1]);
+	tcompo_v *obj = target(params, "delete");
+	/* Dictionaries dominate delete traffic; keep the generic capability
+	 * fallback but avoid its extra indirect call for the built-in type. */
+	if (obj->vtable == &tdict_vtable) {
+		if (!tdict_delete((tdict *)obj, &params[1]))
+			twarn(ErrRuntime_ObjUnfound, "delete", "");
+	} else {
+		tcompo_delete(obj, &params[1]);
+	}
 	tobj_set_nil(result);
 }
 
@@ -48,6 +64,15 @@ static const textension_symbol symbols[] = {
 		.function = builtin_idx,
 		.minimum_arguments = 2,
 		.maximum_arguments = 2
+	},
+	{
+		.name = "idx_or",
+		.type = "Function[Indexable, AnyType, AnyType] -> AnyType",
+		.detail = "idx_or(target: Indexable, key: AnyType, default: AnyType) -> AnyType",
+		.kind = textension_function,
+		.function = builtin_idx_or,
+		.minimum_arguments = 3,
+		.maximum_arguments = 3
 	},
 	{
 		.name = "append",

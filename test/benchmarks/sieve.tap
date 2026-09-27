@@ -1,9 +1,8 @@
 function primes_up_to(limit)
 {
-    let is_prime = []
-    for (let value in 0 to (limit + 1)) {
-        is_prime.append(value >= 2)
-    }
+    let is_prime = replicate([true], limit + 1)
+    is_prime[0] = false
+    is_prime[1] = false
 
     let candidate = 2
     while (candidate * candidate <= limit) {

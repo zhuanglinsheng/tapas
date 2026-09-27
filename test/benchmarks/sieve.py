@@ -2,9 +2,9 @@ import time
 
 
 def primes_up_to(limit):
-    is_prime = []
-    for value in range(limit + 1):
-        is_prime.append(value >= 2)
+    is_prime = [True] * (limit + 1)
+    is_prime[0] = False
+    is_prime[1] = False
 
     candidate = 2
     while candidate * candidate <= limit:

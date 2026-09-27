@@ -574,6 +574,38 @@ static int range_param(const tobj *value, size_t limit,
 	return 1;
 }
 
+/* Return -1 for an otherwise well-typed index outside the array, zero for a
+ * scalar index, and one for a slice. */
+static int try_range_param(const tobj *value, size_t limit,
+			   size_t *begin, size_t *end)
+{
+	if (value->type == tint) {
+		long index = value->val.v_tint;
+		if (index < 0)
+			index += (long)limit;
+		if (index < 0 || (size_t)index >= limit)
+			return -1;
+		*begin = (size_t)index;
+		*end = *begin + 1;
+		return 0;
+	}
+	if (value->type != tcompo || tobj_compo_type(value) != compo_tpair)
+		twarn(ErrRuntime_ParamsType, "idx_or", "array index must be Int or Pair");
+	tpair *pair = (tpair *)value->val.v_tcompo;
+	if (pair->first.type != tint || pair->second.type != tint)
+		twarn(ErrRuntime_ParamsType, "idx_or",
+		      "array slice bounds must be integers");
+	long first = pair->first.val.v_tint;
+	long last = pair->second.val.v_tint;
+	if (first < 0) first += (long)limit;
+	if (last < 0) last += (long)limit;
+	if (first < 0 || last < first || (size_t)last > limit)
+		return -1;
+	*begin = (size_t)first;
+	*end = (size_t)last;
+	return 1;
+}
+
 static void tarr_idx(void *self, const tobj *arguments,
 		     uint_regs argument_count, tobj *result)
 {
@@ -603,6 +635,40 @@ static void tarr_idx(void *self, const tobj *arguments,
 		tobj_set_compo(result, (tcompo_v *)tbarr_slice((tbarr *)arr,
 			row_begin, column_begin, row_end - row_begin,
 			column_end - column_begin));
+}
+
+static int tarr_try_idx(void *self, const tobj *arguments,
+			uint_regs argument_count, tobj *result)
+{
+	tcompo_v *arr = (tcompo_v *)self;
+	if (argument_count != 2)
+		twarn(ErrRuntime_ParamsCtr, "idx_or", "array needs two indices");
+	size_t row_begin, row_end, column_begin, column_end;
+	int row_slice = try_range_param(&arguments[0], array_rows(arr),
+		&row_begin, &row_end);
+	int column_slice = try_range_param(&arguments[1], array_cols(arr),
+		&column_begin, &column_end);
+	if (row_slice < 0 || column_slice < 0)
+		return 0;
+	tcompo_type code = arr->vtable->compo_code;
+	if (!row_slice && !column_slice) {
+		if (code == compo_tdarr)
+			tobj_set_float(result, tdarr_at((tdarr *)arr,
+				row_begin, column_begin));
+		else
+			tobj_set_bool(result, tbarr_at((tbarr *)arr,
+				row_begin, column_begin));
+		return 1;
+	}
+	if (code == compo_tdarr)
+		tobj_set_compo(result, (tcompo_v *)tdarr_slice((tdarr *)arr,
+			row_begin, column_begin, row_end - row_begin,
+			column_end - column_begin));
+	else
+		tobj_set_compo(result, (tcompo_v *)tbarr_slice((tbarr *)arr,
+			row_begin, column_begin, row_end - row_begin,
+			column_end - column_begin));
+	return 1;
 }
 
 static void tarr_iset(void *self, const tobj *arguments,
@@ -658,6 +724,7 @@ static void tarr_iset(void *self, const tobj *arguments,
 
 static const tcompo_capabilities array_capabilities = {
 	.indexable = tarr_idx,
+	.try_indexable = tarr_try_idx,
 	.index_settable = tarr_iset
 };
 

@@ -1,9 +1,6 @@
 function kmp_search(text, pattern)
 {
-    let pi = []
-    for (let i in 0 to pattern.len()) {
-        pi.append(0)
-    }
+    let pi = replicate([0], pattern.len())
     let j = 0
     for (let i in 1 to pattern.len()) {
         while (j > 0 and pattern[i] != pattern[j]) {
@@ -32,10 +29,7 @@ function kmp_search(text, pattern)
     return total + 0
 }
 
-let text_parts = []
-for (let i in 0 to 500) {
-    text_parts.append('ABCABABCAB')
-}
+let text_parts = replicate(['ABCABABCAB'], 500)
 let text = join(text_parts, '')
 let pattern = 'ABCAB'
 let rounds = 60

@@ -2,15 +2,61 @@
 
 #include "../arguments.h"
 
+#include "tapas/objects/titer.h"
 #include "tapas/objects/tlist.h"
 
+static tlist *require_list(tobj *value, const char *function);
 
 static void builtin_list(tobj *params, uint_regs len, tobj *result)
 {
-	tlist *list = tlist_new();
-	for (uint_regs i = 0; i < len; i++)
-		tobj_vec_push(&list->items, &params[i]);
+	if (len > 1)
+		twarn(ErrRuntime_ParamsCtr, "list", "0 or 1 argument required");
+	if (!len) {
+		tobj_set_compo(result, (tcompo_v *)tlist_new());
+		return;
+	}
+	if (params[0].type != tcompo || !params[0].val.v_tcompo ||
+	    !params[0].val.v_tcompo->vtable ||
+	    !params[0].val.v_tcompo->vtable->capabilities ||
+	    !params[0].val.v_tcompo->vtable->capabilities->iterable)
+		twarn(ErrRuntime_ParamsType, "list", "Iterable required");
+	tcompo_v *iterable = params[0].val.v_tcompo;
+	long length_hint = iterable->vtable->len(iterable);
+	if (length_hint < 0 || (uint64_t)length_hint > UINT32_MAX)
+		twarn(ErrRuntime_Other, "list", "invalid iterable length");
+	tlist *list = tlist_new_sized((uint_count)length_hint);
+	if (iterable->vtable == &titer_vtable) {
+		titer *range = (titer *)iterable;
+		list->items.len = (uint_count)length_hint;
+		for (uint_count i = 0; i < (uint_count)length_hint; i++) {
+			list->items.data[i].type = tint;
+			list->items.data[i].name_loc = (int)UNDEF_NAMELOC;
+			list->items.data[i].val.v_tint =
+				range->start + (long)i * range->step;
+		}
+		tobj_set_compo(result, (tcompo_v *)list);
+		return;
+	}
+	long position = 0;
+	tobj item;
+	tobj_set_nil(&item);
+	while (tcompo_next(iterable, &position, &item)) {
+		tobj_vec_push(&list->items, &item);
+		tobj_ddc_ref_clear(&item);
+	}
 	tobj_set_compo(result, (tcompo_v *)list);
+}
+
+static void builtin_replicate(tobj *params, uint_regs len, tobj *result)
+{
+	tstdlib_require_arguments("replicate", len, 2);
+	tlist *source = require_list(&params[0], "replicate");
+	if (params[1].type != tint || params[1].val.v_tint < 0 ||
+	    (uint64_t)params[1].val.v_tint > UINT32_MAX)
+		twarn(ErrRuntime_ParamsType, "replicate",
+		      "non-negative Int repetition count required");
+	tobj_set_compo(result, (tcompo_v *)tlist_replicate(
+		source, (uint_count)params[1].val.v_tint));
 }
 
 static tlist *require_list(tobj *value, const char *function)
@@ -88,11 +134,20 @@ static const textension_symbol symbols[] = {
 	{
 		.name = "list",
 		.type = "Function[...] -> List",
-		.detail = "list(...values: AnyType) -> List",
+		.detail = "list([iterable: Iterable]) -> List",
 		.kind = textension_function,
 		.function = builtin_list,
 		.minimum_arguments = 0,
-		.maximum_arguments = UNDEF_NPARAMS
+		.maximum_arguments = 1
+	},
+	{
+		.name = "replicate",
+		.type = "Function[List, Int] -> List",
+		.detail = "replicate(values: List, count: Int) -> List",
+		.kind = textension_function,
+		.function = builtin_replicate,
+		.minimum_arguments = 2,
+		.maximum_arguments = 2
 	},
 	{
 		.name = "push_front",

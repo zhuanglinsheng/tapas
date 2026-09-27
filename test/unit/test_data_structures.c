@@ -2,6 +2,7 @@
 #include "../../src/stdlib/rules/codec.h"
 #include "../../src/stdlib/rules/hash.h"
 #include "tapas/basic_defs/tbycs.h"
+#include "tapas/dsa/thashtbl.h"
 #include "tapas/dsa/tstring.h"
 #include "tapas/objects/tarray.h"
 #include "tapas/objects/tcfn.h"
@@ -535,6 +536,7 @@ static void test_object_vector_range_copy(void) {
   tobj_vec_push(&source, &first);
   tobj_vec_push(&source, &shared);
   tobj_vec_push(&source, &last);
+  assert(source.compo_count == 1);
   assert(text->base.refctr == 1);
 
   tobj_vec_copy_range(&slice, &source, 1, 2);
@@ -542,6 +544,7 @@ static void test_object_vector_range_copy(void) {
   assert(slice.data[0].type == tcompo &&
          slice.data[0].val.v_tcompo == (tcompo_v *)text);
   assert(slice.data[1].type == tint && slice.data[1].val.v_tint == 30);
+  assert(slice.compo_count == 1);
   assert(text->base.refctr == 2);
 
   tobj_vec_free(&slice);
@@ -559,15 +562,139 @@ static void test_object_vector_take(void) {
   tstr *text = tstr_new("moved");
   tobj_set_compo(&source, (tcompo_v *)text);
   tobj_vec_push(&values, &source);
+  assert(values.compo_count == 1);
   assert(text->base.refctr == 1);
 
   tobj_vec_take(&values, 0, &result);
   assert(values.len == 0);
+  assert(values.compo_count == 0);
   assert(result.type == tcompo && result.val.v_tcompo == (tcompo_v *)text);
   assert(text->base.refctr == 1);
   tobj_vec_free(&values);
   assert(text->base.refctr == 1);
   tobj_ddc_ref_clear(&result);
+}
+
+static void test_hash_table_bulk_delete_and_reuse(void) {
+  thashtbl *table = thashtbl_new();
+  for (long i = 0; i < 1024; i++) {
+    tobj key = integer(i);
+    tobj value = integer(i * 3);
+    thashtbl_set(table, &key, &value);
+  }
+  assert(thashtbl_len(table) == 1024);
+
+  for (long i = 0; i < 1024; i++) {
+    tobj key = integer(i);
+    assert(thashtbl_delete(table, &key));
+  }
+  assert(thashtbl_len(table) == 0);
+  assert(thashtbl_capacity(table) == 0);
+  tobj missing = integer(0);
+  assert(thashtbl_get(table, &missing) == nullptr);
+  assert(thashtbl_find(table, &missing, nullptr) == nullptr);
+
+  tobj key = integer(7);
+  tobj value = integer(21);
+  thashtbl_set(table, &key, &value);
+  const tobj *stored = thashtbl_get(table, &key);
+  assert(stored && stored->type == tint && stored->val.v_tint == 21);
+  thashtbl_free(table);
+}
+
+static void test_hash_table_sized_construction(void) {
+  thashtbl *incremental = thashtbl_new();
+  tobj incremental_key = integer(1);
+  tobj incremental_value = integer(2);
+  thashtbl_set(incremental, &incremental_key, &incremental_value);
+  assert(thashtbl_capacity(incremental) == 16);
+  thashtbl_free(incremental);
+
+  static const uint_count sizes[] = {1, 2, 3, 4, 8, 16, 64};
+  static const uint_count capacities[] = {4, 4, 8, 8, 16, 32, 128};
+  for (size_t size_index = 0;
+       size_index < sizeof(sizes) / sizeof(sizes[0]); size_index++) {
+    uint_count size = sizes[size_index];
+    thashtbl *table = thashtbl_new_sized(size);
+    assert(table);
+    assert(thashtbl_capacity(table) == capacities[size_index]);
+    for (uint_count i = 0; i < size; i++) {
+      tobj key = integer((long)i);
+      tobj value = integer((long)(i * 3 + 1));
+      thashtbl_set(table, &key, &value);
+    }
+    assert(thashtbl_len(table) == size);
+    assert(thashtbl_capacity(table) == capacities[size_index]);
+    for (uint_count i = 0; i < size; i++) {
+      tobj key = integer((long)i);
+      const tobj *value = thashtbl_find(table, &key, nullptr);
+      assert(value && value->type == tint);
+      assert(value->val.v_tint == (long)(i * 3 + 1));
+    }
+    thashtbl_free(table);
+  }
+}
+
+static void test_hash_table_varied_integer_keys(void) {
+  enum { count = 2048 };
+  thashtbl *table = thashtbl_new_sized(count);
+  for (long i = 0; i < count; i++) {
+    long raw = (i & 1) ? -(i * 4096 + 1) : i * 4096;
+    tobj key = integer(raw);
+    tobj value = integer(i + 7);
+    thashtbl_set(table, &key, &value);
+  }
+  for (long i = 0; i < count; i++) {
+    long raw = (i & 1) ? -(i * 4096 + 1) : i * 4096;
+    tobj key = integer(raw);
+    const tobj *value = thashtbl_get(table, &key);
+    assert(value && value->val.v_tint == i + 7);
+    if (i % 3 == 0)
+      assert(thashtbl_delete(table, &key));
+  }
+
+  thashtbl *copy = thashtbl_copy(table);
+  assert(thashtbl_len(copy) == thashtbl_len(table));
+  for (long i = 0; i < count; i++) {
+    long raw = (i & 1) ? -(i * 4096 + 1) : i * 4096;
+    tobj key = integer(raw);
+    const tobj *value = thashtbl_get(copy, &key);
+    if (i % 3 == 0)
+      assert(value == nullptr);
+    else
+      assert(value && value->val.v_tint == i + 7);
+  }
+  thashtbl_free(copy);
+  thashtbl_free(table);
+}
+
+static void test_list_replicate(void) {
+  tlist *source = tlist_new();
+  tobj one = integer(1);
+  tobj two = integer(2);
+  tobj_vec_push(&source->items, &one);
+  tobj_vec_push(&source->items, &two);
+  tlist *repeated = tlist_replicate(source, 3);
+  assert(tlist_size(repeated) == 6);
+  for (uint_count i = 0; i < 6; i++) {
+    const tobj *value = tlist_at(repeated, i);
+    assert(value->type == tint && value->val.v_tint == (long)(i % 2 + 1));
+  }
+  repeated->base.vtable->free(repeated);
+
+  tlist *nested = tlist_new();
+  tobj nested_value;
+  tobj_set_nil(&nested_value);
+  tobj_set_compo(&nested_value, (tcompo_v *)nested);
+  tlist *composites = tlist_new();
+  tobj_vec_push(&composites->items, &nested_value);
+  assert(nested->base.refctr == 1);
+  repeated = tlist_replicate(composites, 3);
+  assert(nested->base.refctr == 4);
+  repeated->base.vtable->free(repeated);
+  assert(nested->base.refctr == 1);
+  composites->base.vtable->free(composites);
+  source->base.vtable->free(source);
 }
 
 static void test_capability_dispatch(void) {
@@ -580,6 +707,10 @@ static void test_capability_dispatch(void) {
   tobj_set_nil(&result);
   tcompo_index((tcompo_v *)list, &index, 1, &result);
   assert(result.type == tint && result.val.v_tint == 7);
+  assert(tcompo_try_index((tcompo_v *)list, &index, 1, &result));
+  tobj missing_index = integer(3);
+  assert(!tcompo_try_index(
+      (tcompo_v *)list, &missing_index, 1, &result));
 
   tobj list_value;
   tobj_set_nil(&list_value);
@@ -606,6 +737,25 @@ static void test_capability_dispatch(void) {
   tcompo_delete((tcompo_v *)list, &index);
   assert(tlist_size(list) == 0);
   tobj_try_clear(&list_value);
+
+  tstr *text = tstr_new("ab");
+  tobj text_value;
+  tobj_set_nil(&text_value);
+  tobj_set_compo(&text_value, (tcompo_v *)text);
+  assert(ttypeval_matches(
+      &text_value, ttypeval_builtin(tbuiltintype_iterable)));
+  position = 0;
+  tobj_set_nil(&item);
+  assert(tcompo_next((tcompo_v *)text, &position, &item));
+  assert(item.type == tcompo &&
+         tobj_compo_type(&item) == compo_tstr &&
+         tstring_eq_cstr(((tstr *)item.val.v_tcompo)->data, "a"));
+  tobj_ddc_ref_clear(&item);
+  assert(tcompo_next((tcompo_v *)text, &position, &item));
+  assert(tstring_eq_cstr(((tstr *)item.val.v_tcompo)->data, "b"));
+  tobj_ddc_ref_clear(&item);
+  assert(!tcompo_next((tcompo_v *)text, &position, &item));
+  tobj_ddc_ref_clear(&text_value);
 }
 
 static void test_rule_logic_ir(void) {
@@ -771,6 +921,10 @@ int main(void) {
   test_short_string_storage();
   test_object_vector_range_copy();
   test_object_vector_take();
+  test_hash_table_bulk_delete_and_reuse();
+  test_hash_table_sized_construction();
+  test_hash_table_varied_integer_keys();
+  test_list_replicate();
   test_capability_dispatch();
   return 0;
 }

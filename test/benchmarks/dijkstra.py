@@ -2,11 +2,8 @@ import time
 
 
 def dijkstra(graph, source, size):
-    dist = []
-    visited = []
-    for i in range(size):
-        dist.append(1000000000000)
-        visited.append(False)
+    dist = [1000000000000] * size
+    visited = [False] * size
     dist[source] = 0
     for step in range(size):
         best = -1

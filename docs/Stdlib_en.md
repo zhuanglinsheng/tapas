@@ -79,7 +79,8 @@ other source tools:
 | `float(value: Bool \| Int \| Float \| String)` | `Float` | Numeric conversion. |
 | `bool(value: AnyType)` | `Bool` | Explicit truth conversion. |
 | `str(value: AnyType)` | `String` | Full textual representation. |
-| `list(...AnyType)` | `List` | New list containing the arguments. |
+| `list()` / `list(Iterable)` | `List` | Create an empty list, or consume any iterable into a new list. |
+| `replicate(List, Int)` | `List` | Shallow-copy all source-list elements the requested number of times. |
 | `pair(first: AnyType, second: AnyType)` | `Pair` | New pair. |
 | `iter(start: Int, end: Int)` | `Iterator` | Half-open range with inferred step. |
 | `iter(start: Int, step: Int, end: Int)` | `Iterator` | Half-open range with explicit nonzero step. |
@@ -101,6 +102,7 @@ error.
 | `pop_back(list: List[T])` | `T` | Removes and returns the last item. |
 | `delete(target: Deletable, index_or_key: AnyType)` | `Nil` | Deletes an item. |
 | `idx(target: Indexable, index: AnyType)` | `AnyType` | One-argument indexing. |
+| `idx_or(target: Indexable, key: AnyType, default: AnyType)` | `AnyType` | Returns the default when the index is absent; invalid argument types still fail. |
 | `keys(dict: Dictionary)` | `List` | Keys in unspecified order. |
 | `values(dict: Dictionary)` | `List` | Values in corresponding order. |
 | `concat(left: List, right: List)` | `List` | New shallow concatenation. |
@@ -109,7 +111,8 @@ error.
 `append(dictionary, value)` requires a `Pair`. `pop_front` and `pop_back`
 transfer ownership of the removed item and reject empty lists. `delete` remains
 a generic mutation and returns `nil`. Negative list indices count from the end
-where an operation accepts them. Collections cannot own `nil`.
+where an operation accepts them. `idx_or` performs one non-throwing lookup; it
+does not issue a separate membership test. Collections cannot own `nil`.
 
 ## 5. Session functions
 

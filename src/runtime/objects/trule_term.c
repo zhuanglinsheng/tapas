@@ -516,8 +516,22 @@ static void term_index(void *self, const tobj *arguments, uint_regs count,
 	else twarn(ErrRuntime_Other, "RuleTerm", name);
 }
 
+static int term_try_index(void *self, const tobj *arguments, uint_regs count,
+			  tobj *result)
+{
+	const char *name = index_name(arguments, count);
+	if (strcmp(name, "id") && strcmp(name, "kind") &&
+	    strcmp(name, "type") && strcmp(name, "arguments") &&
+	    strcmp(name, "payload") && strcmp(name, "provider") &&
+	    strcmp(name, "version"))
+		return 0;
+	term_index(self, arguments, count, result);
+	return 1;
+}
+
 static const tcompo_capabilities term_capabilities = {
-	.indexable = term_index
+	.indexable = term_index,
+	.try_indexable = term_try_index
 };
 
 tcompo_vtable trule_term_vtable = {

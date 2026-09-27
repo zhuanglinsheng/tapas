@@ -24,6 +24,7 @@ sort(values: List) -> Nil
 
 ```tap
 idx(target: Indexable, key: AnyType) -> AnyType
+idx_or(target: Indexable, key: AnyType, default: AnyType) -> AnyType
 append(target: Appendable, value: AnyType) -> Nil
 delete(target: Deletable, key: AnyType) -> Nil
 push_front(list: List, value: AnyType) -> Nil
@@ -32,6 +33,9 @@ pop_front(list: List) -> AnyType
 pop_back(list: List) -> AnyType
 insert(list: List, value: AnyType, index: Int) -> Nil
 ```
+
+`idx_or`在索引不存在时返回`default`，但参数 Type 错误仍然报错；Dictionary
+实现只执行一次哈希查询。
 
 `idx` 执行目标对象的索引读取。`append` 和 `delete` 分别调用目标对象的追加与删除能力。
 

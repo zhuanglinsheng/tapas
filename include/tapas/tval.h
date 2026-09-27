@@ -79,6 +79,10 @@ typedef void (*compo_op_bin_fn)(void *self, const tobj *other,
 typedef void (*tcompo_index_fn)(void *self, const tobj *arguments,
 	uint_regs argument_count, tobj *result);
 
+/** 对象非抛错索引读取能力回调；找到返回 1，索引不存在返回 0。 */
+typedef int (*tcompo_try_index_fn)(void *self, const tobj *arguments,
+	uint_regs argument_count, tobj *result);
+
 /** 对象索引写入能力回调。 */
 typedef void (*tcompo_index_set_fn)(void *self, const tobj *arguments,
 	uint_regs argument_count, const tobj *value);
@@ -104,6 +108,7 @@ typedef int (*tcompo_matches_type_fn)(void *self, const tobj *type);
 /** 引用对象可以选择实现的通用能力表。 */
 typedef struct {
 	tcompo_index_fn indexable;            /**< 索引读取能力。 */
+	tcompo_try_index_fn try_indexable;    /**< 非抛错索引读取能力。 */
 	tcompo_index_set_fn index_settable;   /**< 索引写入能力。 */
 	tcompo_append_fn appendable;          /**< 追加元素能力。 */
 	tcompo_delete_fn deletable;           /**< 删除成员能力。 */
@@ -249,6 +254,14 @@ int tobj_identical(const tobj *a, const tobj *b);
  */
 void tcompo_index(tcompo_v *self, const tobj *arguments,
 		  uint_regs argument_count, tobj *result);
+
+/**
+ * @brief 尝试通过对象能力执行索引读取。
+ *
+ * @return 找到索引返回 1，不存在返回 0；参数错误仍产生运行时错误。
+ */
+int tcompo_try_index(tcompo_v *self, const tobj *arguments,
+		     uint_regs argument_count, tobj *result);
 
 /**
  * @brief 通过对象能力执行索引写入。

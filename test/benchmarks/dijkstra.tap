@@ -1,11 +1,7 @@
 function dijkstra(graph, source, size)
 {
-    let dist = []
-    let visited = []
-    for (let i in 0 to size) {
-        dist.append(1000000000000)
-        visited.append(false)
-    }
+    let dist = replicate([1000000000000], size)
+    let visited = replicate([false], size)
     dist[source] = 0
     for (let step in 0 to size) {
         let best = -1

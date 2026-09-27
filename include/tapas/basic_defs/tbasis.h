@@ -228,6 +228,9 @@ typedef enum {
 	OP_BAND,       /**< 短路逻辑与。 */
 	OP_BOR,        /**< 短路逻辑或。 */
 	OP_NOT,        /**< 一元逻辑非。 */
+	/* Appended to preserve the numeric values of existing serialized opcodes. */
+	OP_PUSHLIST,   /**< 从栈顶若干值创建并压入 List。 */
+	OP_EVALDF,     /**< 直接调用命名槽中的可调用对象。 */
 	OP_COUNT       /**< 操作码数量，不是可执行指令。 */
 } tins;
 

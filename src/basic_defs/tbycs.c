@@ -200,6 +200,9 @@ void tbycode_tostring(tbycode c, char *buf, size_t buf_size)
 	case OP_PUSHDICT:
 		snprintf(buf, buf_size, "OP_PUSHDICT %u", (unsigned)tbycode_get_U(c));
 		break;
+	case OP_PUSHLIST:
+		snprintf(buf, buf_size, "OP_PUSHLIST %u", (unsigned)tbycode_get_U(c));
+		break;
 	case OP_PUSHINFO:
 		snprintf(buf, buf_size, "OP_PUSHINFO %u", (unsigned)tbycode_get_U(c));
 		break;
@@ -245,6 +248,20 @@ void tbycode_tostring(tbycode c, char *buf, size_t buf_size)
 		break;
 	case OP_EVALTF:
 		snprintf(buf, buf_size, "OP_EVALTF   %u", (unsigned)tbycode_get_U(c));
+		break;
+	case OP_EVALDF:
+		if ((tbycode_get_i(c) & 0x0f) != 0)
+			snprintf(buf, buf_size,
+				"OP_EVALDF   %u  env %u depth %u%s",
+				(unsigned)tbycode_get_b(c),
+				(unsigned)tbycode_get_L(c),
+				(unsigned)(tbycode_get_i(c) & 0x0f) - 1,
+				tbycode_get_i(c) & 0x10 ? " retained" : "");
+		else
+			snprintf(buf, buf_size, "OP_EVALDF   %u  local %u%s",
+				(unsigned)tbycode_get_b(c),
+				(unsigned)tbycode_get_L(c),
+				tbycode_get_i(c) & 0x10 ? " retained" : "");
 		break;
 	case OP_EVAL:
 		snprintf(buf, buf_size, "OP_EVAL     %u", (unsigned)tbycode_get_U(c));

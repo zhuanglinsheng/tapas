@@ -163,6 +163,26 @@ static void pair_index(void *self, const tobj *arguments,
 	tpair_idx((tpair *)self, arguments, argument_count, result);
 }
 
+static int pair_try_index(void *self, const tobj *arguments,
+			  uint_regs argument_count, tobj *result)
+{
+	if (argument_count != 1)
+		twarn(ErrRuntime_ParamsCtr, "idx_or", "Pair needs one index");
+	if (arguments[0].type != tint)
+		twarn(ErrRuntime_ParamsType, "idx_or", "Pair index must be Int");
+	long index = arguments[0].val.v_tint;
+	if (index < 0)
+		index += 2;
+	tpair *pair = (tpair *)self;
+	if (index == 0)
+		tobj_copy(result, &pair->first);
+	else if (index == 1)
+		tobj_copy(result, &pair->second);
+	else
+		return 0;
+	return 1;
+}
+
 static void pair_index_set(void *self, const tobj *arguments,
 			   uint_regs argument_count, const tobj *value)
 {
@@ -171,6 +191,7 @@ static void pair_index_set(void *self, const tobj *arguments,
 
 static const tcompo_capabilities pair_capabilities = {
 	.indexable = pair_index,
+	.try_indexable = pair_try_index,
 	.index_settable = pair_index_set
 };
 

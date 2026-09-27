@@ -1124,7 +1124,8 @@ static int static_type_assignable_graph(const tstatic_type_arena *arena,
 		if (b->builtin == tbuiltintype_contains)
 			return builtin == tbuiltintype_list || builtin == tbuiltintype_dictionary ||
 			       builtin == tbuiltintype_iterator;
-		return builtin == tbuiltintype_list ||
+		return builtin == tbuiltintype_string ||
+		       builtin == tbuiltintype_list ||
 		       builtin == tbuiltintype_iterator ||
 		       builtin == tbuiltintype_type;
 	}

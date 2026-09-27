@@ -31,8 +31,21 @@ ALGORITHM_BENCHMARKS = (
 HOT_PATH_BENCHMARKS = (
     "vm_hot_paths",
     "float_arithmetic",
+    "function_call_baseline",
     "function_calls",
+    "function_callbacks",
     "list_access",
+    "list_append",
+    "list_update",
+    "list_copy",
+    "list_from_iterable",
+    "list_replicate",
+    "dict_insert",
+    "dict_lookup",
+    "dict_update",
+    "dict_delete",
+    "dict_literal",
+    "dict_counting",
     "tail_recursion",
     "branch_logic",
 )
@@ -87,7 +100,10 @@ def write_markdown(
         algorithm_title = "综合算法"
         algorithm_description = "这些程序组合使用递归、分支、容器、索引和内存分配，更接近完整算法负载。"
         hot_path_title = "基础热路径"
-        hot_path_description = "这些程序分别放大某一种常见 VM 操作，用来定位解释器的基础开销。"
+        hot_path_description = ("这些程序分别放大常见 VM 操作或容器使用模式，用来定位解释器的基础开销。"
+                                "`function_call_baseline` 是不含调用的等价循环；将其从 "
+                                "`function_calls` 中扣除可估算直接调用净成本，"
+                                "`function_callbacks` 则额外覆盖高阶回调。")
         group_mean = "本组几何平均数"
         usage_title = "## 用法"
         usage = (
@@ -110,6 +126,7 @@ def write_markdown(
         notes_title = "## 说明"
         notes = (
             "这些程序用于比较三种实现执行相同算法时的解释器开销，不代表大型应用的完整性能。",
+            "各语言使用语义等价的惯用实现；内建批量操作和数据结构带来的优势属于比较结果的一部分。",
             "结果会受系统负载、电源状态、编译器版本、Python 版本和 Lua 版本影响。",
             "更新 VM 或运行环境后，应使用上文「用法」中的命令重新生成。",
         )
@@ -134,7 +151,8 @@ def write_markdown(
         algorithm_title = "Complete Algorithms"
         algorithm_description = "These programs combine recursion, branching, containers, indexing, and allocation to approximate complete algorithm workloads."
         hot_path_title = "VM Hot Paths"
-        hot_path_description = "Each program amplifies one common VM operation to help isolate interpreter overhead."
+        hot_path_description = ("Each program amplifies a common VM operation or container usage pattern to help isolate interpreter overhead. "
+                                "`function_call_baseline` is the equivalent loop without a call; subtracting it from `function_calls` estimates direct-call overhead, while `function_callbacks` adds a higher-order callback layer.")
         group_mean = "The geometric mean ratio for this group"
         usage_title = "## Usage"
         usage = (
@@ -163,6 +181,7 @@ def write_markdown(
         notes_title = "## Notes"
         notes = (
             "These programs compare interpreter overhead while all implementations execute the same algorithms; they do not represent complete application performance.",
+            "Each language uses an idiomatic implementation with equivalent semantics; advantages from built-in bulk operations and data structures are part of the comparison.",
             "Results depend on system load, power settings, compiler version, Python version, and Lua version.",
             "Regenerate the reports with the commands in the Usage section after changing the VM or runtime environment.",
         )

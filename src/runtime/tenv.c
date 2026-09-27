@@ -472,6 +472,7 @@ static tfunc *tfunc_snapshot_from_env(tcompo_env *env)
 			tcompo_env_get_nparams(env),
 			compo_tfunc);
 	n->env.owner_func = n;
+	n->library = src->library;
 	n->cmdloc = src->cmdloc;
 	n->ncmds = src->ncmds;
 
@@ -551,6 +552,7 @@ tfunc *tfunc_new(uint_objs nlocals,
 			nparams,
 			compo_tfunc);
 	f->env.owner_func = f;
+	f->library = tlib_from_env(father_env);
 	f->cmdloc = cmdloc;
 	f->ncmds = ncmds;
 	return f;
@@ -671,9 +673,12 @@ static tstring *tlib_tostring_full(void *self)
 
 static void library_index(void *self, const tobj *arguments,
 			  uint_regs argument_count, tobj *result);
+static int library_try_index(void *self, const tobj *arguments,
+			     uint_regs argument_count, tobj *result);
 
 static const tcompo_capabilities library_capabilities = {
-	.indexable = library_index
+	.indexable = library_index,
+	.try_indexable = library_try_index
 };
 
 tcompo_vtable tlib_vtable = {
@@ -1125,6 +1130,16 @@ static void library_index(void *self, const tobj *arguments,
 			  uint_regs argument_count, tobj *result)
 {
 	tlib_idx((tlib *)self, arguments, argument_count, result);
+}
+
+static int library_try_index(void *self, const tobj *arguments,
+			     uint_regs argument_count, tobj *result)
+{
+	tlib *library = (tlib *)self;
+	if (argument_count != 1)
+		twarn(ErrRuntime_ParamsCtr, "idx_or", "Library needs one key");
+	return library->exposed ?
+		tdict_try_get(library->exposed, &arguments[0], result) : 0;
 }
 
 static void append_library_key(const tobj *key, const tobj *value,

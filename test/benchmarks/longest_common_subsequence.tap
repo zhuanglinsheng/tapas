@@ -1,11 +1,7 @@
 function lcs_length(left, right)
 {
-    let previous = []
-    let current = []
-    for (let column in 0 to (right.len() + 1)) {
-        previous.append(0)
-        current.append(0)
-    }
+    let previous = replicate([0], right.len() + 1)
+    let current = replicate([0], right.len() + 1)
 
     for (let i in 1 to (left.len() + 1)) {
         current[0] = 0

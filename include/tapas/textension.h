@@ -24,7 +24,7 @@ extern "C" {
 #endif
 
 /** 当前原生扩展描述符 ABI 版本。 */
-#define TAPAS_EXTENSION_ABI 3u
+#define TAPAS_EXTENSION_ABI 4u
 
 /** 普通原生函数回调；参数只在调用期间有效，结果写入 `result`。 */
 typedef void (*tnative_function)(tobj *arguments, uint_regs argument_count,

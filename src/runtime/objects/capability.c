@@ -16,6 +16,23 @@ void tcompo_index(tcompo_v *self, const tobj *arguments,
 	available->indexable(self, arguments, argument_count, result);
 }
 
+int tcompo_try_index(tcompo_v *self, const tobj *arguments,
+		     uint_regs argument_count, tobj *result)
+{
+	const tcompo_capabilities *available = capabilities(self, "idx_or");
+	if (!available->indexable)
+		twarn(ErrRuntime_RefType, "idx_or", "object is not Indexable");
+	tobj_set_nil(result);
+	if (available->try_indexable)
+		return available->try_indexable(
+			self, arguments, argument_count, result);
+	/* Compatibility fallback for third-party Indexable objects compiled
+	 * before the optional lookup callback was introduced. Such objects keep
+	 * their strict indexing semantics until they implement try_indexable. */
+	available->indexable(self, arguments, argument_count, result);
+	return 1;
+}
+
 void tcompo_index_set(tcompo_v *self, const tobj *arguments,
 		      uint_regs argument_count, const tobj *value)
 {

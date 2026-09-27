@@ -266,6 +266,11 @@ from the end. They also accept a half-open slice `start:end`; either endpoint
 may be omitted. Slice bounds may be negative and are normalized relative to
 the length.
 
+Strings are iterable. Each iteration yields a one-byte String, matching integer
+indexing, rather than an integer or a Unicode code point. UTF-8 text is therefore
+iterated by encoded byte and can be reconstructed without loss by joining the
+yielded strings.
+
 ```tapas
 let tutorial_text = 'Tapas'
 let tutorial_numbers = [0, 1, 2, 3, 4]

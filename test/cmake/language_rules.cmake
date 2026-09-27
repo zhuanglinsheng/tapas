@@ -109,6 +109,89 @@ file(REMOVE "${REGRESSION_DIR}/dictionary_mutation.tapc")
 
 foreach(mode IN ITEMS source bytecode)
     if(mode STREQUAL "source")
+        set(list_construction_command "${REGRESSION_DIR}/list_construction.tap")
+    else()
+        execute_process(COMMAND "${TAPAS}" -c
+            "${REGRESSION_DIR}/list_construction.tap"
+            RESULT_VARIABLE list_construction_compile)
+        if(NOT list_construction_compile EQUAL 0)
+            message(FATAL_ERROR "List construction bytecode compilation failed")
+        endif()
+        set(list_construction_command -e
+            "${REGRESSION_DIR}/list_construction.tapc")
+    endif()
+    execute_process(COMMAND "${TAPAS}" ${list_construction_command}
+        RESULT_VARIABLE list_construction_result
+        OUTPUT_VARIABLE list_construction_output
+        ERROR_VARIABLE list_construction_error)
+    if(NOT list_construction_result EQUAL 0 OR NOT list_construction_output
+       STREQUAL "5\n2\n6\n8\n3\n0\n6\n1\n2\n0\n1\n1\n2\n")
+        message(FATAL_ERROR
+            "List construction ${mode} failed: "
+            "${list_construction_output}${list_construction_error}")
+    endif()
+endforeach()
+file(REMOVE "${REGRESSION_DIR}/list_construction.tapc")
+
+foreach(mode IN ITEMS source bytecode)
+    if(mode STREQUAL "source")
+        set(index_default_command
+            "${REGRESSION_DIR}/index_default_and_string_iteration.tap")
+    else()
+        execute_process(COMMAND "${TAPAS}" -c
+            "${REGRESSION_DIR}/index_default_and_string_iteration.tap"
+            RESULT_VARIABLE index_default_compile)
+        if(NOT index_default_compile EQUAL 0)
+            message(FATAL_ERROR
+                "Index-default/string-iteration bytecode compilation failed")
+        endif()
+        set(index_default_command -e
+            "${REGRESSION_DIR}/index_default_and_string_iteration.tapc")
+    endif()
+    execute_process(COMMAND "${TAPAS}" ${index_default_command}
+        RESULT_VARIABLE index_default_result
+        OUTPUT_VARIABLE index_default_output
+        ERROR_VARIABLE index_default_error)
+    if(NOT index_default_result EQUAL 0 OR NOT index_default_output
+       STREQUAL "7\n99\n5\n99\nb\n?\nabc\n3\n6\ntrue\n4\n")
+        message(FATAL_ERROR
+            "Index-default/string-iteration ${mode} failed: "
+            "${index_default_output}${index_default_error}")
+    endif()
+endforeach()
+file(REMOVE
+    "${REGRESSION_DIR}/index_default_and_string_iteration.tapc")
+
+foreach(mode IN ITEMS source bytecode)
+    if(mode STREQUAL "source")
+        set(function_call_command
+            "${REGRESSION_DIR}/function_call_ownership.tap")
+    else()
+        execute_process(COMMAND "${TAPAS}" -c
+            "${REGRESSION_DIR}/function_call_ownership.tap"
+            RESULT_VARIABLE function_call_compile)
+        if(NOT function_call_compile EQUAL 0)
+            message(FATAL_ERROR
+                "Function-call ownership bytecode compilation failed")
+        endif()
+        set(function_call_command -e
+            "${REGRESSION_DIR}/function_call_ownership.tapc")
+    endif()
+    execute_process(COMMAND "${TAPAS}" ${function_call_command}
+        RESULT_VARIABLE function_call_result
+        OUTPUT_VARIABLE function_call_output
+        ERROR_VARIABLE function_call_error)
+    if(NOT function_call_result EQUAL 0 OR NOT function_call_output
+       STREQUAL "9\n4\n5\n3\n42\ntext\n8\n5\n7\n11\n")
+        message(FATAL_ERROR
+            "Function-call ownership ${mode} failed: "
+            "${function_call_output}${function_call_error}")
+    endif()
+endforeach()
+file(REMOVE "${REGRESSION_DIR}/function_call_ownership.tapc")
+
+foreach(mode IN ITEMS source bytecode)
+    if(mode STREQUAL "source")
         set(string_escape_command "${REGRESSION_DIR}/string_escapes.tap")
     else()
         execute_process(
@@ -661,10 +744,25 @@ if(session_call_position EQUAL -1)
     message(FATAL_ERROR
         "Preloaded session call bytecode is missing OP_EVALSF:\n${runtime_cache_bytecode_output}")
 endif()
-string(FIND "${runtime_cache_bytecode_output}" "OP_EVAL     1" aliased_call_position)
+string(FIND "${runtime_cache_bytecode_output}" "OP_EVALDF" tapas_call_position)
+if(tapas_call_position EQUAL -1)
+    message(FATAL_ERROR
+        "Immutable Tapas function call is missing OP_EVALDF:\n${runtime_cache_bytecode_output}")
+endif()
+string(FIND "${runtime_cache_bytecode_output}" "OP_EVALDF   1" aliased_call_position)
 if(aliased_call_position EQUAL -1)
     message(FATAL_ERROR
-        "Aliased native call bytecode should retain generic OP_EVAL:\n${runtime_cache_bytecode_output}")
+        "Aliased named call bytecode is missing OP_EVALDF:\n${runtime_cache_bytecode_output}")
+endif()
+string(FIND "${runtime_cache_bytecode_output}" "OP_EVALDF   1  env" captured_call_position)
+if(captured_call_position EQUAL -1)
+    message(FATAL_ERROR
+        "Captured callable is missing direct environment OP_EVALDF:\n${runtime_cache_bytecode_output}")
+endif()
+string(FIND "${runtime_cache_bytecode_output}" "retained" retained_call_position)
+if(retained_call_position EQUAL -1)
+    message(FATAL_ERROR
+        "Reassigned callable is missing retained OP_EVALDF:\n${runtime_cache_bytecode_output}")
 endif()
 
 execute_process(

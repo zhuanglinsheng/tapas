@@ -946,8 +946,24 @@ static void index_at(void *self, const tobj *arguments, uint_regs count,
 	tobj_set_int(result, (long)index->coordinates[position]);
 }
 
+static int index_try_at(void *self, const tobj *arguments, uint_regs count,
+			tobj *result)
+{
+	tfinite_index *index = self;
+	if (count != 1 || arguments[0].type != tint)
+		twarn(ErrRuntime_ParamsType, "idx_or", "finite::Index needs an Int");
+	long position = arguments[0].val.v_tint;
+	if (position < 0)
+		position += (long)index->rank;
+	if (position < 0 || (size_t)position >= index->rank)
+		return 0;
+	tobj_set_int(result, (long)index->coordinates[position]);
+	return 1;
+}
+
 static const tcompo_capabilities index_capabilities = {
-	.indexable = index_at
+	.indexable = index_at,
+	.try_indexable = index_try_at
 };
 
 static long distribution_len(void *self)

@@ -17,5 +17,28 @@ left_text[0] == right_text[0]
 let native_alias = len
 len([1])
 native_alias([1])
+
+let invoke_captured = (callback, value)
+{
+    let inner = ()
+    {
+        return callback(value)
+    }
+    return inner()
+}
+invoke_captured(sum_values, [1, 2, 3])
+
+function retained_target(values)
+{
+    return len(values)
+}
+
+function retained_call(values)
+{
+    var callback = retained_target
+    callback = retained_target
+    return callback(values)
+}
+retained_call([1, 2, 3])
 clock_ns()
 __binary__()

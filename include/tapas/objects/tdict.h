@@ -41,6 +41,14 @@ extern tcompo_vtable tdict_vtable;
  */
 tdict *tdict_new(void);
 
+/**
+ * @brief 创建按预期键值对数量预留容量的空字典。
+ *
+ * @param expected_items 无需扩容即可写入的预期键值对数量。
+ * @return 新对象，由 Tapas 引用计数管理。
+ */
+tdict *tdict_new_sized(uint_count expected_items);
+
 /* 能力 */
 
 /**
@@ -57,9 +65,18 @@ void tdict_set(tdict *d, const tobj *key, const tobj *val);
  *
  * @param d 字典。
  * @param key 要查询的键。
- * @param vre 接收查询结果；键不存在时接收 Nil。
+ * @param vre 接收查询结果。
+ *
+ * @note 键不存在时产生运行时错误；需要默认值时使用 `idx_or`。
  */
 void tdict_get(tdict *d, const tobj *key, tobj *vre);
+
+/**
+ * @brief 尝试查询键对应的值。
+ *
+ * @return 键存在返回 1，不存在返回 0。
+ */
+int tdict_try_get(tdict *d, const tobj *key, tobj *vre);
 
 /**
  * @brief 判断字典是否包含指定键。
@@ -69,6 +86,15 @@ void tdict_get(tdict *d, const tobj *key, tobj *vre);
  * @return 包含时返回非零，否则返回零。
  */
 int tdict_contains(tdict *d, const tobj *key);
+
+/**
+ * @brief 删除键对应的键值对。
+ *
+ * @param d 字典。
+ * @param key 要删除的键。
+ * @return 删除成功返回非零，键不存在返回零。
+ */
+int tdict_delete(tdict *d, const tobj *key);
 
 #ifdef __cplusplus
 }

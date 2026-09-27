@@ -32,13 +32,8 @@ function total_length(node, depth)
 function huffman_total(text)
 {
     let freq = {}
-    for (let i in 0 to text.len()) {
-        let ch = text[i]
-        if (ch in freq) {
-            freq[ch] = freq[ch] + 1
-        } else {
-            freq[ch] = 1
-        }
+    for (let ch in text) {
+        freq[ch] = idx_or(freq, ch, 0) + 1
     }
 
     // Fixed symbol order makes ties in the minimum scan deterministic.

@@ -211,6 +211,44 @@ static void domain_index(void *self, const tobj *arguments,
 	}
 }
 
+static int domain_try_index(void *self, const tobj *arguments,
+	uint_regs count, tobj *result)
+{
+	trules_domain *domain = self;
+	if (count != 1)
+		twarn(ErrRuntime_ParamsCtr, "idx_or", "Domain needs one index");
+	if (arguments[0].type == tint) {
+		long index = arguments[0].val.v_tint;
+		long length = domain_len(domain);
+		if (index < 0 || index >= length)
+			return 0;
+		if (domain->range)
+			tobj_set_int(result, domain->start + index);
+		else
+			tobj_copy(result, &domain->values.data[index]);
+		return 1;
+	}
+	if (arguments[0].type != tcompo ||
+	    tobj_compo_type(&arguments[0]) != compo_tstr)
+		twarn(ErrRuntime_ParamsType, "idx_or", "Domain needs Int or String");
+	const char *name = tstring_cstr(
+		((tstr *)arguments[0].val.v_tcompo)->data);
+	if (!strcmp(name, "type"))
+		tobj_set_compo(result, (tcompo_v *)domain->item_type);
+	else if (domain->range && !strcmp(name, "start"))
+		tobj_set_int(result, domain->start);
+	else if (domain->range && !strcmp(name, "end"))
+		tobj_set_int(result, domain->end);
+	else if (!domain->range && !strcmp(name, "values")) {
+		tlist *list = tlist_new();
+		for (uint_objs i = 0; i < domain->values.len; i++)
+			tobj_vec_push(&list->items, &domain->values.data[i]);
+		tobj_set_compo(result, (tcompo_v *)list);
+	} else
+		return 0;
+	return 1;
+}
+
 static void domain_runtime_type(void *self, tobj *result)
 {
 	trules_domain *domain = self;
@@ -241,6 +279,7 @@ static int domain_matches_type(void *self, const tobj *value)
 
 static const tcompo_capabilities domain_capabilities = {
 	.indexable = domain_index,
+	.try_indexable = domain_try_index,
 	.contains = contains,
 	.runtime_type = domain_runtime_type,
 	.matches_type = domain_matches_type

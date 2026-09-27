@@ -34,6 +34,7 @@ typedef struct tsemantic_symbol {
 	uint8_t external;
 	uint8_t initially_assigned;
 	uint8_t captured;
+	uint8_t assigned;
 } tsemantic_symbol;
 
 typedef struct {

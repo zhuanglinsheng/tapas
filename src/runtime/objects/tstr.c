@@ -220,9 +220,60 @@ static void string_index(void *self, const tobj *arguments,
 	tstr_idx((tstr *)self, arguments, argument_count, result);
 }
 
+static int string_try_index(void *self, const tobj *arguments,
+			    uint_regs argument_count, tobj *result)
+{
+	tstr *string = (tstr *)self;
+	if (argument_count != 1)
+		twarn(ErrRuntime_ParamsCtr, "idx_or", "String needs one index");
+	long len = (long)tstring_len(string->data);
+	if (arguments[0].type == tint) {
+		long index = arguments[0].val.v_tint;
+		if (index < 0)
+			index += len;
+		if (index < 0 || index >= len)
+			return 0;
+		tobj_set_compo(result, (tcompo_v *)tstr_new_len(
+			tstring_cstr(string->data) + index, 1));
+		return 1;
+	}
+	if (arguments[0].type == tcompo &&
+	    tobj_compo_type(&arguments[0]) == compo_tpair) {
+		tpair *range = (tpair *)arguments[0].val.v_tcompo;
+		if (range->first.type != tint || range->second.type != tint)
+			twarn(ErrRuntime_ParamsType, "idx_or",
+			      "String slice bounds must be integers");
+		long start = range->first.val.v_tint;
+		long end = range->second.val.v_tint;
+		if (start < 0) start += len;
+		if (end < 0) end += len;
+		if (start < 0 || end < start || end > len)
+			return 0;
+		tobj_set_compo(result, (tcompo_v *)tstr_new_len(
+			tstring_cstr(string->data) + start, (size_t)(end - start)));
+		return 1;
+	}
+	twarn(ErrRuntime_ParamsType, "idx_or", "String index must be Int or Pair");
+	return 0;
+}
+
+static int string_next(void *self, long *position, tobj *result)
+{
+	tstr *string = (tstr *)self;
+	size_t length = tstring_len(string->data);
+	if (*position < 0 || (size_t)*position >= length)
+		return 0;
+	tobj_set_compo(result, (tcompo_v *)tstr_new_len(
+		tstring_cstr(string->data) + *position, 1));
+	(*position)++;
+	return 1;
+}
+
 
 static const tcompo_capabilities string_capabilities = {
-	.indexable = string_index
+	.indexable = string_index,
+	.try_indexable = string_try_index,
+	.iterable = string_next
 };
 
 tcompo_vtable tstr_vtable = {

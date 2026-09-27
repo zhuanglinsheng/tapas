@@ -559,6 +559,7 @@ Optional object protocols are grouped separately from operators:
 ```c
 typedef struct {
     tcompo_index_fn indexable;
+    tcompo_try_index_fn try_indexable;
     tcompo_index_set_fn index_settable;
     tcompo_append_fn appendable;
     tcompo_delete_fn deletable;
@@ -566,6 +567,11 @@ typedef struct {
     tcompo_next_fn iterable;
 } tcompo_capabilities;
 ```
+
+`try_indexable` supports `idx_or`: it stores a result and returns 1 when the
+index exists, or returns 0 when it is absent. Invalid argument Types or arity
+still raise runtime errors. New objects advertised as `Indexable` should
+implement both strict `indexable` and non-throwing `try_indexable` callbacks.
 
 Leave unsupported entries null. Index reads, index writes, `append`, `delete`,
 `in`, and `for` dispatch through these slots without testing a concrete object

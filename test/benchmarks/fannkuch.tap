@@ -1,11 +1,7 @@
 function fannkuch(n)
 {
-    let perm1 = []
-    let count = []
-    for (let i in 0 to n) {
-        perm1.append(i)
-        count.append(0)
-    }
+    let perm1 = list(0 to n)
+    let count = replicate([0], n)
     let checksum = 0
     let maxflips = 0
     let r = n
@@ -15,10 +11,7 @@ function fannkuch(n)
             r = r - 1
         }
 
-        let perm = []
-        for (let i in 0 to n) {
-            perm.append(perm1[i])
-        }
+        let perm = perm1.copy()
         let flips = 0
         let k = perm[0]
         while (k != 0) {

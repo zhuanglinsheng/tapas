@@ -9,20 +9,19 @@
 #include <stddef.h>
 #include <string.h>
 
-#define THASH_MIN_CAP 16
+#define THASH_MIN_CAP 4
+#define THASH_DEFAULT_CAP 16
 #define THASH_MAX_CAP (1u << 30)
-
-typedef enum {
-	THASH_EMPTY = 0,
-	THASH_USED,
-	THASH_DELETED
-} thash_state;
+#define THASH_LOAD_NUM 7
+#define THASH_LOAD_DEN 10
 
 typedef struct {
 	tobj key;
 	tobj value;
+	/* Zero is an empty bucket and one is a tombstone. Real hashes are
+	 * normalized above one, which removes the separate state field and keeps
+	 * the probe array denser. */
 	uint64_t hash;
-	thash_state state;
 } thash_entry;
 
 struct thashtbl {
@@ -42,22 +41,39 @@ static uint64_t thash_mix(uint64_t x)
 	return x;
 }
 
+/* Integer keys are already a full-width scalar and dominate numeric maps.
+ * One odd multiply plus two xor folds preserves a good distribution for
+ * sequential, strided and signed inputs while avoiding the second multiply
+ * needed by the general pointer/content finalizer above. */
+static uint64_t thash_mix_integer(uint64_t x)
+{
+	x ^= x >> 27;
+	x *= 0x3c79ac492ba7b653ULL;
+	x ^= x >> 33;
+	return x;
+}
+
 static uint64_t thash_tobj_hash(const tobj *key)
 {
+	uint64_t hash;
 	switch (key->type) {
 	case tnil:
-		return thash_mix(0x10);
+		hash = thash_mix(0x10);
+		break;
 	case tbool:
-		return thash_mix(0x20 ^ (uint64_t)key->val.v_tbool);
+		hash = thash_mix(0x20 ^ (uint64_t)key->val.v_tbool);
+		break;
 	case tint:
-		return thash_mix(0x30 ^ (uint64_t)key->val.v_tint);
+		hash = thash_mix_integer(0x30 ^ (uint64_t)key->val.v_tint);
+		break;
 	case tfloat: {
 		double v = key->val.v_tfloat;
 		uint64_t bits = 0;
 		if (v == 0.0)
 			v = 0.0;
 		memcpy(&bits, &v, sizeof(bits));
-		return thash_mix(0x40 ^ bits);
+		hash = thash_mix(0x40 ^ bits);
+		break;
 	}
 	case tcompo:
 		if (key->val.v_tcompo &&
@@ -68,16 +84,23 @@ static uint64_t thash_tobj_hash(const tobj *key)
 			 * first use and stays valid for the object's lifetime. */
 			if (!s->hash)
 				s->hash = tstring_hash(s->data);
-			return thash_mix(0x50 ^ s->hash);
+			hash = thash_mix(0x50 ^ s->hash);
+			break;
 		}
 		if (key->val.v_tcompo && key->val.v_tcompo->vtable &&
 		    key->val.v_tcompo->vtable->compo_code ==
-			    compo_ttypeval)
-			return thash_mix(
+			    compo_ttypeval) {
+			hash = thash_mix(
 				0x70 ^ ttypeval_hash((ttypeval *)key->val.v_tcompo));
-		return thash_mix(0x60 ^ (uintptr_t)key->val.v_tcompo);
+			break;
+		}
+		hash = thash_mix(0x60 ^ (uintptr_t)key->val.v_tcompo);
+		break;
+	default:
+		hash = thash_mix(0xff);
+		break;
 	}
-	return thash_mix(0xff);
+	return hash < 2 ? hash + 2 : hash;
 }
 
 static int thash_tobj_key_eq(const tobj *a, const tobj *b)
@@ -141,10 +164,25 @@ thashtbl *thashtbl_new(void)
 	return tbl;
 }
 
+thashtbl *thashtbl_new_sized(uint_count expected_items)
+{
+	thashtbl *tbl = thashtbl_new();
+	if (!expected_items)
+		return tbl;
+	uint_count capacity = THASH_MIN_CAP;
+	/* Use the same load limit as the insertion path. This is a capacity hint,
+	 * not a separately tuned literal-only threshold. */
+	while ((uint64_t)expected_items * THASH_LOAD_DEN >=
+	       (uint64_t)capacity * THASH_LOAD_NUM)
+		capacity = thash_next_cap(capacity);
+	thashtbl_alloc_entries(tbl, capacity);
+	return tbl;
+}
+
 static void thashtbl_clear_entries(thash_entry *entries, uint_count capacity)
 {
 	for (uint_count i = 0; i < capacity; i++) {
-		if (entries[i].state != THASH_USED)
+		if (entries[i].hash < 2)
 			continue;
 		tobj_ddc_ref_clear(&entries[i].key);
 		tobj_ddc_ref_clear(&entries[i].value);
@@ -178,11 +216,11 @@ static uint_count thashtbl_find_slot(const thashtbl *tbl,
 
 	for (;;) {
 		thash_entry *entry = &tbl->entries[idx];
-		if (entry->state == THASH_EMPTY) {
+		if (entry->hash == 0) {
 			*found = 0;
 			return first_deleted != tbl->capacity ? first_deleted : idx;
 		}
-		if (entry->state == THASH_DELETED) {
+		if (entry->hash == 1) {
 			if (first_deleted == tbl->capacity)
 				first_deleted = idx;
 		} else if (entry->hash == hash &&
@@ -196,7 +234,7 @@ static uint_count thashtbl_find_slot(const thashtbl *tbl,
 const tobj *thashtbl_find(const thashtbl *tbl, const tobj *key,
 			   uint_count *slot)
 {
-	if (!tbl || !key) {
+	if (!tbl || !key || tbl->capacity == 0) {
 		if (slot) *slot = 0;
 		return nullptr;
 	}
@@ -216,7 +254,7 @@ const tobj *thashtbl_get_entry_at(const thashtbl *tbl, uint_count slot,
 	/* Interned keys hit the pointer fast path; key equality implies the
 	 * stored hash still matches, so the entry stays valid after rehashes
 	 * and tombstones without recomputing the key hash. */
-	if (entry->state != THASH_USED)
+	if (entry->hash < 2)
 		return nullptr;
 	if (key->type == tcompo) {
 		if (entry->key.val.v_tcompo == key->val.v_tcompo)
@@ -235,13 +273,13 @@ uint_count thashtbl_capacity(const thashtbl *tbl)
 
 static void thashtbl_move_entry(thashtbl *tbl, thash_entry *src)
 {
-	int found = 0;
-	uint_count idx = thashtbl_find_slot(tbl, &src->key, src->hash, &found);
+	uint_count mask = tbl->capacity - 1;
+	uint_count idx = (uint_count)(src->hash & mask);
+	while (tbl->entries[idx].hash != 0)
+		idx = (idx + 1) & mask;
 	thash_entry *dst = &tbl->entries[idx];
-	if (dst->state == THASH_EMPTY)
-		tbl->used++;
 	*dst = *src;
-	dst->state = THASH_USED;
+	tbl->used++;
 	tbl->len++;
 }
 
@@ -253,7 +291,7 @@ static void thashtbl_rehash(thashtbl *tbl, uint_count newcap)
 	thashtbl_alloc_entries(tbl, newcap);
 
 	for (uint_count i = 0; i < old_capacity; i++) {
-		if (old_entries[i].state != THASH_USED)
+		if (old_entries[i].hash < 2)
 			continue;
 		thashtbl_move_entry(tbl, &old_entries[i]);
 	}
@@ -263,67 +301,24 @@ static void thashtbl_rehash(thashtbl *tbl, uint_count newcap)
 static void thashtbl_ensure_room(thashtbl *tbl)
 {
 	if (tbl->capacity == 0) {
-		thashtbl_alloc_entries(tbl, THASH_MIN_CAP);
+		thashtbl_alloc_entries(tbl, THASH_DEFAULT_CAP);
 		return;
 	}
-	if ((tbl->len + 1) * 10 >= tbl->capacity * 7)
+	if ((tbl->len + 1) * THASH_LOAD_DEN >=
+	    tbl->capacity * THASH_LOAD_NUM)
 		thashtbl_rehash(tbl, thash_next_cap(tbl->capacity));
-	else if ((tbl->used + 1) * 10 >= tbl->capacity * 7)
+	else if ((tbl->used + 1) * THASH_LOAD_DEN >=
+		 tbl->capacity * THASH_LOAD_NUM)
 		thashtbl_rehash(tbl, tbl->capacity);
-}
-
-static void thashtbl_maybe_compact_after_delete(thashtbl *tbl)
-{
-	uint_count tombstones;
-	if (!tbl || tbl->capacity == 0)
-		return;
-	tombstones = tbl->used - tbl->len;
-	if (tbl->capacity > THASH_MIN_CAP && tbl->len * 10 < tbl->capacity * 2) {
-		uint_count newcap = tbl->capacity / 2;
-		while (newcap > THASH_MIN_CAP && tbl->len * 10 < newcap * 2)
-			newcap /= 2;
-		thashtbl_rehash(tbl, newcap);
-	} else if (tombstones > tbl->len && tombstones > 8) {
-		thashtbl_rehash(tbl, tbl->capacity);
-	}
-}
-
-static void thashtbl_place(thashtbl *tbl,
-			   const tobj *key,
-			   const tobj *value,
-			   uint64_t hash)
-{
-	int found = 0;
-	uint_count idx = thashtbl_find_slot(tbl, key, hash, &found);
-	thash_entry *entry = &tbl->entries[idx];
-
-	if (found) {
-		if (thash_same_stored_value(&entry->value, value))
-			return;
-		thash_retain(value);
-		tobj_ddc_ref_clear(&entry->value);
-		entry->value = *value;
-		return;
-	}
-
-	if (entry->state == THASH_EMPTY)
-		tbl->used++;
-	entry->key = *key;
-	entry->value = *value;
-	entry->hash = hash;
-	entry->state = THASH_USED;
-	thash_retain(key);
-	thash_retain(value);
-	tbl->len++;
 }
 
 uint_count thashtbl_set(thashtbl *tbl, const tobj *key, const tobj *value)
 {
 	if (!tbl || !key || !value)
 		return 0;
-	uint64_t hash;
-	thashtbl_ensure_room(tbl);
-	hash = thash_tobj_hash(key);
+	if (tbl->capacity == 0)
+		thashtbl_alloc_entries(tbl, THASH_DEFAULT_CAP);
+	uint64_t hash = thash_tobj_hash(key);
 	int found = 0;
 	uint_count idx = thashtbl_find_slot(tbl, key, hash, &found);
 	if (found) {
@@ -335,10 +330,22 @@ uint_count thashtbl_set(thashtbl *tbl, const tobj *key, const tobj *value)
 		}
 		return idx;
 	}
-	thashtbl_place(tbl, key, value, hash);
-	/* The insertion slot equals the find slot unless the table grew. */
-	found = 0;
-	return thashtbl_find_slot(tbl, key, hash, &found);
+	thash_entry *old_entries = tbl->entries;
+	thashtbl_ensure_room(tbl);
+	if (tbl->entries != old_entries) {
+		found = 0;
+		idx = thashtbl_find_slot(tbl, key, hash, &found);
+	}
+	thash_entry *entry = &tbl->entries[idx];
+	if (entry->hash == 0)
+		tbl->used++;
+	entry->key = *key;
+	entry->value = *value;
+	entry->hash = hash;
+	thash_retain(key);
+	thash_retain(value);
+	tbl->len++;
+	return idx;
 }
 
 int thashtbl_set_at(thashtbl *tbl, uint_count slot, const tobj *key,
@@ -347,7 +354,7 @@ int thashtbl_set_at(thashtbl *tbl, uint_count slot, const tobj *key,
 	if (!tbl || slot >= tbl->capacity)
 		return 0;
 	thash_entry *entry = &tbl->entries[slot];
-	if (entry->state != THASH_USED)
+	if (entry->hash < 2)
 		return 0;
 	if (key->type == tcompo &&
 	    entry->key.val.v_tcompo == key->val.v_tcompo) {
@@ -388,10 +395,18 @@ int thashtbl_delete(thashtbl *tbl, const tobj *key)
 		return 0;
 	tobj_ddc_ref_clear(&tbl->entries[idx].key);
 	tobj_ddc_ref_clear(&tbl->entries[idx].value);
-	tbl->entries[idx].hash = 0;
-	tbl->entries[idx].state = THASH_DELETED;
+	tbl->entries[idx].hash = 1;
 	tbl->len--;
-	thashtbl_maybe_compact_after_delete(tbl);
+	/* Leave tombstone compaction to the insertion path. Rehashing after a
+	 * deletion makes bulk erasure repeatedly move entries that are about to
+	 * be deleted as well. Release the backing array when the table becomes
+	 * empty so the next insertion starts from a clean default-size table. */
+	if (tbl->len == 0) {
+		free(tbl->entries);
+		tbl->entries = nullptr;
+		tbl->used = 0;
+		tbl->capacity = 0;
+	}
 	return 1;
 }
 
@@ -400,11 +415,20 @@ thashtbl *thashtbl_copy(const thashtbl *tbl)
 	thashtbl *copy = thashtbl_new();
 	if (!tbl || tbl->len == 0)
 		return copy;
-	thashtbl_rehash(copy, tbl->capacity);
+	thashtbl_alloc_entries(copy, tbl->capacity);
+	uint_count mask = copy->capacity - 1;
 	for (uint_count i = 0; i < tbl->capacity; i++) {
-		if (tbl->entries[i].state != THASH_USED)
+		if (tbl->entries[i].hash < 2)
 			continue;
-		thashtbl_set(copy, &tbl->entries[i].key, &tbl->entries[i].value);
+		const thash_entry *src = &tbl->entries[i];
+		uint_count slot = (uint_count)(src->hash & mask);
+		while (copy->entries[slot].hash != 0)
+			slot = (slot + 1) & mask;
+		copy->entries[slot] = *src;
+		thash_retain(&copy->entries[slot].key);
+		thash_retain(&copy->entries[slot].value);
+		copy->len++;
+		copy->used++;
 	}
 	return copy;
 }
@@ -414,7 +438,7 @@ void thashtbl_each(const thashtbl *tbl, thashtbl_each_fn fn, void *ctx)
 	if (!tbl || !fn)
 		return;
 	for (uint_count i = 0; i < tbl->capacity; i++) {
-		if (tbl->entries[i].state != THASH_USED)
+		if (tbl->entries[i].hash < 2)
 			continue;
 		fn(&tbl->entries[i].key, &tbl->entries[i].value, ctx);
 	}

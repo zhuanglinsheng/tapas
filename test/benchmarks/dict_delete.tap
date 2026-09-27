@@ -1,0 +1,13 @@
+let values = {}
+for (let index in 0 to 200000) {
+    values[index] = index
+}
+
+let started = clock_ns()
+for (let index in 0 to 200000) {
+    delete(values, index)
+}
+let elapsed = clock_ns() - started
+
+print(len(values))
+print(elapsed)

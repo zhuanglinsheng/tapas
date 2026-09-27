@@ -108,6 +108,33 @@ static int native_call_opcode(tast_emitter *emitter, const tstring *name,
 	}
 }
 
+/* Borrow a named callable directly from its slot. Bit 4 records whether source
+ * analysis found an assignment to that binding, in which case the VM retains
+ * it for the duration of a Tapas call. The low four bits encode tmp/current/
+ * ancestor addressing; unusually deep names keep generic OP_EVAL. */
+static int borrowed_named_call_address(tast_emitter *emitter, tast_id id,
+		uint16_t *slot, uint8_t *address)
+{
+	const tsemantic_symbol *symbol = tsemantic_resolved_symbol(
+		&emitter->frontend->semantic, id);
+	uint16_t encoded = 0;
+	if (!compact_named_address(emitter, id, slot, &encoded))
+		return 0;
+	uint8_t direct_address = 0;
+	if (!tpushx_isenv(encoded))
+		direct_address = 0;
+	else if (!tpushx_is_upval(encoded))
+		direct_address = 1;
+	else {
+		uint16_t depth = tpushx_depth(encoded);
+		if (depth >= 15)
+			return 0;
+		direct_address = (uint8_t)(depth + 1);
+	}
+	*address = direct_address | (symbol && symbol->assigned ? 0x10 : 0);
+	return 1;
+}
+
 static void emit_number(tast_emitter *emitter, const tast_node *node)
 {
 	tstring *literal = tast_emitter_text(emitter, node->span);
@@ -432,11 +459,18 @@ static void emit_call(tast_emitter *emitter, const tast_node *node)
 	int opcode = OP_EVAL;
 	uint16_t native_slot = 0;
 	uint8_t native_depth = 0;
+	uint16_t named_slot = 0;
+	uint8_t named_address = 0;
 	if (callee->kind == tast_name) {
 		tstring *callee_name = tast_emitter_text(emitter, callee->span);
 		opcode = native_call_opcode(
 			emitter, callee_name, &native_slot, &native_depth);
 		tstring_free(callee_name);
+		if (opcode == OP_EVAL && arguments <= UINT8_MAX &&
+		    borrowed_named_call_address(
+			emitter, node->aggregate.receiver,
+			&named_slot, &named_address))
+			opcode = OP_EVALDF;
 	}
 	emit_arguments(emitter, node);
 	if (opcode == OP_EVALCF || opcode == OP_EVALSF) {
@@ -444,6 +478,12 @@ static void emit_call(tast_emitter *emitter, const tast_node *node)
 			tbycode_make_lbi(
 				opcode, native_slot, (uint8_t)arguments,
 				native_depth + 1));
+		treg_ctr_ddt_n(&emitter->cp->regctr, (uint_regs)arguments);
+	} else if (opcode == OP_EVALDF) {
+		tvmcmd_vect_append(emitter->instructions,
+			tbycode_make_lbi(
+				OP_EVALDF, named_slot,
+				(uint8_t)arguments, named_address));
 		treg_ctr_ddt_n(&emitter->cp->regctr, (uint_regs)arguments);
 	} else {
 		tast_emit_expression(emitter, node->aggregate.receiver);
@@ -574,26 +614,10 @@ static void emit_index(tast_emitter *emitter, const tast_node *node,
 static void emit_list(tast_emitter *emitter, const tast_node *node)
 {
 	emit_arguments(emitter, node);
-	tstring *list_name = tstring_new("list");
-	uint16_t native_slot = 0;
-	uint8_t native_depth = 0;
-	int list_opcode = native_call_opcode(
-		emitter, list_name, &native_slot, &native_depth);
-	if (list_opcode != OP_EVALCF && list_opcode != OP_EVALSF)
-		compile_emit_reference(emitter->cp, list_name,
-			emitter->instructions, emitter->constants);
-	tstring_free(list_name);
-	tvmcmd_vect_append(
-		emitter->instructions,
-		list_opcode == OP_EVALCF || list_opcode == OP_EVALSF ?
-			tbycode_make_lbi(list_opcode, native_slot,
-				(uint8_t)node->aggregate.count,
-				native_depth + 1) :
-			tbycode_make_u(list_opcode, node->aggregate.count));
+	tvmcmd_vect_append(emitter->instructions,
+		tbycode_make_u(OP_PUSHLIST, node->aggregate.count));
 	treg_ctr_ddt_n(&emitter->cp->regctr,
-		(list_opcode == OP_EVALCF || list_opcode == OP_EVALSF) ?
-			(uint_regs)node->aggregate.count :
-			(uint_regs)(node->aggregate.count + 1));
+		(uint_regs)node->aggregate.count);
 	treg_ctr_add(&emitter->cp->regctr);
 }
 

@@ -68,7 +68,8 @@
 | `float(value: Bool \| Int \| Float \| String)` | `Float` | 转换为浮点数。 |
 | `bool(value: AnyType)` | `Bool` | 显式真值转换。 |
 | `str(value: AnyType)` | `String` | 完整文本表示。 |
-| `list(...AnyType)` | `List` | 用参数建立新列表。 |
+| `list()` / `list(Iterable)` | `List` | 建立空列表，或消费任意可迭代对象并生成新列表。 |
+| `replicate(List, Int)` | `List` | 将源列表的全部内容浅复制指定次数。 |
 | `pair(first: AnyType, second: AnyType)` | `Pair` | 建立对。 |
 | `iter(start: Int, end: Int)` | `Iterator` | 自动推断步长的半开范围。 |
 | `iter(start: Int, step: Int, end: Int)` | `Iterator` | 指定非零步长的半开范围。 |
@@ -89,6 +90,7 @@
 | `pop_back(List[T])` | `T` | 删除并返回最后一个元素。 |
 | `delete(target: Deletable, key: AnyType)` | `Nil` | 删除元素。 |
 | `idx(target: Indexable, key: AnyType)` | `AnyType` | 单参数索引。 |
+| `idx_or(target: Indexable, key: AnyType, default: AnyType)` | `AnyType` | 索引不存在时返回默认值；参数类型错误仍会报错。 |
 | `keys(Dictionary)` | `List` | 按未规定顺序返回键。 |
 | `values(Dictionary)` | `List` | 按相应顺序返回值。 |
 | `concat(List, List)` | `List` | 返回浅复制拼接结果。 |
@@ -97,6 +99,7 @@
 对字典调用`append`时，追加的值必须是`Pair`。
 `pop_front`和`pop_back`会转移被删除元素的所有权，不能用于空列表。
 `delete`只执行通用删除，仍返回`nil`。
+`idx_or`通过非抛错索引能力只查询一次目标；它不先执行`in`测试。
 集合中不能保存`nil`。
 
 ## 5. 会话函数
