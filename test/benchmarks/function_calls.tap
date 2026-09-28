@@ -3,12 +3,18 @@ function add(left, right)
     return left + right
 }
 
-let started = clock_ns()
-var total = 0
+function bench(n, add)
+{
+    let started = clock_ns()
+    var total = 0
 
-for (let index in 0 to 200000) {
-    total = add(total, index % 7)
+    for (let index in 0 to n) {
+        total = add(total, index % 7)
+    }
+
+    let elapsed = clock_ns() - started
+    print(total)
+    print(elapsed)
 }
 
-print(total)
-print(clock_ns() - started)
+bench(200000, add)

@@ -1,13 +1,16 @@
 import time
 
 
-started = time.process_time_ns()
-values = []
+def bench(n):
+    values = []
+    started = time.process_time_ns()
 
-for index in range(500_000):
-    values.append(index % 97)
+    for index in range(n):
+        values.append(index)
 
-elapsed = time.process_time_ns() - started
-result = len(values) + values[123] + values[499_999]
-print(result)
-print(elapsed)
+    elapsed = time.process_time_ns() - started
+    print(len(values) + values[123] + values[499_999])
+    print(elapsed)
+
+
+bench(500_000)

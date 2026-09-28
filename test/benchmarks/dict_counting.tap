@@ -1,18 +1,29 @@
-let started = clock_ns()
-let counts = {}
+let keys = []
 for (let index in 0 to 500000) {
-    let key = (index * 17 + 3) % 4096
-    if (key in counts) {
-        counts[key] = counts[key] + 1
-    } else {
-        counts[key] = 1
-    }
+    keys.append(index % 4096)
 }
-let elapsed = clock_ns() - started
 
-let result = 0
-for (let key in 0 to 4096) {
-    result = result + counts[key]
+function bench(n, keys)
+{
+    let started = clock_ns()
+    let counts = {}
+
+    for (let index in 0 to n) {
+        let key = keys[index]
+        if (key in counts) {
+            counts[key] = counts[key] + 1
+        } else {
+            counts[key] = 1
+        }
+    }
+
+    let elapsed = clock_ns() - started
+    var result = 0
+    for (let key in 0 to 4096) {
+        result = result + counts[key]
+    }
+    print(result)
+    print(elapsed)
 }
-print(result)
-print(elapsed)
+
+bench(500000, keys)

@@ -10,13 +10,18 @@ local function replicate(values, count)
     return result
 end
 
-local started = os.clock()
-local result = 0
-for repetition = 0, 19999 do
-    local values = replicate(pattern, 256)
-    result = result + values[repetition % 1024 + 1]
-end
-local elapsed = os.clock() - started
+local function bench(rounds, pattern)
+    local started = os.clock()
+    local result = 0
 
-print(result)
-print(math.floor(elapsed * 1e9 + 0.5))
+    for repetition = 1, rounds do
+        local values = replicate(pattern, 256)
+        result = result + values[1024]
+    end
+
+    local elapsed = math.floor((os.clock() - started) * 1e9 + 0.5)
+    print(result)
+    print(elapsed)
+end
+
+bench(20000, pattern)

@@ -1,18 +1,20 @@
 local values = {}
-for index = 1, 1024 do
-    values[index] = 0
+for slot = 1, 1024 do
+    values[slot] = 0
 end
 
-local started = os.clock()
-for index = 0, 499999 do
-    local slot = index % 1024 + 1
-    values[slot] = (values[slot] + index) % 1000003
-end
-local elapsed = os.clock() - started
+local function bench(rounds, values)
+    local started = os.clock()
 
-local result = 0
-for index = 1, 1024 do
-    result = result + values[index]
+    for round = 1, rounds do
+        for slot = 0, 1023 do
+            values[slot + 1] = slot
+        end
+    end
+
+    local elapsed = math.floor((os.clock() - started) * 1e9 + 0.5)
+    print(values[124] + values[1024] + #values)
+    print(elapsed)
 end
-print(result)
-print(math.floor(elapsed * 1e9 + 0.5))
+
+bench(488, values)

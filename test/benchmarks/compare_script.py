@@ -100,10 +100,12 @@ def write_markdown(
         algorithm_title = "综合算法"
         algorithm_description = "这些程序组合使用递归、分支、容器、索引和内存分配，更接近完整算法负载。"
         hot_path_title = "基础热路径"
-        hot_path_description = ("这些程序分别放大常见 VM 操作或容器使用模式，用来定位解释器的基础开销。"
-                                "`function_call_baseline` 是不含调用的等价循环；将其从 "
-                                "`function_calls` 中扣除可估算直接调用净成本，"
-                                "`function_callbacks` 则额外覆盖高阶回调。")
+        hot_path_description = ("这些程序把计时循环放在函数内，并让循环体只保留被测的那一种 VM 操作或容器访问模式，"
+                                "用来定位解释器的基础开销；与目标操作无关的取模寻址、增长整数累加和模块级变量访问均已移除，"
+                                "避免把其他语言的长短处混进单项结果。"
+                                "`vm_hot_paths` 与 `float_arithmetic` 的循环体本身就是被测的混合算术负载；"
+                                "`function_call_baseline` 与 `function_calls` 共享同一循环体，两者相减可估算直接调用净成本，"
+                                "`function_callbacks` 在其上增加一层高阶回调。")
         group_mean = "本组几何平均数"
         usage_title = "## 用法"
         usage = (
@@ -127,6 +129,7 @@ def write_markdown(
         notes = (
             "这些程序用于比较三种实现执行相同算法时的解释器开销，不代表大型应用的完整性能。",
             "各语言使用语义等价的惯用实现；内建批量操作和数据结构带来的优势属于比较结果的一部分。",
+            "计时区域都位于函数内部，三种语言保持一致；比较脚本会校验三种实现的输出完全相同。",
             "结果会受系统负载、电源状态、编译器版本、Python 版本和 Lua 版本影响。",
             "更新 VM 或运行环境后，应使用上文「用法」中的命令重新生成。",
         )
@@ -151,8 +154,11 @@ def write_markdown(
         algorithm_title = "Complete Algorithms"
         algorithm_description = "These programs combine recursion, branching, containers, indexing, and allocation to approximate complete algorithm workloads."
         hot_path_title = "VM Hot Paths"
-        hot_path_description = ("Each program amplifies a common VM operation or container usage pattern to help isolate interpreter overhead. "
-                                "`function_call_baseline` is the equivalent loop without a call; subtracting it from `function_calls` estimates direct-call overhead, while `function_callbacks` adds a higher-order callback layer.")
+        hot_path_description = ("Each program times a loop inside a function and keeps only the measured VM operation or container access pattern in the loop body, "
+                                "to help isolate interpreter overhead. Modular index arithmetic, growing-integer accumulation, and module-scope variable access are kept out, "
+                                "so one language's unrelated strengths or weaknesses cannot leak into a single-item result. "
+                                "The loop bodies of `vm_hot_paths` and `float_arithmetic` are themselves the measured arithmetic workload; "
+                                "`function_call_baseline` shares the loop body of `function_calls`, so subtracting the two estimates direct-call overhead, and `function_callbacks` adds a higher-order callback layer.")
         group_mean = "The geometric mean ratio for this group"
         usage_title = "## Usage"
         usage = (
@@ -182,6 +188,7 @@ def write_markdown(
         notes = (
             "These programs compare interpreter overhead while all implementations execute the same algorithms; they do not represent complete application performance.",
             "Each language uses an idiomatic implementation with equivalent semantics; advantages from built-in bulk operations and data structures are part of the comparison.",
+            "Timed regions live inside functions in all three languages, and the comparison script verifies that all implementations print identical results.",
             "Results depend on system load, power settings, compiler version, Python version, and Lua version.",
             "Regenerate the reports with the commands in the Usage section after changing the VM or runtime environment.",
         )

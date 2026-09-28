@@ -1,12 +1,18 @@
 let source = list(0 to 1024)
 
-let started = clock_ns()
-let result = 0
-for (let repetition in 0 to 20000) {
-    let copied = source.copy()
-    result = result + copied[repetition % 1024]
-}
-let elapsed = clock_ns() - started
+function bench(rounds, source)
+{
+    var result = 0
+    let started = clock_ns()
 
-print(result)
-print(elapsed)
+    for (let repetition in 0 to rounds) {
+        let copied = source.copy()
+        result = result + copied[1023]
+    }
+
+    let elapsed = clock_ns() - started
+    print(result)
+    print(elapsed)
+}
+
+bench(20000, source)

@@ -1,13 +1,18 @@
-let values = {}
-for (let index in 0 to 200000) {
-    values[index] = index
+function bench(n)
+{
+    let values = {}
+    for (let index in 0 to n) {
+        values[index] = index
+    }
+
+    let started = clock_ns()
+    for (let index in 0 to n) {
+        delete(values, index)
+    }
+    let elapsed = clock_ns() - started
+
+    print(len(values))
+    print(elapsed)
 }
 
-let started = clock_ns()
-for (let index in 0 to 200000) {
-    delete(values, index)
-}
-let elapsed = clock_ns() - started
-
-print(len(values))
-print(elapsed)
+bench(200000)

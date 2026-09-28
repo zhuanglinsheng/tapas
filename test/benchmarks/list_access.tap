@@ -1,10 +1,17 @@
-let values = [3, 1, 4, 1, 5, 9, 2, 6]
-let started = clock_ns()
-var total = 0
+let values = replicate([0, 1, 2, 3, 4, 5, 6, 7], 62500)
 
-for (let index in 0 to 500000) {
-    total = total + values[index % 8]
+function bench(n, values)
+{
+    var sink = 0
+    let started = clock_ns()
+
+    for (let index in 0 to n) {
+        sink = values[index]
+    }
+
+    let elapsed = clock_ns() - started
+    print(sink + len(values))
+    print(elapsed)
 }
 
-print(total)
-print(clock_ns() - started)
+bench(500000, values)

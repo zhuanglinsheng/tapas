@@ -1,10 +1,16 @@
-let started = clock_ns()
-let result = 0
-for (let index in 0 to 300000) {
-    let values = {0: index, 1: index + 1}
-    result = result + values[0] - values[1]
-}
-let elapsed = clock_ns() - started
+function bench(n)
+{
+    var result = 0
+    let started = clock_ns()
 
-print(result)
-print(elapsed)
+    for (let index in 0 to n) {
+        let values = {0: index % 97, 1: index % 89}
+        result = result + values[0] - values[1]
+    }
+
+    let elapsed = clock_ns() - started
+    print(result)
+    print(elapsed)
+}
+
+bench(300000)

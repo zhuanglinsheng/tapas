@@ -1,18 +1,18 @@
 local values = {}
-for index = 0, 4095 do
+for index = 1, 500000 do
     values[index] = 0
 end
 
-local started = os.clock()
-for index = 0, 499999 do
-    local key = index % 4096
-    values[key] = values[key] + 1
-end
-local elapsed = os.clock() - started
+local function bench(n, values)
+    local started = os.clock()
 
-local result = 0
-for index = 0, 4095 do
-    result = result + values[index]
+    for index = 1, n do
+        values[index] = index - 1
+    end
+
+    local elapsed = math.floor((os.clock() - started) * 1e9 + 0.5)
+    print(values[124] + values[500000] + #values)
+    print(elapsed)
 end
-print(result)
-print(math.floor(elapsed * 1e9 + 0.5))
+
+bench(500000, values)

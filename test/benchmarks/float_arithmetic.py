@@ -1,12 +1,17 @@
 import time
 
 
-started = time.process_time_ns()
-value = 0.5
+def bench(n):
+    started = time.process_time_ns()
+    value = 0.5
 
-for index in range(1_000_000):
-    value = value * 1.00000001 + 0.25
-    value = value - 0.125
+    for index in range(n):
+        value = value * 1.00000001 + 0.25
+        value = value - 0.125
 
-print(int(value))
-print(time.process_time_ns() - started)
+    elapsed = time.process_time_ns() - started
+    print(int(value))
+    print(elapsed)
+
+
+bench(1_000_000)

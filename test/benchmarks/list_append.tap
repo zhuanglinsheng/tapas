@@ -1,11 +1,15 @@
-let started = clock_ns()
-let values = []
+function bench(n)
+{
+    let values = []
+    let started = clock_ns()
 
-for (let index in 0 to 500000) {
-    values.append(index % 97)
+    for (let index in 0 to n) {
+        values.append(index)
+    }
+
+    let elapsed = clock_ns() - started
+    print(len(values) + values[123] + values[499999])
+    print(elapsed)
 }
 
-let elapsed = clock_ns() - started
-let result = len(values) + values[123] + values[499999]
-print(result)
-print(elapsed)
+bench(500000)

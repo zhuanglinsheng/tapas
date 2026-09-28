@@ -8,12 +8,18 @@ function apply(callback, left, right)
     return callback(left, right)
 }
 
-let started = clock_ns()
-var total = 0
+function bench(n, add, apply)
+{
+    let started = clock_ns()
+    var total = 0
 
-for (let index in 0 to 200000) {
-    total = apply(add, total, index % 7)
+    for (let index in 0 to n) {
+        total = apply(add, total, index % 7)
+    }
+
+    let elapsed = clock_ns() - started
+    print(total)
+    print(elapsed)
 }
 
-print(total)
-print(clock_ns() - started)
+bench(200000, add, apply)

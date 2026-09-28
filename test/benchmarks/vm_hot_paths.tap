@@ -1,15 +1,21 @@
-let started = clock_ns()
-var total = 0
+function bench(n)
+{
+    let started = clock_ns()
+    var total = 0
 
-for (let index in 0 to 2000000) {
-    if (index % 2 == 0) {
-        continue
+    for (let index in 0 to n) {
+        if (index % 2 == 0) {
+            continue
+        }
+        total = total + index % 7
+        total = total + index % 5
+        total = total - index % 3
+        total = total + index % 11
     }
-    total = total + index % 7
-    total = total + index % 5
-    total = total - index % 3
-    total = total + index % 11
+
+    let elapsed = clock_ns() - started
+    print(total)
+    print(elapsed)
 }
 
-print(total)
-print(clock_ns() - started)
+bench(2000000)

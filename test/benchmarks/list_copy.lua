@@ -1,15 +1,20 @@
 local source = {}
-for index = 0, 1023 do
-    source[index + 1] = index
+for index = 1, 1024 do
+    source[index] = index - 1
 end
 
-local started = os.clock()
-local result = 0
-for repetition = 0, 19999 do
-    local copied = table.move(source, 1, 1024, 1, {})
-    result = result + copied[repetition % 1024 + 1]
-end
-local elapsed = os.clock() - started
+local function bench(rounds, source)
+    local started = os.clock()
+    local result = 0
 
-print(result)
-print(math.floor(elapsed * 1e9 + 0.5))
+    for repetition = 1, rounds do
+        local copied = table.move(source, 1, 1024, 1, {})
+        result = result + copied[1024]
+    end
+
+    local elapsed = math.floor((os.clock() - started) * 1e9 + 0.5)
+    print(result)
+    print(elapsed)
+end
+
+bench(20000, source)

@@ -1,12 +1,19 @@
 import time
 
 
-values = {index: index % 97 for index in range(4096)}
-started = time.process_time_ns()
-result = 0
-for index in range(1_000_000):
-    result += values[index % 4096]
-elapsed = time.process_time_ns() - started
+values = {index: index for index in range(500_000)}
 
-print(result)
-print(elapsed)
+
+def bench(n, values):
+    started = time.process_time_ns()
+    sink = 0
+
+    for index in range(n):
+        sink = values[index]
+
+    elapsed = time.process_time_ns() - started
+    print(sink + len(values))
+    print(elapsed)
+
+
+bench(500_000, values)
