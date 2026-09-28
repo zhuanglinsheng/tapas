@@ -1,5 +1,6 @@
-#include "tapas/dsa/thashtbl.h"
 #include "tapas/dsa/tstring.h"
+#include "thashtbl_internal.h"
+#include "tblockpool.h"
 #include "tapas/objects/tstr.h"
 #include "tapas/objects/ttype.h"
 #include "tapas/tval.h"
@@ -12,24 +13,6 @@
 #define THASH_MIN_CAP 4
 #define THASH_DEFAULT_CAP 16
 #define THASH_MAX_CAP (1u << 30)
-#define THASH_LOAD_NUM 7
-#define THASH_LOAD_DEN 10
-
-typedef struct {
-	tobj key;
-	tobj value;
-	/* Zero is an empty bucket and one is a tombstone. Real hashes are
-	 * normalized above one, which removes the separate state field and keeps
-	 * the probe array denser. */
-	uint64_t hash;
-} thash_entry;
-
-struct thashtbl {
-	thash_entry *entries;
-	uint_count len;
-	uint_count used;
-	uint_count capacity;
-};
 
 static uint64_t thash_mix(uint64_t x)
 {
@@ -38,18 +21,6 @@ static uint64_t thash_mix(uint64_t x)
 	x ^= x >> 27;
 	x *= 0x94d049bb133111ebULL;
 	x ^= x >> 31;
-	return x;
-}
-
-/* Integer keys are already a full-width scalar and dominate numeric maps.
- * One odd multiply plus two xor folds preserves a good distribution for
- * sequential, strided and signed inputs while avoiding the second multiply
- * needed by the general pointer/content finalizer above. */
-static uint64_t thash_mix_integer(uint64_t x)
-{
-	x ^= x >> 27;
-	x *= 0x3c79ac492ba7b653ULL;
-	x ^= x >> 33;
 	return x;
 }
 
@@ -64,7 +35,8 @@ static uint64_t thash_tobj_hash(const tobj *key)
 		hash = thash_mix(0x20 ^ (uint64_t)key->val.v_tbool);
 		break;
 	case tint:
-		hash = thash_mix_integer(0x30 ^ (uint64_t)key->val.v_tint);
+		/* Same computation as thashtbl_hash_int(); keep both in sync. */
+		hash = thashtbl_hash_int((uint64_t)key->val.v_tint);
 		break;
 	case tfloat: {
 		double v = key->val.v_tfloat;
@@ -150,7 +122,8 @@ static uint_count thash_next_cap(uint_count cap)
 
 static void thashtbl_alloc_entries(thashtbl *tbl, uint_count capacity)
 {
-	tbl->entries = (thash_entry *)calloc(capacity, sizeof(thash_entry));
+	tbl->entries = (thash_entry *)tblockpool_calloc(
+		capacity * sizeof(thash_entry));
 	if (!tbl->entries)
 		twarn(ErrRuntime_Other, "thashtbl_alloc_entries", "out of memory");
 	tbl->capacity = capacity;
@@ -160,7 +133,7 @@ static void thashtbl_alloc_entries(thashtbl *tbl, uint_count capacity)
 
 thashtbl *thashtbl_new(void)
 {
-	thashtbl *tbl = (thashtbl *)calloc(1, sizeof(thashtbl));
+	thashtbl *tbl = (thashtbl *)tblockpool_calloc(sizeof(thashtbl));
 	return tbl;
 }
 
@@ -195,9 +168,9 @@ void thashtbl_free(thashtbl *tbl)
 		return;
 	if (tbl->entries) {
 		thashtbl_clear_entries(tbl->entries, tbl->capacity);
-		free(tbl->entries);
+		tblockpool_free(tbl->entries, tbl->capacity * sizeof(thash_entry));
 	}
-	free(tbl);
+	tblockpool_free(tbl, sizeof(thashtbl));
 }
 
 uint_count thashtbl_len(const thashtbl *tbl)
@@ -295,7 +268,7 @@ static void thashtbl_rehash(thashtbl *tbl, uint_count newcap)
 			continue;
 		thashtbl_move_entry(tbl, &old_entries[i]);
 	}
-	free(old_entries);
+	tblockpool_free(old_entries, old_capacity * sizeof(thash_entry));
 }
 
 static void thashtbl_ensure_room(thashtbl *tbl)
@@ -402,7 +375,7 @@ int thashtbl_delete(thashtbl *tbl, const tobj *key)
 	 * be deleted as well. Release the backing array when the table becomes
 	 * empty so the next insertion starts from a clean default-size table. */
 	if (tbl->len == 0) {
-		free(tbl->entries);
+		tblockpool_free(tbl->entries, tbl->capacity * sizeof(thash_entry));
 		tbl->entries = nullptr;
 		tbl->used = 0;
 		tbl->capacity = 0;

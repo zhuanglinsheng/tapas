@@ -1,4 +1,5 @@
 #include "tapas/objects/tdict.h"
+#include "../../dsa/tblockpool.h"
 #include "tapas/dsa/tstring.h"
 #include "tapas/dsa/thashtbl.h"
 #include "tapas/objects/tpair.h"
@@ -7,7 +8,7 @@
 
 tdict *tdict_new_sized(uint_count expected_items)
 {
-	tdict *dictionary = (tdict *)calloc(1, sizeof(tdict));
+	tdict *dictionary = (tdict *)tblockpool_calloc(sizeof(tdict));
 	dictionary->base.vtable = &tdict_vtable;
 	dictionary->items = thashtbl_new_sized(expected_items);
 	return dictionary;
@@ -63,7 +64,7 @@ static long tdict_len(void *self)
 static void *tdict_copy(void *self)
 {
 	tdict *d = (tdict *)self;
-	tdict *n = (tdict *)calloc(1, sizeof(tdict));
+	tdict *n = (tdict *)tblockpool_calloc(sizeof(tdict));
 	n->base.vtable = d->base.vtable;
 	n->items = thashtbl_copy(d->items);
 	return n;
@@ -73,7 +74,7 @@ static void tdict_free(void *self)
 {
 	tdict *d = (tdict *)self;
 	thashtbl_free(d->items);
-	free(d);
+	tblockpool_free(d, sizeof(tdict));
 }
 
 static int tdict_identical(void *self, void *other)

@@ -2,7 +2,7 @@
 #include "compile/cache.h"
 #include "compile/compiler.h"
 #include "tapas/dsa/tstring.h"
-#include "tapas/dsa/thashtbl.h"
+#include "../dsa/thashtbl_internal.h"
 #include "tapas/objects/tarray.h"
 #include "tapas/objects/tdict.h"
 #include "tenv.h"
@@ -233,7 +233,8 @@ static void operator_add_slow(const tobj *v1, const tobj *v2, tobj *vre)
 	twarn(ErrRuntime_ParamsType, "operator_add", "unsupported type for +");
 }
 
-static void operator_add(const tobj *v1, const tobj *v2, tobj *vre)
+static inline TVM_ALWAYS_INLINE void operator_add(const tobj *v1, const tobj *v2,
+						  tobj *vre)
 {
 	if (add_impl(v1->type, v2->type, v1, v2, vre))
 		return;
@@ -518,7 +519,7 @@ static void operator_ne_slow(const tobj *v1, const tobj *v2, tobj *vre)
 	tobj_set_bool(vre, !tobj_identical(v1, v2));
 }
 
-static void operator_ne(
+static inline TVM_ALWAYS_INLINE void operator_ne(
 		const tobj *v1, const tobj *v2, tobj *vre)
 {
 	if (vm_is_indexed_byte(v1) || vm_is_indexed_byte(v2)) {
@@ -531,24 +532,25 @@ static void operator_ne(
 }
 
 #define DEF_COMPO_CMP_OPERATOR(fn, field, impl, opname)                        \
-static void fn##_slow(const tobj *v1, const tobj *v2, tobj *vre)               \
-{                                                                              \
-	if (v1->type == tcompo && v1->val.v_tcompo->vtable->field) {           \
-		v1->val.v_tcompo->vtable->field(v1->val.v_tcompo, v2, 0, vre); \
-		return;                                                        \
-	} \
-	if (v2->type == tcompo && v2->val.v_tcompo->vtable->field) {           \
-		v2->val.v_tcompo->vtable->field(v2->val.v_tcompo, v1, 1, vre); \
-		return;                                                        \
-	} \
-	twarn(ErrRuntime_ParamsType, opname, "unsupported comparison");        \
-}                                                                              \
-static void fn(const tobj *v1, const tobj *v2, tobj *vre)                      \
-{                                                                              \
-	if (impl(v1->type, v2->type, v1, v2, vre))                             \
-		return;                                                        \
-	fn##_slow(v1, v2, vre);                                                \
-}
+	static void fn##_slow(const tobj *v1, const tobj *v2, tobj *vre)               \
+	{                                                                              \
+		if (v1->type == tcompo && v1->val.v_tcompo->vtable->field) {           \
+			v1->val.v_tcompo->vtable->field(v1->val.v_tcompo, v2, 0, vre); \
+			return;                                                        \
+		} \
+		if (v2->type == tcompo && v2->val.v_tcompo->vtable->field) {           \
+			v2->val.v_tcompo->vtable->field(v2->val.v_tcompo, v1, 1, vre); \
+			return;                                                        \
+		} \
+		twarn(ErrRuntime_ParamsType, opname, "unsupported comparison");        \
+	}                                                                              \
+	static inline TVM_ALWAYS_INLINE void fn(const tobj *v1, const tobj *v2,       \
+						tobj *vre)                     \
+	{                                                                              \
+		if (impl(v1->type, v2->type, v1, v2, vre))                             \
+			return;                                                        \
+		fn##_slow(v1, v2, vre);                                                \
+	}
 
 DEF_COMPO_CMP_OPERATOR(operator_sg, op_sg, sg_impl, "operator_sg")
 DEF_COMPO_CMP_OPERATOR(operator_sl, op_sl, sl_impl, "operator_sl")
@@ -817,7 +819,8 @@ static inline TVM_ALWAYS_INLINE void tcall_frame_release(
 
 static void tcall_frame_prepare(tcall_frame *fr, tfunc *f)
 {
-	if (fr->initialized && fr->func == f) {
+	if (fr->initialized && fr->func == f &&
+	    fr->env.base.father_env == f->env.base.father_env) {
 		fr->env.owner_func = f;
 		return;
 	}
@@ -1028,7 +1031,11 @@ static tcall_frame *tvm_push_call_frame(
 	}
 
 	tcall_frame *fr = vm->frames[vm->frame_len++];
-	if (fr->initialized && fr->func == f)
+	/* The func pointer alone is not identity: a freed function's memory
+	 * may be reused by an unrelated function, so the frame's cached
+	 * environment must also match before it can be reused unchanged. */
+	if (fr->initialized && fr->func == f &&
+	    fr->env.base.father_env == f->env.base.father_env)
 		fr->env.owner_func = f;
 	else
 		tcall_frame_prepare(fr, f);
@@ -1069,6 +1076,7 @@ static inline TVM_ALWAYS_INLINE tcall_frame *tvm_push_call_frame_fast(
 		return nullptr;
 	tcall_frame *fr = vm->frames[vm->frame_len];
 	if (!fr->initialized || fr->func != f ||
+	    fr->env.base.father_env != f->env.base.father_env ||
 	    fr->env.nparams == UNDEF_NPARAMS ||
 	    fr->env.nparams != nparams ||
 	    fr->env.base.objs.capacity < nparams)
@@ -1120,7 +1128,8 @@ static tcall_frame *tvm_replace_current_call_frame(
 	frame->loop_state_len = 0;
 	vm->loop_state_len = 0;
 
-	if (frame->initialized && frame->func == function)
+	if (frame->initialized && frame->func == function &&
+	    frame->env.base.father_env == function->env.base.father_env)
 		frame->env.owner_func = function;
 	else
 		tcall_frame_prepare(frame, function);
@@ -1293,6 +1302,16 @@ static inline tobj *vm_direct_slot(tcompo_env *env, uint_objs slot, uint16_t dep
 	return vm_array_slot(&owner->objs, slot);
 }
 
+/* Composite operator hooks (RealArray/BoolArray arithmetic, comparisons and
+ * logic) deliver a fresh result at refctr zero; the stack slot that receives
+ * it must own one reference so its later popc releases exactly one. */
+static inline TVM_ALWAYS_INLINE void vm_own_result(tobj *slot)
+{
+	if (slot->type == tcompo && slot->val.v_tcompo &&
+	    slot->val.v_tcompo->refctr == 0)
+		slot->val.v_tcompo->refctr++;
+}
+
 /* Scalar-only fast dispatch for the borrowed-left peephole. The impls
  * carry the full type matrix and error paths, so this re-dispatches rather
  * than re-implements; indexed bytes keep their string-aware EQ/NE slow path. */
@@ -1416,8 +1435,11 @@ static inline int vm_try_borrowed_left_binop(
 	    stk_len(vm) == 0)
 		return 0;
 	tins instruction = tbycode_ins(operation);
-	return vm_binop_fast(instruction, left, stk_top(vm), stk_top(vm)) ||
-	       vm_apply_binop(instruction, left, stk_top(vm), stk_top(vm));
+	int done = vm_binop_fast(instruction, left, stk_top(vm), stk_top(vm)) ||
+		   vm_apply_binop(instruction, left, stk_top(vm), stk_top(vm));
+	if (done)
+		vm_own_result(stk_top(vm));
+	return done;
 }
 
 void tmp_add(tvm *vm)
@@ -1499,6 +1521,8 @@ static inline TVM_ALWAYS_INLINE int vm_idxr_fast(
 		if (index < 0 || (uint_objs)index >= len)
 			twarn(ErrRuntime_IdxOutRange, "list index", "");
 		*result = list->items.data[index];
+		/* Own the result before the receiver is popped: the receiver's
+		 * release may free the container holding this value. */
 		if (result->type == tcompo && result->val.v_tcompo)
 			result->val.v_tcompo->refctr++;
 		return 1;
@@ -1524,6 +1548,31 @@ static inline TVM_ALWAYS_INLINE int vm_idxr_fast(
 			(tcompo_v *)tstr_new_len(
 				tstring_cstr(str->data) + index, 1));
 		return 1;
+	}
+	if (arr->vtable == &tdict_vtable) {
+		/* Integer keys dominate numeric maps. Probe the collision chain
+		 * inline all the way; an empty bucket proves absence and raises
+		 * the same error the general path would. */
+		thashtbl *items = ((tdict *)arr)->items;
+		if (items->capacity == 0)
+			twarn(ErrRuntime_ObjUnfound, "tdict_get", "");
+		uint64_t hash = thashtbl_hash_int((uint64_t)index);
+		uint_count mask = items->capacity - 1;
+		uint_count idx = (uint_count)(hash & mask);
+		for (;;) {
+			thash_entry *entry = &items->entries[idx];
+			if (entry->hash == 0)
+				twarn(ErrRuntime_ObjUnfound, "tdict_get", "");
+			if (entry->hash == hash && entry->key.type == tint &&
+			    entry->key.val.v_tint == index) {
+				*result = entry->value;
+				if (result->type == tcompo &&
+				    result->val.v_tcompo)
+					result->val.v_tcompo->refctr++;
+				return 1;
+			}
+			idx = (idx + 1) & mask;
+		}
 	}
 	return 0;
 }
@@ -1601,6 +1650,28 @@ static void vm_dense_iset_int2(tcompo_v *array, const tobj *params, const tobj *
 	}
 }
 
+/* After a fusion consumes instructions up to `next`, a trailing OP_JPB (the
+ * loop back-edge) can be consumed as well. Returns the index to store in the
+ * program counter, given that the dispatch loop increments it once more. */
+static inline TVM_ALWAYS_INLINE uint_cmds vm_fused_next(
+		const tbycode *cmdarr, uint_cmds end, uint_cmds next)
+{
+	if (next < end && tbycode_ins(cmdarr[next]) == OP_JPB)
+		return next - (uint_cmds)tbycode_get_U(cmdarr[next]);
+	return next - 1;
+}
+
+/* Materialize one owned reference for a composite sitting in vm->rev.
+ * Fresh producers deliver refctr zero; borrowers deliver an uncounted
+ * alias. The idxr pipeline always hands out exactly one owned reference,
+ * so both states become refctr >= 1 here. */
+static inline TVM_ALWAYS_INLINE void vm_own_rev(tvm *vm)
+{
+	if (vm->rev.type == tcompo && vm->rev.val.v_tcompo &&
+	    vm->rev.val.v_tcompo->refctr == 0)
+		vm->rev.val.v_tcompo->refctr++;
+}
+
 /* Index right */
 static void vm_idxr_value(tvm *vm, tcompo_v *arr, tobj *params,
 			  uint_regs nparams, int comparison_hint,
@@ -1611,10 +1682,12 @@ static void vm_idxr_value(tvm *vm, tcompo_v *arr, tobj *params,
 		    params[1].type == tint) {
 			if (arr->vtable == &tlist_vtable) {
 				tlist_slice_index((tlist *)arr, params, &vm->rev);
+				vm_own_rev(vm);
 				return;
 			}
 			if (arr->vtable == &tstr_vtable) {
 				tstr_slice_index((tstr *)arr, params, &vm->rev);
+				vm_own_rev(vm);
 				return;
 			}
 		}
@@ -1625,6 +1698,7 @@ static void vm_idxr_value(tvm *vm, tcompo_v *arr, tobj *params,
 			(tcompo_v *)tpair_new(&params[1], &params[0]));
 		tcompo_index(arr, &pair, 1, &vm->rev);
 		tobj_try_clear(&pair);
+		vm_own_rev(vm);
 		return;
 	}
 	/* Dictionaries and libraries dominate struct-like member access;
@@ -1674,6 +1748,7 @@ static void vm_idxr_value(tvm *vm, tcompo_v *arr, tobj *params,
 	}
 	if (nparams == 1 && arr->vtable == &tlib_vtable) {
 		tlib_idx((tlib *)arr, &params[0], 1, &vm->rev);
+		vm_own_rev(vm);
 		return;
 	}
 	if (cache && cache->kind == tins_cache_idxr_list_int &&
@@ -1713,7 +1788,49 @@ static void vm_idxr_value(tvm *vm, tcompo_v *arr, tobj *params,
 		if (cache && cache->kind == tins_cache_empty)
 			cache->kind = tins_cache_polymorphic;
 		tcompo_index(arr, params, nparams, &vm->rev);
+		vm_own_rev(vm);
 	}
+}
+
+/* Dispatch-site hot prefix for indexed reads. Resolves the dominant
+ * single-int reads on List and Dictionary without entering the general
+ * out-of-line handlers, so the fast path carries no call frame and no
+ * operand re-decoding. The result overwrites the key's stack slot directly:
+ * the key is an immediate that owns no reference, and the fast reader leaves
+ * an owned value behind, so the slot simply becomes the result. Returns zero
+ * for anything it does not resolve; the caller falls back to the general
+ * handler. */
+static inline TVM_ALWAYS_INLINE int vm_idxr_slot_hot(tvm *vm, const tobj *obj,
+						     tbycode instruction)
+{
+	if (tbycode_idxr_count(instruction) != 1 ||
+	    tbycode_idxr_slice(instruction) ||
+	    obj->type != tcompo || !obj->val.v_tcompo)
+		return 0;
+	tobj *key_slot = stk_top(vm);
+	/* vm_idxr_fast reads the key before writing the result and already
+	 * owns the composite result, so the slot simply takes it over. */
+	return vm_idxr_fast(obj->val.v_tcompo, key_slot, 1,
+			    tbycode_idxr_compare(instruction), key_slot);
+}
+
+/* Stack form: the receiver itself occupies the top stack slot, so it must be
+ * released after the read; the result takes over the key's slot below it. */
+static inline TVM_ALWAYS_INLINE int vm_idxr_stack_hot(tvm *vm,
+						      tbycode instruction)
+{
+	if (tbycode_idxr_count(instruction) != 1 ||
+	    tbycode_idxr_slice(instruction))
+		return 0;
+	tobj *obj = stk_top(vm);
+	if (obj->type != tcompo || !obj->val.v_tcompo)
+		return 0;
+	tobj *key_slot = stk_at(vm, 1);
+	if (!vm_idxr_fast(obj->val.v_tcompo, key_slot, 1,
+			  tbycode_idxr_compare(instruction), key_slot))
+		return 0;
+	stk_popc(vm);
+	return 1;
 }
 
 static void vm_idxr(tvm *vm, tbycode instruction, tins_cache *cache)
@@ -1728,8 +1845,14 @@ static void vm_idxr(tvm *vm, tbycode instruction, tins_cache *cache)
 			      nparams, tbycode_idxr_compare(instruction),
 			      tbycode_idxr_slice(instruction), cache);
 	stk_popcn(vm, 1 + nparams);
+	/* The reader owns one protective reference (the receiver's release
+	 * may free the container holding this value). Push uniformizes the
+	 * stack convention (+1, like every other producer); releasing the
+	 * reader's reference afterwards leaves exactly one owned count. */
 	stk_push(vm, &vm->rev);
-	tvm_set_rev_empty(vm);
+	if (vm->rev.type == tcompo && vm->rev.val.v_tcompo)
+		vm->rev.val.v_tcompo->refctr--;
+	tobj_set_nil(&vm->rev);
 }
 
 static void vm_idxr_borrowed(tvm *vm, const tobj *obj,
@@ -1745,7 +1868,103 @@ static void vm_idxr_borrowed(tvm *vm, const tobj *obj,
 			      tbycode_idxr_slice(instruction), cache);
 	stk_popcn(vm, nparams);
 	stk_push(vm, &vm->rev);
-	tvm_set_rev_empty(vm);
+	if (vm->rev.type == tcompo && vm->rev.val.v_tcompo)
+		vm->rev.val.v_tcompo->refctr--;
+	tobj_set_nil(&vm->rev);
+}
+
+/* Mirrors thashtbl's stored-value identity check: composites compare by
+ * pointer, immediates by payload. */
+static inline TVM_ALWAYS_INLINE int vm_same_stored_value(const tobj *a,
+							 const tobj *b)
+{
+	if (a->type != b->type)
+		return 0;
+	switch (a->type) {
+	case tcompo:
+		return a->val.v_tcompo == b->val.v_tcompo;
+	case tint:
+		return a->val.v_tint == b->val.v_tint;
+	case tfloat:
+		return a->val.v_tfloat == b->val.v_tfloat;
+	case tbool:
+		return a->val.v_tbool == b->val.v_tbool;
+	default:
+		return a->type == tnil;
+	}
+}
+
+static inline TVM_ALWAYS_INLINE void vm_retain(const tobj *obj)
+{
+	if (obj->type == tcompo && obj->val.v_tcompo)
+		obj->val.v_tcompo->refctr++;
+}
+
+/* Move an owned value into an existing slot, releasing the old content.
+ * The incoming reference becomes the slot's own reference. */
+static inline TVM_ALWAYS_INLINE void vm_slot_move(tobj *slot, const tobj *owned)
+{
+	if (slot->type == tcompo)
+		tobj_ddc_ref_clear(slot);
+	*slot = *owned;
+}
+
+/* Integer-key dictionary write shared by the IDXL dispatch prefix, the
+ * push-free store fusion and the general vm_idxl handler: replace on hit,
+ * insert on a free slot when no rehash is due, and defer to thashtbl_set
+ * for growth and empty tables. */
+static inline TVM_ALWAYS_INLINE void vm_dict_set_int(thashtbl *items,
+						     const tobj *key,
+						     const tobj *rv)
+{
+	if (items->capacity == 0) {
+		thashtbl_set(items, key, rv);
+		return;
+	}
+	uint64_t hash = thashtbl_hash_int((uint64_t)key->val.v_tint);
+	uint_count mask = items->capacity - 1;
+	uint_count idx = (uint_count)(hash & mask);
+	uint_count first_deleted = items->capacity;
+	thash_entry *hit = nullptr;
+	for (;;) {
+		thash_entry *candidate = &items->entries[idx];
+		if (candidate->hash == 0)
+			break;
+		if (candidate->hash == 1) {
+			if (first_deleted == items->capacity)
+				first_deleted = idx;
+		} else if (candidate->hash == hash &&
+			   candidate->key.type == tint &&
+			   candidate->key.val.v_tint == key->val.v_tint) {
+			hit = candidate;
+			break;
+		}
+		idx = (idx + 1) & mask;
+	}
+	if (hit) {
+		if (!vm_same_stored_value(&hit->value, rv)) {
+			vm_retain(rv);
+			tobj_ddc_ref_clear(&hit->value);
+			hit->value = *rv;
+		}
+		return;
+	}
+	if (!thashtbl_needs_rehash(items)) {
+		thash_entry *target = &items->entries
+			[first_deleted != items->capacity ?
+				 first_deleted :
+				 idx];
+		if (target->hash == 0)
+			items->used++;
+		target->key = *key;
+		target->value = *rv;
+		target->hash = hash;
+		vm_retain(key);
+		vm_retain(rv);
+		items->len++;
+		return;
+	}
+	thashtbl_set(items, key, rv);
 }
 
 /* Index left */
@@ -1760,11 +1979,18 @@ static void vm_idxl(tvm *vm, uint_objs loc, uint_regs nparams, int isenv,
 	tobj *params = stk_topn(vm, nparams);
 	/* Dictionary writes are struct-field assignments in the common case;
 	 * set the key directly instead of through the capability dispatch.
+	 * Integer keys resolve inline: replace on hit, insert on a free slot
+	 * when no rehash is due, and fall back to thashtbl_set otherwise.
 	 * Constant-string keys hit the same entry slot across structurally
 	 * identical dictionaries, so remember the slot per call site. */
 	if (nparams == 1 && arr->vtable == &tdict_vtable) {
 		tdict *dict = (tdict *)arr;
 		const tobj *key = &params[0];
+		thashtbl *items = dict->items;
+		if (key->type == tint) {
+			vm_dict_set_int(items, key, rv);
+			goto finish;
+		}
 		if (cache && cache->kind == tins_cache_idxr_dict_str &&
 		    key->type == tcompo &&
 		    key->val.v_tcompo == cache->key &&
@@ -1876,10 +2102,15 @@ static void vm_loop_range(tvm *vm, tloop_state *state, uint_objs idx,
 	vm_loop_push_cond(vm, has_next);
 }
 
-static void vm_loop_inline_range(tvm *vm, tins_cache *cache, uint_objs idx,
-				 int isenv, tcompo_env *env)
+/* Advance an inline range loop by one step and report whether the body
+ * should run. The condition value itself is left to the caller: the fused
+ * dispatch consumes it as a jump decision without a stack round trip. */
+static inline TVM_ALWAYS_INLINE int vm_loop_range_step(tvm *vm,
+		tins_cache *cache, uint_objs idx, int isenv, tcompo_env *env)
 {
-	tloop_state *state = tvm_loop_state(vm, cache->state_slot);
+	tloop_state *state = cache->state_slot < vm->loop_state_len ?
+		&vm->loop_states[cache->state_slot] :
+		tvm_loop_state(vm, cache->state_slot);
 	if (!state->iterator_slot) {
 		if (stk_len(vm) < 2 || stk_top(vm)->type != tint ||
 		    stk_at(vm, 1)->type != tint)
@@ -1898,8 +2129,14 @@ static void vm_loop_inline_range(tvm *vm, tins_cache *cache, uint_objs idx,
 	if (has_next) {
 		vm_set_int_result(vm_loop_target(vm, idx, isenv, env), value);
 		state->pos++;
+	} else {
+		/* Reset on exhaustion instead of relying on the exit POPN to
+		 * recognize the iterator slot by address; re-entry always
+		 * re-reads the bounds. */
+		state->pos = 0;
+		state->iterator_slot = nullptr;
 	}
-	vm_loop_push_cond(vm, has_next);
+	return has_next;
 }
 
 static void vm_loop_list(tvm *vm, tloop_state *state, uint_objs idx,
@@ -2816,6 +3053,29 @@ static inline void vm_finish_eval(tvm *vm, uint_regs stack_values)
 	tvm_set_rev_empty(vm);
 }
 
+/* Statement-level native calls are followed by a lone POPN that discards the
+ * result. Consume that POPN at the call site: pop the arguments, print the
+ * result when the POPN would have, and release a fresh unreferenced result
+ * exactly as the push/pop pair would. The result slot can never alias a loop
+ * iterator placeholder, so the release scan POPN performs cannot fire. */
+static inline TVM_ALWAYS_INLINE int vm_try_discard_eval_result(
+		tvm *vm, const tbycode *cmdarr, uint_cmds i, uint_cmds end,
+		uint_regs stack_values)
+{
+	if (i + 1 >= end || tbycode_ins(cmdarr[i + 1]) != OP_POPN ||
+	    tbycode_get_L(cmdarr[i + 1]) != 1 ||
+	    tbycode_popn_temporary_count(cmdarr[i + 1]) != 0)
+		return 0;
+	if (tbycode_popn_print(cmdarr[i + 1]) && vm->rev.type != tnil) {
+		tstring *s = tobj_tostring_full(&vm->rev);
+		printf("%s\n", tstring_cstr(s));
+		tstring_free(s);
+	}
+	stk_popcn(vm, stack_values);
+	tobj_try_clear(&vm->rev);
+	return 1;
+}
+
 /* Eval helper */
 void vm_eval(tvm *vm, tbycode *iter, tcompo_env *env)
 {
@@ -2940,6 +3200,7 @@ vm_import(tvm *vm, uint_csts cloc, tstring **cstrlsts, tcompo_env *env)
 		tlib_set_exposed(lib, tdict_new());
 	} else
 		tlib_set_exposed(lib, tdict_new());
+	((tcompo_v *)lib)->refctr++;
 	tobj_set_compo(stk_free(vm), (tcompo_v *)lib);
 	stk_fill(vm);
 }
@@ -3062,10 +3323,12 @@ static void tvm_resolve_error_context(
 			const tobj *left_value__ = vm_pushx_source(            \
 				(vm), (env), left__, tbycode_binop_address(code)); \
 			(fn)(left_value__, stk_top(vm), stk_top(vm));           \
+			vm_own_result(stk_top(vm));                             \
 		} else {                                                     \
 			const tobj *left_value__ = stk_at((vm), left__);       \
 			const tobj *right_value__ = stk_at((vm), right__);     \
 			(fn)(left_value__, right_value__, stk_at((vm), right__)); \
+			vm_own_result(stk_at((vm), right__));                   \
 			stk_popc(vm);                                           \
 		}                                                            \
 	} while (0)
@@ -3126,8 +3389,9 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 			if (flags & TVCRT_INIT_FLAG) {
 				if (stk_len(vm) == 0 || stk_top(vm)->type == tnil)
 					twarn(ErrRuntime_AssignNil, "OP_VCRT", "");
-				tobj_array_set_obj(slots, slots->len - 1, stk_top(vm));
-				stk_pop(vm);
+				tobj_array_set_obj(slots, slots->len - 1,
+						   stk_top(vm));
+				stk_popc(vm);
 			}
 		}
 		break;
@@ -3171,7 +3435,41 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 		case OP_IN: {
 			tobj r;
 			tobj_set_nil(&r);
-			operator_in(stk_top(vm), stk_at(vm, 1), &r);
+			const tobj *member = stk_top(vm);
+			const tobj *collection = stk_at(vm, 1);
+			if (collection->type == tcompo &&
+			    collection->val.v_tcompo &&
+			    collection->val.v_tcompo->vtable == &tdict_vtable &&
+			    member->type != tcompo) {
+				/* Non-composite members are never Rule terms, so
+				 * dict membership can skip operator_in's term
+				 * machinery. Integer members resolve at the first
+				 * probe; an empty bucket proves absence. */
+				thashtbl *items =
+					((tdict *)collection->val.v_tcompo)
+						->items;
+				int hit = 0;
+				if (items->capacity == 0)
+					hit = 0;
+				else if (member->type == tint) {
+					uint64_t hash = thashtbl_hash_int(
+						(uint64_t)member->val.v_tint);
+					thash_entry *entry = &items->entries
+						[hash & (items->capacity - 1)];
+					hit = entry->hash == hash &&
+					      entry->key.type == tint &&
+					      entry->key.val.v_tint ==
+						      member->val.v_tint;
+					/* Any non-empty first bucket may hide a
+					 * collision chain; probe exactly. */
+					if (!hit && entry->hash != 0)
+						hit = thashtbl_contains(
+							items, member);
+				} else
+					hit = thashtbl_contains(items, member);
+				tobj_set_bool(&r, hit);
+			} else
+				operator_in(member, collection, &r);
 			stk_popcn(vm, 2);
 			stk_push(vm, &r);
 			tobj_set_nil(&r);
@@ -3219,8 +3517,9 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 					env, tbycode_get_L(*iter), stk_top(vm));
 			else
 				tobj_array_set_obj(
-					&vm->tmps, tbycode_get_L(*iter), stk_top(vm));
-			stk_pop(vm);
+					&vm->tmps, tbycode_get_L(*iter),
+					stk_top(vm));
+			stk_popc(vm);
 			break;
 		case OP_TYPEFWD: {
 			tobj value;
@@ -3254,11 +3553,24 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 				  tbycode_get_R(*iter),
 				  env);
 			break;
-		case OP_LOOPRANGE:
-			vm_loop_inline_range(
+		case OP_LOOPRANGE: {
+			int has_next = vm_loop_range_step(
 				vm, tvm_instruction_cache(&code_cache, i),
 				tbycode_get_L(*iter), tbycode_get_R(*iter), env);
+			/* The compiler always guards the body with CJPFPOP;
+			 * consume the condition directly as the jump decision
+			 * and skip its stack round trip. */
+			if (i + 1 < end &&
+			    tbycode_ins(cmdarr[i + 1]) == OP_CJPFPOP) {
+				if (has_next)
+					i++;
+				else
+					i += 1u + tbycode_get_U(cmdarr[i + 1]);
+				break;
+			}
+			vm_loop_push_cond(vm, has_next);
 			break;
+		}
 		case OP_JPF:
 			i += tbycode_get_U(*iter);
 			iter += tbycode_get_U(*iter);
@@ -3293,6 +3605,158 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 			uint_objs loc = tbycode_get_L(*iter);
 			uint16_t addr = tbycode_get_R(*iter);
 			tobj *src = vm_pushx_source(vm, env, loc, addr);
+			/* `recv.method(arg)` / `f(recv, arg)` as a full statement:
+			 * two slot pushes, a direct native call and the result
+			 * discard. Native callbacks borrow their parameters for
+			 * the duration of the call only, so the arguments can be
+			 * passed as a local array without any stack traffic. */
+			if (i + 3 < end &&
+			    tbycode_ins(cmdarr[i + 1]) == OP_PUSHX &&
+			    tbycode_ins(cmdarr[i + 2]) == OP_EVALCF &&
+			    tbycode_get_i(cmdarr[i + 2]) != 0 &&
+			    tbycode_get_b(cmdarr[i + 2]) == 2 &&
+			    tbycode_ins(cmdarr[i + 3]) == OP_POPN &&
+			    tbycode_get_L(cmdarr[i + 3]) == 1 &&
+			    tbycode_popn_temporary_count(cmdarr[i + 3]) == 0) {
+				tbycode eval = cmdarr[i + 2];
+				tobj *callable = vm_direct_slot(
+					env, tbycode_get_L(eval),
+					tbycode_get_i(eval) - 1);
+				if (callable->type == tcompo &&
+				    callable->val.v_tcompo &&
+				    callable->val.v_tcompo->vtable ==
+					    &tcppgenf_vtable) {
+					tcppgenf *fn =
+						(tcppgenf *)callable->val.v_tcompo;
+					if (fn->f && tcppgenf_accepts(fn, 2)) {
+						const tobj *arg =
+							vm_pushx_source(
+								vm, env,
+								tbycode_get_L(cmdarr[i + 1]),
+								tbycode_get_R(cmdarr[i + 1]));
+						tobj params[2];
+						params[0] = *src;
+						params[1] = *arg;
+						fn->f(params, 2, &vm->rev);
+						if (tbycode_popn_print(
+							    cmdarr[i + 3]) &&
+						    vm->rev.type != tnil) {
+							tstring *s =
+								tobj_tostring_full(
+									&vm->rev);
+							printf("%s\n",
+							       tstring_cstr(s));
+							tstring_free(s);
+						}
+						tobj_try_clear(&vm->rev);
+						i = vm_fused_next(cmdarr, end,
+								  i + 4);
+						break;
+					}
+				}
+			}
+			/* `slot[key] = value` with both operands in slots: resolve
+			 * the List/Dictionary write without the stack round trip
+			 * of the two pushes. */
+			if (i + 2 < end &&
+			    tbycode_ins(cmdarr[i + 1]) == OP_PUSHX &&
+			    tbycode_ins(cmdarr[i + 2]) == OP_IDXL &&
+			    tbycode_get_b(cmdarr[i + 2]) == 1) {
+				tbycode idxl = cmdarr[i + 2];
+				const tobj *key = vm_pushx_source(
+					vm, env, tbycode_get_L(cmdarr[i + 1]),
+					tbycode_get_R(cmdarr[i + 1]));
+				uint_objs tloc = (uint_objs)tbycode_get_L(idxl);
+				tobj *objp = nullptr;
+				if (tbycode_get_i(idxl)) {
+					if (tloc < env->base.objs.len)
+						objp = &env->base.objs.data[tloc];
+				} else if (tloc < vm->tmps.len)
+					objp = &vm->tmps.data[tloc];
+				if (key->type == tint && objp &&
+				    objp->type == tcompo && objp->val.v_tcompo) {
+					tcompo_v *arr = objp->val.v_tcompo;
+					if (arr->vtable == &tdict_vtable) {
+						vm_dict_set_int(
+							((tdict *)arr)->items,
+							key, src);
+						i = vm_fused_next(cmdarr, end,
+								  i + 3);
+						break;
+					}
+					if (arr->vtable == &tlist_vtable) {
+						tlist *list = (tlist *)arr;
+						long index = key->val.v_tint;
+						uint_count len = list->items.len;
+						if (index < 0)
+							index += (long)len;
+						if (index < 0 ||
+						    (uint_objs)index >= len)
+							twarn(ErrRuntime_IdxOutRange,
+							      "list assignment", "");
+						/* Both-immediate stores keep the
+						 * composite count untouched and
+						 * need no reference traffic. */
+						tobj *slotp =
+							&list->items.data[index];
+						if (slotp->type != tcompo &&
+						    src->type != tcompo)
+							*slotp = *src;
+						else
+							tobj_vec_set(&list->items,
+								(uint_objs)index,
+								src);
+						i = vm_fused_next(cmdarr, end,
+								  i + 3);
+						break;
+					}
+				}
+			}
+			/* `dst = recv[key]` with all three operands in slots:
+			 * read through the fast path and store directly into
+			 * the POPCOV target. */
+			if (i + 2 < end &&
+			    tbycode_ins(cmdarr[i + 1]) == OP_IDXR &&
+			    tbycode_idxr_named(cmdarr[i + 1]) &&
+			    tbycode_idxr_count(cmdarr[i + 1]) == 1 &&
+			    !tbycode_idxr_slice(cmdarr[i + 1]) &&
+			    tbycode_ins(cmdarr[i + 2]) == OP_POPCOV) {
+				tbycode idxr = cmdarr[i + 1];
+				const tobj *object = vm_pushx_source(
+					vm, env, tbycode_idxr_named_slot(idxr),
+					tbycode_idxr_named_address(idxr));
+				tobj result;
+				if (object->type == tcompo && object->val.v_tcompo &&
+				    vm_idxr_fast(object->val.v_tcompo, src, 1,
+						 tbycode_idxr_compare(idxr),
+						 &result)) {
+					tbycode store = cmdarr[i + 2];
+					uint_objs dloc =
+						(uint_objs)tbycode_get_L(store);
+					tobj_array *slots =
+						tbycode_get_R(store) ?
+							&env->base.objs :
+							&vm->tmps;
+					if (dloc < slots->len) {
+						if (result.type == tnil)
+							twarn(ErrRuntime_AssignNil,
+							      "OP_POPCOV", "");
+						vm_slot_move(
+							&slots->data[dloc],
+							&result);
+						i = vm_fused_next(cmdarr, end,
+								  i + 3);
+						break;
+					}
+					/* A father-environment target is rare;
+					 * leave the owned result on the stack
+					 * and let POPCOV walk the chain. */
+					vm->stk[vm->stklen] = result;
+					vm->stklen++;
+					i += 1;
+					break;
+				}
+			}
 			if (i + 1 < end &&
 			    vm_try_borrowed_left_binop(vm, src, cmdarr[i + 1])) {
 				i++;
@@ -3302,9 +3766,11 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 			    tbycode_ins(cmdarr[i + 1]) == OP_IDXR &&
 			    !tbycode_idxr_named(cmdarr[i + 1])) {
 				i++;
-				vm_idxr_borrowed(
-					vm, src, cmdarr[i],
-					tvm_instruction_cache(&code_cache, i));
+				if (!vm_idxr_slot_hot(vm, src, cmdarr[i]))
+					vm_idxr_borrowed(
+						vm, src, cmdarr[i],
+						tvm_instruction_cache(
+							&code_cache, i));
 				break;
 			}
 			vm->stk[vm->stklen] = *src;
@@ -3314,11 +3780,38 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 		}
 		break;
 		case OP_PUSHI: {
-			tobj v;
-			tobj_set_nil(&v);
 			long value = tbycode_pushi_is_immediate(*iter) ?
 				tbycode_pushi_immediate_value(*iter) :
 				cints[tbycode_get_U(*iter)];
+			/* `recv[constant]` on a named receiver: read through the
+			 * fast path without materializing the key on the
+			 * stack. */
+			if (i + 1 < end &&
+			    tbycode_ins(cmdarr[i + 1]) == OP_IDXR &&
+			    tbycode_idxr_named(cmdarr[i + 1]) &&
+			    tbycode_idxr_count(cmdarr[i + 1]) == 1 &&
+			    !tbycode_idxr_slice(cmdarr[i + 1])) {
+				tbycode idxr = cmdarr[i + 1];
+				const tobj *object = vm_pushx_source(
+					vm, env, tbycode_idxr_named_slot(idxr),
+					tbycode_idxr_named_address(idxr));
+				if (object->type == tcompo &&
+				    object->val.v_tcompo) {
+					tobj key;
+					vm_set_int_result(&key, value);
+					tobj *dest = stk_free(vm);
+					if (vm_idxr_fast(
+						    object->val.v_tcompo, &key,
+						    1, tbycode_idxr_compare(idxr),
+						    dest)) {
+						vm->stklen++;
+						i++;
+						break;
+					}
+				}
+			}
+			tobj v;
+			tobj_set_nil(&v);
 			vm_set_int_result(&v, value);
 			stk_push(vm, &v);
 		}
@@ -3403,10 +3896,12 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 				const tobj *object = vm_pushx_source(
 					vm, env, tbycode_idxr_named_slot(*iter),
 					tbycode_idxr_named_address(*iter));
-				vm_idxr_borrowed(
-					vm, object, *iter,
-					tvm_instruction_cache(&code_cache, i));
-			} else
+				if (!vm_idxr_slot_hot(vm, object, *iter))
+					vm_idxr_borrowed(
+						vm, object, *iter,
+						tvm_instruction_cache(
+							&code_cache, i));
+			} else if (!vm_idxr_stack_hot(vm, *iter))
 				vm_idxr(vm, *iter,
 					tvm_instruction_cache(&code_cache, i));
 			break;
@@ -3426,6 +3921,12 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 			vm_eval_sessfunc(vm, (tcppsessf *)callable->val.v_tcompo,
 					direct ? params : stk_topn(vm, nparams + 1),
 					nparams, env);
+			if (vm_try_discard_eval_result(
+				    vm, cmdarr, i, end,
+				    nparams + (direct ? 0 : 1))) {
+				i++;
+				break;
+			}
 			vm_finish_eval(vm, nparams + (direct ? 0 : 1));
 		}
 		break;
@@ -3445,6 +3946,12 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 			vm_eval_cppfunc(vm, (tcppgenf *)callable->val.v_tcompo,
 					direct ? params : stk_topn(vm, nparams + 1),
 					nparams);
+			if (vm_try_discard_eval_result(
+				    vm, cmdarr, i, end,
+				    nparams + (direct ? 0 : 1))) {
+				i++;
+				break;
+			}
 			vm_finish_eval(vm, nparams + (direct ? 0 : 1));
 		}
 		break;
@@ -3526,14 +4033,62 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 					&call, env))
 				goto make_call;
 			break;
-		case OP_IDXL:
+		case OP_IDXL: {
+			uint_objs loc = (uint_objs)tbycode_get_L(*iter);
+			uint_regs np = (uint_regs)tbycode_get_b(*iter);
+			int isenv = tbycode_get_i(*iter);
+			/* Hot prefix: single-int writes on List and Dictionary
+			 * resolve inline, without the out-of-line handler. */
+			tobj *objp = nullptr;
+			if (isenv) {
+				if (loc < env->base.objs.len)
+					objp = &env->base.objs.data[loc];
+			} else if (loc < vm->tmps.len)
+				objp = &vm->tmps.data[loc];
+			if (objp && np == 1 && objp->type == tcompo &&
+			    objp->val.v_tcompo && stk_len(vm) >= 2) {
+				tcompo_v *arr = objp->val.v_tcompo;
+				tobj *key = stk_top(vm);
+				if (key->type == tint &&
+				    arr->vtable == &tdict_vtable) {
+					vm_dict_set_int(((tdict *)arr)->items,
+							key, stk_at(vm, 1));
+					stk_popcn(vm, 2);
+					i = vm_fused_next(cmdarr, end, i + 1);
+					break;
+				}
+				if (key->type == tint &&
+				    arr->vtable == &tlist_vtable) {
+					tlist *list = (tlist *)arr;
+					long index = key->val.v_tint;
+					uint_count len = list->items.len;
+					if (index < 0)
+						index += (long)len;
+					if (index < 0 || (uint_objs)index >= len)
+						twarn(ErrRuntime_IdxOutRange,
+						      "list assignment", "");
+					const tobj *value = stk_at(vm, 1);
+					tobj *slotp = &list->items.data[index];
+					if (slotp->type != tcompo &&
+					    value->type != tcompo)
+						*slotp = *value;
+					else
+						tobj_vec_set(&list->items,
+							     (uint_objs)index,
+							     value);
+					stk_popcn(vm, 2);
+					i = vm_fused_next(cmdarr, end, i + 1);
+					break;
+				}
+			}
 			vm_idxl(vm,
-				tbycode_get_L(*iter),
-				tbycode_get_b(*iter),
-				tbycode_get_i(*iter),
+				loc,
+				np,
+				isenv,
 				env,
 				tvm_instruction_cache(&code_cache, i));
 			break;
+		}
 		case OP_PUSHF: {
 			uint_cmds ncmds = tbycode_get_U(*iter);
 			uint_regs nparams = (uint_regs)stk_top(vm)->val.v_tint;

@@ -78,6 +78,7 @@ set(TAPAS_RUNTIME_SOURCES
     src/runtime/tformat.c
     src/runtime/tenv.c
     src/dsa/tblas.c
+    src/dsa/tblockpool.c
     src/runtime/textension.c
     src/dsa/tobj_vec.c
     src/dsa/tobj_array.c

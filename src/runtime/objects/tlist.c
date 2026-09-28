@@ -2,6 +2,7 @@
 #include "tapas/dsa/tstring.h"
 
 #include "tapas/objects/tpair.h"
+#include "../../dsa/tblockpool.h"
 
 #include <stdint.h>
 #include <stdlib.h>
@@ -14,13 +15,13 @@
 static tlist *tlist_new_cap(uint_count cap)
 {
 	if (cap > TLIST_INLINE_ITEMS) {
-		tlist *list = (tlist *)calloc(1, sizeof(tlist));
+		tlist *list = (tlist *)tblockpool_calloc(sizeof(tlist));
 		list->base.vtable = &tlist_vtable;
 		tobj_vec_init_cap(&list->items, cap);
 		return list;
 	}
-	tlist *list = (tlist *)calloc(
-		1, sizeof(tlist) + TLIST_INLINE_ITEMS * sizeof(tobj));
+	tlist *list = (tlist *)tblockpool_calloc(
+		sizeof(tlist) + TLIST_INLINE_ITEMS * sizeof(tobj));
 	list->base.vtable = &tlist_vtable;
 	list->items.data = (tobj *)(list + 1);
 	list->items.len = 0;
@@ -153,8 +154,11 @@ static void *tlist_copy(void *self)
 static void tlist_free(void *self)
 {
 	tlist *l = (tlist *)self;
+	int embedded = l->items.embedded;
 	tobj_vec_free(&l->items);
-	free(l);
+	tblockpool_free(l, embedded ?
+		sizeof(tlist) + TLIST_INLINE_ITEMS * sizeof(tobj) :
+		sizeof(tlist));
 }
 
 static int tlist_identical(void *self, void *other)

@@ -1,4 +1,5 @@
 #include "tapas/dsa/tobj_vec.h"
+#include "tblockpool.h"
 #include "tapas/tval.h"
 
 #include <stdlib.h>
@@ -38,7 +39,7 @@ void tobj_vec_free(tobj_vec *v)
 				if (v->data[i].type == tcompo)
 					tobj_ddc_ref_clear(&v->data[i]);
 		if (!v->embedded)
-			free(v->data);
+			tblockpool_free(v->data, v->capacity * sizeof(tobj));
 	}
 	v->data = nullptr;
 	v->len = 0;
@@ -79,11 +80,13 @@ void tobj_vec_reserve(tobj_vec *v, uint_count cap)
 	if (v->embedded) {
 		/* The current storage lives inside an enclosing allocation and
 		 * cannot be realloc'd; migrate it to an owned array first. */
-		tobj *grown = (tobj *)malloc(cap * sizeof(tobj));
+		tobj *grown = (tobj *)tblockpool_alloc(cap * sizeof(tobj));
 		if (v->len)
 			memcpy(grown, v->data, v->len * sizeof(tobj));
 		v->data = grown;
 		v->embedded = 0;
+	} else if (!v->data) {
+		v->data = (tobj *)tblockpool_alloc(cap * sizeof(tobj));
 	} else {
 		v->data = (tobj *)realloc(v->data, cap * sizeof(tobj));
 	}
