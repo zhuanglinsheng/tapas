@@ -4092,6 +4092,11 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 			tins_cache *pcache = tvm_instruction_cache(&code_cache, i);
 			if (pcache && pcache->kind == tins_cache_pushx_plain)
 				goto pushx_plain;
+
+			/* 按后继指令一次性判定融合形态；字节码不可变，
+			 * 各形态的分支条件预测稳定，省掉整条顺序探测链。 */
+			tins f1 = i + 1 < end ? tbycode_ins(cmdarr[i + 1]) : OP_PASS;
+			if (f1 == OP_POPCOV || f1 == OP_VCRT) {
 			/* `dst = src` 纯拷贝赋值：最高频的语句形态，直接
 			 * 槽到槽转移。先保留后释放，`x = x` 与别名安全。 */
 			tins store_kind =
@@ -4132,19 +4137,121 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 				i = vm_fused_next(cmdarr, end, i + 2);
 				VM_NEXT();
 			}
-			/* `x <op> slot` compare-branch and `slot = slot <op>
-			 * slot` accumulate-into-slot resolve without stack
-			 * traffic. */
-			if (vm_cmp_branch_fused(vm, env, cmdarr, &i, end, src))
-				VM_NEXT();
-			if (vm_arith_named_fused(vm, env, cmdarr, &i, end, src))
-				VM_NEXT();
-			/* Direct native call whose arguments are consecutive
-			 * slot/immediate pushes — statement and expression
-			 * forms both resolve without stack traffic. */
-			if (vm_native_call_fused(vm, env, cmdarr, &i, end,
-						 cints, src))
-				VM_NEXT();
+
+			} else if (f1 == OP_PUSHX) {
+				tins f2 = i + 2 < end ? tbycode_ins(cmdarr[i + 2]) : OP_PASS;
+				if (f2 == OP_IDXL) {
+			/* `slot[key] = value` with both operands in slots: resolve
+			 * the List/Dictionary write without the stack round trip
+			 * of the two pushes. */
+			if (i + 2 < end &&
+			    tbycode_ins(cmdarr[i + 1]) == OP_PUSHX &&
+			    tbycode_ins(cmdarr[i + 2]) == OP_IDXL &&
+			    tbycode_get_b(cmdarr[i + 2]) == 1) {
+				tbycode idxl = cmdarr[i + 2];
+				/* `values[i] = i` 式写法中两个操作数来自同一
+				 * 槽位，跳过第二次解析。 */
+				const tobj *key =
+					(tbycode_get_L(cmdarr[i + 1]) == loc &&
+					 tbycode_get_R(cmdarr[i + 1]) == addr) ?
+						src :
+						vm_pushx_source(
+							vm, env,
+							tbycode_get_L(cmdarr[i + 1]),
+							tbycode_get_R(cmdarr[i + 1]));
+				uint_objs tloc = (uint_objs)tbycode_get_L(idxl);
+				tobj *objp = nullptr;
+				if (tbycode_get_i(idxl)) {
+					if (tloc < env->base.objs.len)
+						objp = &env->base.objs.data[tloc];
+				} else if (tloc < vm->tmps.len)
+					objp = &vm->tmps.data[tloc];
+				if (key->type == tint && objp &&
+				    objp->type == tcompo && objp->val.v_tcompo) {
+					tcompo_v *arr = objp->val.v_tcompo;
+					if (arr->vtable == &tdict_vtable) {
+						vm_dict_set_int(
+							((tdict *)arr)->items,
+							key, src);
+						i = vm_fused_next(cmdarr, end,
+								  i + 3);
+						VM_NEXT();
+					}
+					if (arr->vtable == &tlist_vtable) {
+						tlist *list = (tlist *)arr;
+						long index = key->val.v_tint;
+						uint_count len = list->items.len;
+						if (index < 0)
+							index += (long)len;
+						if (index < 0 ||
+						    (uint_objs)index >= len)
+							twarn(ErrRuntime_IdxOutRange,
+							      "list assignment", "");
+						/* Both-immediate stores keep the
+						 * composite count untouched and
+						 * need no reference traffic. */
+						tobj *slotp =
+							&list->items.data[index];
+						if (slotp->type != tcompo &&
+						    src->type != tcompo)
+							*slotp = *src;
+						else
+							tobj_vec_set(&list->items,
+								(uint_objs)index,
+								src);
+						i = vm_fused_next(cmdarr, end,
+								  i + 3);
+						VM_NEXT();
+					}
+				}
+			}
+
+				} else if (f2 == OP_IDXR &&
+				    tbycode_idxr_named(cmdarr[i + 2])) {
+					if (tbycode_idxr_count(cmdarr[i + 2]) == 2) {
+			/* `matrix[row, column]` on a dense array with both indices
+			 * in slots: resolve the 2D read without stack traffic. */
+			if (i + 2 < end &&
+			    tbycode_ins(cmdarr[i + 1]) == OP_PUSHX &&
+			    tbycode_ins(cmdarr[i + 2]) == OP_IDXR &&
+			    tbycode_idxr_named(cmdarr[i + 2]) &&
+			    tbycode_idxr_count(cmdarr[i + 2]) == 2 &&
+			    !tbycode_idxr_slice(cmdarr[i + 2])) {
+				tbycode idxr = cmdarr[i + 2];
+				const tobj *object = vm_pushx_source(
+					vm, env, tbycode_idxr_named_slot(idxr),
+					tbycode_idxr_named_address(idxr));
+				if (object->type == tcompo && object->val.v_tcompo &&
+				    (object->val.v_tcompo->vtable ==
+					     &tdarr_vtable ||
+				     object->val.v_tcompo->vtable ==
+					     &tbarr_vtable)) {
+					const tobj *second = vm_pushx_source(
+						vm, env,
+						tbycode_get_L(cmdarr[i + 1]),
+						tbycode_get_R(cmdarr[i + 1]));
+					if (src->type == tint &&
+					    second->type == tint) {
+						tobj params[2];
+						params[0] = *src;
+						params[1] = *second;
+						tobj *dest = stk_free(vm);
+						vm_dense_idx_int2(
+							object->val.v_tcompo,
+							params, dest);
+						vm->stklen++;
+						i += 2;
+						vm_consume_cjpop(vm, cmdarr, &i,
+								 end);
+						vm_consume_popcov(vm, env,
+								  cmdarr, &i,
+								  end);
+						VM_NEXT();
+					}
+				}
+			}
+
+					} else {
 			/* `container[key2] <op> slot` 扫描惯用法：索引读 +
 			 * 栈式比较 + 条件跳，一次完成，无栈往返。 */
 			if (i + 4 < end &&
@@ -4211,111 +4318,23 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 					VM_NEXT();
 				}
 			}
-			/* `matrix[row, column]` on a dense array with both indices
-			 * in slots: resolve the 2D read without stack traffic. */
-			if (i + 2 < end &&
-			    tbycode_ins(cmdarr[i + 1]) == OP_PUSHX &&
-			    tbycode_ins(cmdarr[i + 2]) == OP_IDXR &&
-			    tbycode_idxr_named(cmdarr[i + 2]) &&
-			    tbycode_idxr_count(cmdarr[i + 2]) == 2 &&
-			    !tbycode_idxr_slice(cmdarr[i + 2])) {
-				tbycode idxr = cmdarr[i + 2];
-				const tobj *object = vm_pushx_source(
-					vm, env, tbycode_idxr_named_slot(idxr),
-					tbycode_idxr_named_address(idxr));
-				if (object->type == tcompo && object->val.v_tcompo &&
-				    (object->val.v_tcompo->vtable ==
-					     &tdarr_vtable ||
-				     object->val.v_tcompo->vtable ==
-					     &tbarr_vtable)) {
-					const tobj *second = vm_pushx_source(
-						vm, env,
-						tbycode_get_L(cmdarr[i + 1]),
-						tbycode_get_R(cmdarr[i + 1]));
-					if (src->type == tint &&
-					    second->type == tint) {
-						tobj params[2];
-						params[0] = *src;
-						params[1] = *second;
-						tobj *dest = stk_free(vm);
-						vm_dense_idx_int2(
-							object->val.v_tcompo,
-							params, dest);
-						vm->stklen++;
-						i += 2;
-						vm_consume_cjpop(vm, cmdarr, &i,
-								 end);
-						vm_consume_popcov(vm, env,
-								  cmdarr, &i,
-								  end);
-						VM_NEXT();
+
 					}
-				}
-			}
-			/* `slot[key] = value` with both operands in slots: resolve
-			 * the List/Dictionary write without the stack round trip
-			 * of the two pushes. */
-			if (i + 2 < end &&
-			    tbycode_ins(cmdarr[i + 1]) == OP_PUSHX &&
-			    tbycode_ins(cmdarr[i + 2]) == OP_IDXL &&
-			    tbycode_get_b(cmdarr[i + 2]) == 1) {
-				tbycode idxl = cmdarr[i + 2];
-				/* `values[i] = i` 式写法中两个操作数来自同一
-				 * 槽位，跳过第二次解析。 */
-				const tobj *key =
-					(tbycode_get_L(cmdarr[i + 1]) == loc &&
-					 tbycode_get_R(cmdarr[i + 1]) == addr) ?
-						src :
-						vm_pushx_source(
-							vm, env,
-							tbycode_get_L(cmdarr[i + 1]),
-							tbycode_get_R(cmdarr[i + 1]));
-				uint_objs tloc = (uint_objs)tbycode_get_L(idxl);
-				tobj *objp = nullptr;
-				if (tbycode_get_i(idxl)) {
-					if (tloc < env->base.objs.len)
-						objp = &env->base.objs.data[tloc];
-				} else if (tloc < vm->tmps.len)
-					objp = &vm->tmps.data[tloc];
-				if (key->type == tint && objp &&
-				    objp->type == tcompo && objp->val.v_tcompo) {
-					tcompo_v *arr = objp->val.v_tcompo;
-					if (arr->vtable == &tdict_vtable) {
-						vm_dict_set_int(
-							((tdict *)arr)->items,
-							key, src);
-						i = vm_fused_next(cmdarr, end,
-								  i + 3);
-						VM_NEXT();
-					}
-					if (arr->vtable == &tlist_vtable) {
-						tlist *list = (tlist *)arr;
-						long index = key->val.v_tint;
-						uint_count len = list->items.len;
-						if (index < 0)
-							index += (long)len;
-						if (index < 0 ||
-						    (uint_objs)index >= len)
-							twarn(ErrRuntime_IdxOutRange,
-							      "list assignment", "");
-						/* Both-immediate stores keep the
-						 * composite count untouched and
-						 * need no reference traffic. */
-						tobj *slotp =
-							&list->items.data[index];
-						if (slotp->type != tcompo &&
-						    src->type != tcompo)
-							*slotp = *src;
-						else
-							tobj_vec_set(&list->items,
-								(uint_objs)index,
-								src);
-						i = vm_fused_next(cmdarr, end,
-								  i + 3);
-						VM_NEXT();
-					}
-				}
-			}
+				} else
+					goto pushx_native;
+			} else if (f1 == OP_EVALCF) {
+			pushx_native:
+			/* Direct native call whose arguments are consecutive
+			 * slot/immediate pushes — statement and expression
+			 * forms both resolve without stack traffic. */
+			if (vm_native_call_fused(vm, env, cmdarr, &i, end,
+						 cints, src))
+				VM_NEXT();
+
+			} else if (f1 == OP_IDXR &&
+			    tbycode_idxr_named(cmdarr[i + 1]) &&
+			    tbycode_idxr_count(cmdarr[i + 1]) == 1 &&
+			    !tbycode_idxr_slice(cmdarr[i + 1])) {
 			/* `dst = recv[key]` with all three operands in slots:
 			 * read through the fast path and store directly into
 			 * the POPCOV target. */
@@ -4353,6 +4372,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 					VM_NEXT();
 				}
 			}
+
 			/* `recv[key]` as an expression: read through the fast path
 			 * without pushing the key first; a trailing NOT and/or
 			 * conditional jump are consumed as well. */
@@ -4384,6 +4404,8 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 					VM_NEXT();
 				}
 			}
+
+			} else if (f1 == OP_IDXL) {
 			/* `recv[key] = value` with the value already on the
 			 * stack: the current push supplies only the key. */
 			if (i + 1 < end &&
@@ -4430,6 +4452,16 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 					}
 				}
 			}
+
+			} else if (vm_is_binop_instruction(f1)) {
+			/* `x <op> slot` compare-branch and `slot = slot <op>
+			 * slot` accumulate-into-slot resolve without stack
+			 * traffic. */
+			if (vm_cmp_branch_fused(vm, env, cmdarr, &i, end, src))
+				VM_NEXT();
+			if (vm_arith_named_fused(vm, env, cmdarr, &i, end, src))
+				VM_NEXT();
+
 			if (i + 1 < end &&
 			    vm_try_borrowed_left_binop(vm, src, cmdarr[i + 1])) {
 				i++;
@@ -4437,6 +4469,8 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 				vm_consume_popcov(vm, env, cmdarr, &i, end);
 				VM_NEXT();
 			}
+
+			} else if (f1 == OP_IDXR) {
 			if (i + 1 < end &&
 			    tbycode_ins(cmdarr[i + 1]) == OP_IDXR &&
 			    !tbycode_idxr_named(cmdarr[i + 1])) {
@@ -4448,6 +4482,8 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 							&code_cache, i));
 				VM_NEXT();
 			}
+
+			} else {
 			if (pcache && pcache->kind == tins_cache_empty &&
 			    i + 1 < end) {
 				/* 下一条指令不构成任何融合前缀时才学习，
@@ -4458,7 +4494,10 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 				    !vm_is_binop_instruction(follower))
 					pcache->kind = tins_cache_pushx_plain;
 			}
+		
+			}
 		pushx_plain:
+
 			vm->stk[vm->stklen] = *src;
 			if (src->type == tcompo && src->val.v_tcompo)
 				src->val.v_tcompo->refctr++;
@@ -4471,24 +4510,24 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 				cints[tbycode_get_U(*iter)];
 			tobj cst;
 			vm_set_int_result(&cst, value);
-			/* `x <op> const` compare-branch and `slot = slot <op>
-			 * const` accumulate-into-slot resolve without stack
-			 * traffic. */
-			if (vm_cmp_branch_fused(vm, env, cmdarr, &i, end, &cst))
-				VM_NEXT();
-			if (vm_arith_named_fused(vm, env, cmdarr, &i, end, &cst))
-				VM_NEXT();
-			if (vm_native_call_fused(vm, env, cmdarr, &i, end,
-						 cints, &cst))
-				VM_NEXT();
-			/* `recv[constant]` on a named receiver: read through the
-			 * fast path without materializing the key on the
-			 * stack. */
-			if (i + 1 < end &&
-			    tbycode_ins(cmdarr[i + 1]) == OP_IDXR &&
+			/* 按后继指令一次性判定融合形态。 */
+			tins f1 = i + 1 < end ? tbycode_ins(cmdarr[i + 1]) : OP_PASS;
+			if (vm_is_binop_instruction(f1)) {
+				/* `x <op> const` compare-branch 与 `slot = slot
+				 * <op> const` 累加落槽，均无栈往返。 */
+				if (vm_cmp_branch_fused(vm, env, cmdarr, &i,
+							end, &cst))
+					VM_NEXT();
+				if (vm_arith_named_fused(vm, env, cmdarr, &i,
+							 end, &cst))
+					VM_NEXT();
+			} else if (f1 == OP_IDXR &&
 			    tbycode_idxr_named(cmdarr[i + 1]) &&
 			    tbycode_idxr_count(cmdarr[i + 1]) == 1 &&
 			    !tbycode_idxr_slice(cmdarr[i + 1])) {
+				/* `recv[constant]` on a named receiver: read
+				 * through the fast path without
+				 * materializing the key on the stack. */
 				tbycode idxr = cmdarr[i + 1];
 				const tobj *object = vm_pushx_source(
 					vm, env, tbycode_idxr_named_slot(idxr),
@@ -4504,9 +4543,17 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 						    dest)) {
 						vm->stklen++;
 						i++;
+						vm_consume_cjpop(vm, cmdarr,
+								 &i, end);
+						vm_consume_popcov(vm, env,
+								  cmdarr, &i,
+								  end);
 						VM_NEXT();
 					}
 				}
+			} else if (vm_native_call_fused(vm, env, cmdarr, &i, end,
+							cints, &cst)) {
+				VM_NEXT();
 			}
 			tobj v;
 			tobj_set_nil(&v);
