@@ -4,8 +4,8 @@ function bench(n)
     let started = clock_ns()
 
     for (let index in 0 to n) {
-        let values = {0: index % 97, 1: index % 89}
-        result = result + values[0] - values[1]
+        let values = {0: index, 1: index}
+        result = values[0]
     }
 
     let elapsed = clock_ns() - started

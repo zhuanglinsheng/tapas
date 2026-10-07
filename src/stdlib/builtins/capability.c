@@ -1,6 +1,7 @@
 #include "tapas/textension.h"
 
 #include "../arguments.h"
+#include "tapas/dsa/thashtbl.h"
 #include "tapas/dsa/tobj_vec.h"
 #include "tapas/objects/tdict.h"
 #include "tapas/objects/tlist.h"
@@ -23,7 +24,20 @@ static void builtin_idx(tobj *params, uint_regs count, tobj *result)
 static void builtin_idx_or(tobj *params, uint_regs count, tobj *result)
 {
 	tstdlib_require_arguments("idx_or", count, 3);
-	if (!tcompo_try_index(target(params, "idx_or"), &params[1], 1, result))
+	tcompo_v *obj = target(params, "idx_or");
+	/* Dictionaries dominate idx_or traffic; probe them directly and skip
+	 * the capability dispatch chain. */
+	if (obj->vtable == &tdict_vtable) {
+		const tobj *value = thashtbl_get(((tdict *)obj)->items,
+						 &params[1]);
+		if (value) {
+			tobj_copy(result, value);
+			return;
+		}
+		tobj_copy(result, &params[2]);
+		return;
+	}
+	if (!tcompo_try_index(obj, &params[1], 1, result))
 		tobj_copy(result, &params[2]);
 }
 

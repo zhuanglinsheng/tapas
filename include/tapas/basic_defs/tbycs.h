@@ -159,6 +159,23 @@ static inline uint16_t tbycode_popn_temporary_count(tbycode c)
 	return (uint16_t)(tbycode_get_R(c) >> 1);
 }
 
+/* OP_PUSHDICT reserves the high U bit to select the key-value form: instead
+ * of one Pair per entry the stack carries the raw operands of every entry
+ * (value first, key second, both pushed per entry), so the literal never
+ * materializes intermediate Pair objects. The flag must stay inside the U
+ * field's 26 bits. */
+#define TBYCODE_PUSHDICT_KV_FLAG UINT32_C(0x02000000)
+
+static inline int tbycode_pushdict_kv(tbycode c)
+{
+	return (tbycode_get_U(c) & TBYCODE_PUSHDICT_KV_FLAG) != 0;
+}
+
+static inline uint32_t tbycode_pushdict_count(tbycode c)
+{
+	return tbycode_get_U(c) & ~TBYCODE_PUSHDICT_KV_FLAG;
+}
+
 /* OP_IDXR reserves the high U bit as a representation hint when the indexed
  * value is consumed immediately by equality or inequality. The language-level
  * result remains unchanged; the VM masks the hint before reading the argument

@@ -17,6 +17,9 @@
 extern "C" {
 #endif
 
+/** 池化的最大块尺寸；超过它的块直接走 malloc/realloc/free。 */
+#define TBLOCKPOOL_MAX_BYTES ((size_t)1 << 17)
+
 /**
  * @brief 分配至少 `bytes` 字节的块，优先复用池中的同类别块。
  *

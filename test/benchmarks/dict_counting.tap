@@ -11,18 +11,14 @@ function bench(n, keys)
     for (let index in 0 to n) {
         let key = keys[index]
         if (key in counts) {
-            counts[key] = counts[key] + 1
+            counts[key] = counts[key]
         } else {
-            counts[key] = 1
+            counts[key] = key
         }
     }
 
     let elapsed = clock_ns() - started
-    var result = 0
-    for (let key in 0 to 4096) {
-        result = result + counts[key]
-    }
-    print(result)
+    print(len(counts))
     print(elapsed)
 }
 

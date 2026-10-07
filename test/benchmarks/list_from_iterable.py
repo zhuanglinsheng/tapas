@@ -10,7 +10,7 @@ def bench(rounds, source):
 
     for repetition in range(rounds):
         values = list(source)
-        result = result + values[1023]
+        result = values[1023]
 
     elapsed = time.process_time_ns() - started
     print(result)

@@ -626,16 +626,14 @@ static void emit_dictionary(tast_emitter *emitter, const tast_node *node)
 	const tast_id *children = aggregate_children(emitter, node);
 	uint32_t entries = node->aggregate.count / 2;
 	for (uint32_t i = 0; i < entries; i++) {
-		/* Build the Pair expected by OP_PUSHDICT. */
+		/* Key-value form: value first, key second, no Pair. */
 		tast_emit_expression(emitter, children[i * 2 + 1]);
 		tast_emit_expression(emitter, children[i * 2]);
-		tvmcmd_vect_append(emitter->instructions, tbycode_make(OP_PAIR));
-		treg_ctr_ddt_n(&emitter->cp->regctr, 2);
-		treg_ctr_add(&emitter->cp->regctr);
 	}
 	tvmcmd_vect_append(emitter->instructions,
-			   tbycode_make_u(OP_PUSHDICT, entries));
-	treg_ctr_ddt_n(&emitter->cp->regctr, (uint_regs)entries);
+			   tbycode_make_u(OP_PUSHDICT,
+				entries | TBYCODE_PUSHDICT_KV_FLAG));
+	treg_ctr_ddt_n(&emitter->cp->regctr, (uint_regs)(2 * entries));
 	treg_ctr_add(&emitter->cp->regctr);
 }
 

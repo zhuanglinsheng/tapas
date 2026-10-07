@@ -207,9 +207,6 @@ static void emit_structure(tast_emitter *emitter, const tast_node *structure,
 		tvmcmd_vect_append(emitter->instructions,
 			tbycode_make_u(OP_PUSHS, key));
 		treg_ctr_add(&emitter->cp->regctr);
-		tvmcmd_vect_append(emitter->instructions, tbycode_make(OP_PAIR));
-		treg_ctr_ddt_n(&emitter->cp->regctr, 2);
-		treg_ctr_add(&emitter->cp->regctr);
 	}
 	for (uint_objs i = 0; i < order_count; i++)
 		if (!assigned[i] && !ttypeval_field_optional(
@@ -218,9 +215,11 @@ static void emit_structure(tast_emitter *emitter, const tast_node *structure,
 			      "all target fields must be initialized");
 	free(assigned);
 	tvmcmd_vect_append(emitter->instructions,
-		tbycode_make_u(OP_PUSHDICT, structure->aggregate.count));
+		tbycode_make_u(OP_PUSHDICT,
+			structure->aggregate.count |
+			TBYCODE_PUSHDICT_KV_FLAG));
 	treg_ctr_ddt_n(&emitter->cp->regctr,
-			  (uint_regs)structure->aggregate.count);
+			  (uint_regs)(2 * structure->aggregate.count));
 	treg_ctr_add(&emitter->cp->regctr);
 }
 

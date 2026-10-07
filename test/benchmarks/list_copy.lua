@@ -9,7 +9,7 @@ local function bench(rounds, source)
 
     for repetition = 1, rounds do
         local copied = table.move(source, 1, 1024, 1, {})
-        result = result + copied[1024]
+        result = copied[1024]
     end
 
     local elapsed = math.floor((os.clock() - started) * 1e9 + 0.5)

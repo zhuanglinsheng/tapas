@@ -3,18 +3,16 @@
  * @brief 热路径小块内存的线程本地回收池。
  *
  * @details 解释器的高频工作负载每轮迭代都会创建并销毁同尺寸的短期对象
- * （列表元素缓冲、哈希桶数组、Pair 节点等），直接往返 malloc/free 会
- * 成为主要开销。本模块按 2 的幂尺寸类别缓存少量刚释放的块，供同类别
- * 的后续分配直接复用。池中的块始终是真实的 malloc 块，只是暂缓归还；
- * 静态线程本地数组保持对它们的引用，因此不会被泄漏检查误报，也不会
- * 在多会话间共享所有权语义。
+ * （列表元素缓冲、哈希桶数组、Pair 节点、树节点等），直接往返
+ * malloc/free 会成为主要开销。本模块按 2 的幂尺寸类别组织空闲块：分配
+ * 向上取整到类别尺寸，释放把块推入该类别的单链空闲栈（链接指针写在
+ * 块内，不再额外分配）。类别设每类驻留上限，超出部分归还系统，避免
+ * 偶发的内存尖峰被无限期保留。
  *
- * @note 归还时记录的尺寸以分配方所知的请求尺寸为准（真实块可能更大，
- * 下界记录始终安全）；超出池范围的块直接走 malloc/free。
+ * @note 池中的块始终是真实的 malloc 块，只是暂缓归还；线程本地静态
+ * 数组保持对它们的引用，不会被泄漏检查误报，也不跨会话共享所有权。
  */
 #include "tblockpool.h"
-
-#define TBPOOL_DISABLE 0
 
 #include <stdlib.h>
 #include <string.h>
@@ -23,14 +21,12 @@
 #define TBPOOL_MIN_SHIFT 5
 #define TBPOOL_MAX_SHIFT 17
 #define TBPOOL_CLASSES (TBPOOL_MAX_SHIFT - TBPOOL_MIN_SHIFT + 1)
-#define TBPOOL_PER_CLASS 4
 
-typedef struct {
-	void *ptr;   /**< 缓存的块；空槽为 NULL。 */
-	size_t size; /**< 已知的可用尺寸下界（字节）。 */
-} tbpool_slot;
+/* 每个类别最多驻留 32MiB，防止尖峰后的长期保留。 */
+#define TBPOOL_MAX_CLASS_BYTES ((size_t)32 << 20)
 
-static _Thread_local tbpool_slot tbpool[TBPOOL_CLASSES][TBPOOL_PER_CLASS];
+static _Thread_local void *tbpool_head[TBPOOL_CLASSES];
+static _Thread_local size_t tbpool_count[TBPOOL_CLASSES];
 
 static int tbpool_class(size_t bytes)
 {
@@ -45,21 +41,18 @@ static int tbpool_class(size_t bytes)
 
 void *tblockpool_alloc(size_t bytes)
 {
-#if TBPOOL_DISABLE
-	return malloc(bytes);
-#endif
 	if (bytes == 0 || bytes > ((size_t)1 << TBPOOL_MAX_SHIFT))
 		return malloc(bytes);
-	tbpool_slot *slots = tbpool[tbpool_class(bytes)];
-	for (int i = 0; i < TBPOOL_PER_CLASS; i++) {
-		if (slots[i].ptr && slots[i].size >= bytes) {
-			void *ptr = slots[i].ptr;
-			slots[i].ptr = nullptr;
-			slots[i].size = 0;
-			return ptr;
-		}
+	int cls = tbpool_class(bytes);
+	void *block = tbpool_head[cls];
+	if (block) {
+		void *next;
+		memcpy(&next, block, sizeof(next));
+		tbpool_head[cls] = next;
+		tbpool_count[cls]--;
+		return block;
 	}
-	return malloc(bytes);
+	return malloc((size_t)1 << (TBPOOL_MIN_SHIFT + cls));
 }
 
 void *tblockpool_calloc(size_t bytes)
@@ -72,34 +65,21 @@ void *tblockpool_calloc(size_t bytes)
 
 void tblockpool_free(void *ptr, size_t bytes)
 {
-#if TBPOOL_DISABLE
-	free(ptr);
-	return;
-#endif
 	if (!ptr)
 		return;
-	if (bytes < ((size_t)1 << TBPOOL_MIN_SHIFT))
-		bytes = (size_t)1 << TBPOOL_MIN_SHIFT;
 	if (bytes > ((size_t)1 << TBPOOL_MAX_SHIFT)) {
 		free(ptr);
 		return;
 	}
-	tbpool_slot *slots = tbpool[tbpool_class(bytes)];
-	int smallest = 0;
-	for (int i = 0; i < TBPOOL_PER_CLASS; i++) {
-		if (!slots[i].ptr) {
-			slots[i].ptr = ptr;
-			slots[i].size = bytes;
-			return;
-		}
-		if (slots[i].size < slots[smallest].size)
-			smallest = i;
-	}
-	/* 类别已满：保留较大的块，归还较小的一个。 */
-	if (bytes > slots[smallest].size) {
-		free(slots[smallest].ptr);
-		slots[smallest].ptr = ptr;
-		slots[smallest].size = bytes;
-	} else
+	if (bytes < ((size_t)1 << TBPOOL_MIN_SHIFT))
+		bytes = (size_t)1 << TBPOOL_MIN_SHIFT;
+	int cls = tbpool_class(bytes);
+	size_t cap = TBPOOL_MAX_CLASS_BYTES >> (TBPOOL_MIN_SHIFT + cls);
+	if (tbpool_count[cls] >= cap) {
 		free(ptr);
+		return;
+	}
+	memcpy(ptr, &tbpool_head[cls], sizeof(void *));
+	tbpool_head[cls] = ptr;
+	tbpool_count[cls]++;
 }

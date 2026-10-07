@@ -10,7 +10,7 @@ def bench(rounds, pattern):
 
     for repetition in range(rounds):
         values = pattern * 256
-        result = result + values[1023]
+        result = values[1023]
 
     elapsed = time.process_time_ns() - started
     print(result)

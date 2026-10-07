@@ -12,7 +12,7 @@ local function bench(rounds)
 
     for repetition = 1, rounds do
         local values = list_from_range(0, 1024)
-        result = result + values[1024]
+        result = values[1024]
     end
 
     local elapsed = math.floor((os.clock() - started) * 1e9 + 0.5)

@@ -198,7 +198,9 @@ void tbycode_tostring(tbycode c, char *buf, size_t buf_size)
 		snprintf(buf, buf_size, "OP_PUSHS    %u", (unsigned)tbycode_get_U(c));
 		break;
 	case OP_PUSHDICT:
-		snprintf(buf, buf_size, "OP_PUSHDICT %u", (unsigned)tbycode_get_U(c));
+		snprintf(buf, buf_size, "OP_PUSHDICT %u%s",
+			(unsigned)tbycode_pushdict_count(c),
+			tbycode_pushdict_kv(c) ? "  kv" : "");
 		break;
 	case OP_PUSHLIST:
 		snprintf(buf, buf_size, "OP_PUSHLIST %u", (unsigned)tbycode_get_U(c));

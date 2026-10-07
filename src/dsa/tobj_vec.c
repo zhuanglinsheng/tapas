@@ -87,8 +87,17 @@ void tobj_vec_reserve(tobj_vec *v, uint_count cap)
 		v->embedded = 0;
 	} else if (!v->data) {
 		v->data = (tobj *)tblockpool_alloc(cap * sizeof(tobj));
-	} else {
+	} else if (cap * sizeof(tobj) > TBLOCKPOOL_MAX_BYTES) {
+		/* 超出池化区间的块始终是真实的 malloc 块，可直接 realloc。 */
 		v->data = (tobj *)realloc(v->data, cap * sizeof(tobj));
+	} else {
+		/* Pooled blocks carry no exact size and cannot be realloc'd;
+		 * grow by copy instead. */
+		tobj *grown = (tobj *)tblockpool_alloc(cap * sizeof(tobj));
+		if (v->len)
+			memcpy(grown, v->data, v->len * sizeof(tobj));
+		tblockpool_free(v->data, v->capacity * sizeof(tobj));
+		v->data = grown;
 	}
 	v->capacity = cap;
 }

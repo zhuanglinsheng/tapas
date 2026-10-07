@@ -6,8 +6,8 @@ def bench(n):
     result = 0
 
     for index in range(n):
-        values = {0: index % 97, 1: index % 89}
-        result = result + values[0] - values[1]
+        values = {0: index, 1: index}
+        result = values[0]
 
     elapsed = time.process_time_ns() - started
     print(result)

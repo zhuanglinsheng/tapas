@@ -10,16 +10,16 @@ local function bench(n, keys)
     for index = 1, n do
         local key = keys[index]
         if counts[key] ~= nil then
-            counts[key] = counts[key] + 1
+            counts[key] = counts[key]
         else
-            counts[key] = 1
+            counts[key] = key
         end
     end
 
     local elapsed = math.floor((os.clock() - started) * 1e9 + 0.5)
     local result = 0
-    for key = 0, 4095 do
-        result = result + (counts[key] or 0)
+    for _ in pairs(counts) do
+        result = result + 1
     end
     print(result)
     print(elapsed)

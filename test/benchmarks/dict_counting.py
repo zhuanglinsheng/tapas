@@ -11,12 +11,12 @@ def bench(n, keys):
     for index in range(n):
         key = keys[index]
         if key in counts:
-            counts[key] = counts[key] + 1
+            counts[key] = counts[key]
         else:
-            counts[key] = 1
+            counts[key] = key
 
     elapsed = time.process_time_ns() - started
-    print(sum(counts.values()))
+    print(len(counts))
     print(elapsed)
 
 
