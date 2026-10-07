@@ -4595,10 +4595,36 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 					tobj_set_nil(&key);
 					tobj_set_compo(&key,
 						(tcompo_v *)csobjs[tbycode_get_U(*iter)]);
+					thashtbl *items =
+						((tdict *)recv->val.v_tcompo)->items;
+					tins_cache *gcache = tvm_instruction_cache(
+						&code_cache, i + 2);
+					const tobj *value = nullptr;
+					if (gcache &&
+					    gcache->kind == tins_cache_idxr_dict_str &&
+					    gcache->key == key.val.v_tcompo)
+						value = thashtbl_entry_value_at(
+							items, gcache->slot,
+							key.val.v_tcompo);
+					if (value) {
+						/* 内弦键指针直中：内联返回。 */
+						tobj *dest = stk_free(vm);
+						*dest = *value;
+						if (dest->type == tcompo &&
+						    dest->val.v_tcompo)
+							dest->val.v_tcompo->refctr++;
+						vm->stklen++;
+						i += 2;
+						vm_consume_cjpop(vm, cmdarr,
+								 &i, end);
+						vm_consume_popcov(vm, env,
+								  cmdarr, &i,
+								  end);
+						VM_NEXT();
+					}
 					vm_idxr_value(vm, recv->val.v_tcompo, &key, 1,
 						tbycode_idxr_compare(idxr), 0,
-						tvm_instruction_cache(
-							&code_cache, i + 2));
+						gcache);
 					/* rev 移入栈槽后按计数引用管理。 */
 					vm->stk[vm->stklen] = vm->rev;
 					vm->stklen++;
@@ -4882,6 +4908,37 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 					stk_popcn(vm, 2);
 					i = vm_fused_next(cmdarr, end, i + 1);
 					VM_NEXT();
+				}
+				/* 结构成员写 `obj['field'] = ...`：内弦键配合
+				 * 每点槽位缓存，指针直中时内联写回。 */
+				if (key->type == tcompo &&
+				    arr->vtable == &tdict_vtable) {
+					tins_cache *wcache =
+						tvm_instruction_cache(&code_cache, i);
+					thashtbl *items = ((tdict *)arr)->items;
+					if (wcache &&
+					    wcache->kind == tins_cache_idxr_dict_str &&
+					    wcache->key == key->val.v_tcompo &&
+					    wcache->slot < items->capacity) {
+						thash_entry *entry =
+							&items->entries[wcache->slot];
+						if (entry->hash >= 2 &&
+						    entry->key.val.v_tcompo ==
+							    key->val.v_tcompo) {
+							const tobj *rv = stk_at(vm, 1);
+							if (!vm_same_stored_value(
+								    &entry->value, rv)) {
+								vm_retain(rv);
+								tobj_ddc_ref_clear(
+									&entry->value);
+								entry->value = *rv;
+							}
+							stk_popcn(vm, 2);
+							i = vm_fused_next(cmdarr, end,
+									  i + 1);
+							VM_NEXT();
+						}
+					}
 				}
 			}
 			vm_idxl(vm,

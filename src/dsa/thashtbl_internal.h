@@ -50,6 +50,29 @@ static inline uint64_t thashtbl_hash_int(uint64_t key)
 }
 
 /**
+ * @brief 指针命中快速读：仅处理内弦键指针直中的热路径。
+ *
+ * @details 返回空表示需要走完整的 thashtbl_get_entry_at()（键不同、
+ * 槽位无效或桶为空）。
+ *
+ * @param tbl 哈希表。
+ * @param slot 候选桶位。
+ * @param key_ptr 内弦键对象指针。
+ * @return 命中时的值指针，否则为 NULL。
+ */
+static inline const tobj *thashtbl_entry_value_at(const thashtbl *tbl,
+						  uint_count slot,
+						  const tcompo_v *key_ptr)
+{
+	if (slot >= tbl->capacity)
+		return nullptr;
+	const thash_entry *entry = &tbl->entries[slot];
+	if (entry->hash < 2 || entry->key.val.v_tcompo != key_ptr)
+		return nullptr;
+	return &entry->value;
+}
+
+/**
  * @brief 判断再写入一个元素是否需要扩容或同容量重排。
  *
  * @param tbl 哈希表。

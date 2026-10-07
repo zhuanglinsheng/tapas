@@ -14,7 +14,7 @@
 #define THASH_DEFAULT_CAP 16
 #define THASH_MAX_CAP (1u << 30)
 
-static uint64_t thash_mix(uint64_t x)
+static inline __attribute__((always_inline)) uint64_t thash_mix(uint64_t x)
 {
 	x ^= x >> 30;
 	x *= 0xbf58476d1ce4e5b9ULL;
@@ -24,7 +24,8 @@ static uint64_t thash_mix(uint64_t x)
 	return x;
 }
 
-static uint64_t thash_tobj_hash(const tobj *key)
+static inline __attribute__((always_inline)) uint64_t thash_tobj_hash(
+	const tobj *key)
 {
 	uint64_t hash;
 	switch (key->type) {
