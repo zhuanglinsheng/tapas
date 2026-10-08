@@ -4044,6 +4044,8 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 		VM_NEXT();
 		VM_CASE(OP_TMPDEL):
 			vm_del_slots(&vm->tmps, (uint_objs)tbycode_get_U(*iter));
+			/* 循环体末尾的 TMPDEL 之后紧跟回边；一并消费。 */
+			i = vm_fused_next(cmdarr, end, i + 1);
 			VM_NEXT();
 		VM_CASE(OP_THIS): {
 			tobj current;
