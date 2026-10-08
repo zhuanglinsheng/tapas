@@ -25,24 +25,24 @@ These programs combine recursion, branching, containers, indexing, and allocatio
 
 | Benchmark | Source | Tapas | Python | Lua | Tapas/Python | Tapas/Lua |
 | --- | --- | ---: | ---: | ---: | ---: | ---: |
-| `recursive_fibonacci` | [Tapas](recursive_fibonacci.tap) · [Python](recursive_fibonacci.py) · [Lua](recursive_fibonacci.lua) | 3,612.0 µs | 3,280.0 µs | 1,636.0 µs | 1.101× | 2.208× |
-| `sieve` | [Tapas](sieve.tap) · [Python](sieve.py) · [Lua](sieve.lua) | 812.0 µs | 783.0 µs | 435.0 µs | 1.037× | 1.867× |
-| `merge_sort` | [Tapas](merge_sort.tap) · [Python](merge_sort.py) · [Lua](merge_sort.lua) | 3,958.0 µs | 3,678.0 µs | 5,398.0 µs | 1.076× | 0.733× |
-| `n_queens` | [Tapas](n_queens.tap) · [Python](n_queens.py) · [Lua](n_queens.lua) | 117,427.0 µs | 100,047.0 µs | 51,187.0 µs | 1.174× | 2.294× |
-| `longest_common_subsequence` | [Tapas](longest_common_subsequence.tap) · [Python](longest_common_subsequence.py) · [Lua](longest_common_subsequence.lua) | 12,874.0 µs | 10,241.0 µs | 15,659.0 µs | 1.257× | 0.822× |
-| `matrix_multiply` | [Tapas](matrix_multiply.tap) · [Python](matrix_multiply.py) · [Lua](matrix_multiply.lua) | 2,608.0 µs | 3,624.0 µs | 1,229.0 µs | 0.720× | 2.122× |
-| `sudoku` | [Tapas](sudoku.tap) · [Python](sudoku.py) · [Lua](sudoku.lua) | 315,528.0 µs | 252,733.0 µs | 139,117.0 µs | 1.248× | 2.268× |
-| `dijkstra` | [Tapas](dijkstra.tap) · [Python](dijkstra.py) · [Lua](dijkstra.lua) | 17,982.0 µs | 14,426.0 µs | 8,405.0 µs | 1.246× | 2.139× |
-| `optimize` | [Tapas](optimize.tap) · [Python](optimize.py) · [Lua](optimize.lua) | 16,290.0 µs | 16,736.0 µs | 17,469.0 µs | 0.973× | 0.933× |
-| `kmp` | [Tapas](kmp.tap) · [Python](kmp.py) · [Lua](kmp.lua) | 20,226.0 µs | 16,844.0 µs | 41,933.0 µs | 1.201× | 0.482× |
-| `k_nucleotide` | [Tapas](k_nucleotide.tap) · [Python](k_nucleotide.py) · [Lua](k_nucleotide.lua) | 151,358.0 µs | 125,156.0 µs | 71,769.0 µs | 1.209× | 2.109× |
-| `binary_trees` | [Tapas](binary_trees.tap) · [Python](binary_trees.py) · [Lua](binary_trees.lua) | 613,388.0 µs | 466,537.0 µs | 766,672.0 µs | 1.315× | 0.800× |
-| `lru_cache` | [Tapas](lru_cache.tap) · [Python](lru_cache.py) · [Lua](lru_cache.lua) | 37,083.0 µs | 53,487.0 µs | 44,044.0 µs | 0.693× | 0.842× |
-| `huffman` | [Tapas](huffman.tap) · [Python](huffman.py) · [Lua](huffman.lua) | 1,780.0 µs | 1,411.0 µs | 1,726.0 µs | 1.262× | 1.031× |
-| `fannkuch` | [Tapas](fannkuch.tap) · [Python](fannkuch.py) · [Lua](fannkuch.lua) | 34,679.0 µs | 26,973.0 µs | 25,121.0 µs | 1.286× | 1.380× |
-| `n_body` | [Tapas](n_body.tap) · [Python](n_body.py) · [Lua](n_body.lua) | 19,037.0 µs | 16,117.0 µs | 9,381.0 µs | 1.181× | 2.029× |
+| `recursive_fibonacci` | [Tapas](recursive_fibonacci.tap) · [Python](recursive_fibonacci.py) · [Lua](recursive_fibonacci.lua) | 4,117.0 µs | 5,498.0 µs | 4,358.0 µs | 0.749× | 0.945× |
+| `sieve` | [Tapas](sieve.tap) · [Python](sieve.py) · [Lua](sieve.lua) | 990.0 µs | 2,263.0 µs | 1,012.0 µs | 0.437× | 0.978× |
+| `merge_sort` | [Tapas](merge_sort.tap) · [Python](merge_sort.py) · [Lua](merge_sort.lua) | 7,212.0 µs | 5,187.0 µs | 8,737.0 µs | 1.390× | 0.825× |
+| `n_queens` | [Tapas](n_queens.tap) · [Python](n_queens.py) · [Lua](n_queens.lua) | 175,247.0 µs | 147,560.0 µs | 68,256.0 µs | 1.188× | 2.567× |
+| `longest_common_subsequence` | [Tapas](longest_common_subsequence.tap) · [Python](longest_common_subsequence.py) · [Lua](longest_common_subsequence.lua) | 17,204.0 µs | 12,494.0 µs | 24,752.0 µs | 1.377× | 0.695× |
+| `matrix_multiply` | [Tapas](matrix_multiply.tap) · [Python](matrix_multiply.py) · [Lua](matrix_multiply.lua) | 6,081.0 µs | 5,246.0 µs | 3,372.0 µs | 1.159× | 1.803× |
+| `sudoku` | [Tapas](sudoku.tap) · [Python](sudoku.py) · [Lua](sudoku.lua) | 449,432.0 µs | 387,177.0 µs | 171,619.0 µs | 1.161× | 2.619× |
+| `dijkstra` | [Tapas](dijkstra.tap) · [Python](dijkstra.py) · [Lua](dijkstra.lua) | 24,248.0 µs | 20,002.0 µs | 11,943.0 µs | 1.212× | 2.030× |
+| `optimize` | [Tapas](optimize.tap) · [Python](optimize.py) · [Lua](optimize.lua) | 25,175.0 µs | 21,993.0 µs | 22,727.0 µs | 1.145× | 1.108× |
+| `kmp` | [Tapas](kmp.tap) · [Python](kmp.py) · [Lua](kmp.lua) | 30,440.0 µs | 22,799.0 µs | 59,432.0 µs | 1.335× | 0.512× |
+| `k_nucleotide` | [Tapas](k_nucleotide.tap) · [Python](k_nucleotide.py) · [Lua](k_nucleotide.lua) | 206,894.0 µs | 183,256.0 µs | 96,980.0 µs | 1.129× | 2.133× |
+| `binary_trees` | [Tapas](binary_trees.tap) · [Python](binary_trees.py) · [Lua](binary_trees.lua) | 852,199.0 µs | 626,822.0 µs | 1,017,804.0 µs | 1.360× | 0.837× |
+| `lru_cache` | [Tapas](lru_cache.tap) · [Python](lru_cache.py) · [Lua](lru_cache.lua) | 46,897.0 µs | 68,794.0 µs | 59,117.0 µs | 0.682× | 0.793× |
+| `huffman` | [Tapas](huffman.tap) · [Python](huffman.py) · [Lua](huffman.lua) | 3,408.0 µs | 3,188.0 µs | 2,480.0 µs | 1.069× | 1.374× |
+| `fannkuch` | [Tapas](fannkuch.tap) · [Python](fannkuch.py) · [Lua](fannkuch.lua) | 47,325.0 µs | 33,590.0 µs | 32,991.0 µs | 1.409× | 1.434× |
+| `n_body` | [Tapas](n_body.tap) · [Python](n_body.py) · [Lua](n_body.lua) | 25,982.0 µs | 26,492.0 µs | 10,875.0 µs | 0.981× | 2.389× |
 
-The geometric mean ratio for this group: Tapas/Python **1.106×**，Tapas/Lua **1.340×**.
+The geometric mean ratio for this group: Tapas/Python **1.068×**，Tapas/Lua **1.276×**.
 
 ### VM Hot Paths
 
@@ -50,27 +50,27 @@ Each program times a loop inside a function and keeps only the measured VM opera
 
 | Benchmark | Source | Tapas | Python | Lua | Tapas/Python | Tapas/Lua |
 | --- | --- | ---: | ---: | ---: | ---: | ---: |
-| `vm_hot_paths` | [Tapas](vm_hot_paths.tap) · [Python](vm_hot_paths.py) · [Lua](vm_hot_paths.lua) | 65,587.0 µs | 103,733.0 µs | 37,721.0 µs | 0.632× | 1.739× |
-| `float_arithmetic` | [Tapas](float_arithmetic.tap) · [Python](float_arithmetic.py) · [Lua](float_arithmetic.lua) | 21,243.0 µs | 29,506.0 µs | 9,429.0 µs | 0.720× | 2.253× |
-| `function_call_baseline` | [Tapas](function_call_baseline.tap) · [Python](function_call_baseline.py) · [Lua](function_call_baseline.lua) | 2,359.0 µs | 4,316.0 µs | 983.0 µs | 0.547× | 2.400× |
-| `function_calls` | [Tapas](function_calls.tap) · [Python](function_calls.py) · [Lua](function_calls.lua) | 6,379.0 µs | 6,361.0 µs | 2,911.0 µs | 1.003× | 2.191× |
-| `function_callbacks` | [Tapas](function_callbacks.tap) · [Python](function_callbacks.py) · [Lua](function_callbacks.lua) | 11,254.0 µs | 9,381.0 µs | 5,994.0 µs | 1.200× | 1.878× |
-| `list_access` | [Tapas](list_access.tap) · [Python](list_access.py) · [Lua](list_access.lua) | 3,555.0 µs | 4,773.0 µs | 1,140.0 µs | 0.745× | 3.118× |
-| `list_append` | [Tapas](list_append.tap) · [Python](list_append.py) · [Lua](list_append.lua) | 5,966.0 µs | 6,086.0 µs | 5,559.0 µs | 0.980× | 1.073× |
-| `list_update` | [Tapas](list_update.tap) · [Python](list_update.py) · [Lua](list_update.lua) | 3,515.0 µs | 4,147.0 µs | 1,740.0 µs | 0.848× | 2.020× |
-| `list_copy` | [Tapas](list_copy.tap) · [Python](list_copy.py) · [Lua](list_copy.lua) | 4,481.0 µs | 18,594.0 µs | 122,742.0 µs | 0.241× | 0.037× |
-| `list_from_iterable` | [Tapas](list_from_iterable.tap) · [Python](list_from_iterable.py) · [Lua](list_from_iterable.lua) | 9,836.0 µs | 157,859.0 µs | 188,823.0 µs | 0.062× | 0.052× |
-| `list_replicate` | [Tapas](list_replicate.tap) · [Python](list_replicate.py) · [Lua](list_replicate.lua) | 4,626.0 µs | 11,618.0 µs | 322,481.0 µs | 0.398× | 0.014× |
-| `dict_insert` | [Tapas](dict_insert.tap) · [Python](dict_insert.py) · [Lua](dict_insert.lua) | 5,131.0 µs | 5,836.0 µs | 1,159.0 µs | 0.879× | 4.427× |
-| `dict_lookup` | [Tapas](dict_lookup.tap) · [Python](dict_lookup.py) · [Lua](dict_lookup.lua) | 3,808.0 µs | 9,906.0 µs | 1,146.0 µs | 0.384× | 3.323× |
-| `dict_update` | [Tapas](dict_update.tap) · [Python](dict_update.py) · [Lua](dict_update.lua) | 4,183.0 µs | 11,413.0 µs | 1,747.0 µs | 0.367× | 2.394× |
-| `dict_delete` | [Tapas](dict_delete.tap) · [Python](dict_delete.py) · [Lua](dict_delete.lua) | 3,027.0 µs | 6,018.0 µs | 531.0 µs | 0.503× | 5.701× |
-| `dict_literal` | [Tapas](dict_literal.tap) · [Python](dict_literal.py) · [Lua](dict_literal.lua) | 16,023.0 µs | 17,364.0 µs | 27,299.0 µs | 0.923× | 0.587× |
-| `dict_counting` | [Tapas](dict_counting.tap) · [Python](dict_counting.py) · [Lua](dict_counting.lua) | 15,444.0 µs | 25,293.0 µs | 5,924.0 µs | 0.611× | 2.607× |
-| `tail_recursion` | [Tapas](tail_recursion.tap) · [Python](tail_recursion.py) · [Lua](tail_recursion.lua) | 1,383.0 µs | 2,955.0 µs | 471.0 µs | 0.468× | 2.936× |
-| `branch_logic` | [Tapas](branch_logic.tap) · [Python](branch_logic.py) · [Lua](branch_logic.lua) | 17,892.0 µs | 19,132.0 µs | 7,249.0 µs | 0.935× | 2.468× |
+| `vm_hot_paths` | [Tapas](vm_hot_paths.tap) · [Python](vm_hot_paths.py) · [Lua](vm_hot_paths.lua) | 93,839.0 µs | 146,973.0 µs | 42,528.0 µs | 0.638× | 2.207× |
+| `float_arithmetic` | [Tapas](float_arithmetic.tap) · [Python](float_arithmetic.py) · [Lua](float_arithmetic.lua) | 29,203.0 µs | 41,863.0 µs | 11,213.0 µs | 0.698× | 2.604× |
+| `function_call_baseline` | [Tapas](function_call_baseline.tap) · [Python](function_call_baseline.py) · [Lua](function_call_baseline.lua) | 2,948.0 µs | 4,567.0 µs | 2,168.0 µs | 0.646× | 1.360× |
+| `function_calls` | [Tapas](function_calls.tap) · [Python](function_calls.py) · [Lua](function_calls.lua) | 10,084.0 µs | 6,783.0 µs | 6,059.0 µs | 1.487× | 1.664× |
+| `function_callbacks` | [Tapas](function_callbacks.tap) · [Python](function_callbacks.py) · [Lua](function_callbacks.lua) | 15,721.0 µs | 11,902.0 µs | 8,806.0 µs | 1.321× | 1.785× |
+| `list_access` | [Tapas](list_access.tap) · [Python](list_access.py) · [Lua](list_access.lua) | 7,438.0 µs | 7,062.0 µs | 1,212.0 µs | 1.053× | 6.137× |
+| `list_append` | [Tapas](list_append.tap) · [Python](list_append.py) · [Lua](list_append.lua) | 9,997.0 µs | 6,621.0 µs | 8,898.0 µs | 1.510× | 1.124× |
+| `list_update` | [Tapas](list_update.tap) · [Python](list_update.py) · [Lua](list_update.lua) | 7,398.0 µs | 5,532.0 µs | 4,536.0 µs | 1.337× | 1.631× |
+| `list_copy` | [Tapas](list_copy.tap) · [Python](list_copy.py) · [Lua](list_copy.lua) | 7,720.0 µs | 25,250.0 µs | 175,539.0 µs | 0.306× | 0.044× |
+| `list_from_iterable` | [Tapas](list_from_iterable.tap) · [Python](list_from_iterable.py) · [Lua](list_from_iterable.lua) | 13,345.0 µs | 212,673.0 µs | 236,438.0 µs | 0.063× | 0.056× |
+| `list_replicate` | [Tapas](list_replicate.tap) · [Python](list_replicate.py) · [Lua](list_replicate.lua) | 6,689.0 µs | 12,819.0 µs | 402,398.0 µs | 0.522× | 0.017× |
+| `dict_insert` | [Tapas](dict_insert.tap) · [Python](dict_insert.py) · [Lua](dict_insert.lua) | 8,973.0 µs | 6,212.0 µs | 2,516.0 µs | 1.444× | 3.566× |
+| `dict_lookup` | [Tapas](dict_lookup.tap) · [Python](dict_lookup.py) · [Lua](dict_lookup.lua) | 5,926.0 µs | 13,734.0 µs | 1,486.0 µs | 0.431× | 3.988× |
+| `dict_update` | [Tapas](dict_update.tap) · [Python](dict_update.py) · [Lua](dict_update.lua) | 4,452.0 µs | 17,718.0 µs | 1,794.0 µs | 0.251× | 2.482× |
+| `dict_delete` | [Tapas](dict_delete.tap) · [Python](dict_delete.py) · [Lua](dict_delete.lua) | 4,310.0 µs | 6,127.0 µs | 1,361.0 µs | 0.703× | 3.167× |
+| `dict_literal` | [Tapas](dict_literal.tap) · [Python](dict_literal.py) · [Lua](dict_literal.lua) | 19,059.0 µs | 19,862.0 µs | 34,133.0 µs | 0.960× | 0.558× |
+| `dict_counting` | [Tapas](dict_counting.tap) · [Python](dict_counting.py) · [Lua](dict_counting.lua) | 19,653.0 µs | 31,174.0 µs | 6,468.0 µs | 0.630× | 3.038× |
+| `tail_recursion` | [Tapas](tail_recursion.tap) · [Python](tail_recursion.py) · [Lua](tail_recursion.lua) | 1,551.0 µs | 3,222.0 µs | 1,135.0 µs | 0.481× | 1.367× |
+| `branch_logic` | [Tapas](branch_logic.tap) · [Python](branch_logic.py) · [Lua](branch_logic.lua) | 23,207.0 µs | 22,780.0 µs | 11,489.0 µs | 1.019× | 2.020× |
 
-The geometric mean ratio for this group: Tapas/Python **0.561×**，Tapas/Lua **1.157×**.
+The geometric mean ratio for this group: Tapas/Python **0.662×**，Tapas/Lua **1.095×**.
 
 ## Usage
 

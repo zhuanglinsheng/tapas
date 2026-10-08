@@ -104,6 +104,7 @@ struct tfunc {
 	struct tlib *library;
 	uint_cmds cmdloc;
 	uint_cmds ncmds;
+	uint8_t loop_state_kind;  /**< 0 未知 / 1 无循环 / 2 有循环（惰性判定）。 */
 };
 
 extern tcompo_vtable tfunc_vtable;

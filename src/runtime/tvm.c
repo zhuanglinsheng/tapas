@@ -487,6 +487,11 @@ static void operator_eq_slow(const tobj *v1, const tobj *v2, tobj *vre)
 static inline TVM_ALWAYS_INLINE void operator_eq(const tobj *v1, const tobj *v2,
 						  tobj *vre)
 {
+	/* 两个索引字节直接按值比较；单边字节交给保字符串语义的慢路径。 */
+	if (vm_is_indexed_byte(v1) && vm_is_indexed_byte(v2)) {
+		vm_set_bool_result(vre, v1->val.v_tint == v2->val.v_tint);
+		return;
+	}
 	if (vm_is_indexed_byte(v1) || vm_is_indexed_byte(v2)) {
 		operator_eq_slow(v1, v2, vre);
 		return;
@@ -534,6 +539,10 @@ static void operator_ne_slow(const tobj *v1, const tobj *v2, tobj *vre)
 static inline TVM_ALWAYS_INLINE void operator_ne(
 		const tobj *v1, const tobj *v2, tobj *vre)
 {
+	if (vm_is_indexed_byte(v1) && vm_is_indexed_byte(v2)) {
+		vm_set_bool_result(vre, v1->val.v_tint != v2->val.v_tint);
+		return;
+	}
 	if (vm_is_indexed_byte(v1) || vm_is_indexed_byte(v2)) {
 		operator_ne_slow(v1, v2, vre);
 		return;
@@ -786,6 +795,29 @@ static tloop_state *tvm_loop_state(tvm *vm, uint_cmds state_slot)
 	return &vm->loop_states[state_slot];
 }
 
+/* 函数是否含循环指令：首次调用时扫描其指令区间并缓存在函数对象上。
+ * 无循环的被调函数在帧交换时不需要保存/恢复调用方的循环状态。 */
+static int vm_function_has_loops(tfunc *f)
+{
+	if (f->loop_state_kind == 0) {
+		twrapper *wrapper = f->library ? f->library->wrapper :
+			tfunc_get_wrapper_from_env(&f->env);
+		int has = 0;
+		if (wrapper) {
+			uint_cmds end = f->cmdloc + f->ncmds;
+			for (uint_cmds k = f->cmdloc; k < end; k++) {
+				tins ins = tbycode_ins(wrapper->cmdarr[k]);
+				if (ins == OP_LOOPAS || ins == OP_LOOPRANGE) {
+					has = 1;
+					break;
+				}
+			}
+		}
+		f->loop_state_kind = has ? 2 : 1;
+	}
+	return f->loop_state_kind == 2;
+}
+
 static void tvm_release_loop_iterator(tvm *vm, const tobj *stack_slot)
 {
 	for (uint_cmds i = 0; i < vm->loop_state_len; i++) {
@@ -822,9 +854,11 @@ static inline TVM_ALWAYS_INLINE void tcall_frame_release(
 	tvm_array_clear(&fr->tail_args);
 	tvm_array_clear(&fr->env.base.objs);
 	tobj_ddc_ref_clear(&fr->retained_callable);
-	fr->loop_states = vm->loop_states;
-	fr->loop_state_len = 0;
-	fr->loop_state_cap = vm->loop_state_cap;
+	if (fr->func && vm_function_has_loops(fr->func)) {
+		fr->loop_states = vm->loop_states;
+		fr->loop_state_len = 0;
+		fr->loop_state_cap = vm->loop_state_cap;
+	}
 }
 
 static void tcall_frame_prepare(tcall_frame *fr, tfunc *f)
@@ -1053,9 +1087,11 @@ static tcall_frame *tvm_push_call_frame(
 	fr->saved_stk = vm->stk;
 	fr->saved_regmax = vm->regmax;
 	fr->saved_stklen = vm->stklen;
-	fr->saved_loop_states = vm->loop_states;
-	fr->saved_loop_state_len = vm->loop_state_len;
-	fr->saved_loop_state_cap = vm->loop_state_cap;
+	if (vm_function_has_loops(f)) {
+		fr->saved_loop_states = vm->loop_states;
+		fr->saved_loop_state_len = vm->loop_state_len;
+		fr->saved_loop_state_cap = vm->loop_state_cap;
+	}
 
 	if (fr->env.nparams != UNDEF_NPARAMS) {
 		tcall_frame_assign_params(fr, params, nparams, move_params);
@@ -1069,9 +1105,11 @@ static tcall_frame *tvm_push_call_frame(
 	vm->stk = fr->env.vmstack;
 	vm->regmax = fr->env.regmax;
 	vm->stklen = 0;
-	vm->loop_states = fr->loop_states;
-	vm->loop_state_len = 0;
-	vm->loop_state_cap = fr->loop_state_cap;
+	if (vm_function_has_loops(f)) {
+		vm->loop_states = fr->loop_states;
+		vm->loop_state_len = 0;
+		vm->loop_state_cap = fr->loop_state_cap;
+	}
 	return fr;
 }
 
@@ -1096,9 +1134,14 @@ static inline TVM_ALWAYS_INLINE tcall_frame *tvm_push_call_frame_fast(
 	fr->saved_stk = vm->stk;
 	fr->saved_regmax = vm->regmax;
 	fr->saved_stklen = vm->stklen;
-	fr->saved_loop_states = vm->loop_states;
-	fr->saved_loop_state_len = vm->loop_state_len;
-	fr->saved_loop_state_cap = vm->loop_state_cap;
+	if (vm_function_has_loops(f)) {
+		fr->saved_loop_states = vm->loop_states;
+		fr->saved_loop_state_len = vm->loop_state_len;
+		fr->saved_loop_state_cap = vm->loop_state_cap;
+		vm->loop_states = fr->loop_states;
+		vm->loop_state_len = 0;
+		vm->loop_state_cap = fr->loop_state_cap;
+	}
 	tcall_frame_move_params(&fr->env.base.objs, params, nparams);
 	fr->env.params = fr->env.base.objs.data;
 	fr->env.dynamic_nparams = nparams;
@@ -1106,9 +1149,6 @@ static inline TVM_ALWAYS_INLINE tcall_frame *tvm_push_call_frame_fast(
 	vm->stk = fr->env.vmstack;
 	vm->regmax = fr->env.regmax;
 	vm->stklen = 0;
-	vm->loop_states = fr->loop_states;
-	vm->loop_state_len = 0;
-	vm->loop_state_cap = fr->loop_state_cap;
 	vm->frame_len++;
 	return fr;
 }
@@ -1181,9 +1221,11 @@ static inline TVM_ALWAYS_INLINE void tvm_pop_call_frame(tvm *vm)
 	vm->stk = saved_stk;
 	vm->regmax = saved_regmax;
 	vm->stklen = saved_stklen;
-	vm->loop_states = saved_loop_states;
-	vm->loop_state_len = saved_loop_state_len;
-	vm->loop_state_cap = saved_loop_state_cap;
+	if (vm_function_has_loops(fr->func)) {
+		vm->loop_states = saved_loop_states;
+		vm->loop_state_len = saved_loop_state_len;
+		vm->loop_state_cap = saved_loop_state_cap;
+	}
 }
 
 static void tvm_drop_call_frames(tvm *vm)
