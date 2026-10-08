@@ -328,8 +328,16 @@ static inline TVM_ALWAYS_INLINE void operator_div(const tobj *v1, const tobj *v2
 	operator_div_slow(v1, v2, vre);
 }
 
-void operator_mod(const tobj *v1, const tobj *v2, tobj *vre)
+static inline TVM_ALWAYS_INLINE void operator_mod(const tobj *v1, const tobj *v2,
+						  tobj *vre)
 {
+	/* 整数取模是条件表达式与寻址计算的热路径。 */
+	if (v1->type == tint && v2->type == tint) {
+		if (v2->val.v_tint == 0)
+			twarn(ErrRuntime_DivIntZero, "operator_mod", "");
+		tobj_set_int(vre, v1->val.v_tint % v2->val.v_tint);
+		return;
+	}
 	if (v1->type == tcompo && v1->val.v_tcompo->vtable->op_mod) {
 		v1->val.v_tcompo->vtable->op_mod(v1->val.v_tcompo, v2, 0, vre);
 		return;
@@ -1275,7 +1283,9 @@ tobj *tmp_obj(tvm *vm, uint_objs loc)
 	return vm_array_slot(&vm->tmps, loc);
 }
 
-static tobj *vm_pushx_source(tvm *vm, tcompo_env *env, uint_objs slot, uint16_t addr)
+static inline TVM_ALWAYS_INLINE tobj *vm_pushx_source(tvm *vm, tcompo_env *env,
+						      uint_objs slot,
+						      uint16_t addr)
 {
 	if (!tpushx_isenv(addr))
 		return vm_array_slot(&vm->tmps, slot);
