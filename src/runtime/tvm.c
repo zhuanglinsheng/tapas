@@ -4135,7 +4135,12 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 				    (viter->val.v_tcompo->vtable == &tlist_vtable ||
 				     viter->val.v_tcompo->vtable == &tstr_vtable)) {
 					tloop_state *state =
-						tvm_loop_state(vm, lcache->state_slot);
+						lcache->state_slot <
+							vm->loop_state_len ?
+							&vm->loop_states
+								[lcache->state_slot] :
+							tvm_loop_state(vm,
+								lcache->state_slot);
 					if (state->iterator_slot != viter) {
 						state->pos = 0;
 						state->iterator_slot = viter;
