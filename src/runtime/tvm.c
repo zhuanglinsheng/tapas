@@ -3858,6 +3858,65 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 						   stk_top(vm));
 				stk_popc(vm);
 			} else if (i + 3 < end &&
+				   (tbycode_ins(cmdarr[i + 1]) == OP_PUSHX ||
+				    tbycode_ins(cmdarr[i + 1]) == OP_PUSHI) &&
+				   tbycode_binop_named(cmdarr[i + 2]) &&
+				   tbycode_ins(cmdarr[i + 3]) == OP_POPCOV) {
+				/* `let x = a <op> b`：刚创建的槽位即 POPCOV
+				 * 目标时，算术与初始化一次完成。 */
+				tins op = tbycode_ins(cmdarr[i + 2]);
+				if (op == OP_ADD || op == OP_SUB || op == OP_MUL ||
+				    op == OP_DIV) {
+					tbycode store = cmdarr[i + 3];
+					tobj_array *dst =
+						tbycode_get_R(store) ?
+							&env->base.objs :
+							&vm->tmps;
+					uint_objs dloc =
+						(uint_objs)tbycode_get_L(store);
+					if (dst == slots && dloc == slots->len - 1 &&
+					    dloc < dst->len) {
+						tobj right;
+						if (tbycode_ins(cmdarr[i + 1]) == OP_PUSHI) {
+							vm_set_int_result(&right,
+								tbycode_pushi_is_immediate(cmdarr[i + 1]) ?
+									tbycode_pushi_immediate_value(cmdarr[i + 1]) :
+									cints[tbycode_get_U(cmdarr[i + 1])]);
+						} else {
+							right = *vm_pushx_source(
+								vm, env,
+								tbycode_get_L(cmdarr[i + 1]),
+								tbycode_get_R(cmdarr[i + 1]));
+						}
+						const tobj *left = vm_pushx_source(
+							vm, env,
+							tbycode_get_L(cmdarr[i + 2]),
+							tbycode_binop_address(cmdarr[i + 2]));
+						tobj result;
+						int ok;
+						switch (op) {
+						case OP_ADD:
+							ok = add_impl(left->type, right.type, left, &right, &result);
+							break;
+						case OP_SUB:
+							ok = sub_impl(left->type, right.type, left, &right, &result);
+							break;
+						case OP_MUL:
+							ok = mul_impl(left->type, right.type, left, &right, &result);
+							break;
+						default:
+							ok = div_impl(left->type, right.type, left, &right, &result);
+							break;
+						}
+						if (ok) {
+							slots->data[dloc] = result;
+							i = vm_fused_next(cmdarr, end,
+									  i + 4);
+							VM_NEXT();
+						}
+					}
+				}
+			} else if (i + 3 < end &&
 				   tbycode_ins(cmdarr[i + 1]) == OP_PUSHX &&
 				   tbycode_ins(cmdarr[i + 2]) == OP_IDXR &&
 				   tbycode_idxr_named(cmdarr[i + 2]) &&
