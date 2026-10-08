@@ -1686,6 +1686,23 @@ static inline TVM_ALWAYS_INLINE uint_cmds vm_fused_next(
 	return next - 1;
 }
 
+/* Jump threading: a taken conditional jump whose landing instruction is
+ * itself an unconditional jump can be followed immediately, since the
+ * compiler routinely emits "skip body -> loop back-edge" shapes. Returns
+ * the program counter to store, given the dispatch loop's final i++. */
+static inline TVM_ALWAYS_INLINE uint_cmds vm_jump_landing(
+	const tbycode *cmdarr, uint_cmds end, uint_cmds landing)
+{
+	if (landing < end) {
+		tins kind = tbycode_ins(cmdarr[landing]);
+		if (kind == OP_JPB)
+			return landing - (uint_cmds)tbycode_get_U(cmdarr[landing]);
+		if (kind == OP_JPF)
+			return landing + (uint_cmds)tbycode_get_U(cmdarr[landing]);
+	}
+	return landing - 1;
+}
+
 /* Fused "compare with a freshly produced operand, then branch": handles a
  * named-left comparison whose right operand the current instruction just
  * produced, and consumes the following conditional jump, all without stack
@@ -1741,7 +1758,8 @@ static inline TVM_ALWAYS_INLINE int vm_cmp_branch_fused(
 	int taken = jk == OP_CJPFPOP ? !result.val.v_tbool :
 		result.val.v_tbool;
 	if (taken)
-		*pc += 2u + (uint_cmds)tbycode_get_U(jump);
+		*pc = vm_jump_landing(cmdarr, end,
+				      *pc + 3u + (uint_cmds)tbycode_get_U(jump));
 	else
 		*pc += 2;
 	return 1;
@@ -3599,7 +3617,8 @@ static inline TVM_ALWAYS_INLINE void vm_consume_cjpop(
 	stk_pop(vm);
 	/* CJPFPOP 在假时前跳，CJPBPOP 在真时前跳；两者都只向前。 */
 	if (taken)
-		*pc += 1u + (uint_cmds)tbycode_get_U(jump);
+		*pc = vm_jump_landing(cmdarr, end,
+				      *pc + 2u + (uint_cmds)tbycode_get_U(jump));
 	else
 		*pc += 1;
 }
@@ -4529,7 +4548,9 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 						!readval.val.v_tbool :
 						readval.val.v_tbool;
 					if (taken)
-						i += 4u + (uint_cmds)tbycode_get_U(jump);
+						i = vm_jump_landing(
+							cmdarr, end,
+							i + 5u + (uint_cmds)tbycode_get_U(jump));
 					else
 						i += 4;
 					VM_NEXT();
