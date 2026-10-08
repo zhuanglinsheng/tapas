@@ -1878,74 +1878,6 @@ static inline TVM_ALWAYS_INLINE void vm_consume_popcov(
  * consumed by a following POPN discard, conditional jump, or POPCOV store;
  * otherwise it lands on the stack with its reference moved over. Returns 0
  * when the pattern or the callable does not fit. */
-static inline TVM_ALWAYS_INLINE int vm_native_call_fused(
-	tvm *vm, tcompo_env *env, tbycode *cmdarr, uint_cmds *pc,
-	uint_cmds end, const long *cints, const tobj *first_arg)
-{
-	const tobj *args[VM_NATIVE_FUSED_MAX_PARAMS];
-	tobj immediates[VM_NATIVE_FUSED_MAX_PARAMS];
-	uint_regs nargs = 1;
-	args[0] = first_arg;
-	uint_cmds j = *pc + 1;
-	while (nargs < VM_NATIVE_FUSED_MAX_PARAMS && j < end) {
-		tbycode a = cmdarr[j];
-		if (tbycode_ins(a) == OP_PUSHX) {
-			args[nargs++] = vm_pushx_source(
-				vm, env, tbycode_get_L(a), tbycode_get_R(a));
-			j++;
-			continue;
-		}
-		if (tbycode_ins(a) == OP_PUSHI) {
-			vm_set_int_result(&immediates[nargs],
-				tbycode_pushi_is_immediate(a) ?
-					tbycode_pushi_immediate_value(a) :
-					cints[tbycode_get_U(a)]);
-			args[nargs] = &immediates[nargs];
-			nargs++;
-			j++;
-			continue;
-		}
-		break;
-	}
-	if (j >= end || tbycode_ins(cmdarr[j]) != OP_EVALCF ||
-	    tbycode_get_i(cmdarr[j]) == 0 ||
-	    tbycode_get_b(cmdarr[j]) != nargs)
-		return 0;
-	tobj *callable = vm_direct_slot(env, tbycode_get_L(cmdarr[j]),
-					tbycode_get_i(cmdarr[j]) - 1);
-	if (callable->type != tcompo || !callable->val.v_tcompo ||
-	    callable->val.v_tcompo->vtable != &tcppgenf_vtable)
-		return 0;
-	tcppgenf *fn = (tcppgenf *)callable->val.v_tcompo;
-	if (!fn->f || !tcppgenf_accepts(fn, nargs))
-		return 0;
-	tobj params[VM_NATIVE_FUSED_MAX_PARAMS];
-	for (uint_regs k = 0; k < nargs; k++)
-		params[k] = *args[k];
-	fn->f(params, nargs, &vm->rev);
-	*pc = j;
-	if (j + 1 < end && tbycode_ins(cmdarr[j + 1]) == OP_POPN &&
-	    tbycode_get_L(cmdarr[j + 1]) == 1 &&
-	    tbycode_popn_temporary_count(cmdarr[j + 1]) == 0) {
-		if (tbycode_popn_print(cmdarr[j + 1]) && vm->rev.type != tnil) {
-			tstring *text = tobj_tostring_full(&vm->rev);
-			printf("%s\n", tstring_cstr(text));
-			tstring_free(text);
-		}
-		tobj_try_clear(&vm->rev);
-		*pc = vm_fused_next(cmdarr, end, j + 2);
-		return 1;
-	}
-	vm->stk[vm->stklen] = vm->rev;
-	vm->stklen++;
-	tvm_set_rev_empty(vm);
-	/* 内建回调交出的是未计数的初始所有权；栈槽按计数引用管理。 */
-	vm_own_result(stk_top(vm));
-	vm_consume_cjpop(vm, cmdarr, pc, end);
-	vm_consume_popcov(vm, env, cmdarr, pc, end);
-	return 1;
-}
-
 /* Materialize one owned reference for a composite sitting in vm->rev.
  * Fresh producers deliver refctr zero; borrowers deliver an uncounted
  * alias. The idxr pipeline always hands out exactly one owned reference,
@@ -3658,6 +3590,124 @@ static inline TVM_ALWAYS_INLINE void vm_consume_cjpop(
 }
 
 
+static inline TVM_ALWAYS_INLINE int vm_native_call_fused(
+	tvm *vm, tcompo_env *env, tbycode *cmdarr, uint_cmds *pc,
+	uint_cmds end, const long *cints, const tobj *first_arg,
+	tcall_request *call, tobj *out_params)
+{
+	const tobj *args[VM_NATIVE_FUSED_MAX_PARAMS];
+	tobj immediates[VM_NATIVE_FUSED_MAX_PARAMS];
+	uint_regs nargs = 1;
+	args[0] = first_arg;
+	uint_cmds j = *pc + 1;
+	while (nargs < VM_NATIVE_FUSED_MAX_PARAMS && j < end) {
+		tbycode a = cmdarr[j];
+		if (tbycode_ins(a) == OP_PUSHX) {
+			args[nargs++] = vm_pushx_source(
+				vm, env, tbycode_get_L(a), tbycode_get_R(a));
+			j++;
+			continue;
+		}
+		if (tbycode_ins(a) == OP_PUSHI) {
+			vm_set_int_result(&immediates[nargs],
+				tbycode_pushi_is_immediate(a) ?
+					tbycode_pushi_immediate_value(a) :
+					cints[tbycode_get_U(a)]);
+			args[nargs] = &immediates[nargs];
+			nargs++;
+			j++;
+			continue;
+		}
+		break;
+	}
+	if (j >= end)
+		return 0;
+	tins callop = tbycode_ins(cmdarr[j]);
+	/* Tapas 函数调用（自调用或槽位函数）：参数搬入局部数组，补一次
+	 * 引用供被调帧 move_params 转移所有权；返回 2 由调用方进入
+	 * make_call。返回值落到空栈上（return_stack_values 为零）。 */
+	if (callop == OP_EVALTF &&
+	    (uint_regs)tbycode_get_U(cmdarr[j]) == nargs) {
+		if (!env->owner_func)
+			return 0;
+		for (uint_regs k = 0; k < nargs; k++) {
+			out_params[k] = *args[k];
+			vm_retain(&out_params[k]);
+		}
+		call->function = env->owner_func;
+		call->params = out_params;
+		call->nparams = nargs;
+		call->return_stack_values = 0;
+		call->stack_has_callable = 0;
+		call->tail_self_call = 1;
+		call->retain_callable = nullptr;
+		*pc = j;
+		return 2;
+	}
+	if (callop == OP_EVALDF && tbycode_get_b(cmdarr[j]) == nargs) {
+		uint8_t encoded_address = tbycode_get_i(cmdarr[j]);
+		uint8_t address = encoded_address & 0x0f;
+		tobj *callable = address ?
+			vm_direct_slot(env, tbycode_get_L(cmdarr[j]),
+				       address - 1) :
+			tmp_obj(vm, tbycode_get_L(cmdarr[j]));
+		if (callable->type != tcompo || !callable->val.v_tcompo ||
+		    callable->val.v_tcompo->vtable != &tfunc_vtable)
+			return 0;
+		for (uint_regs k = 0; k < nargs; k++) {
+			out_params[k] = *args[k];
+			vm_retain(&out_params[k]);
+		}
+		call->function = (tfunc *)callable->val.v_tcompo;
+		call->params = out_params;
+		call->nparams = nargs;
+		call->return_stack_values = 0;
+		call->stack_has_callable = 0;
+		call->tail_self_call = 0;
+		call->retain_callable = (encoded_address & 0x10) ?
+			callable->val.v_tcompo : nullptr;
+		*pc = j;
+		return 2;
+	}
+	if (callop != OP_EVALCF || tbycode_get_i(cmdarr[j]) == 0 ||
+	    tbycode_get_b(cmdarr[j]) != nargs)
+		return 0;
+	tobj *callable = vm_direct_slot(env, tbycode_get_L(cmdarr[j]),
+					tbycode_get_i(cmdarr[j]) - 1);
+	if (callable->type != tcompo || !callable->val.v_tcompo ||
+	    callable->val.v_tcompo->vtable != &tcppgenf_vtable)
+		return 0;
+	tcppgenf *fn = (tcppgenf *)callable->val.v_tcompo;
+	if (!fn->f || !tcppgenf_accepts(fn, nargs))
+		return 0;
+	tobj params[VM_NATIVE_FUSED_MAX_PARAMS];
+	for (uint_regs k = 0; k < nargs; k++)
+		params[k] = *args[k];
+	fn->f(params, nargs, &vm->rev);
+	*pc = j;
+	if (j + 1 < end && tbycode_ins(cmdarr[j + 1]) == OP_POPN &&
+	    tbycode_get_L(cmdarr[j + 1]) == 1 &&
+	    tbycode_popn_temporary_count(cmdarr[j + 1]) == 0) {
+		if (tbycode_popn_print(cmdarr[j + 1]) && vm->rev.type != tnil) {
+			tstring *text = tobj_tostring_full(&vm->rev);
+			printf("%s\n", tstring_cstr(text));
+			tstring_free(text);
+		}
+		tobj_try_clear(&vm->rev);
+		*pc = vm_fused_next(cmdarr, end, j + 2);
+		return 1;
+	}
+	vm->stk[vm->stklen] = vm->rev;
+	vm->stklen++;
+	tvm_set_rev_empty(vm);
+	/* 内建回调交出的是未计数的初始所有权；栈槽按计数引用管理。 */
+	vm_own_result(stk_top(vm));
+	vm_consume_cjpop(vm, cmdarr, pc, end);
+	vm_consume_popcov(vm, env, cmdarr, pc, end);
+	return 1;
+}
+
+
 void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 {
 	twrapper *wrapper = tfunc_get_wrapper_from_env(env);
@@ -3807,6 +3857,46 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 				tobj_array_set_obj(slots, slots->len - 1,
 						   stk_top(vm));
 				stk_popc(vm);
+			} else if (i + 3 < end &&
+				   tbycode_ins(cmdarr[i + 1]) == OP_PUSHX &&
+				   tbycode_ins(cmdarr[i + 2]) == OP_IDXR &&
+				   tbycode_idxr_named(cmdarr[i + 2]) &&
+				   tbycode_idxr_count(cmdarr[i + 2]) == 1 &&
+				   !tbycode_idxr_slice(cmdarr[i + 2]) &&
+				   tbycode_ins(cmdarr[i + 3]) == OP_POPCOV) {
+				/* `let x = recv[k]`：刚创建的槽位就是 POPCOV
+				 * 目标时，索引读 + 初始化一次完成。 */
+				tbycode idxr = cmdarr[i + 2];
+				tbycode store = cmdarr[i + 3];
+				tobj_array *dst =
+					tbycode_get_R(store) ?
+						&env->base.objs :
+						&vm->tmps;
+				uint_objs dloc = (uint_objs)tbycode_get_L(store);
+				if (dst == slots &&
+				    dloc == slots->len - 1 && dloc < dst->len) {
+					const tobj *key = vm_pushx_source(
+						vm, env,
+						tbycode_get_L(cmdarr[i + 1]),
+						tbycode_get_R(cmdarr[i + 1]));
+					const tobj *object = vm_pushx_source(
+						vm, env,
+						tbycode_idxr_named_slot(idxr),
+						tbycode_idxr_named_address(idxr));
+					if (object->type == tcompo &&
+					    object->val.v_tcompo &&
+					    vm_idxr_fast(object->val.v_tcompo,
+							 (tobj *)key, 1,
+							 tbycode_idxr_compare(idxr),
+							 &slots->data[dloc])) {
+						if (slots->data[dloc].type == tnil)
+							twarn(ErrRuntime_AssignNil,
+							      "OP_POPCOV", "");
+						i = vm_fused_next(cmdarr, end,
+								  i + 4);
+						VM_NEXT();
+					}
+				}
 			}
 		}
 		VM_NEXT();
@@ -4322,14 +4412,20 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 					}
 				} else
 					goto pushx_native;
-			} else if (f1 == OP_EVALCF) {
-			pushx_native:
-			/* Direct native call whose arguments are consecutive
-			 * slot/immediate pushes — statement and expression
-			 * forms both resolve without stack traffic. */
-			if (vm_native_call_fused(vm, env, cmdarr, &i, end,
-						 cints, src))
-				VM_NEXT();
+			} else if (f1 == OP_EVALCF || f1 == OP_EVALTF ||
+				   f1 == OP_EVALDF) {
+			pushx_native: {
+				/* 直接调用（原生或 Tapas 函数）：连续槽位/立即数
+				 * 推送的参数解析进借用数组，不经 VM 栈。 */
+				tobj call_params[VM_NATIVE_FUSED_MAX_PARAMS];
+				int fused = vm_native_call_fused(
+					vm, env, cmdarr, &i, end, cints, src,
+					&call, call_params);
+				if (fused == 2)
+					goto make_call;
+				if (fused)
+					VM_NEXT();
+			}
 
 			} else if (f1 == OP_IDXR &&
 			    tbycode_idxr_named(cmdarr[i + 1]) &&
@@ -4551,9 +4647,15 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 						VM_NEXT();
 					}
 				}
-			} else if (vm_native_call_fused(vm, env, cmdarr, &i, end,
-							cints, &cst)) {
-				VM_NEXT();
+			} else {
+				tobj call_params[VM_NATIVE_FUSED_MAX_PARAMS];
+				int fused = vm_native_call_fused(
+					vm, env, cmdarr, &i, end, cints, &cst,
+					&call, call_params);
+				if (fused == 2)
+					goto make_call;
+				if (fused)
+					VM_NEXT();
 			}
 			tobj v;
 			tobj_set_nil(&v);
