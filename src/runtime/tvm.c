@@ -2131,6 +2131,11 @@ static inline TVM_ALWAYS_INLINE void vm_retain(const tobj *obj)
  * The incoming reference becomes the slot's own reference. */
 static inline TVM_ALWAYS_INLINE void vm_slot_move(tobj *slot, const tobj *owned)
 {
+	/* 定态下目标槽与来值同为 Int：类型与名字已就位，只搬运负载。 */
+	if (slot->type == tint && owned->type == tint) {
+		slot->val.v_tint = owned->val.v_tint;
+		return;
+	}
 	if (slot->type == tcompo)
 		tobj_ddc_ref_clear(slot);
 	*slot = *owned;
@@ -3600,6 +3605,55 @@ static inline TVM_ALWAYS_INLINE void vm_consume_cjpop(
 }
 
 
+/* Named-receiver indexed read with a slot key: store form
+ * (`dst = recv[key]`) and expression form share one body; the shape is
+ * learned per call site so later dispatches skip the pattern checks. */
+static inline TVM_ALWAYS_INLINE int vm_pushx_idxr_named_fused(
+	tvm *vm, tcompo_env *env, tbycode *cmdarr, uint_cmds *pc,
+	uint_cmds end, tobj *src)
+{
+	tbycode idxr = cmdarr[*pc + 1];
+	const tobj *object = vm_pushx_source(
+		vm, env, tbycode_idxr_named_slot(idxr),
+		tbycode_idxr_named_address(idxr));
+	if (object->type != tcompo || !object->val.v_tcompo)
+		return 0;
+	if (*pc + 2 < end &&
+	    (tbycode_ins(cmdarr[*pc + 2]) == OP_POPCOV ||
+	     (tbycode_ins(cmdarr[*pc + 2]) == OP_VCRT &&
+	      (tbycode_get_R(cmdarr[*pc + 2]) & TVCRT_INIT_FLAG)))) {
+		tobj result;
+		if (!vm_idxr_fast(object->val.v_tcompo, src, 1,
+				  tbycode_idxr_compare(idxr), &result))
+			return 0;
+		*pc += 1;
+		if (vm_store_owned_consumed(vm, env, cmdarr, pc, end,
+					    &result))
+			return 1;
+		*pc -= 1;
+		/* A father-environment target is rare; leave the owned
+		 * result on the stack and let POPCOV walk the chain. */
+		vm->stk[vm->stklen] = result;
+		vm->stklen++;
+		*pc += 1;
+		return 1;
+	}
+	tobj *dest = stk_free(vm);
+	if (!vm_idxr_fast(object->val.v_tcompo, src, 1,
+			  tbycode_idxr_compare(idxr), dest))
+		return 0;
+	vm->stklen++;
+	*pc += 1;
+	if (*pc + 1 < end && tbycode_ins(cmdarr[*pc + 1]) == OP_NOT) {
+		if (dest->type != tbool)
+			twarn(ErrRuntime_ParamsType, "OP_NOT", "");
+		dest->val.v_tbool = !dest->val.v_tbool;
+		*pc += 1;
+	}
+	vm_consume_cjpop(vm, cmdarr, pc, end);
+	return 1;
+}
+
 static inline TVM_ALWAYS_INLINE int vm_native_call_fused(
 	tvm *vm, tcompo_env *env, tbycode *cmdarr, uint_cmds *pc,
 	uint_cmds end, const long *cints, const tobj *first_arg,
@@ -4256,7 +4310,6 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 			tins_cache *pcache = tvm_instruction_cache(&code_cache, i);
 			if (pcache && pcache->kind == tins_cache_pushx_plain)
 				goto pushx_plain;
-
 			/* 按后继指令一次性判定融合形态；字节码不可变，
 			 * 各形态的分支条件预测稳定，省掉整条顺序探测链。 */
 			tins f1 = i + 1 < end ? tbycode_ins(cmdarr[i + 1]) : OP_PASS;
@@ -4505,76 +4558,12 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 			    tbycode_idxr_named(cmdarr[i + 1]) &&
 			    tbycode_idxr_count(cmdarr[i + 1]) == 1 &&
 			    !tbycode_idxr_slice(cmdarr[i + 1])) {
-			/* `dst = recv[key]` with all three operands in slots:
-			 * read through the fast path and store directly into
-			 * the POPCOV target. */
-			if (i + 2 < end &&
-			    tbycode_ins(cmdarr[i + 1]) == OP_IDXR &&
-			    tbycode_idxr_named(cmdarr[i + 1]) &&
-			    tbycode_idxr_count(cmdarr[i + 1]) == 1 &&
-			    !tbycode_idxr_slice(cmdarr[i + 1]) &&
-			    (tbycode_ins(cmdarr[i + 2]) == OP_POPCOV ||
-			     (tbycode_ins(cmdarr[i + 2]) == OP_VCRT &&
-			      (tbycode_get_R(cmdarr[i + 2]) &
-			       TVCRT_INIT_FLAG)))) {
-				tbycode idxr = cmdarr[i + 1];
-				const tobj *object = vm_pushx_source(
-					vm, env, tbycode_idxr_named_slot(idxr),
-					tbycode_idxr_named_address(idxr));
-				tobj result;
-				if (object->type == tcompo && object->val.v_tcompo &&
-				    vm_idxr_fast(object->val.v_tcompo, src, 1,
-						 tbycode_idxr_compare(idxr),
-						 &result)) {
-					/* 存储指令紧跟在 IDXR 之后。 */
-					i += 1;
-					if (vm_store_owned_consumed(vm, env,
-								    cmdarr, &i,
-								    end, &result))
-						VM_NEXT();
-					i -= 1;
-					/* A father-environment target is rare;
-					 * leave the owned result on the stack
-					 * and let POPCOV walk the chain. */
-					vm->stk[vm->stklen] = result;
-					vm->stklen++;
-					i += 1;
+			{
+				if (vm_pushx_idxr_named_fused(vm, env, cmdarr, &i,
+							      end, src)) {
 					VM_NEXT();
 				}
 			}
-
-			/* `recv[key]` as an expression: read through the fast path
-			 * without pushing the key first; a trailing NOT and/or
-			 * conditional jump are consumed as well. */
-			if (i + 1 < end &&
-			    tbycode_ins(cmdarr[i + 1]) == OP_IDXR &&
-			    tbycode_idxr_named(cmdarr[i + 1]) &&
-			    tbycode_idxr_count(cmdarr[i + 1]) == 1 &&
-			    !tbycode_idxr_slice(cmdarr[i + 1])) {
-				tbycode idxr = cmdarr[i + 1];
-				const tobj *object = vm_pushx_source(
-					vm, env, tbycode_idxr_named_slot(idxr),
-					tbycode_idxr_named_address(idxr));
-				tobj *dest = stk_free(vm);
-				if (object->type == tcompo && object->val.v_tcompo &&
-				    vm_idxr_fast(object->val.v_tcompo, src, 1,
-						 tbycode_idxr_compare(idxr), dest)) {
-					vm->stklen++;
-					i += 1;
-					if (i + 1 < end &&
-					    tbycode_ins(cmdarr[i + 1]) == OP_NOT) {
-						if (dest->type != tbool)
-							twarn(ErrRuntime_ParamsType,
-							      "OP_NOT", "");
-						dest->val.v_tbool =
-							!dest->val.v_tbool;
-						i += 1;
-					}
-					vm_consume_cjpop(vm, cmdarr, &i, end);
-					VM_NEXT();
-				}
-			}
-
 			} else if (f1 == OP_IDXL) {
 			/* `recv[key] = value` with the value already on the
 			 * stack: the current push supplies only the key. */
@@ -4627,10 +4616,12 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 			/* `x <op> slot` compare-branch and `slot = slot <op>
 			 * slot` accumulate-into-slot resolve without stack
 			 * traffic. */
-			if (vm_cmp_branch_fused(vm, env, cmdarr, &i, end, src))
+			if (vm_cmp_branch_fused(vm, env, cmdarr, &i, end, src)) {
 				VM_NEXT();
-			if (vm_arith_named_fused(vm, env, cmdarr, &i, end, src))
+			}
+			if (vm_arith_named_fused(vm, env, cmdarr, &i, end, src)) {
 				VM_NEXT();
+			}
 
 			if (i + 1 < end &&
 			    vm_try_borrowed_left_binop(vm, src, cmdarr[i + 1])) {
