@@ -5660,6 +5660,19 @@ resume_caller:
 		}
 		i = return_pc + 1;
 		end = return_end;
+		/* `x = f(...)` / `let x = f(...)` / `if (f(...))`：调用结果
+		 * 直接落槽或消费为分支条件，不再走栈往返。 */
+		if (i < end) {
+			uint_cmds back = i - 1;
+			vm_consume_popcov(vm, env, cmdarr, &back, end);
+			i = back + 1;
+			if (i < end && (tbycode_ins(cmdarr[i]) == OP_CJPFPOP ||
+					tbycode_ins(cmdarr[i]) == OP_CJPBPOP)) {
+				back = i - 1;
+				vm_consume_cjpop(vm, cmdarr, &back, end);
+				i = back + 1;
+			}
+		}
 		goto dispatch;
 	}
 	loop_done:
