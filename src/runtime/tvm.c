@@ -1702,6 +1702,14 @@ static void vm_dense_iset_int2(tcompo_v *array, const tobj *params, const tobj *
 
 static inline TVM_ALWAYS_INLINE void vm_slot_move(tobj *slot,
 						 const tobj *owned);
+typedef struct tcall_request tcall_request;
+static inline TVM_ALWAYS_INLINE int vm_store_owned_consumed(
+	tvm *vm, tcompo_env *env, tbycode *cmdarr, uint_cmds *pc,
+	uint_cmds end, const tobj *owned);
+static inline TVM_ALWAYS_INLINE int vm_arith_named_fused(
+	tvm *vm, tcompo_env *env, tbycode *cmdarr, uint_cmds *pc,
+	uint_cmds end, const tobj *right, tcall_request *call,
+	tobj *out_params);
 static inline TVM_ALWAYS_INLINE void vm_consume_cjpop(
 	tvm *vm, const tbycode *cmdarr, uint_cmds *pc, uint_cmds end);
 static inline TVM_ALWAYS_INLINE void vm_consume_popcov(
@@ -1801,121 +1809,6 @@ static inline TVM_ALWAYS_INLINE int vm_cmp_branch_fused(
 	else
 		*pc += 2;
 	return 1;
-}
-
-/* Fused named arithmetic with a freshly produced right operand:
- * `slot = slot OP value` stores straight into the POPCOV target, while the
- * bare form leaves the result on the stack. Both skip the operand's stack
- * round trip; the store form also consumes trailing jumps (loop back-edges,
- * branch-chain skips). Returns 0 for the general path. Numeric results are
- * never nil, so the POPCOV nil check cannot fire on this path. */
-static inline TVM_ALWAYS_INLINE int vm_arith_named_fused(
-	tvm *vm, tcompo_env *env, tbycode *cmdarr, uint_cmds *pc,
-	uint_cmds end, const tobj *right)
-{
-	if (*pc + 1 >= end)
-		return 0;
-	tbycode arith = cmdarr[*pc + 1];
-	tins op = tbycode_ins(arith);
-	/* 同上：操作码先于 named 标志。 */
-	if ((op != OP_ADD && op != OP_SUB && op != OP_MUL && op != OP_DIV) ||
-	    !tbycode_binop_named(arith))
-		return 0;
-	const tobj *left = vm_pushx_source(
-		vm, env, tbycode_get_L(arith), tbycode_binop_address(arith));
-	tobj result;
-	int ok;
-	switch (op) {
-	case OP_ADD:
-		ok = add_impl(left->type, right->type, left, right, &result);
-		break;
-	case OP_SUB:
-		ok = sub_impl(left->type, right->type, left, right, &result);
-		break;
-	case OP_MUL:
-		ok = mul_impl(left->type, right->type, left, right, &result);
-		break;
-	case OP_DIV:
-		ok = div_impl(left->type, right->type, left, right, &result);
-		break;
-	default:
-		return 0;
-	}
-	if (!ok)
-		return 0;
-	if (*pc + 2 < end && tbycode_ins(cmdarr[*pc + 2]) == OP_POPCOV) {
-		tbycode store = cmdarr[*pc + 2];
-		tobj_array *slots =
-			tbycode_get_R(store) ? &env->base.objs : &vm->tmps;
-		uint_objs dloc = (uint_objs)tbycode_get_L(store);
-		if (dloc >= slots->len)
-			return 0;
-		vm_slot_move(&slots->data[dloc], &result);
-		*pc = vm_fused_next(cmdarr, end, *pc + 3);
-		return 1;
-	}
-	/* `recv[slot +/- c]`：索引常量偏移惯用法，读出结果直接入栈。 */
-	if (*pc + 2 < end && result.type == tint &&
-	    tbycode_ins(cmdarr[*pc + 2]) == OP_IDXR &&
-	    tbycode_idxr_named(cmdarr[*pc + 2]) &&
-	    tbycode_idxr_count(cmdarr[*pc + 2]) == 1 &&
-	    !tbycode_idxr_slice(cmdarr[*pc + 2])) {
-		tbycode idxr = cmdarr[*pc + 2];
-		const tobj *object = vm_pushx_source(
-			vm, env, tbycode_idxr_named_slot(idxr),
-			tbycode_idxr_named_address(idxr));
-		if (object->type == tcompo && object->val.v_tcompo) {
-			tobj *dest = stk_free(vm);
-			if (vm_idxr_fast(object->val.v_tcompo, &result, 1,
-					 tbycode_idxr_compare(idxr), dest)) {
-				vm->stklen++;
-				*pc += 2;
-				vm_consume_cjpop(vm, cmdarr, pc, end);
-				vm_consume_popcov(vm, env, cmdarr, pc, end);
-				return 1;
-			}
-		}
-	}
-	/* Immediate results carry no reference; place them directly. */
-	vm->stk[vm->stklen] = result;
-	vm->stklen++;
-	*pc += 1;
-	return 1;
-}
-
-/* Store an owned value through a following POPCOV (existing slot) or
- * VCRT-init (fresh slot) instruction. Returns nonzero when consumed. */
-static inline TVM_ALWAYS_INLINE int vm_store_owned_consumed(
-	tvm *vm, tcompo_env *env, tbycode *cmdarr, uint_cmds *pc,
-	uint_cmds end, const tobj *owned)
-{
-	if (*pc + 1 >= end)
-		return 0;
-	tbycode store = cmdarr[*pc + 1];
-	tins kind = tbycode_ins(store);
-	if (kind == OP_POPCOV) {
-		tobj_array *slots =
-			tbycode_get_R(store) ? &env->base.objs : &vm->tmps;
-		uint_objs dloc = (uint_objs)tbycode_get_L(store);
-		if (dloc >= slots->len)
-			return 0;
-		if (owned->type == tnil)
-			twarn(ErrRuntime_AssignNil, "OP_POPCOV", "");
-		vm_slot_move(&slots->data[dloc], owned);
-		*pc = vm_fused_next(cmdarr, end, *pc + 2);
-		return 1;
-	}
-	if (kind == OP_VCRT && (tbycode_get_R(store) & TVCRT_INIT_FLAG)) {
-		if (owned->type == tnil)
-			twarn(ErrRuntime_AssignNil, "OP_VCRT", "");
-		tobj_array *slots = (tbycode_get_R(store) & TVCRT_ENV_FLAG) ?
-			&env->base.objs : &vm->tmps;
-		vm_add_slot(slots, (uint_csts)tbycode_get_L(store));
-		slots->data[slots->len - 1] = *owned;
-		*pc = vm_fused_next(cmdarr, end, *pc + 2);
-		return 1;
-	}
-	return 0;
 }
 
 /* A produced value followed by POPCOV stores into the target slot directly,
@@ -3506,7 +3399,7 @@ vm_import(tvm *vm, uint_csts cloc, tstring **cstrlsts, tcompo_env *env)
 }
 
 /* Single ins execution */
-typedef struct {
+typedef struct tcall_request {
 	tfunc *function;
 	tobj *params;
 	uint_regs nparams;
@@ -3667,7 +3560,7 @@ static inline TVM_ALWAYS_INLINE void vm_consume_cjpop(
  * learned per call site so later dispatches skip the pattern checks. */
 static inline TVM_ALWAYS_INLINE int vm_pushx_idxr_named_fused(
 	tvm *vm, tcompo_env *env, tbycode *cmdarr, uint_cmds *pc,
-	uint_cmds end, tobj *src)
+	uint_cmds end, tobj *src, tcall_request *call, tobj *out_params)
 {
 	tbycode idxr = cmdarr[*pc + 1];
 	const tobj *object = vm_pushx_source(
@@ -3699,6 +3592,46 @@ static inline TVM_ALWAYS_INLINE int vm_pushx_idxr_named_fused(
 	if (!vm_idxr_fast(object->val.v_tcompo, src, 1,
 			  tbycode_idxr_compare(idxr), dest))
 		return 0;
+	/* `f(recv[k])`：单实参调用直接以读出的值发起。 */
+	if (*pc + 2 < end) {
+		tbycode nxt = cmdarr[*pc + 2];
+		tins nins = tbycode_ins(nxt);
+		if (nins == OP_EVALTF &&
+		    (uint_regs)tbycode_get_U(nxt) == 1 && env->owner_func) {
+			out_params[0] = *dest;
+			call->function = env->owner_func;
+			call->params = out_params;
+			call->nparams = 1;
+			call->return_stack_values = 0;
+			call->stack_has_callable = 0;
+			call->tail_self_call = 1;
+			call->retain_callable = nullptr;
+			*pc += 2;
+			return 2;
+		}
+		if (nins == OP_EVALDF && tbycode_get_b(nxt) == 1) {
+			uint8_t encoded_address = tbycode_get_i(nxt);
+			uint8_t address = encoded_address & 0x0f;
+			tobj *callable = address ?
+				vm_direct_slot(env, tbycode_get_L(nxt),
+					       address - 1) :
+				tmp_obj(vm, tbycode_get_L(nxt));
+			if (callable->type == tcompo && callable->val.v_tcompo &&
+			    callable->val.v_tcompo->vtable == &tfunc_vtable) {
+				out_params[0] = *dest;
+				call->function = (tfunc *)callable->val.v_tcompo;
+				call->params = out_params;
+				call->nparams = 1;
+				call->return_stack_values = 0;
+				call->stack_has_callable = 0;
+				call->tail_self_call = 0;
+				call->retain_callable = (encoded_address & 0x10) ?
+					callable->val.v_tcompo : nullptr;
+				*pc += 2;
+				return 2;
+			}
+		}
+	}
 	vm->stklen++;
 	*pc += 1;
 	if (*pc + 1 < end && tbycode_ins(cmdarr[*pc + 1]) == OP_NOT) {
@@ -3710,6 +3643,166 @@ static inline TVM_ALWAYS_INLINE int vm_pushx_idxr_named_fused(
 	vm_consume_cjpop(vm, cmdarr, pc, end);
 	return 1;
 }
+
+/* Fused named arithmetic with a freshly produced right operand:
+ * `slot = slot OP value` stores straight into the POPCOV target, while the
+ * bare form leaves the result on the stack. Both skip the operand's stack
+ * round trip; the store form also consumes trailing jumps (loop back-edges,
+ * branch-chain skips). Returns 0 for the general path. Numeric results are
+ * never nil, so the POPCOV nil check cannot fire on this path. */
+static inline TVM_ALWAYS_INLINE int vm_arith_named_fused(
+	tvm *vm, tcompo_env *env, tbycode *cmdarr, uint_cmds *pc,
+	uint_cmds end, const tobj *right, tcall_request *call,
+	tobj *out_params)
+{
+	if (*pc + 1 >= end)
+		return 0;
+	tbycode arith = cmdarr[*pc + 1];
+	tins op = tbycode_ins(arith);
+	/* 同上：操作码先于 named 标志。 */
+	if ((op != OP_ADD && op != OP_SUB && op != OP_MUL && op != OP_DIV) ||
+	    !tbycode_binop_named(arith))
+		return 0;
+	const tobj *left = vm_pushx_source(
+		vm, env, tbycode_get_L(arith), tbycode_binop_address(arith));
+	tobj result;
+	int ok;
+	switch (op) {
+	case OP_ADD:
+		ok = add_impl(left->type, right->type, left, right, &result);
+		break;
+	case OP_SUB:
+		ok = sub_impl(left->type, right->type, left, right, &result);
+		break;
+	case OP_MUL:
+		ok = mul_impl(left->type, right->type, left, right, &result);
+		break;
+	case OP_DIV:
+		ok = div_impl(left->type, right->type, left, right, &result);
+		break;
+	default:
+		return 0;
+	}
+	if (!ok)
+		return 0;
+	if (*pc + 2 < end && tbycode_ins(cmdarr[*pc + 2]) == OP_POPCOV) {
+		tbycode store = cmdarr[*pc + 2];
+		tobj_array *slots =
+			tbycode_get_R(store) ? &env->base.objs : &vm->tmps;
+		uint_objs dloc = (uint_objs)tbycode_get_L(store);
+		if (dloc >= slots->len)
+			return 0;
+		vm_slot_move(&slots->data[dloc], &result);
+		*pc = vm_fused_next(cmdarr, end, *pc + 3);
+		return 1;
+	}
+	/* `f(slot <op> c)`：单参数调用的实参是刚算出的值——直接进
+	 * make_call，不再经栈。 */
+	if (*pc + 2 < end && result.type != tnil) {
+		tbycode nxt = cmdarr[*pc + 2];
+		tins nins = tbycode_ins(nxt);
+		if (nins == OP_EVALTF &&
+		    (uint_regs)tbycode_get_U(nxt) == 1 && env->owner_func) {
+			out_params[0] = result;
+			vm_retain(&out_params[0]);
+			call->function = env->owner_func;
+			call->params = out_params;
+			call->nparams = 1;
+			call->return_stack_values = 0;
+			call->stack_has_callable = 0;
+			call->tail_self_call = 1;
+			call->retain_callable = nullptr;
+			*pc += 2;
+			return 2;
+		}
+		if (nins == OP_EVALDF && tbycode_get_b(nxt) == 1) {
+			uint8_t encoded_address = tbycode_get_i(nxt);
+			uint8_t address = encoded_address & 0x0f;
+			tobj *callable = address ?
+				vm_direct_slot(env, tbycode_get_L(nxt),
+					       address - 1) :
+				tmp_obj(vm, tbycode_get_L(nxt));
+			if (callable->type == tcompo && callable->val.v_tcompo &&
+			    callable->val.v_tcompo->vtable == &tfunc_vtable) {
+				out_params[0] = result;
+				vm_retain(&out_params[0]);
+				call->function = (tfunc *)callable->val.v_tcompo;
+				call->params = out_params;
+				call->nparams = 1;
+				call->return_stack_values = 0;
+				call->stack_has_callable = 0;
+				call->tail_self_call = 0;
+				call->retain_callable = (encoded_address & 0x10) ?
+					callable->val.v_tcompo : nullptr;
+				*pc += 2;
+				return 2;
+			}
+		}
+	}
+	/* `recv[slot +/- c]`：索引常量偏移惯用法，读出结果直接入栈。 */
+	if (*pc + 2 < end && result.type == tint &&
+	    tbycode_ins(cmdarr[*pc + 2]) == OP_IDXR &&
+	    tbycode_idxr_named(cmdarr[*pc + 2]) &&
+	    tbycode_idxr_count(cmdarr[*pc + 2]) == 1 &&
+	    !tbycode_idxr_slice(cmdarr[*pc + 2])) {
+		tbycode idxr = cmdarr[*pc + 2];
+		const tobj *object = vm_pushx_source(
+			vm, env, tbycode_idxr_named_slot(idxr),
+			tbycode_idxr_named_address(idxr));
+		if (object->type == tcompo && object->val.v_tcompo) {
+			tobj *dest = stk_free(vm);
+			if (vm_idxr_fast(object->val.v_tcompo, &result, 1,
+					 tbycode_idxr_compare(idxr), dest)) {
+				vm->stklen++;
+				*pc += 2;
+				vm_consume_cjpop(vm, cmdarr, pc, end);
+				vm_consume_popcov(vm, env, cmdarr, pc, end);
+				return 1;
+			}
+		}
+	}
+	/* Immediate results carry no reference; place them directly. */
+	vm->stk[vm->stklen] = result;
+	vm->stklen++;
+	*pc += 1;
+	return 1;
+}
+
+/* Store an owned value through a following POPCOV (existing slot) or
+ * VCRT-init (fresh slot) instruction. Returns nonzero when consumed. */
+static inline TVM_ALWAYS_INLINE int vm_store_owned_consumed(
+	tvm *vm, tcompo_env *env, tbycode *cmdarr, uint_cmds *pc,
+	uint_cmds end, const tobj *owned)
+{
+	if (*pc + 1 >= end)
+		return 0;
+	tbycode store = cmdarr[*pc + 1];
+	tins kind = tbycode_ins(store);
+	if (kind == OP_POPCOV) {
+		tobj_array *slots =
+			tbycode_get_R(store) ? &env->base.objs : &vm->tmps;
+		uint_objs dloc = (uint_objs)tbycode_get_L(store);
+		if (dloc >= slots->len)
+			return 0;
+		if (owned->type == tnil)
+			twarn(ErrRuntime_AssignNil, "OP_POPCOV", "");
+		vm_slot_move(&slots->data[dloc], owned);
+		*pc = vm_fused_next(cmdarr, end, *pc + 2);
+		return 1;
+	}
+	if (kind == OP_VCRT && (tbycode_get_R(store) & TVCRT_INIT_FLAG)) {
+		if (owned->type == tnil)
+			twarn(ErrRuntime_AssignNil, "OP_VCRT", "");
+		tobj_array *slots = (tbycode_get_R(store) & TVCRT_ENV_FLAG) ?
+			&env->base.objs : &vm->tmps;
+		vm_add_slot(slots, (uint_csts)tbycode_get_L(store));
+		slots->data[slots->len - 1] = *owned;
+		*pc = vm_fused_next(cmdarr, end, *pc + 2);
+		return 1;
+	}
+	return 0;
+}
+
 
 static inline TVM_ALWAYS_INLINE int vm_native_call_fused(
 	tvm *vm, tcompo_env *env, tbycode *cmdarr, uint_cmds *pc,
@@ -4620,10 +4713,14 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 			    tbycode_idxr_count(cmdarr[i + 1]) == 1 &&
 			    !tbycode_idxr_slice(cmdarr[i + 1])) {
 			{
-				if (vm_pushx_idxr_named_fused(vm, env, cmdarr, &i,
-							      end, src)) {
+				tobj call_params[VM_NATIVE_FUSED_MAX_PARAMS];
+				int fused = vm_pushx_idxr_named_fused(
+					vm, env, cmdarr, &i, end, src, &call,
+					call_params);
+				if (fused == 2)
+					goto make_call;
+				if (fused)
 					VM_NEXT();
-				}
 			}
 			} else if (f1 == OP_IDXL) {
 			/* `recv[key] = value` with the value already on the
@@ -4680,8 +4777,15 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 			if (vm_cmp_branch_fused(vm, env, cmdarr, &i, end, src)) {
 				VM_NEXT();
 			}
-			if (vm_arith_named_fused(vm, env, cmdarr, &i, end, src)) {
-				VM_NEXT();
+			{
+				tobj call_params[VM_NATIVE_FUSED_MAX_PARAMS];
+				int fused = vm_arith_named_fused(vm, env, cmdarr,
+								 &i, end, src, &call,
+								 call_params);
+				if (fused == 2)
+					goto make_call;
+				if (fused)
+					VM_NEXT();
 			}
 
 			if (i + 1 < end &&
@@ -4740,9 +4844,16 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 				if (vm_cmp_branch_fused(vm, env, cmdarr, &i,
 							end, &cst))
 					VM_NEXT();
-				if (vm_arith_named_fused(vm, env, cmdarr, &i,
-							 end, &cst))
-					VM_NEXT();
+				{
+					tobj call_params[VM_NATIVE_FUSED_MAX_PARAMS];
+					int fused = vm_arith_named_fused(
+						vm, env, cmdarr, &i, end, &cst,
+						&call, call_params);
+					if (fused == 2)
+						goto make_call;
+					if (fused)
+						VM_NEXT();
+				}
 			} else if (f1 == OP_IDXR &&
 			    tbycode_idxr_named(cmdarr[i + 1]) &&
 			    tbycode_idxr_count(cmdarr[i + 1]) == 1 &&
@@ -4763,6 +4874,51 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 						    object->val.v_tcompo, &key,
 						    1, tbycode_idxr_compare(idxr),
 						    dest)) {
+						/* `f(recv[c])`：单实参调用直接以
+						 * 读出的值发起。 */
+						if (i + 2 < end) {
+							tbycode nxt = cmdarr[i + 2];
+							tins nins = tbycode_ins(nxt);
+							if (nins == OP_EVALTF &&
+							    (uint_regs)tbycode_get_U(nxt) == 1 &&
+							    env->owner_func) {
+								tobj call_params[1];
+								call_params[0] = *dest;
+								call.function =
+									env->owner_func;
+								call.params = call_params;
+								call.nparams = 1;
+								call.return_stack_values = 0;
+								call.stack_has_callable = 0;
+								call.tail_self_call = 1;
+								call.retain_callable = nullptr;
+								i += 2;
+								goto make_call;
+							}
+							if (nins == OP_EVALDF &&
+							    tbycode_get_b(nxt) == 1) {
+								uint8_t enc = tbycode_get_i(nxt);
+								uint8_t address = enc & 0x0f;
+								tobj *callable = address ?
+									vm_direct_slot(env, tbycode_get_L(nxt), address - 1) :
+									tmp_obj(vm, tbycode_get_L(nxt));
+								if (callable->type == tcompo &&
+								    callable->val.v_tcompo &&
+								    callable->val.v_tcompo->vtable == &tfunc_vtable) {
+									tobj call_params[1];
+									call_params[0] = *dest;
+									call.function = (tfunc *)callable->val.v_tcompo;
+									call.params = call_params;
+									call.nparams =1;
+									call.return_stack_values = 0;
+									call.stack_has_callable = 0;
+									call.tail_self_call = 0;
+									call.retain_callable = (enc & 0x10) ? callable->val.v_tcompo : nullptr;
+									i += 2;
+									goto make_call;
+								}
+							}
+						}
 						vm->stklen++;
 						i++;
 						vm_consume_cjpop(vm, cmdarr,
