@@ -1085,7 +1085,6 @@ static tcall_frame *tvm_push_call_frame(
 		tcall_frame_prepare(fr, f);
 	fr->saved_tmps = vm->tmps;
 	fr->saved_stk = vm->stk;
-	fr->saved_regmax = vm->regmax;
 	fr->saved_stklen = vm->stklen;
 	if (vm_function_has_loops(f)) {
 		fr->saved_loop_states = vm->loop_states;
@@ -1132,7 +1131,6 @@ static inline TVM_ALWAYS_INLINE tcall_frame *tvm_push_call_frame_fast(
 	fr->env.owner_func = f;
 	fr->saved_tmps = vm->tmps;
 	fr->saved_stk = vm->stk;
-	fr->saved_regmax = vm->regmax;
 	fr->saved_stklen = vm->stklen;
 	if (vm_function_has_loops(f)) {
 		fr->saved_loop_states = vm->loop_states;
@@ -1208,7 +1206,6 @@ static inline TVM_ALWAYS_INLINE void tvm_pop_call_frame(tvm *vm)
 	tcall_frame *fr = vm->frames[vm->frame_len - 1];
 	tobj_array saved_tmps = fr->saved_tmps;
 	tobj *saved_stk = fr->saved_stk;
-	uint_regs saved_regmax = fr->saved_regmax;
 	uint_regs saved_stklen = fr->saved_stklen;
 	tloop_state *saved_loop_states = fr->saved_loop_states;
 	uint_cmds saved_loop_state_len = fr->saved_loop_state_len;
@@ -1219,7 +1216,6 @@ static inline TVM_ALWAYS_INLINE void tvm_pop_call_frame(tvm *vm)
 
 	vm->tmps = saved_tmps;
 	vm->stk = saved_stk;
-	vm->regmax = saved_regmax;
 	vm->stklen = saved_stklen;
 	if (vm_function_has_loops(fr->func)) {
 		vm->loop_states = saved_loop_states;
