@@ -18,7 +18,13 @@ function bench(n, keys)
     }
 
     let elapsed = clock_ns() - started
-    print(len(counts))
+    // 校验和必须依赖字典中存放的值：只用 len(counts) 无法发现被测的
+    // 读+写回路径返回了错误的值。求和在校时点之后，不影响计时。
+    var total = 0
+    for (let key in 0 to 4096) {
+        total = total + counts[key]
+    }
+    print(total)
     print(elapsed)
 }
 

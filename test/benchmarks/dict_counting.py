@@ -16,7 +16,9 @@ def bench(n, keys):
             counts[key] = key
 
     elapsed = time.process_time_ns() - started
-    print(len(counts))
+    # The checksum must depend on the stored values: len(counts) alone cannot
+    # detect a broken read-then-write-back. Summed after the timed region.
+    print(sum(counts.values()))
     print(elapsed)
 
 

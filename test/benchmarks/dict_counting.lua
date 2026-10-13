@@ -17,9 +17,11 @@ local function bench(n, keys)
     end
 
     local elapsed = math.floor((os.clock() - started) * 1e9 + 0.5)
+    -- The checksum must depend on the stored values: counting the pairs alone
+    -- cannot detect a broken read-then-write-back. Summed after the timed region.
     local result = 0
-    for _ in pairs(counts) do
-        result = result + 1
+    for _, value in pairs(counts) do
+        result = result + value
     end
     print(result)
     print(elapsed)
