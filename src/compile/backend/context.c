@@ -298,6 +298,8 @@ void tcp_init_preload(
 		const tlib *library,
 		int interactive)
 {
+	tstandard_catalog_init(&cp->standards,
+		library ? tlib_get_extension_registry(library) : nullptr);
 	tobj_ctr_init_preload(
 		&cp->objctr, default_objs, ndefault, father_objctr);
 	if (library && !father_objctr) {
@@ -380,6 +382,7 @@ void tcp_free(tcp *cp)
 {
 	if (!cp)
 		return;
+	tstandard_catalog_free(&cp->standards);
 	tobj_ctr_free(&cp->objctr);
 	tobj_ctr_free(&cp->tmpctr);
 	tcompile_module_interface_free(cp->module_interface);

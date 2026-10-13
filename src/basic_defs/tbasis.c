@@ -8,21 +8,21 @@
  * Error System
  *===========================================================================*/
 
-jmp_buf tapas_error_jmpbuf;
-int tapas_error_recover_enabled = 0;
+_Thread_local jmp_buf tapas_error_jmpbuf;
+_Thread_local int tapas_error_recover_enabled = 0;
 
-static terror tapas_last_error;
-static tstring *tapas_error_source_ctx = nullptr;
-static tstring *tapas_error_file_ctx = nullptr;
-static const char *tapas_error_source_view = nullptr;
-static const char *tapas_error_file_view = nullptr;
-static uint64_t tapas_error_line_ctx = 0;
-static uint64_t tapas_error_column_ctx = 0;
-static int tapas_error_has_file_ctx = 0;
-static uint_cmds tapas_error_instruction_ctx = 0;
-static int tapas_error_has_instruction_ctx = 0;
-static terror_runtime_context_resolver tapas_runtime_context_resolver = nullptr;
-static void *tapas_runtime_context_data = nullptr;
+static _Thread_local terror tapas_last_error;
+static _Thread_local tstring *tapas_error_source_ctx = nullptr;
+static _Thread_local tstring *tapas_error_file_ctx = nullptr;
+static _Thread_local const char *tapas_error_source_view = nullptr;
+static _Thread_local const char *tapas_error_file_view = nullptr;
+static _Thread_local uint64_t tapas_error_line_ctx = 0;
+static _Thread_local uint64_t tapas_error_column_ctx = 0;
+static _Thread_local int tapas_error_has_file_ctx = 0;
+static _Thread_local uint_cmds tapas_error_instruction_ctx = 0;
+static _Thread_local int tapas_error_has_instruction_ctx = 0;
+static _Thread_local terror_runtime_context_resolver tapas_runtime_context_resolver = nullptr;
+static _Thread_local void *tapas_runtime_context_data = nullptr;
 
 static void terror_reset(terror *err)
 {

@@ -31,14 +31,19 @@ typedef struct tfrontend {
 void tfrontend_init(tfrontend *frontend, const char *name,
 		    const char *source, tfrontend_mode mode);
 
+void tfrontend_init_with_catalog(tfrontend *frontend, const char *name,
+	const char *source, tfrontend_mode mode, tstandard_catalog *standards);
+
 void tfrontend_init_with_resolver(
 	tfrontend *frontend, const char *name, const char *source,
-	tfrontend_mode mode, ttype_info_external_resolver resolver,
+	tfrontend_mode mode, tstandard_catalog *standards,
+	ttype_info_external_resolver resolver,
 	void *resolver_context);
 
 void tfrontend_init_with_environment(
 	tfrontend *frontend, const char *name, const char *source,
-	tfrontend_mode mode, ttype_info_external_resolver type_resolver,
+	tfrontend_mode mode, tstandard_catalog *standards,
+	ttype_info_external_resolver type_resolver,
 	void *type_context, tsemantic_external_resolver semantic_resolver,
 	void *semantic_context);
 

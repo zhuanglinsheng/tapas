@@ -1,9 +1,18 @@
 #include "lsp/server.h"
 #include "../../src/lsp/presentation.h"
+#include "tapas/textension.h"
+#include "tapas/tstdlib.h"
 
 #include <assert.h>
 #include <stdlib.h>
 #include <string.h>
+
+static textension_registry *test_extensions;
+static tstandard_catalog test_standards;
+
+#define tfrontend_init(frontend_, name_, source_, mode_) \
+	tfrontend_init_with_catalog((frontend_), (name_), (source_), (mode_), \
+		&test_standards)
 
 static void frame(FILE *stream, const char *json)
 {
@@ -36,17 +45,20 @@ static void test_presentation_categories(void)
     }
     tstring *field=tlsp_present_field(&f.types.arena,"reason",tbuiltintype_string);
     assert(tstring_eq_cstr(field,"reason: String")); tstring_free(field);
-    tstandard_symbol standard=*tstandard_symbol_find("solve","hold");
+    tstandard_symbol standard=*tstandard_symbol_find(
+	&test_standards, "solve","hold");
     standard.detail="Misleading handwritten signature";
-    tstring *description=tlsp_present_standard(&standard);
+    tstring *description=tlsp_present_standard(&test_standards, &standard);
     assert(tstring_eq_cstr(description,"Function solve::hold[Union[Rule, RuleInstance]] -> solve::HoldResult"));
     tstring_free(description);
-    description=tlsp_present_standard(tstandard_package("solve"));
+    description=tlsp_present_standard(&test_standards,
+	tstandard_package(&test_standards, "solve"));
     assert(tstring_eq_cstr(description,"package solve")); tstring_free(description);
-    description=tlsp_present_standard(tstandard_symbol_find("solve","HoldResult"));
+    description=tlsp_present_standard(&test_standards,
+	tstandard_symbol_find(&test_standards, "solve","HoldResult"));
     assert(strstr(tstring_cstr(description),"Type solve::HoldResult {status: String")); tstring_free(description);
-	description = tlsp_present_standard(
-		tstandard_symbol_find("solve", "sample"));
+	description = tlsp_present_standard(&test_standards,
+		tstandard_symbol_find(&test_standards, "solve", "sample"));
 	assert(strstr(tstring_cstr(description),
 		"Function solve::sample(rule: Rule, count: Int"));
 	assert(strstr(tstring_cstr(description),
@@ -63,6 +75,10 @@ static void test_presentation_categories(void)
 
 int main(void)
 {
+	test_extensions = textension_registry_new();
+	assert(test_extensions);
+	assert(textension_registry_register(test_extensions, tstdlib_descriptor()));
+	tstandard_catalog_init(&test_standards, test_extensions);
     test_presentation_categories();
 	FILE *input = tmpfile();
 	FILE *output = tmpfile();
@@ -92,7 +108,7 @@ int main(void)
 	frame(input, "{\"jsonrpc\":\"2.0\",\"id\":11,\"method\":\"shutdown\",\"params\":null}");
 	frame(input, "{\"jsonrpc\":\"2.0\",\"method\":\"exit\",\"params\":null}");
 	rewind(input);
-	assert(tlsp_run(input, output) == 0);
+	assert(tlsp_run(input, output, test_extensions) == 0);
 	fflush(output);
 	fseek(output, 0, SEEK_END);
 	long length = ftell(output);
@@ -135,5 +151,7 @@ int main(void)
 	free(text);
 	fclose(input);
 	fclose(output);
+	tstandard_catalog_free(&test_standards);
+	textension_registry_free(test_extensions);
 	return 0;
 }

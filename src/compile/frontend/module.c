@@ -9,13 +9,10 @@
 #include "compile/frontend/module.h"
 #include "tapas/dsa/tstring.h"
 #include "compile/frontend/frontend.h"
-#include "tapas/tstdlib.h"
 
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-
-static tstandard_symbol *standard_symbols;
-static uint32_t standard_symbol_length;
 
 static tmodule_symbol_kind standard_kind(const textension_symbol *symbol)
 {
@@ -25,60 +22,104 @@ static tmodule_symbol_kind standard_kind(const textension_symbol *symbol)
 	return tmodule_symbol_value;
 }
 
-static int package_added(const char *name)
+static int package_added(const tstandard_catalog *catalog, const char *name)
 {
-	for (uint32_t i = 0; i < standard_symbol_length; i++)
-		if (!standard_symbols[i].package &&
-		    standard_symbols[i].kind == tmodule_symbol_package &&
-		    strcmp(standard_symbols[i].name, name) == 0)
+	for (uint32_t i = 0; i < catalog->symbol_count; i++)
+		if (!catalog->symbols[i].package &&
+		    catalog->symbols[i].kind == tmodule_symbol_package &&
+		    strcmp(catalog->symbols[i].name, name) == 0)
 			return 1;
 	return 0;
 }
 
-static void initialize_standard_symbols(void)
+static void initialize_standard_symbols(tstandard_catalog *catalog)
 {
-	if (standard_symbols) return;
-	const textension_descriptor *extension = tstdlib_descriptor();
-	uint32_t capacity = textension_symbol_count(extension) +
-		extension->module_count;
-	standard_symbols = (tstandard_symbol *)calloc(
-		capacity, sizeof(*standard_symbols));
-	if (!standard_symbols) abort();
-	for (uint32_t i = 0; i < extension->module_count; i++) {
-		const textension_module *module = extension->modules[i];
-		const char *package = module->scope == textension_package ?
-			module->name : nullptr;
-		if (package && !package_added(package))
-			standard_symbols[standard_symbol_length++] =
-				(tstandard_symbol){
-					.name = package,
-					.detail = module->detail,
-					.kind = tmodule_symbol_package
-				};
-		for (uint32_t j = 0; j < module->symbol_count; j++) {
-			const textension_symbol *symbol = &module->symbols[j];
-			standard_symbols[standard_symbol_length++] =
-				(tstandard_symbol){
-					.package = package,
-					.name = symbol->name,
-					.type = symbol->type,
-					.detail = symbol->detail,
-					.kind = standard_kind(symbol),
-					.result_argument = symbol->result_argument,
-					.result_from_argument = symbol->result_relation ==
-						tnative_result_argument,
-					.result_template_from_argument =
-						symbol->result_relation ==
-						tnative_result_template_argument,
-					.nominal_template = symbol->nominal_template,
-					.result_template = symbol->result_template,
-					.following_arguments_match_result_parameter =
-						symbol->following_arguments_match_result_parameter,
-					.compile_time_signature =
-						symbol->compile_time_signature
-				};
+	if (!catalog) return;
+	uint64_t revision = textension_registry_revision(catalog->extensions);
+	if (catalog->revision == revision) return;
+	free(catalog->symbols);
+	catalog->symbols = nullptr;
+	catalog->symbol_count = 0;
+	memset(catalog->constructors, 0, sizeof(catalog->constructors));
+	uint32_t capacity = 0;
+	for (uint32_t i = 0; i < textension_registry_count(catalog->extensions); i++) {
+		const textension_descriptor *extension =
+			textension_registry_at(catalog->extensions, i);
+		capacity += textension_symbol_count(extension) + extension->module_count;
+	}
+	if (capacity) {
+		catalog->symbols = (tstandard_symbol *)calloc(
+			capacity, sizeof(*catalog->symbols));
+		if (!catalog->symbols) abort();
+	}
+	for (uint32_t e = 0; e < textension_registry_count(catalog->extensions); e++) {
+		const textension_descriptor *extension =
+			textension_registry_at(catalog->extensions, e);
+		for (uint32_t i = 0; i < extension->module_count; i++) {
+			const textension_module *module = extension->modules[i];
+			const char *package = module->scope == textension_package ?
+				module->name : nullptr;
+			if (package && !package_added(catalog, package))
+				catalog->symbols[catalog->symbol_count++] =
+					(tstandard_symbol){
+						.name = package,
+						.detail = module->detail,
+						.kind = tmodule_symbol_package
+					};
+			for (uint32_t j = 0; j < module->symbol_count; j++) {
+				const textension_symbol *symbol = &module->symbols[j];
+				catalog->symbols[catalog->symbol_count++] =
+					(tstandard_symbol){
+						.package = package,
+						.name = symbol->name,
+						.type = symbol->type,
+						.detail = symbol->detail,
+						.kind = standard_kind(symbol),
+						.result_argument = symbol->result_argument,
+						.result_from_argument = symbol->result_relation ==
+							tnative_result_argument,
+						.result_template_from_argument =
+							symbol->result_relation ==
+							tnative_result_template_argument,
+						.nominal_template = symbol->nominal_template,
+						.result_template = symbol->result_template,
+						.following_arguments_match_result_parameter =
+							symbol->following_arguments_match_result_parameter,
+						.compile_time_signature =
+							symbol->compile_time_signature,
+						.intrinsic = symbol->intrinsic,
+						.minimum_arguments = symbol->minimum_arguments,
+						.maximum_arguments = symbol->maximum_arguments
+					};
+				if (symbol->intrinsic != tnative_intrinsic_none &&
+				    (uint32_t)symbol->intrinsic <
+					ttype_constructor_count)
+					catalog->constructors[symbol->intrinsic] =
+						(ttype_constructor){
+							.name = symbol->name,
+							.minimum_arguments = symbol->minimum_arguments,
+							.maximum_arguments = symbol->maximum_arguments
+						};
+			}
 		}
 	}
+	catalog->revision = revision;
+}
+
+void tstandard_catalog_init(tstandard_catalog *catalog,
+	const textension_registry *extensions)
+{
+	*catalog = (tstandard_catalog){
+		.extensions = extensions,
+		.revision = UINT64_MAX
+	};
+}
+
+void tstandard_catalog_free(tstandard_catalog *catalog)
+{
+	if (!catalog) return;
+	free(catalog->symbols);
+	*catalog = (tstandard_catalog){ 0 };
 }
 
 void tmodule_interface_init(tmodule_interface *interface, const char *uri)
@@ -224,24 +265,27 @@ const tmodule_export *tmodule_interface_find(
 	return nullptr;
 }
 
-uint32_t tstandard_symbol_count(void)
+uint32_t tstandard_symbol_count(tstandard_catalog *catalog)
 {
-	initialize_standard_symbols();
-	return standard_symbol_length;
+	initialize_standard_symbols(catalog);
+	return catalog ? catalog->symbol_count : 0;
 }
 
-const tstandard_symbol *tstandard_symbol_at(uint32_t index)
+const tstandard_symbol *tstandard_symbol_at(
+	tstandard_catalog *catalog, uint32_t index)
 {
-	initialize_standard_symbols();
-	return index < tstandard_symbol_count() ? &standard_symbols[index] : nullptr;
+	initialize_standard_symbols(catalog);
+	return catalog && index < catalog->symbol_count ?
+		&catalog->symbols[index] : nullptr;
 }
 
-const tstandard_symbol *tstandard_symbol_find(const char *package,
-					       const char *name)
+const tstandard_symbol *tstandard_symbol_find(tstandard_catalog *catalog,
+	const char *package, const char *name)
 {
 	if (!name) return nullptr;
-	for (uint32_t i = 0; i < tstandard_symbol_count(); i++) {
-		const tstandard_symbol *symbol = &standard_symbols[i];
+	initialize_standard_symbols(catalog);
+	for (uint32_t i = 0; catalog && i < catalog->symbol_count; i++) {
+		const tstandard_symbol *symbol = &catalog->symbols[i];
 		if (((!package && !symbol->package) ||
 		    (package && symbol->package && strcmp(package, symbol->package) == 0)) &&
 		    strcmp(name, symbol->name) == 0)
@@ -250,11 +294,12 @@ const tstandard_symbol *tstandard_symbol_find(const char *package,
 	return nullptr;
 }
 
-const tstandard_symbol *tstandard_package(const char *name)
+const tstandard_symbol *tstandard_package(
+	tstandard_catalog *catalog, const char *name)
 {
-	initialize_standard_symbols();
-	for (uint32_t i = 0; i < tstandard_symbol_count(); i++) {
-		const tstandard_symbol *symbol = &standard_symbols[i];
+	initialize_standard_symbols(catalog);
+	for (uint32_t i = 0; catalog && i < catalog->symbol_count; i++) {
+		const tstandard_symbol *symbol = &catalog->symbols[i];
 		if (!symbol->package && symbol->kind == tmodule_symbol_package
 		                     && strcmp(symbol->name, name) == 0)
 			return symbol;
@@ -264,6 +309,7 @@ const tstandard_symbol *tstandard_package(const char *name)
 
 /* Resolve package signatures and named Type definitions without loading or executing values. */
 typedef struct {
+	tstandard_catalog *catalog;
 	tstatic_type_arena *arena;
 	unsigned depth;
 	const char *package;
@@ -327,10 +373,10 @@ static tstatic_type_id resolve_standard_type(standard_type_context *context, con
     const char *separator = strstr(name, "::");
     tstring *package = separator ? tstring_new_len(name, separator-name) : nullptr;
 	const char *package_name = package ? tstring_cstr(package) : context->package;
-    const tstandard_symbol *symbol = tstandard_symbol_find(package_name,
+    const tstandard_symbol *symbol = tstandard_symbol_find(context->catalog, package_name,
         separator ? separator+2 : name);
 	if (!symbol && !separator)
-		symbol = tstandard_symbol_find(nullptr, name);
+		symbol = tstandard_symbol_find(context->catalog, nullptr, name);
     tstring_free(package);
 	if (!symbol) return TSTATIC_TYPE_UNKNOWN;
 	if (symbol->kind == tmodule_symbol_type && !static_value)
@@ -353,7 +399,8 @@ static tstatic_type_id resolve_standard_type(standard_type_context *context, con
 	const tstandard_symbol *value_type =
 		!static_value && symbol->kind == tmodule_symbol_value &&
 		symbol->package ?
-		tstandard_symbol_find(symbol->package, symbol->type) : nullptr;
+		tstandard_symbol_find(context->catalog,
+			symbol->package, symbol->type) : nullptr;
 	int named_value = value_type &&
 		value_type->kind == tmodule_symbol_type;
 	if ((static_value && symbol->kind != tmodule_symbol_type) ||
@@ -368,8 +415,9 @@ static tstatic_type_id resolve_standard_type(standard_type_context *context, con
 	context->package = previous_package;
     return static_value ? tstatic_type_with_name(context->arena,result,name) : result;
 }
-tstatic_type_id tstandard_type_resolve(tstatic_type_arena *arena, const char *name, int static_value)
+tstatic_type_id tstandard_type_resolve(tstandard_catalog *catalog,
+	tstatic_type_arena *arena, const char *name, int static_value)
 {
-    standard_type_context context = {.arena=arena};
+    standard_type_context context = {.catalog=catalog, .arena=arena};
     return resolve_standard_type(&context,name,static_value);
 }

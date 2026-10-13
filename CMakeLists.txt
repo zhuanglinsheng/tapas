@@ -139,9 +139,8 @@ set(TAPAS_STDLIB_SOURCES
     src/stdlib/evaluators/object.c
 )
 
-# Front-end sources do not include VM or runtime object headers. The target
-# links the standard extension because signatures and implementations share
-# one descriptor by design.
+# Front-end sources consume generic extension descriptors registered by the
+# embedding host. They do not link or include any concrete package.
 set(TAPAS_FRONTEND_SOURCES
     src/compile/frontend/diagnostic.c
     src/compile/frontend/ast.c
@@ -169,6 +168,7 @@ set(TAPAS_BACKEND_SOURCES
     src/compile/backend/binding.c
     src/compile/backend/type_bridge.c
     src/compile/backend/source.c
+    src/runtime/tmodule.c
 )
 
 add_library(tapas_strings STATIC src/dsa/tstring.c src/basic_defs/tbuiltintype.c)
@@ -216,7 +216,18 @@ target_link_libraries(tapas_stdlib PUBLIC tapas_runtime tapas_syntax)
 
 add_library(tapas_frontend STATIC ${TAPAS_FRONTEND_SOURCES})
 target_include_directories(tapas_frontend PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
-target_link_libraries(tapas_frontend PUBLIC tapas_strings tapas_syntax tapas_stdlib)
+target_link_libraries(tapas_frontend PUBLIC tapas_strings tapas_syntax tapas_runtime)
+
+# The embeddable language core owns compilation, VM execution, and sessions.
+# Concrete packages depend on this foundation through the public extension ABI;
+# this target deliberately has no dependency on tapas_stdlib.
+add_library(tapas_core STATIC
+    ${TAPAS_BACKEND_SOURCES}
+    src/runtime/tvm.c
+    src/runtime/tsess.c
+)
+target_include_directories(tapas_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_link_libraries(tapas_core PUBLIC tapas_frontend tapas_runtime)
 
 # ============================================================================
 # 5. Executables
@@ -227,12 +238,9 @@ target_link_libraries(tapas_frontend PUBLIC tapas_strings tapas_syntax tapas_std
 add_executable(tapas
     src/cli/main.c
     src/cli/input_state.c
-    ${TAPAS_BACKEND_SOURCES}
-    src/runtime/tvm.c
-    src/runtime/tsess.c
 )
 target_include_directories(tapas PRIVATE ${READLINE_INCLUDE_DIR})
-target_link_libraries(tapas PRIVATE tapas_frontend ${READLINE_LIBRARY})
+target_link_libraries(tapas PRIVATE tapas_core tapas_stdlib ${READLINE_LIBRARY})
 target_compile_definitions(tapas PRIVATE
     TAPAS_RELATIVE_STDLIB_DIR="../${CMAKE_INSTALL_DATADIR}/tapas/stdlib"
 )
@@ -243,7 +251,7 @@ add_executable(tapas-language-server
     src/lsp/server.c
     src/lsp/presentation.c
 )
-target_link_libraries(tapas-language-server PRIVATE tapas_frontend)
+target_link_libraries(tapas-language-server PRIVATE tapas_frontend tapas_stdlib)
 set_target_properties(tapas-language-server PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
 )
@@ -256,7 +264,7 @@ if(TAPAS_ENABLE_IPO)
     check_ipo_supported(RESULT TAPAS_IPO_SUPPORTED OUTPUT TAPAS_IPO_ERROR)
     if(TAPAS_IPO_SUPPORTED)
         foreach(TAPAS_IPO_TARGET IN ITEMS
-                tapas_strings tapas_runtime tapas)
+                tapas_strings tapas_runtime tapas_core tapas)
             set_property(TARGET ${TAPAS_IPO_TARGET} PROPERTY
                 INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE)
         endforeach()
@@ -280,7 +288,7 @@ if(BUILD_TESTING)
     endif()
 
     add_executable(test_compile_frontend test/unit/test_compile_frontend.c)
-    target_link_libraries(test_compile_frontend PRIVATE tapas_frontend)
+    target_link_libraries(test_compile_frontend PRIVATE tapas_frontend tapas_stdlib)
     tapas_enable_test_assertions(test_compile_frontend)
     add_test(NAME compile_frontend COMMAND test_compile_frontend)
 
@@ -290,9 +298,14 @@ if(BUILD_TESTING)
         src/lsp/server.c
         src/lsp/presentation.c
     )
-    target_link_libraries(test_language_server PRIVATE tapas_frontend)
+    target_link_libraries(test_language_server PRIVATE tapas_frontend tapas_stdlib)
     tapas_enable_test_assertions(test_language_server)
     add_test(NAME language_server COMMAND test_language_server)
+
+    add_executable(test_core_no_stdlib test/unit/test_core_no_stdlib.c)
+    target_link_libraries(test_core_no_stdlib PRIVATE tapas_core)
+    tapas_enable_test_assertions(test_core_no_stdlib)
+    add_test(NAME core_no_stdlib COMMAND test_core_no_stdlib)
     if(NODE_EXECUTABLE)
         add_test(
             NAME vscode_protocol
@@ -318,6 +331,11 @@ if(BUILD_TESTING)
 	add_test(NAME finite COMMAND test_finite)
 	add_test(NAME finite_language COMMAND $<TARGET_FILE:tapas>
 		${CMAKE_CURRENT_SOURCE_DIR}/test/language_rules/regression/finite.tap)
+	add_test(NAME repl_error_recovery
+		COMMAND ${CMAKE_COMMAND}
+			-DTAPAS=$<TARGET_FILE:tapas>
+			-DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/test-repl-recovery
+			-P ${CMAKE_CURRENT_SOURCE_DIR}/test/cmake/repl_error_recovery.cmake)
 
 	add_test(NAME package_type_boundary
 		COMMAND ${CMAKE_COMMAND}

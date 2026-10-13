@@ -418,7 +418,8 @@ static ttype_constructor_id types_constructor(type_checker *checker, tast_id id)
 		return ttype_constructor_invalid;
 	tstring *name = tsource_document_slice(
 		checker->document, member->member.name);
-	ttype_constructor_id result = ttype_constructor_named(tstring_cstr(name));
+	ttype_constructor_id result = ttype_constructor_named(
+		checker->types->standards, tstring_cstr(name));
 	tstring_free(name);
 	return result;
 }
@@ -444,6 +445,7 @@ static const tstandard_symbol *standard_function(type_checker *checker,
 		tstring *name = tsource_document_slice(checker->document,
 			node->member.name);
 		const tstandard_symbol *result = tstandard_symbol_find(
+			checker->types->standards,
 			tstring_cstr(package->name), tstring_cstr(name));
 		tstring_free(name);
 		return result && result->kind == tmodule_symbol_function ?
@@ -492,7 +494,8 @@ static void validate_type_constructor(type_checker *checker,
 				      const tast_node *call,
 				      ttype_constructor_id constructor)
 {
-	const ttype_constructor *descriptor = ttype_constructor_get(constructor);
+	const ttype_constructor *descriptor = ttype_constructor_get(
+		checker->types->standards, constructor);
 	if (!descriptor) return;
 	uint32_t count = call->aggregate.count;
 	if (count < descriptor->minimum_arguments ||

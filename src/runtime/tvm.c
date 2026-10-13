@@ -1,6 +1,5 @@
 #include "tvm.h"
-#include "compile/cache.h"
-#include "compile/compiler.h"
+#include "tmodule.h"
 #include "tapas/dsa/tstring.h"
 #include "../dsa/thashtbl_internal.h"
 #include "tapas/objects/tarray.h"
@@ -610,7 +609,7 @@ void operator_or(const tobj *v1, const tobj *v2, tobj *vre)
  * 3. Virtual Machine
  *===========================================================================*/
 
-static void tvm_drop_call_frames(tvm *vm);
+static void tvm_frames_drop_active(tvm *vm);
 
 typedef enum {
 	tins_cache_empty,
@@ -709,8 +708,7 @@ void tvm_init(tvm *vm, uint_objs tmpmax)
 	vm->error_source_loc_count = 0;
 	vm->error_instruction = nullptr;
 	vm->execution_depth = 0;
-	vm->antecedent_depth = 0;
-	vm->rule_logic_values = nullptr;
+	vm->rule = (trule_eval_context){ 0 };
 }
 
 void tvm_set_tmpmax(tvm *vm, uint_objs m)
@@ -725,20 +723,22 @@ void tvm_set_vmstack(tvm *vm, tobj *s, uint_regs n)
 	vm->stklen = 0;
 }
 
-tobj *tvm_get_vre(tvm *vm)
+tobj tvm_take_result(tvm *vm)
 {
-	return &vm->rev;
+	tobj result = vm->rev;
+	tobj_set_nil(&vm->rev);
+	return result;
 }
 
-void tvm_set_rev_empty(tvm *vm)
+static inline void tvm_set_rev_empty(tvm *vm)
 {
 	tobj_set_nil(&vm->rev);
 }
 
-void tvm_clean(tvm *vm)
+void tvm_reset(tvm *vm)
 {
 	tobj_ddc_ref_clear(&vm->rev);
-	tvm_drop_call_frames(vm);
+	tvm_frames_drop_active(vm);
 	uint_regs i;
 	for (i = 0; i < vm->stklen; i++)
 		tobj_ddc_ref_clear(&vm->stk[i]);
@@ -769,6 +769,22 @@ void tvm_clean(tvm *vm)
 	vm->frames = nullptr;
 	vm->frame_len = 0;
 	vm->frame_cap = 0;
+	/* A recoverable error can longjmp out of exec_tins before its normal
+	 * epilogue restores this transient execution state.  tvm_reset is also the
+	 * recovery/reset operation used by the REPL and Markdown executor. */
+	vm->error_source_locs = nullptr;
+	vm->error_source_loc_count = 0;
+	vm->error_instruction = nullptr;
+	vm->execution_depth = 0;
+	vm->rule = (trule_eval_context){ 0 };
+}
+
+void tvm_destroy(tvm *vm)
+{
+	tvm_reset(vm);
+	tobj_array_free(&vm->tmps);
+	vm->stk = nullptr;
+	vm->regmax = 0;
 }
 
 static tloop_state *tvm_loop_state(tvm *vm, uint_cmds state_slot)
@@ -841,7 +857,7 @@ static inline TVM_ALWAYS_INLINE void tvm_array_clear(tobj_array *array)
 	}
 }
 
-static inline TVM_ALWAYS_INLINE void tcall_frame_release(
+static inline TVM_ALWAYS_INLINE void tvm_frame_release(
 	tcall_frame *fr, tvm *vm)
 {
 	uint_regs i;
@@ -854,14 +870,16 @@ static inline TVM_ALWAYS_INLINE void tcall_frame_release(
 	tvm_array_clear(&fr->tail_args);
 	tvm_array_clear(&fr->env.base.objs);
 	tobj_ddc_ref_clear(&fr->retained_callable);
-	if (fr->func && vm_function_has_loops(fr->func)) {
+	/* 不能在这里解引用 fr->func：被调函数可能已在其自身运行期间被释放
+	 * （持有它的环境槽位被改写），判定结果在入栈时已缓存。 */
+	if (fr->callee_has_loops) {
 		fr->loop_states = vm->loop_states;
 		fr->loop_state_len = 0;
 		fr->loop_state_cap = vm->loop_state_cap;
 	}
 }
 
-static void tcall_frame_prepare(tcall_frame *fr, tfunc *f)
+static void tvm_frame_prepare(tcall_frame *fr, tfunc *f)
 {
 	if (fr->initialized && fr->func == f &&
 	    fr->env.base.father_env == f->env.base.father_env) {
@@ -909,7 +927,7 @@ static void tcall_frame_prepare(tcall_frame *fr, tfunc *f)
 				fr->env.vmstack, register_capacity * sizeof(tobj));
 			if (!grown)
 				twarn(ErrRuntime_Other,
-				      "tcall_frame_prepare", "out of memory");
+				      "tvm_frame_prepare", "out of memory");
 			fr->env.vmstack = grown;
 			for (uint_regs i = fr->regcap; i < register_capacity; i++)
 				tobj_set_nil(&fr->env.vmstack[i]);
@@ -933,7 +951,7 @@ static void tcall_frame_prepare(tcall_frame *fr, tfunc *f)
  * frame stack, so its local array has no live occupants here. Copy callers
  * retain their arguments; bytecode calls use the move variant below and
  * transfer the caller stack's ownership into the callee instead. */
-static inline TVM_ALWAYS_INLINE void tcall_frame_transfer_params(
+static inline TVM_ALWAYS_INLINE void tvm_frame_copy_params(
 	tobj_array *locals, const tobj *params, uint_regs nparams)
 {
 	if (nparams == 0) {
@@ -991,7 +1009,7 @@ static inline TVM_ALWAYS_INLINE void tcall_frame_transfer_params(
 	locals->len = nparams;
 }
 
-static inline TVM_ALWAYS_INLINE void tcall_frame_move_params(
+static inline TVM_ALWAYS_INLINE void tvm_frame_move_params(
 	tobj_array *locals, tobj *params, uint_regs nparams)
 {
 	if (nparams == 0) {
@@ -1040,7 +1058,7 @@ static inline TVM_ALWAYS_INLINE void tcall_frame_move_params(
 	locals->len = nparams;
 }
 
-static inline void tcall_frame_assign_params(
+static inline void tvm_frame_assign_params(
 	tcall_frame *frame, tobj *params, uint_regs nparams,
 	int move_params)
 {
@@ -1048,12 +1066,12 @@ static inline void tcall_frame_assign_params(
 	if (nparams > locals->capacity)
 		tobj_array_try_expand(locals, nparams);
 	if (move_params)
-		tcall_frame_move_params(locals, params, nparams);
+		tvm_frame_move_params(locals, params, nparams);
 	else
-		tcall_frame_transfer_params(locals, params, nparams);
+		tvm_frame_copy_params(locals, params, nparams);
 }
 
-static tcall_frame *tvm_push_call_frame(
+static tcall_frame *tvm_frame_push(
 	tvm *vm, tfunc *f, tobj *params, uint_regs nparams,
 	int move_params)
 {
@@ -1063,12 +1081,12 @@ static tcall_frame *tvm_push_call_frame(
 		tcall_frame **grown = (tcall_frame **)realloc(
 			vm->frames, newcap * sizeof(tcall_frame *));
 		if (!grown)
-			twarn(ErrRuntime_Other, "tvm_push_call_frame", "out of memory");
+			twarn(ErrRuntime_Other, "tvm_frame_push", "out of memory");
 		vm->frames = grown;
 		for (uint32_t i = oldcap; i < newcap; i++) {
 			vm->frames[i] = (tcall_frame *)calloc(1, sizeof(tcall_frame));
 			if (!vm->frames[i])
-				twarn(ErrRuntime_Other, "tvm_push_call_frame", "out of memory");
+				twarn(ErrRuntime_Other, "tvm_frame_push", "out of memory");
 			tobj_set_nil(&vm->frames[i]->retained_callable);
 		}
 		vm->frame_cap = newcap;
@@ -1082,18 +1100,20 @@ static tcall_frame *tvm_push_call_frame(
 	    fr->env.base.father_env == f->env.base.father_env)
 		fr->env.owner_func = f;
 	else
-		tcall_frame_prepare(fr, f);
+		tvm_frame_prepare(fr, f);
+	int callee_has_loops = vm_function_has_loops(f);
+	fr->callee_has_loops = callee_has_loops;
 	fr->saved_tmps = vm->tmps;
 	fr->saved_stk = vm->stk;
 	fr->saved_stklen = vm->stklen;
-	if (vm_function_has_loops(f)) {
+	if (callee_has_loops) {
 		fr->saved_loop_states = vm->loop_states;
 		fr->saved_loop_state_len = vm->loop_state_len;
 		fr->saved_loop_state_cap = vm->loop_state_cap;
 	}
 
 	if (fr->env.nparams != UNDEF_NPARAMS) {
-		tcall_frame_assign_params(fr, params, nparams, move_params);
+		tvm_frame_assign_params(fr, params, nparams, move_params);
 		fr->env.params = fr->env.base.objs.data;
 	} else {
 		fr->env.params = params;
@@ -1104,7 +1124,7 @@ static tcall_frame *tvm_push_call_frame(
 	vm->stk = fr->env.vmstack;
 	vm->regmax = fr->env.regmax;
 	vm->stklen = 0;
-	if (vm_function_has_loops(f)) {
+	if (callee_has_loops) {
 		vm->loop_states = fr->loop_states;
 		vm->loop_state_len = 0;
 		vm->loop_state_cap = fr->loop_state_cap;
@@ -1115,8 +1135,8 @@ static tcall_frame *tvm_push_call_frame(
 /* Inline fast path for the steady state of hot calls: the pooled frame
  * already serves this exact function with fixed arity. Anything else
  * (pool growth, prepare miss, dynamic arity, tight capacity) falls back
- * to tvm_push_call_frame. */
-static inline TVM_ALWAYS_INLINE tcall_frame *tvm_push_call_frame_fast(
+ * to tvm_frame_push. */
+static inline TVM_ALWAYS_INLINE tcall_frame *tvm_frame_push_fast(
 	tvm *vm, tfunc *f, tobj *params, uint_regs nparams)
 {
 	if (vm->frame_len >= vm->frame_cap)
@@ -1129,10 +1149,12 @@ static inline TVM_ALWAYS_INLINE tcall_frame *tvm_push_call_frame_fast(
 	    fr->env.base.objs.capacity < nparams)
 		return nullptr;
 	fr->env.owner_func = f;
+	int callee_has_loops = vm_function_has_loops(f);
+	fr->callee_has_loops = callee_has_loops;
 	fr->saved_tmps = vm->tmps;
 	fr->saved_stk = vm->stk;
 	fr->saved_stklen = vm->stklen;
-	if (vm_function_has_loops(f)) {
+	if (callee_has_loops) {
 		fr->saved_loop_states = vm->loop_states;
 		fr->saved_loop_state_len = vm->loop_state_len;
 		fr->saved_loop_state_cap = vm->loop_state_cap;
@@ -1140,7 +1162,7 @@ static inline TVM_ALWAYS_INLINE tcall_frame *tvm_push_call_frame_fast(
 		vm->loop_state_len = 0;
 		vm->loop_state_cap = fr->loop_state_cap;
 	}
-	tcall_frame_move_params(&fr->env.base.objs, params, nparams);
+	tvm_frame_move_params(&fr->env.base.objs, params, nparams);
 	fr->env.params = fr->env.base.objs.data;
 	fr->env.dynamic_nparams = nparams;
 	vm->tmps = fr->tmps;
@@ -1151,12 +1173,12 @@ static inline TVM_ALWAYS_INLINE tcall_frame *tvm_push_call_frame_fast(
 	return fr;
 }
 
-static tcall_frame *tvm_replace_current_call_frame(
+static tcall_frame *tvm_frame_replace(
 		tvm *vm, tfunc *function, tobj *params, uint_regs nparams)
 {
 	if (vm->frame_len == 0)
 		twarn(ErrRuntime_Other,
-		      "tvm_replace_current_call_frame", "empty frame stack");
+		      "tvm_frame_replace", "empty frame stack");
 	tcall_frame *frame = vm->frames[vm->frame_len - 1];
 
 	tobj_array_set_len(&frame->tail_args, 0);
@@ -1171,11 +1193,12 @@ static tcall_frame *tvm_replace_current_call_frame(
 	frame->tmps = vm->tmps;
 	tobj_array_set_len(&frame->tmps, 0);
 	tobj_array_set_len(&frame->env.base.objs, 0);
-	/* 与 tcall_frame_push 对称：只有含循环的函数才接管循环状态。否则
+	/* 与 tvm_frame_push 对称：只有含循环的函数才接管循环状态。否则
 	 * vm->loop_states 属于仍在活动的祖先帧，写进本帧记录会让两个
 	 * 帧记录指向同一数组——该记录之后复用到含循环的调用时会与祖先
-	 * 帧的循环状态互相覆盖，并在 tvm_clean 时双重释放。 */
-	if (vm_function_has_loops(function)) {
+	 * 帧的循环状态互相覆盖，并在 tvm_reset 时双重释放。 */
+	int replaced_has_loops = vm_function_has_loops(function);
+	if (replaced_has_loops) {
 		frame->loop_states = vm->loop_states;
 		frame->loop_state_cap = vm->loop_state_cap;
 		frame->loop_state_len = 0;
@@ -1186,9 +1209,9 @@ static tcall_frame *tvm_replace_current_call_frame(
 	    frame->env.base.father_env == function->env.base.father_env)
 		frame->env.owner_func = function;
 	else
-		tcall_frame_prepare(frame, function);
+		tvm_frame_prepare(frame, function);
 	if (frame->env.nparams != UNDEF_NPARAMS) {
-		tcall_frame_assign_params(
+		tvm_frame_assign_params(
 			frame, frame->tail_args.data, nparams, 1);
 		frame->tail_args.len = 0;
 		frame->env.params = frame->env.base.objs.data;
@@ -1197,6 +1220,7 @@ static tcall_frame *tvm_replace_current_call_frame(
 	}
 	frame->env.dynamic_nparams = nparams;
 	frame->func = function;
+	frame->callee_has_loops = replaced_has_loops;
 
 	vm->tmps = frame->tmps;
 	vm->stk = frame->env.vmstack;
@@ -1205,10 +1229,10 @@ static tcall_frame *tvm_replace_current_call_frame(
 	return frame;
 }
 
-static inline TVM_ALWAYS_INLINE void tvm_pop_call_frame(tvm *vm)
+static inline TVM_ALWAYS_INLINE void tvm_frame_pop(tvm *vm)
 {
 	if (vm->frame_len == 0)
-		twarn(ErrRuntime_Other, "tvm_pop_call_frame", "empty frame stack");
+		twarn(ErrRuntime_Other, "tvm_frame_pop", "empty frame stack");
 	tcall_frame *fr = vm->frames[vm->frame_len - 1];
 	tobj_array saved_tmps = fr->saved_tmps;
 	tobj *saved_stk = fr->saved_stk;
@@ -1217,23 +1241,23 @@ static inline TVM_ALWAYS_INLINE void tvm_pop_call_frame(tvm *vm)
 	uint_cmds saved_loop_state_len = fr->saved_loop_state_len;
 	uint_cmds saved_loop_state_cap = fr->saved_loop_state_cap;
 
-	tcall_frame_release(fr, vm);
+	tvm_frame_release(fr, vm);
 	vm->frame_len--;
 
 	vm->tmps = saved_tmps;
 	vm->stk = saved_stk;
 	vm->stklen = saved_stklen;
-	if (vm_function_has_loops(fr->func)) {
+	if (fr->callee_has_loops) {
 		vm->loop_states = saved_loop_states;
 		vm->loop_state_len = saved_loop_state_len;
 		vm->loop_state_cap = saved_loop_state_cap;
 	}
 }
 
-static void tvm_drop_call_frames(tvm *vm)
+static void tvm_frames_drop_active(tvm *vm)
 {
 	while (vm->frame_len > 0)
-		tvm_pop_call_frame(vm);
+		tvm_frame_pop(vm);
 }
 
 /* Stack helpers */
@@ -1721,7 +1745,6 @@ static inline TVM_ALWAYS_INLINE void vm_consume_cjpop(
 static inline TVM_ALWAYS_INLINE void vm_consume_popcov(
 	tvm *vm, tcompo_env *env, tbycode *cmdarr, uint_cmds *pc,
 	uint_cmds end);
-
 /* After a fusion consumes instructions up to `next`, a trailing OP_JPB (the
  * loop back-edge) can be consumed as well. Returns the index to store in the
  * program counter, given that the dispatch loop increments it once more. */
@@ -2462,12 +2485,10 @@ static trule_instance *rule_instance_argument(const tobj *value)
 	return nullptr;
 }
 
-static trule_instance *rule_bind_call(trule *rule, const tobj *arguments,
-				      uint_regs argument_count);
-
 static void vm_invoke(tvm *vm, const tobj *callable, tobj *arguments,
 		      uint_regs argument_count, tcompo_env *environment,
 		      tobj *result);
+static const tvm_services core_vm_services;
 
 static int rule_parameter_index(const trule_ir *ir, const trule_term *term)
 {
@@ -2478,34 +2499,66 @@ static int rule_parameter_index(const trule_ir *ir, const trule_term *term)
 	return -1;
 }
 
+typedef struct {
+	tlist *items;
+	tlist *logic_values;
+} trule_checker_result;
+
+/* Execute a source-backed Rule checker behind one context boundary.  The
+ * checker bytecode communicates with OP_RULE* instructions through vm->rule;
+ * callers only consume the two collected lists and never manipulate that
+ * transient VM state themselves. */
+static trule_checker_result rule_run_checker(tvm *vm, trule *rule,
+					     trule_instance *instance)
+{
+	if (rule->checker.type != tcompo ||
+	    tobj_compo_type(&rule->checker) != compo_tfunc)
+		twarn(ErrRuntime_Other, "Rule", "missing source checker");
+
+	trule_checker_result collected = {
+		.items = tlist_new(),
+		.logic_values = tlist_new()
+	};
+	trule_eval_context saved = vm->rule;
+	vm->rule.output = collected.items;
+	vm->rule.logic_values = collected.logic_values;
+
+	tfunc *checker = (tfunc *)rule->checker.val.v_tcompo;
+	tcall_frame *frame = tvm_frame_push(
+		vm, checker, instance->arguments.data,
+		(uint_regs)instance->arguments.len, 0);
+	exec_tins(vm, checker->cmdloc, checker->ncmds, &frame->env);
+	tvm_frame_pop(vm);
+	tobj_try_clear(&vm->rev);
+	vm->rule = saved;
+	return collected;
+}
+
+static void rule_checker_result_clear(trule_checker_result *result)
+{
+	tobj owner;
+	tobj_set_nil(&owner);
+	tobj_set_compo(&owner, (tcompo_v *)result->items);
+	tobj_try_clear(&owner);
+	tobj_set_compo(&owner, (tcompo_v *)result->logic_values);
+	tobj_try_clear(&owner);
+	result->items = nullptr;
+	result->logic_values = nullptr;
+}
+
 static void rule_eval_source_item(tvm *vm, trule_instance *instance,
 				  const trule_term *term, tobj *result)
 {
 	trule *rule = (trule *)instance->rule.val.v_tcompo;
-	if (rule->checker.type != tcompo ||
-	    tobj_compo_type(&rule->checker) != compo_tfunc)
-		twarn(ErrRuntime_Other, "Rule", "missing source checker");
-	tfunc *checker = (tfunc *)rule->checker.val.v_tcompo;
-	tlist *output = tlist_new();
-	tlist *saved = vm->rule_output;
-	tlist *negations = tlist_new();
-	tlist *saved_negations = vm->rule_logic_values;
-	vm->rule_logic_values = negations;
-	vm->rule_output = output;
-	tcall_frame *frame = tvm_push_call_frame(vm, checker,
-		instance->arguments.data, (uint_regs)instance->arguments.len, 0);
-	exec_tins(vm, checker->cmdloc, checker->ncmds, &frame->env);
-	tvm_pop_call_frame(vm);
-	tobj_try_clear(&vm->rev);
-	vm->rule_output = saved;
-	vm->rule_logic_values = saved_negations;
+	trule_checker_result collected = rule_run_checker(vm, rule, instance);
 	const char *role = tstring_cstr(term->provider_kind);
 	if (strcmp(role, "negation-value") == 0
 	 || strcmp(role, "negation-operand") == 0
 	 || strcmp(role, "expression-value") == 0) {
 		const tpair *record = nullptr;
-		for (uint_count i = 0; i < tlist_size(negations); i++) {
-			const tpair *entry = (tpair *)tlist_at(negations, i)->val.v_tcompo;
+		for (uint_count i = 0; i < tlist_size(collected.logic_values); i++) {
+			const tpair *entry = (tpair *)tlist_at(
+				collected.logic_values, i)->val.v_tcompo;
 			if (entry->first.val.v_tint == term->provider_version)
 				record = (tpair *)entry->second.val.v_tcompo;
 		}
@@ -2515,20 +2568,16 @@ static void rule_eval_source_item(tvm *vm, trule_instance *instance,
 		tobj_copy(result, strcmp(role, "negation-value") == 0 ? &record->second : &record->first);
 	} else {
 		long item_index = term->provider_version;
-		if (item_index < 0 || (uint_objs)item_index >= tlist_size(output))
+		if (item_index < 0 ||
+		    (uint_objs)item_index >= tlist_size(collected.items))
 			twarn(ErrRuntime_Other, "Rule", "invalid source Term index");
-		const tobj *item = tlist_at(output, (uint_objs)item_index);
+		const tobj *item = tlist_at(collected.items, (uint_objs)item_index);
 		if (item->type == tcompo && tobj_compo_type(item) == compo_tpair)
 			tobj_copy(result, &((tpair *)item->val.v_tcompo)->second);
 		else
 			tobj_copy(result, item);
 	}
-	tobj owner;
-	tobj_set_nil(&owner);
-	tobj_set_compo(&owner, (tcompo_v *)output);
-	tobj_try_clear(&owner);
-	tobj_set_compo(&owner, (tcompo_v *)negations);
-	tobj_try_clear(&owner);
+	rule_checker_result_clear(&collected);
 }
 
 static int rule_antecedent_truth(tvm *vm, const tobj *value, tcompo_env *environment);
@@ -2769,14 +2818,14 @@ static int rule_antecedent_truth(tvm *vm, const tobj *value, tcompo_env *environ
 		twarn(ErrRuntime_ParamsType, "Rule truth", "Bool or RuleInstance required");
 	/* Bound source and dynamic recursion even though each nested check starts
 	 * a new requirement path. */
-	if (vm->antecedent_depth >= 128)
+	if (vm->rule.antecedent_depth >= 128)
 		twarn(ErrRuntime_Other, "Rule truth",
 		      "antecedent evaluation depth exceeded (cyclic or deeply nested Rule check)");
 	tobj checked;
 	tobj_set_nil(&checked);
-	vm->antecedent_depth++;
+	vm->rule.antecedent_depth++;
 	rule_check(vm, value, &checked, 0, environment);
-	vm->antecedent_depth--;
+	vm->rule.antecedent_depth--;
 	tobj key;
 	tobj_set_nil(&key);
 	tobj_set_compo(&key, (tcompo_v *)tstr_new("passed"));
@@ -2939,31 +2988,18 @@ static void rule_collect(tvm *vm, trule_instance *instance,
 		}
 		return;
 	}
-	tfunc *checker = (tfunc *)rule->checker.val.v_tcompo;
-	tlist *output = tlist_new();
-	tlist *saved = vm->rule_output;
-	tlist *negations = tlist_new();
-	tlist *saved_negations = vm->rule_logic_values;
-	vm->rule_logic_values = negations;
-	vm->rule_output = output;
-	tcall_frame *frame = tvm_push_call_frame(
-		vm, checker, instance->arguments.data,
-		(uint_regs)instance->arguments.len, 0);
-	exec_tins(vm, checker->cmdloc, checker->ncmds, &frame->env);
-	tvm_pop_call_frame(vm);
-	tobj_try_clear(&vm->rev);
-	vm->rule_output = saved;
-	vm->rule_logic_values = saved_negations;
+	trule_checker_result collected = rule_run_checker(vm, rule, instance);
 
 	uint_objs metadata_index = 0;
-	for (uint_count i = 0; i < tlist_size(output); i++) {
-		const tobj *item = tlist_at(output, i);
+	for (uint_count i = 0; i < tlist_size(collected.items); i++) {
+		const tobj *item = tlist_at(collected.items, i);
 		trule_item *metadata = metadata_index < rule->ir->items.len ?
 			(trule_item *)rule->ir->items.data[metadata_index++]
 				.val.v_tcompo : nullptr;
 		if (metadata && metadata->kind == trule_item_implication) {
 			rule_check_implication(vm, instance, metadata, violations, implications,
-				path, requirement_path, depth + 1, environment, output, &i);
+				path, requirement_path, depth + 1, environment,
+				collected.items, &i);
 			continue;
 		}
 		if (item->type != tcompo || !item->val.v_tcompo)
@@ -3000,12 +3036,7 @@ static void rule_collect(tvm *vm, trule_instance *instance,
 		} else
 			twarn(ErrRuntime_ParamsType, "Rule dependency", "RuleInstance required");
 	}
-	tobj owner;
-	tobj_set_nil(&owner);
-	tobj_set_compo(&owner, (tcompo_v *)output);
-	tobj_try_clear(&owner);
-	tobj_set_compo(&owner, (tcompo_v *)negations);
-	tobj_try_clear(&owner);
+	rule_checker_result_clear(&collected);
 }
 
 static void rule_check(tvm *vm, const tobj *value, tobj *result, int fatal,
@@ -3081,44 +3112,74 @@ static void rule_check(tvm *vm, const tobj *value, tobj *result, int fatal,
 	tobj_set_compo(result, (tcompo_v *)check);
 }
 
+/* Shared slow-path dispatch for callable kinds that do not transfer control
+ * to Tapas bytecode.  Direct native-call opcodes keep their specialized hot
+ * paths; generic calls, VM services and the embedding API use this one source
+ * of truth for Rule/native/builtin behavior. */
+static void vm_invoke_non_tfunc(tvm *vm, tcompo_v *callable,
+				tobj *arguments, uint_regs argument_count,
+				tcompo_env *environment, tobj *result,
+				const char *where)
+{
+	switch (callable->vtable->compo_code) {
+	case compo_trule:
+		tobj_set_compo(result, (tcompo_v *)trule_bind_call(
+			(trule *)callable, arguments, argument_count));
+		return;
+	case compo_cppfunc: {
+		tcppgenf *function = (tcppgenf *)callable;
+		if (!function->f)
+			twarn(ErrRuntime_Other, tstring_cstr(function->name),
+			      "function is not implemented");
+		if (!tcppgenf_accepts(function, argument_count))
+			twarn(ErrRuntime_ParamsCtr, tstring_cstr(function->name),
+			      "incorrect parameter count");
+		function->f(arguments, argument_count, result);
+		return;
+	}
+	case compo_sessfunc: {
+		tcppsessf *function = (tcppsessf *)callable;
+		if (!tcppsessf_accepts(function, argument_count))
+			twarn(ErrRuntime_ParamsCtr, tstring_cstr(function->name),
+			      "incorrect parameter count");
+		tcompo_env_set_vm_services(environment, &core_vm_services, vm);
+		function->f(arguments, argument_count, result, environment);
+		return;
+	}
+	case compo_trule_builtin:
+		if (((trule_builtin *)callable)->kind != trule_builtin_assert ||
+		    argument_count != 1)
+			twarn(ErrRuntime_ParamsCtr, "assert", "one argument required");
+		rule_check(vm, &arguments[0], result, 1, environment);
+		return;
+	default:
+		twarn(ErrRuntime_RefType, where, "Function required");
+	}
+}
+
+static void vm_execute_tfunc_nested(tvm *vm, tfunc *function,
+				    tobj *arguments, uint_regs argument_count)
+{
+	tcall_frame *frame = tvm_frame_push(
+		vm, function, arguments, argument_count, 0);
+	exec_tins(vm, function->cmdloc, function->ncmds, &frame->env);
+	tvm_frame_pop(vm);
+}
+
 static void vm_invoke(tvm *vm, const tobj *callable, tobj *arguments,
 		      uint_regs argument_count, tcompo_env *environment,
 		      tobj *result)
 {
 	if (!callable || callable->type != tcompo || !callable->val.v_tcompo)
 		twarn(ErrRuntime_RefType, "VM invoke", "Function required");
-	switch (tobj_compo_type(callable)) {
-	case compo_trule:
-		tobj_set_compo(result, (tcompo_v *)rule_bind_call(
-			(trule *)callable->val.v_tcompo, arguments, argument_count));
-		break;
-	case compo_tfunc: {
+	if (tobj_compo_type(callable) == compo_tfunc) {
 		tfunc *function = (tfunc *)callable->val.v_tcompo;
-		tcall_frame *frame = tvm_push_call_frame(
-			vm, function, arguments, argument_count, 0);
-		exec_tins(vm, function->cmdloc, function->ncmds, &frame->env);
-		tvm_pop_call_frame(vm);
-		tobj returned = vm->rev;
-		tobj_set_nil(&vm->rev);
-		*result = returned;
-	} break;
-	case compo_cppfunc: {
-		tcppgenf *function = (tcppgenf *)callable->val.v_tcompo;
-		if (!tcppgenf_accepts(function, argument_count))
-			twarn(ErrRuntime_ParamsCtr, "VM invoke",
-			      "incorrect parameter count");
-		function->f(arguments, argument_count, result);
-	} break;
-	case compo_sessfunc: {
-		tcppsessf *function = (tcppsessf *)callable->val.v_tcompo;
-		if (!tcppsessf_accepts(function, argument_count))
-			twarn(ErrRuntime_ParamsCtr, "VM invoke",
-			      "incorrect parameter count");
-		function->f(arguments, argument_count, result, environment);
-	} break;
-	default:
-		twarn(ErrRuntime_RefType, "VM invoke", "Function required");
+		vm_execute_tfunc_nested(vm, function, arguments, argument_count);
+		*result = tvm_take_result(vm);
+		return;
 	}
+	vm_invoke_non_tfunc(vm, callable->val.v_tcompo, arguments,
+		argument_count, environment, result, "VM invoke");
 }
 
 static void vm_service_invoke(void *context, const tobj *callable,
@@ -3150,74 +3211,6 @@ static void vm_service_check_rule(void *context, const tobj *rule,
 				  tcompo_env *environment, tobj *result)
 {
 	rule_check((tvm *)context, rule, result, 0, environment);
-}
-
-static const char *rule_parameter_name(const trule_term *parameter)
-{
-	if (!parameter || parameter->payload.type != tcompo ||
-	    tobj_compo_type(&parameter->payload) != compo_tstr)
-		twarn(ErrRuntime_Other, "Rule", "parameter has no stable name");
-	return tstring_cstr(
-		((tstr *)parameter->payload.val.v_tcompo)->data);
-}
-
-static int rule_uses_named_arguments(trule *rule, const tobj *arguments,
-				     uint_regs argument_count)
-{
-	if (argument_count != 1 || arguments[0].type != tcompo ||
-	    tobj_compo_type(&arguments[0]) != compo_tdict)
-		return 0;
-	uint_count count = rule->ir ? rule->ir->parameters.len : 0;
-	if (count != 1)
-		return 1;
-	trule_term *parameter = (trule_term *)
-		rule->ir->parameters.data[0].val.v_tcompo;
-	tobj key;
-	tobj_set_nil(&key);
-	tobj_set_compo(&key, (tcompo_v *)tstr_new(
-		rule_parameter_name(parameter)));
-	int named = tdict_contains((tdict *)arguments[0].val.v_tcompo, &key);
-	tobj_try_clear(&key);
-	return named;
-}
-
-static trule_instance *rule_bind_named(trule *rule, tdict *arguments)
-{
-	uint_count count = rule->ir ? rule->ir->parameters.len : 0;
-	if (thashtbl_len(arguments->items) != count)
-		twarn(ErrRuntime_ParamsCtr, "Rule",
-		      "argument Dictionary must contain every parameter exactly once");
-	tobj *ordered = count ? calloc(count, sizeof(*ordered)) : nullptr;
-	if (count && !ordered)
-		abort();
-	for (uint_count i = 0; i < count; i++) {
-		tobj_set_nil(&ordered[i]);
-		trule_term *parameter = (trule_term *)
-			rule->ir->parameters.data[i].val.v_tcompo;
-		tobj key;
-		tobj_set_nil(&key);
-		tobj_set_compo(&key, (tcompo_v *)tstr_new(
-			rule_parameter_name(parameter)));
-		if (!tdict_contains(arguments, &key))
-			twarn(ErrRuntime_ParamsType, "Rule",
-			      "argument Dictionary key does not match a parameter");
-		tdict_get(arguments, &key, &ordered[i]);
-		tobj_try_clear(&key);
-	}
-	trule_instance *instance = trule_bind(
-		rule, ordered, (uint_regs)count);
-	for (uint_count i = 0; i < count; i++)
-		tobj_ddc_ref_clear(&ordered[i]);
-	free(ordered);
-	return instance;
-}
-
-static trule_instance *rule_bind_call(trule *rule, const tobj *arguments,
-				      uint_regs argument_count)
-{
-	return rule_uses_named_arguments(rule, arguments, argument_count) ?
-		rule_bind_named(rule, (tdict *)arguments[0].val.v_tcompo) :
-		trule_bind(rule, arguments, argument_count);
 }
 
 static const tvm_services core_vm_services = {
@@ -3293,36 +3286,12 @@ void vm_eval(tvm *vm, tbycode *iter, tcompo_env *env)
 		twarn(ErrRuntime_RefType, "vm_eval", "");
 	tcompo_v *v = obj->val.v_tcompo;
 
-	switch (v->vtable->compo_code) {
-	case compo_trule: {
-		trule *rule = (trule *)v;
-		tobj_set_compo(&vm->rev,
-			(tcompo_v *)rule_bind_call(rule, params, nparams));
-	} break;
-	case compo_tfunc: {
+	if (v->vtable->compo_code == compo_tfunc) {
 		tfunc *f = (tfunc *)v;
-		tcall_frame *fr = tvm_push_call_frame(vm, f, params, nparams, 0);
-		exec_tins(vm, f->cmdloc, f->ncmds, &fr->env);
-		tvm_pop_call_frame(vm);
-	} break;
-	case compo_cppfunc: {
-		vm_eval_cppfunc(vm, (tcppgenf *)v, params, nparams);
-	} break;
-	case compo_sessfunc: {
-		vm_eval_sessfunc(vm, (tcppsessf *)v, params, nparams, env);
-	} break;
-	case compo_trule_builtin:
-		switch (((trule_builtin *)v)->kind) {
-		case trule_builtin_assert:
-			if (nparams != 1) twarn(ErrRuntime_ParamsCtr,
-				"assert", "one argument required");
-			rule_check(vm, &params[0], &vm->rev, 1, env);
-			break;
-		}
-		break;
-	default:
-		twarn(ErrRuntime_RefType, "vm_eval", "");
-	}
+		vm_execute_tfunc_nested(vm, f, params, nparams);
+	} else
+		vm_invoke_non_tfunc(vm, v, params, nparams, env, &vm->rev,
+			"vm_eval");
 	vm_finish_eval(vm, 1 + nparams);
 }
 
@@ -3355,57 +3324,6 @@ void tvm_call(tvm *vm, const tobj *callable, tobj *arguments,
 	stk_popc(vm);
 	tcompo_env_set_vm_services(environment, previous_services,
 		previous_context);
-}
-
-/* Import */
-void
-vm_import(tvm *vm, uint_csts cloc, tstring **cstrlsts, tcompo_env *env)
-{
-	tlib *current_lib = tlib_from_env(env);
-	tlib *lib = tlib_recreate(current_lib);
-	tstring *file_ts = cstrlsts[cloc];
-	const char *file = tstring_cstr(file_ts);
-	if (!tlib_get_build_root(current_lib))
-		tcompile_cache_configure(current_lib, file_ts,
-			tlib_get_build_interactive(current_lib));
-	if (!tlib_get_build_root(lib))
-		tcompile_cache_configure(lib, file_ts,
-			tlib_get_build_interactive(current_lib));
-	twrapper *w = tcompile_cache_load_current(current_lib, file_ts);
-	if (!w) {
-		tcp *compiler = tcp_new_library(
-			current_lib, tlib_get_build_interactive(current_lib));
-		w = compile_file(compiler, file_ts,
-			tlib_get_paths(current_lib),
-			tlib_get_npaths(current_lib));
-		tcp_delete(compiler);
-		if (!w) {
-			twarn(ErrSession_IO, "vm_import", file);
-			return;
-		}
-		(void)tcompile_cache_save(current_lib, file_ts, w);
-	}
-	tlib_set_wrapper(lib, w);
-	tvm vm2;
-	tvm_init(&vm2, w->info.tmp_max);
-	tvm_set_vmstack(
-		&vm2, tcompo_env_get_vmstack(&lib->env), w->info.reg_max);
-	exec_tins(&vm2, 0, w->ncmds, &lib->env);
-	tobj returned = *tvm_get_vre(&vm2);
-	tvm_get_vre(&vm2)->type = tnil;
-	tvm_clean(&vm2);
-	tvm_set_vmstack(&vm2, nullptr, 0);
-	if (returned.type == tcompo &&
-	    tobj_compo_type(&returned) == compo_tdict)
-		tlib_set_exposed(lib, (tdict *)returned.val.v_tcompo);
-	else if (returned.type == tcompo) {
-		returned.val.v_tcompo->vtable->free(returned.val.v_tcompo);
-		tlib_set_exposed(lib, tdict_new());
-	} else
-		tlib_set_exposed(lib, tdict_new());
-	((tcompo_v *)lib)->refctr++;
-	tobj_set_compo(stk_free(vm), (tcompo_v *)lib);
-	stk_fill(vm);
 }
 
 /* Single ins execution */
@@ -3583,6 +3501,10 @@ static inline TVM_ALWAYS_INLINE int vm_pushx_idxr_named_fused(
 	     (tbycode_ins(cmdarr[*pc + 2]) == OP_VCRT &&
 	      (tbycode_get_R(cmdarr[*pc + 2]) & TVCRT_INIT_FLAG)))) {
 		tobj result;
+		/* vm_idxr_fast 允许在写入前清理目标，因此目标必须是有效的
+		 * tobj；未初始化的栈内存可能带着垃圾 tcompo 指针，导致
+		 * tobj_set_compo 内部按野指针 free。 */
+		tobj_set_nil(&result);
 		if (!vm_idxr_fast(object->val.v_tcompo, src, 1,
 				  tbycode_idxr_compare(idxr), &result))
 			return 0;
@@ -3599,6 +3521,9 @@ static inline TVM_ALWAYS_INLINE int vm_pushx_idxr_named_fused(
 		return 1;
 	}
 	tobj *dest = stk_free(vm);
+	/* 该槽位在 stklen 之上，stk_pop 不会清理它，可能残留 type==tcompo
+	 * 的过期指针；先置 nil，避免后续清理释放已失效的对象。 */
+	tobj_set_nil(dest);
 	if (!vm_idxr_fast(object->val.v_tcompo, src, 1,
 			  tbycode_idxr_compare(idxr), dest))
 		return 0;
@@ -3761,12 +3686,31 @@ static inline TVM_ALWAYS_INLINE int vm_arith_named_fused(
 			tbycode_idxr_named_address(idxr));
 		if (object->type == tcompo && object->val.v_tcompo) {
 			tobj *dest = stk_free(vm);
+			tobj_set_nil(dest);
 			if (vm_idxr_fast(object->val.v_tcompo, &result, 1,
 					 tbycode_idxr_compare(idxr), dest)) {
 				vm->stklen++;
 				*pc += 2;
 				vm_consume_cjpop(vm, cmdarr, pc, end);
 				vm_consume_popcov(vm, env, cmdarr, pc, end);
+				return 1;
+			}
+		}
+	}
+	/* `named arithmetic -> named comparison -> conditional jump` occurs in
+	 * geometry-heavy loops (for example `a == b - delta`).  Keep this after
+	 * the more frequent store/call/index consumers so they pay no extra
+	 * pattern probe. */
+	if (*pc + 3 < end) {
+		tins next = tbycode_ins(cmdarr[*pc + 2]);
+		tins after = tbycode_ins(cmdarr[*pc + 3]);
+		if ((next == OP_EQ || next == OP_NE || next == OP_SG ||
+		     next == OP_SL || next == OP_GE || next == OP_LE) &&
+		    (after == OP_CJPFPOP || after == OP_CJPBPOP)) {
+			uint_cmds produced = *pc + 1;
+			if (vm_cmp_branch_fused(vm, env, cmdarr, &produced, end,
+						&result)) {
+				*pc = produced;
 				return 1;
 			}
 		}
@@ -4654,6 +4598,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 					vm, env, tbycode_get_L(cmdarr[i + 1]),
 					tbycode_get_R(cmdarr[i + 1]));
 				tobj readval;
+				tobj_set_nil(&readval);
 				int ok = 0;
 				if (object->type == tcompo && object->val.v_tcompo &&
 				    vm_idxr_fast(object->val.v_tcompo,
@@ -4880,6 +4825,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 					tobj key;
 					vm_set_int_result(&key, value);
 					tobj *dest = stk_free(vm);
+					tobj_set_nil(dest);
 					if (vm_idxr_fast(
 						    object->val.v_tcompo, &key,
 						    1, tbycode_idxr_compare(idxr),
@@ -5112,7 +5058,13 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 		}
 		VM_NEXT();
 		VM_CASE(OP_IMPORT):
-			vm_import(vm, (uint_csts)tbycode_get_U(*iter), cstrs, env);
+		{
+			tlib *imported = tmodule_load(
+				env, cstrs[(uint_csts)tbycode_get_U(*iter)]);
+			((tcompo_v *)imported)->refctr++;
+			tobj_set_compo(stk_free(vm), (tcompo_v *)imported);
+			stk_fill(vm);
+		}
 			VM_NEXT();
 		VM_CASE(OP_IDXR):
 			if (tbycode_idxr_named(*iter)) {
@@ -5223,29 +5175,8 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 			tobj_set_nil(&retained);
 			if (address || retain_callable)
 				tobj_copy(&retained, callable);
-			switch (value->vtable->compo_code) {
-			case compo_trule:
-				tobj_set_compo(&vm->rev, (tcompo_v *)rule_bind_call(
-					(trule *)value, params, nparams));
-				break;
-			case compo_cppfunc:
-				vm_eval_cppfunc(vm, (tcppgenf *)value, params, nparams);
-				break;
-			case compo_sessfunc:
-				vm_eval_sessfunc(
-					vm, (tcppsessf *)value, params, nparams, env);
-				break;
-			case compo_trule_builtin:
-				if (((trule_builtin *)value)->kind !=
-				    trule_builtin_assert || nparams != 1)
-					twarn(ErrRuntime_ParamsCtr, "assert",
-						"one argument required");
-				rule_check(vm, &params[0], &vm->rev, 1, env);
-				break;
-			default:
-				twarn(ErrRuntime_RefType, "OP_EVALDF",
-					"Function required");
-			}
+			vm_invoke_non_tfunc(vm, value, params, nparams, env,
+				&vm->rev, "OP_EVALDF");
 			vm_finish_eval(vm, nparams);
 			tobj_ddc_ref_clear(&retained);
 			VM_NEXT();
@@ -5406,7 +5337,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 		VM_CASE(OP_RULEVALUE):
 		VM_CASE(OP_RULENOT):
 		VM_CASE(OP_RULETRUTH): {
-			if (!vm->rule_output || !vm->rule_logic_values)
+			if (!vm->rule.output || !vm->rule.logic_values)
 				twarn(ErrRuntime_Other, "Rule logic", "logical expression outside checker");
 			/* Nested checks may grow the VM stack: retain the value, not its address. */
 			tobj operand;
@@ -5421,7 +5352,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 			tobj_set_int(&key, tbycode_get_U(*iter));
 			tobj_set_compo(&pair, (tcompo_v *)tpair_new(&operand, &value));
 			tobj_set_compo(&entry, (tcompo_v *)tpair_new(&key, &pair));
-			tobj_vec_push(&vm->rule_logic_values->items, &entry);
+			tobj_vec_push(&vm->rule.logic_values->items, &entry);
 			tobj_try_clear(&entry); tobj_try_clear(&pair); tobj_ddc_ref_clear(&operand);
 			stk_popc(vm);
 			stk_push(vm, &value);
@@ -5430,13 +5361,13 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 		VM_NEXT();
 		VM_CASE(OP_RULEITEM):
 		VM_CASE(OP_RULEIMPLY): {
-			if (!vm->rule_output)
+			if (!vm->rule.output)
 				twarn(ErrRuntime_Other, "Rule condition",
 				      "condition outside checker");
 			tobj *condition = stk_top(vm);
 			if (tbycode_ins(*iter) == OP_RULEITEM && condition->type == tcompo &&
 			    tobj_compo_type(condition) == compo_trule_instance) {
-				tobj_vec_push(&vm->rule_output->items, condition);
+				tobj_vec_push(&vm->rule.output->items, condition);
 				stk_popc(vm);
 				VM_NEXT();
 			}
@@ -5448,7 +5379,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 				tobj_set_nil(&record);
 				tobj_set_compo(&empty, (tcompo_v *)tstr_new(""));
 				tobj_set_compo(&record, (tcompo_v *)tpair_new(&empty, condition));
-				tobj_vec_push(&vm->rule_output->items, &record);
+				tobj_vec_push(&vm->rule.output->items, &record);
 				int truth = rule_antecedent_truth(vm, condition, env);
 				tobj_try_clear(&record);
 				tobj_try_clear(&empty);
@@ -5470,7 +5401,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 			tobj_set_nil(&pair);
 			tobj_set_compo(&pair,
 				(tcompo_v *)tpair_new(&description, condition));
-			tobj_vec_push(&vm->rule_output->items, &pair);
+			tobj_vec_push(&vm->rule.output->items, &pair);
 			tobj_try_clear(&pair);
 			tobj_try_clear(&description);
 			stk_popc(vm);
@@ -5600,14 +5531,14 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 			tbycode_ins(cmdarr[i + 1]) == OP_RET &&
 			vm->frame_len > base_frame_depth;
 		if (tail_recursion) {
-			tvm_replace_current_call_frame(
+			tvm_frame_replace(
 				vm, function, call.params, call.nparams);
 			env = &vm->frames[vm->frame_len - 1]->env;
 		} else {
-			tcall_frame *frame = tvm_push_call_frame_fast(
+			tcall_frame *frame = tvm_frame_push_fast(
 				vm, function, call.params, call.nparams);
 			if (!frame)
-				frame = tvm_push_call_frame(
+				frame = tvm_frame_push(
 					vm, function, call.params, call.nparams, 1);
 			frame->return_pc = i;
 			frame->return_end = end;
@@ -5652,7 +5583,7 @@ resume_caller:
 		tcompo_env *return_env = frame->return_env;
 		twrapper *return_wrapper = frame->return_wrapper;
 
-		tvm_pop_call_frame(vm);
+		tvm_frame_pop(vm);
 		stk_finish_tapas_call(
 			vm, return_stack_values, return_has_callable);
 

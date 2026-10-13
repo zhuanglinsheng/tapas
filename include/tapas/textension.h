@@ -6,7 +6,8 @@
  * 以及包中立的对象能力。
  *
  * @note 扩展只能在这里声明面向语言的元数据；核心和 VM 不得了解包对象的私有
- * 表示。描述符及其引用的静态字符串和数组必须在扩展安装期间保持有效。
+ * 表示。注册表借用描述符及其引用的字符串和数组；它们必须至少存活到对应
+ * 注册表（或拥有该注册表的 Library）销毁为止，通常应使用静态存储期。
  */
 #ifndef TAPAS_TEXTENSION_H
 #define TAPAS_TEXTENSION_H
@@ -18,6 +19,7 @@
 typedef struct tobj tobj;             /**< Tapas 值。 */
 typedef struct tcompo_env tcompo_env; /**< 运行时执行环境。 */
 typedef struct tlib tlib;             /**< 可安装扩展的符号库。 */
+typedef struct textension_registry textension_registry; /**< 扩展元数据集合。 */
 
 #ifdef __cplusplus
 extern "C" {
@@ -135,7 +137,7 @@ typedef struct {
 } textension_module;
 
 /** 一个完整原生扩展的顶层描述符。 */
-typedef struct {
+typedef struct textension_descriptor {
 	uint32_t abi_version; /**< 必须等于 `TAPAS_EXTENSION_ABI`。 */
 	uint32_t structure_size; /**< 当前描述符结构大小。 */
 	const char *name; /**< 扩展名称。 */
@@ -159,6 +161,37 @@ typedef struct {
  */
 int tlib_install_extension(tlib *library,
 			   const textension_descriptor *extension);
+
+/**
+ * @brief Create and maintain an explicitly scoped extension metadata registry.
+ *
+ * @details A registry belongs to its host context (normally a Library, compiler,
+ * or language-server workspace), so independent contexts never observe each
+ * other's extensions. Registration is idempotent for the same descriptor and
+ * borrows it for the registry's lifetime. It does not install runtime values
+ * into a Library; tlib_install_extension()
+ * performs both operations for a Library-owned registry. Host tools that do not
+ * create a runtime Library may populate their own registry directly.
+ */
+textension_registry *textension_registry_new(void);
+
+void textension_registry_free(textension_registry *registry);
+
+int textension_registry_accepts(const textension_registry *registry,
+				const textension_descriptor *extension);
+
+int textension_registry_register(textension_registry *registry,
+				 const textension_descriptor *extension);
+
+/** Return the number of descriptors in this registry. */
+uint32_t textension_registry_count(const textension_registry *registry);
+
+/** Return a borrowed registered descriptor, or NULL when index is out of range. */
+const textension_descriptor *textension_registry_at(
+	const textension_registry *registry, uint32_t index);
+
+/** Return a monotonically increasing registry revision. */
+uint64_t textension_registry_revision(const textension_registry *registry);
 
 /** 使用详细说明初始化普通原生函数符号。 */
 #define TAPAS_NATIVE_FUNCTION_DETAIL( \

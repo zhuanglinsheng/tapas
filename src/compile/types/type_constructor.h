@@ -29,7 +29,11 @@ typedef struct {
 	uint32_t maximum_arguments;
 } ttype_constructor;
 
-ttype_constructor_id ttype_constructor_named(const char *name);
-const ttype_constructor *ttype_constructor_get(ttype_constructor_id id);
+typedef struct tstandard_catalog tstandard_catalog;
+
+ttype_constructor_id ttype_constructor_named(
+	tstandard_catalog *catalog, const char *name);
+const ttype_constructor *ttype_constructor_get(
+	tstandard_catalog *catalog, ttype_constructor_id id);
 
 #endif

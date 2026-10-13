@@ -27,12 +27,22 @@ typedef struct {
 typedef struct tvm_code_cache tvm_code_cache;
 
 typedef struct {
+	uint32_t antecedent_depth;
+	tlist *output;
+	tlist *logic_values;
+} trule_eval_context;
+
+typedef struct {
 	tfunc       *func;
 	tcompo_env   env;
 	tobj_array   tmps;
 	tobj_array   tail_args;
 	uint_regs    regcap;
 	int          initialized;
+	/* 被调函数是否含循环指令。在入栈时判定并缓存：函数可能在其自身运行
+	 * 期间被释放（持有它的环境槽位被改写），因此出栈时不能再解引用
+	 * func 去重新判定。 */
+	int          callee_has_loops;
 
 	tobj_array   saved_tmps;
 	tobj        *saved_stk;
@@ -78,17 +88,21 @@ typedef struct tvm {
 	uint_cmds        error_source_loc_count;
 	uint_cmds       *error_instruction;
 	uint32_t         execution_depth;
-	uint32_t         antecedent_depth;
-	tlist           *rule_output;
-	tlist           *rule_logic_values;
+	trule_eval_context rule;
 } tvm;
 
 void tvm_init(tvm *vm, uint_objs tmpmax);
 void tvm_set_tmpmax(tvm *vm, uint_objs m);
 void tvm_set_vmstack(tvm *vm, tobj *s, uint_regs n);
-tobj *tvm_get_vre(tvm *vm);
-void tvm_set_rev_empty(tvm *vm);
-void tvm_clean(tvm *vm);
+/** Transfer the current result out of the VM and leave its result slot Nil. */
+tobj tvm_take_result(tvm *vm);
+/**
+ * Clear transient execution state while retaining top-level temporaries.
+ * REPL and Markdown sessions use those slots as bindings across code blocks.
+ */
+void tvm_reset(tvm *vm);
+/** Release all VM-owned storage. The VM must be initialized before reuse. */
+void tvm_destroy(tvm *vm);
 
 
 /*===========================================================================*
@@ -108,7 +122,6 @@ void vm_eval(tvm *vm, tbycode *iter, tcompo_env *env);
 void tvm_call(tvm *vm, const tobj *callable, tobj *arguments,
 	      uint_regs argument_count, tcompo_env *environment,
 	      tobj *result);
-void vm_import(tvm *vm, uint_csts cloc, tstring **cstrlsts, tcompo_env *env);
 
 
 /*===========================================================================*

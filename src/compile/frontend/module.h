@@ -11,6 +11,7 @@
 
 #include "compile/frontend/source.h"
 #include "compile/types/static_type.h"
+#include "compile/types/type_constructor.h"
 #include "tapas/textension.h"
 
 typedef struct tfrontend tfrontend;
@@ -59,7 +60,22 @@ typedef struct {
 	const textension_nominal_template *result_template;
 	uint8_t following_arguments_match_result_parameter;
 	uint8_t compile_time_signature;
+	tnative_intrinsic intrinsic;
+	uint_regs minimum_arguments;
+	uint_regs maximum_arguments;
 } tstandard_symbol;
+
+typedef struct tstandard_catalog {
+	const textension_registry *extensions;
+	tstandard_symbol *symbols;
+	uint32_t symbol_count;
+	uint64_t revision;
+	ttype_constructor constructors[ttype_constructor_count];
+} tstandard_catalog;
+
+void tstandard_catalog_init(tstandard_catalog *catalog,
+	const textension_registry *extensions);
+void tstandard_catalog_free(tstandard_catalog *catalog);
 
 void tmodule_interface_init(tmodule_interface *interface, const char *uri);
 
@@ -72,16 +88,19 @@ void tmodule_interface_extract(const tfrontend *frontend, const char *uri,
 const tmodule_export *tmodule_interface_find(
 	const tmodule_interface *interface, const char *name);
 
-tstatic_type_id tstandard_type_resolve(tstatic_type_arena *arena, const char *name, int static_value);
+tstatic_type_id tstandard_type_resolve(tstandard_catalog *catalog,
+	tstatic_type_arena *arena, const char *name, int static_value);
 
-uint32_t tstandard_symbol_count(void);
+uint32_t tstandard_symbol_count(tstandard_catalog *catalog);
 
-const tstandard_symbol *tstandard_symbol_at(uint32_t index);
+const tstandard_symbol *tstandard_symbol_at(
+	tstandard_catalog *catalog, uint32_t index);
 
-const tstandard_symbol *tstandard_symbol_find(const char *package,
-					       const char *name);
+const tstandard_symbol *tstandard_symbol_find(tstandard_catalog *catalog,
+	const char *package, const char *name);
 
-const tstandard_symbol *tstandard_package(const char *name);
+const tstandard_symbol *tstandard_package(
+	tstandard_catalog *catalog, const char *name);
 
 #ifdef __cplusplus
 }

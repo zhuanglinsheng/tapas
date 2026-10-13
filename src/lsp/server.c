@@ -176,7 +176,7 @@ static int semantic_name_priority(uint8_t type)
 static void init_semantic_names(tlsp_server *server)
 {
 	uint32_t capacity = (uint32_t)tbuiltintype_count + 2 +
-		tstandard_symbol_count();
+		tstandard_symbol_count(&server->workspace.standards);
 	server->semantic_names = capacity ? calloc(capacity,
 		sizeof(*server->semantic_names)) : nullptr;
 	if (capacity && !server->semantic_names) abort();
@@ -184,8 +184,10 @@ static void init_semantic_names(tlsp_server *server)
 		add_semantic_name(server, tbuiltintype_name((tbuiltintype_id)i), semantic_type);
 	add_semantic_name(server, "Union", semantic_type);
 	add_semantic_name(server, "InstanceOf", semantic_type);
-	for (uint32_t i = 0; i < tstandard_symbol_count(); i++) {
-		const tstandard_symbol *symbol = tstandard_symbol_at(i);
+	for (uint32_t i = 0;
+	     i < tstandard_symbol_count(&server->workspace.standards); i++) {
+		const tstandard_symbol *symbol = tstandard_symbol_at(
+			&server->workspace.standards, i);
 		int type = symbol->kind == tmodule_symbol_package ? semantic_namespace :
 			symbol->kind == tmodule_symbol_type ? semantic_type :
 			symbol->kind == tmodule_symbol_function ? semantic_function : -1;
@@ -345,8 +347,10 @@ static void handle_syntax_catalog(tlsp_server *server,
 	append_catalog_names(result, &first, "InstanceOf");
 	tstring_append(result, "],\"packages\":[");
 	first = 1;
-	for (uint32_t i = 0; i < tstandard_symbol_count(); i++) {
-		const tstandard_symbol *symbol = tstandard_symbol_at(i);
+	for (uint32_t i = 0;
+	     i < tstandard_symbol_count(&server->workspace.standards); i++) {
+		const tstandard_symbol *symbol = tstandard_symbol_at(
+			&server->workspace.standards, i);
 		if (symbol->kind != tmodule_symbol_package) continue;
 		append_catalog_names(result, &first, symbol->name);
 	}
@@ -401,7 +405,8 @@ static void handle_hover(tlsp_server *server, const tjson_value *message,
 		&document->frontend.document, line, character);
 	tworkspace_member_resolution member;
 	if (tworkspace_resolve_member(&server->workspace, document, offset, &member)) {
-        tstring *description = member.standard ? tlsp_present_standard(member.standard) :
+        tstring *description = member.standard ? tlsp_present_standard(
+		&server->workspace.standards, member.standard) :
             tlsp_present_export(member.document ? &member.document->frontend : nullptr,member.exported);
 		send_hover(server, id, document, member.reference_span,
 			tstring_cstr(description));
@@ -435,7 +440,8 @@ static void handle_hover(tlsp_server *server, const tjson_value *message,
 			send_result(server, id, "null");
 			return;
 		}
-        tstring *description = tlsp_present_standard(standard);
+        tstring *description = tlsp_present_standard(
+		&server->workspace.standards, standard);
         send_hover(server, id, document, span,tstring_cstr(description));
         tstring_free(description);
 		return;
@@ -919,7 +925,8 @@ static int resolve_completion_namespace(tlsp_server *server,
 		receiver_end - 1, namespace)) return 1;
 	tsource_span span = { receiver_start, receiver_end };
 	tstring *name = tsource_document_slice(&document->frontend.document, span);
-	const tstandard_symbol *package = tstandard_package(tstring_cstr(name));
+	const tstandard_symbol *package = tstandard_package(
+		&server->workspace.standards, tstring_cstr(name));
 	if (package) {
 		namespace->standard_package = package->name;
 		tstring_free(name);
@@ -1002,12 +1009,15 @@ static void handle_completion(tlsp_server *server, const tjson_value *message,
                     }
 				}
 			} else if (namespace.standard_package) {
-				for (uint32_t i = 0; i < tstandard_symbol_count(); i++) {
-					const tstandard_symbol *standard = tstandard_symbol_at(i);
+				for (uint32_t i = 0; i < tstandard_symbol_count(
+				     &server->workspace.standards); i++) {
+					const tstandard_symbol *standard = tstandard_symbol_at(
+						&server->workspace.standards, i);
 					if (standard->package &&
 					    strcmp(standard->package, namespace.standard_package) == 0 &&
                         starts_with(standard->name, tstring_cstr(prefix))) {
-                        tstring *detail = tlsp_present_standard(standard);
+                        tstring *detail = tlsp_present_standard(
+						&server->workspace.standards, standard);
                         append_completion(result,&first,standard->name,module_completion_kind(standard->kind),tstring_cstr(detail));
                         tstring_free(detail);
                     }
@@ -1033,8 +1043,10 @@ static void handle_completion(tlsp_server *server, const tjson_value *message,
         append_completion(result,&first,tstring_cstr(symbol->name),completion_kind(document,symbol),tstring_cstr(detail));
         tstring_free(detail);
 	}
-	for (uint32_t i = 0; i < tstandard_symbol_count(); i++) {
-		const tstandard_symbol *standard = tstandard_symbol_at(i);
+	for (uint32_t i = 0;
+	     i < tstandard_symbol_count(&server->workspace.standards); i++) {
+		const tstandard_symbol *standard = tstandard_symbol_at(
+			&server->workspace.standards, i);
 		if (standard->package || !starts_with(standard->name, tstring_cstr(prefix)))
 			continue;
 		int shadowed = 0;
@@ -1043,7 +1055,8 @@ static void handle_completion(tlsp_server *server, const tjson_value *message,
 				standard->name) && document->frontend.semantic.symbols[j].span.start <= offset)
 				shadowed = 1;
         if (!shadowed) {
-            tstring *detail = tlsp_present_standard(standard);
+            tstring *detail = tlsp_present_standard(
+			&server->workspace.standards, standard);
             append_completion(result,&first,standard->name,module_completion_kind(standard->kind),tstring_cstr(detail));
             tstring_free(detail);
         }
@@ -1300,11 +1313,12 @@ static char *read_message(FILE *input)
 	return body;
 }
 
-int tlsp_run(FILE *input, FILE *output)
+int tlsp_run(FILE *input, FILE *output,
+	const textension_registry *extensions)
 {
 	if (!input || !output) return 1;
 	tlsp_server server = { .input = input, .output = output };
-	tworkspace_init(&server.workspace);
+	tworkspace_init(&server.workspace, extensions);
 	init_semantic_names(&server);
 	while (!server.exit_requested) {
 		char *body = read_message(input);

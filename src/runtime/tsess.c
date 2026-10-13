@@ -1,6 +1,5 @@
 #include "tapas/tsession.h"
 #include "tapas/dsa/tstring.h"
-#include "tapas/tstdlib.h"
 #include "tapas/objects/tdict.h"
 #include "tvm.h"
 #include "tsess_internal.h"
@@ -41,18 +40,26 @@ static twrapper *session_compile_cached(tsession *session, tcp *compiler,
 	return wrapper;
 }
 
+static void session_evaluate_wrapper(tlib *library, twrapper *wrapper)
+{
+	tlib_set_wrapper(library, wrapper);
+	tvm vm;
+	tvm_init(&vm, wrapper->info.tmp_max);
+	tvm_set_vmstack(&vm, tcompo_env_get_vmstack(&library->env),
+		wrapper->info.reg_max);
+	eval_bycodes(&vm, 0, library);
+	tvm_destroy(&vm);
+}
+
 /*===========================================================================*
  * 2. Session Management
  *===========================================================================*/
 
-/** Create a new session with default functions registered */
+/** Create a new empty session. Hosts explicitly install desired extensions. */
 tsession *tsession_new(void)
 {
 	tsession *sess = (tsession *)malloc(sizeof(tsession));
 	sess->lib = tlib_new();
-	if (!tlib_install_extension(sess->lib, tstdlib_descriptor()))
-		twarn(ErrRuntime_Other, "tsession_new",
-		      "cannot install the standard library");
 #ifdef TAPAS_SOURCE_STDLIB_DIR
 	tlib_add_path(sess->lib, TAPAS_SOURCE_STDLIB_DIR);
 #endif
@@ -60,6 +67,12 @@ tsession *tsession_new(void)
 	tlib_add_path(sess->lib, TAPAS_INSTALL_STDLIB_DIR);
 #endif
 	return sess;
+}
+
+int tsession_install_extension(tsession *session,
+			       const textension_descriptor *extension)
+{
+	return session && tlib_install_extension(session->lib, extension);
 }
 
 /** Free a session */
@@ -118,15 +131,7 @@ void tsession_eval_bycodes(tsession *sess, const char *file)
 	if (!w)
 		return;
 
-	tlib_set_wrapper(sess->lib, w);
-	tvm vm;
-	tvm_init(&vm, w->info.tmp_max);
-	tvm_set_vmstack(&vm,
-				tcompo_env_get_vmstack(&sess->lib->env),
-				w->info.reg_max);
-	eval_bycodes(&vm, 0, sess->lib);
-	tvm_clean(&vm);
-	tvm_set_vmstack(&vm, nullptr, 0);
+	session_evaluate_wrapper(sess->lib, w);
 }
 
 /** Compile & execute a .tap file without saving .tapc */
@@ -145,15 +150,7 @@ void tsession_execute_file(tsession *sess, const char *file, int interactive)
 		return;
 	}
 
-	tlib_set_wrapper(sess->lib, wrapper);
-	tvm vm;
-	tvm_init(&vm, wrapper->info.tmp_max);
-	tvm_set_vmstack(&vm,
-				tcompo_env_get_vmstack(&sess->lib->env),
-				wrapper->info.reg_max);
-	eval_bycodes(&vm, 0, sess->lib);
-	tvm_clean(&vm);
-	tvm_set_vmstack(&vm, nullptr, 0);
+	session_evaluate_wrapper(sess->lib, wrapper);
 	tcp_delete(cp);
 }
 
@@ -211,8 +208,7 @@ int tsession_execute_module(tsession *session, const char *name,
 	tvm_set_vmstack(&vm, tcompo_env_get_vmstack(&module->env),
 			wrapper->info.reg_max);
 	exec_tins(&vm, 0, wrapper->ncmds, &module->env);
-	tobj returned = *tvm_get_vre(&vm);
-	tvm_get_vre(&vm)->type = tnil;
+	tobj returned = tvm_take_result(&vm);
 	if (returned.type != tcompo ||
 	    tobj_compo_type(&returned) != compo_tdict)
 		twarn(ErrRuntime_RefType, "module",
@@ -247,8 +243,7 @@ int tsession_execute_module(tsession *session, const char *name,
 	tobj_try_clear(&call_result);
 	tobj_try_clear(&argument_list);
 	tobj_try_clear(&main_function);
-	tvm_clean(&vm);
-	tvm_set_vmstack(&vm, nullptr, 0);
+	tvm_destroy(&vm);
 	module->compo_base.vtable->free(module);
 	return exit_code;
 }
@@ -271,15 +266,7 @@ void tsession_execute_str(tsession *sess, const char *str, int interactive)
 	tstring_free(src);
 	twrapper *wrapper = tanalyser_wrap(&tcmds, &consts, &info);
 
-	tlib_set_wrapper(sess->lib, wrapper);
-	tvm vm;
-	tvm_init(&vm, info.tmp_max);
-	tvm_set_vmstack(&vm,
-				tcompo_env_get_vmstack(&sess->lib->env),
-				info.reg_max);
-	eval_bycodes(&vm, 0, sess->lib);
-	tvm_clean(&vm);
-	tvm_set_vmstack(&vm, nullptr, 0);
+	session_evaluate_wrapper(sess->lib, wrapper);
 
 	tvmcmd_vect_free(&tcmds);
 	tconsts_free(&consts);
@@ -374,7 +361,7 @@ static int execute_block_capture(
 	int failed = 0;
 	if (setjmp(tapas_error_jmpbuf) != 0) {
 		failed = 1;
-		tvm_clean(vm);
+		tvm_reset(vm);
 		tvm_set_vmstack(vm, nullptr, 0);
 	} else {
 		tapas_error_recover_enabled = 1;
@@ -393,7 +380,7 @@ static int execute_block_capture(
 					tcompo_env_get_vmstack(&sess->lib->env),
 					info->reg_max);
 			eval_bycodes(vm, ncmd_old, sess->lib);
-			tvm_clean(vm);
+			tvm_reset(vm);
 			tvm_set_vmstack(vm, nullptr, 0);
 		}
 	}
@@ -555,7 +542,7 @@ void tsession_execute_markdown_update(tsession *sess, const char *file, int inte
 	tvmcmd_vect_free(&tcmds);
 	tconsts_free(&consts);
 	tcp_delete(syner);
-	tvm_clean(&vm_storage);
+	tvm_destroy(&vm_storage);
 }
 
 /** Show bycodes of compiled .tapc file */

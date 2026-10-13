@@ -21,6 +21,7 @@ typedef struct tsession tsession; /**< 不透明的 Tapas 会话。 */
 typedef struct tdict tdict;       /**< Dictionary 对象。 */
 typedef struct tlib tlib;         /**< 会话使用的符号库。 */
 typedef struct tobj tobj;         /**< Tapas 值。 */
+typedef struct textension_descriptor textension_descriptor; /**< 原生扩展描述符。 */
 
 /**
  * @brief 创建新的独立会话。
@@ -28,6 +29,14 @@ typedef struct tobj tobj;         /**< Tapas 值。 */
  * @return 新会话，由调用者使用 tsession_free() 释放。
  */
 tsession *tsession_new(void);
+
+/**
+ * @brief 向会话安装一个原生扩展。
+ *
+ * @return 安装成功返回非零；描述符无效或与已有符号冲突时返回零。
+ */
+int tsession_install_extension(tsession *session,
+			       const textension_descriptor *extension);
 
 /**
  * @brief 释放会话及其持有的运行时资源。

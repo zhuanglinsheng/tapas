@@ -12,6 +12,7 @@
 
 #include "tapas/tsession.h"
 #include "tapas/dsa/tstring.h"
+#include "tapas/tstdlib.h"
 #include "tapas/version.h"
 #include "runtime/tsess_internal.h"
 #include "input_state.h"
@@ -105,7 +106,7 @@ static int exec_cmd_seq(
 {
 	if (setjmp(tapas_error_jmpbuf) != 0) {
 		tapas_error_recover_enabled = 0;
-		tvm_clean(vm);
+		tvm_reset(vm);
 		tvm_set_vmstack(vm, nullptr, 0);
 		return 1;
 	}
@@ -136,7 +137,7 @@ static int exec_cmd_seq(
 					tcompo_env_get_vmstack(&tsession_get_lib(sess)->env),
 					info->reg_max);
 		eval_bycodes(vm, ncmd_old, tsession_get_lib(sess));
-		tvm_clean(vm);
+		tvm_reset(vm);
 		tvm_set_vmstack(vm, nullptr, 0);
 	}
 	tapas_error_recover_enabled = 0;
@@ -272,7 +273,7 @@ static void cope_with_stdin(tsession *sess)
 	tvmcmd_vect_free(&cmds);
 	tconsts_free(&consts);
 	tcp_delete(syner);
-	tvm_clean(&vm_storage);
+	tvm_destroy(&vm_storage);
 }
 
 static void cope_with_1_input(tsession *sess, const char *p)
@@ -312,6 +313,11 @@ static void cope_with_2_params(tsession *sess, const char *p_i0, const char *p_i
 int main(int argc, char **argv)
 {
 	tsession * sess = tsession_new();
+	if (!tsession_install_extension(sess, tstdlib_descriptor())) {
+		fprintf(stderr, "tapas: cannot install the standard library\n");
+		tsession_free(sess);
+		return 1;
+	}
 	tsession_set_build_file(sess, argv[0]);
 	add_executable_standard_library(sess, argv[0]);
 	int exit_code = 0;

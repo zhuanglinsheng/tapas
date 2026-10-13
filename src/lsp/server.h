@@ -10,6 +10,8 @@
 
 #include <stdio.h>
 
+typedef struct textension_registry textension_registry;
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -17,7 +19,8 @@ extern "C" {
 /* Run a Language Server Protocol connection until an exit notification or
  * end-of-file. The streams are borrowed and must be opened in binary mode on
  * platforms that distinguish text from binary I/O. */
-int tlsp_run(FILE *input, FILE *output);
+int tlsp_run(FILE *input, FILE *output,
+	const textension_registry *extensions);
 
 #ifdef __cplusplus
 }

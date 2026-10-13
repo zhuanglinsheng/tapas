@@ -4,6 +4,19 @@ file(READ "${SOURCE_ROOT}/src/runtime/tvm.c" VM_SOURCE)
 file(READ "${SOURCE_ROOT}/src/runtime/tvm.h" VM_HEADER)
 file(READ "${SOURCE_ROOT}/include/tapas/objects/trule_ir.h" RULE_IR_HEADER)
 
+# Core layers may consume only the generic extension ABI. Package selection is
+# a host concern (CLI, language server, or another embedding application).
+foreach(CORE_EXTENSION_CONSUMER IN ITEMS
+		src/compile/frontend/module.c
+		src/compile/types/type_constructor.c
+		src/runtime/tsess.c)
+	file(READ "${SOURCE_ROOT}/${CORE_EXTENSION_CONSUMER}" CORE_EXTENSION_SOURCE)
+	if(CORE_EXTENSION_SOURCE MATCHES "tstdlib(_descriptor|\\.h)")
+		message(FATAL_ERROR
+			"core directly depends on the standard package: ${CORE_EXTENSION_CONSUMER}")
+	endif()
+endforeach()
+
 # Public header layout and dependency direction.
 if(EXISTS "${SOURCE_ROOT}/include/tapas/runtime")
 	message(FATAL_ERROR

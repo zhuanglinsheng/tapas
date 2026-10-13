@@ -101,6 +101,10 @@ void tcompo_env_copy_to_obj(tcompo_env *env, tobj *vre);
 struct tfunc {
 	tcompo_v compo_base;
 	tcompo_env env;
+	/* Owns the heap snapshot that backs env.base.father_env, when this is a
+	 * returned closure.  Ordinary function prototypes borrow their lexical
+	 * parent from the containing library or active frame. */
+	struct tfunc *closure_parent;
 	struct tlib *library;
 	uint_cmds cmdloc;
 	uint_cmds ncmds;
@@ -128,6 +132,7 @@ typedef struct {
 struct tlib {
 	tcompo_v compo_base;
 	tcompo_env env;
+	textension_registry *extensions;
 
 	tstring **default_v_names;
 	uint_objs ndefault;
@@ -183,6 +188,7 @@ void tlib_set_build_mtime(tlib *lb, int64_t modification_time);
 int64_t tlib_get_build_mtime(const tlib *lb);
 tstring **tlib_get_default_v_names(tlib *lb);
 uint_objs tlib_get_ndefault(tlib *lb);
+const textension_registry *tlib_get_extension_registry(const tlib *lb);
 tlib *tlib_recreate(tlib *lb);
 void tlib_idx(tlib *lb, const tobj *params, uint_regs np, tobj *vre);
 tlist *tlib_listing_objects(tlib *lb);

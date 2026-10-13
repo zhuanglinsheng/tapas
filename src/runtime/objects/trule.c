@@ -9,6 +9,7 @@
 #include "tapas/objects/trule.h"
 #include "tapas/dsa/tstring.h"
 #include "tapas/objects/trule_ir.h"
+#include "tapas/objects/tdict.h"
 #include "tapas/objects/ttype.h"
 #include "runtime/tenv.h"
 #include "tapas/objects/tstr.h"
@@ -427,6 +428,10 @@ static trule_item *trule_load_item(trule_ir *ir, const char **position, long *it
 	trule_term *term = trule_term_new(trule_term_construct,
 		kind != 'R' ? ttypeval_builtin(tbuiltintype_bool) :
 		ttypeval_builtin(tbuiltintype_any), &payload, nullptr, 0);
+	/* trule_term_new copied the value and now owns its counted reference.
+	 * Drop this borrowed alias before tree metadata may replace and destroy
+	 * the provisional Term. */
+	tobj_try_clear(&payload);
 	term->origin_start = strtol(start_text, nullptr, 10);
 	term->origin_end = strtol(end_text, nullptr, 10);
 	tstring_free(term->provider);
@@ -465,7 +470,6 @@ static trule_item *trule_load_item(trule_ir *ir, const char **position, long *it
 		term = root;
 		free(tree_text);
 	}
-	tobj_try_clear(&payload);
 	trule_item *item = kind != 'R' ?
 		trule_condition_new(term, description) :
 		trule_requirement_new(term, nullptr, 0);
@@ -688,6 +692,73 @@ trule_instance *trule_bind(trule *rule, const tobj *arguments,
 	for (uint_regs i = 0; i < argument_count; i++)
 		tobj_vec_push(&instance->arguments, &arguments[i]);
 	return instance;
+}
+
+static const char *rule_parameter_name(const trule_term *parameter)
+{
+	if (!parameter || parameter->payload.type != tcompo ||
+	    tobj_compo_type(&parameter->payload) != compo_tstr)
+		twarn(ErrRuntime_Other, "Rule", "parameter has no stable name");
+	return tstring_cstr(
+		((tstr *)parameter->payload.val.v_tcompo)->data);
+}
+
+static int rule_uses_named_arguments(trule *rule, const tobj *arguments,
+				     uint_regs argument_count)
+{
+	if (argument_count != 1 || arguments[0].type != tcompo ||
+	    tobj_compo_type(&arguments[0]) != compo_tdict)
+		return 0;
+	uint_count count = rule->ir ? rule->ir->parameters.len : 0;
+	if (count != 1)
+		return 1;
+	trule_term *parameter = (trule_term *)
+		rule->ir->parameters.data[0].val.v_tcompo;
+	tobj key;
+	tobj_set_nil(&key);
+	tobj_set_compo(&key, (tcompo_v *)tstr_new(
+		rule_parameter_name(parameter)));
+	int named = tdict_contains((tdict *)arguments[0].val.v_tcompo, &key);
+	tobj_try_clear(&key);
+	return named;
+}
+
+static trule_instance *rule_bind_named(trule *rule, tdict *arguments)
+{
+	uint_count count = rule->ir ? rule->ir->parameters.len : 0;
+	if ((uint_count)arguments->base.vtable->len(arguments) != count)
+		twarn(ErrRuntime_ParamsCtr, "Rule",
+		      "argument Dictionary must contain every parameter exactly once");
+	tobj *ordered = count ? (tobj *)calloc(count, sizeof(*ordered)) : nullptr;
+	if (count && !ordered)
+		abort();
+	for (uint_count i = 0; i < count; i++) {
+		tobj_set_nil(&ordered[i]);
+		trule_term *parameter = (trule_term *)
+			rule->ir->parameters.data[i].val.v_tcompo;
+		tobj key;
+		tobj_set_nil(&key);
+		tobj_set_compo(&key, (tcompo_v *)tstr_new(
+			rule_parameter_name(parameter)));
+		if (!tdict_try_get(arguments, &key, &ordered[i]))
+			twarn(ErrRuntime_ParamsType, "Rule",
+			      "argument Dictionary key does not match a parameter");
+		tobj_try_clear(&key);
+	}
+	trule_instance *instance = trule_bind(
+		rule, ordered, (uint_regs)count);
+	for (uint_count i = 0; i < count; i++)
+		tobj_ddc_ref_clear(&ordered[i]);
+	free(ordered);
+	return instance;
+}
+
+trule_instance *trule_bind_call(trule *rule, const tobj *arguments,
+				uint_regs argument_count)
+{
+	return rule_uses_named_arguments(rule, arguments, argument_count) ?
+		rule_bind_named(rule, (tdict *)arguments[0].val.v_tcompo) :
+		trule_bind(rule, arguments, argument_count);
 }
 
 trule_builtin *trule_builtin_new(trule_builtin_kind kind)

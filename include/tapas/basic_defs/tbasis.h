@@ -496,11 +496,22 @@ void terror_restore_runtime_context_resolver(
  */
 void twarn(terror_type type, const char *fname, const char *info);
 
-/** 交互式 CLI 启用恢复时使用的跳转点。 */
-extern jmp_buf tapas_error_jmpbuf;
+/* Error recovery is process-global in API shape but thread-local in storage:
+ * independent sessions on different threads must not jump through one
+ * another's recovery boundary. */
+#ifdef __cplusplus
+#define TAPAS_THREAD_LOCAL thread_local
+#else
+#define TAPAS_THREAD_LOCAL _Thread_local
+#endif
 
-/** 非零时允许错误处理跳转到 `tapas_error_jmpbuf`。 */
-extern int tapas_error_recover_enabled;
+/** 交互式 CLI 启用恢复时使用的当前线程跳转点。 */
+extern TAPAS_THREAD_LOCAL jmp_buf tapas_error_jmpbuf;
+
+/** 非零时允许当前线程跳转到 `tapas_error_jmpbuf`。 */
+extern TAPAS_THREAD_LOCAL int tapas_error_recover_enabled;
+
+#undef TAPAS_THREAD_LOCAL
 
 #ifdef __cplusplus
 }

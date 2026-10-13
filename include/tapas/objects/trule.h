@@ -128,6 +128,15 @@ void trule_close_over(trule *rule, tcompo_env *environment);
 trule_instance *trule_bind(trule *rule, const tobj *arguments,
 			   uint_regs argument_count);
 
+/**
+ * @brief 按 Rule 调用语义绑定参数。
+ *
+ * @details 普通参数保持位置顺序；单个 Dictionary 在能够表示命名参数时，
+ * 按 RuleIR 中的参数声明顺序重排。该策略属于 Rule 对象，不依赖 VM。
+ */
+trule_instance *trule_bind_call(trule *rule, const tobj *arguments,
+				uint_regs argument_count);
+
 /* 内建 Rule 可调用对象 */
 
 /**

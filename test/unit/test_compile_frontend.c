@@ -3,12 +3,21 @@
 #include "compile/frontend/semantic.h"
 #include "compile/frontend/module.h"
 #include "compile/frontend/workspace.h"
+#include "tapas/textension.h"
+#include "tapas/tstdlib.h"
 
 #include <assert.h>
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+
+static textension_registry *test_extensions;
+static tstandard_catalog test_standards;
+
+#define tfrontend_init(frontend_, name_, source_, mode_) \
+	tfrontend_init_with_catalog((frontend_), (name_), (source_), (mode_), \
+		&test_standards)
 
 typedef struct {
 	tsource_document document;
@@ -1036,12 +1045,12 @@ static void test_module_interface_and_standard_environment(void)
 	assert(double_value && double_value->kind == tmodule_symbol_function);
 	assert(strcmp(tstring_cstr(double_value->detail),
 		"Function[Int] -> Int") == 0);
-	assert(tstandard_package("math"));
+	assert(tstandard_package(&test_standards, "math"));
 	int found_sqrt = 0;
 	tstatic_type_arena signatures;
 	tstatic_type_arena_init(&signatures);
-	for (uint32_t i = 0; i < tstandard_symbol_count(); i++) {
-		const tstandard_symbol *symbol = tstandard_symbol_at(i);
+	for (uint32_t i = 0; i < tstandard_symbol_count(&test_standards); i++) {
+		const tstandard_symbol *symbol = tstandard_symbol_at(&test_standards, i);
 		found_sqrt |= symbol->package && strcmp(symbol->package, "math") == 0 &&
 			strcmp(symbol->name, "sqrt") == 0;
 		if (symbol->kind != tmodule_symbol_package)
@@ -1051,15 +1060,16 @@ static void test_module_interface_and_standard_environment(void)
                 tstring_append(qualified,symbol->name);
                 const tstandard_symbol *value_type =
                     symbol->kind == tmodule_symbol_value && symbol->package ?
-                    tstandard_symbol_find(symbol->package, symbol->type) :
+		    tstandard_symbol_find(&test_standards,
+			symbol->package, symbol->type) :
                     nullptr;
                 int named_value = value_type &&
                     value_type->kind == tmodule_symbol_type;
                 tstatic_type_id type =
                     (symbol->kind == tmodule_symbol_function ||
                      symbol->kind == tmodule_symbol_type || named_value)
-                    ? tstandard_type_resolve(
-                        &signatures, tstring_cstr(qualified),
+		    ? tstandard_type_resolve(&test_standards,
+			&signatures, tstring_cstr(qualified),
                         symbol->kind == tmodule_symbol_type)
                     : tstatic_type_parse(
                         &signatures, symbol->type, nullptr, nullptr);
@@ -1092,7 +1102,7 @@ static void test_workspace_import_resolution(void)
 	fclose(file);
 	tstring *main_uri = tworkspace_uri_from_path(main_path);
 	tworkspace workspace;
-	tworkspace_init(&workspace);
+	tworkspace_init(&workspace, test_extensions);
 	tworkspace_add_root(&workspace, directory);
 	tworkspace_document *main_document = tworkspace_open(&workspace,
 		tstring_cstr(main_uri),
@@ -1238,6 +1248,10 @@ static void test_type_presentation_provenance(void)
 
 int main(void)
 {
+	test_extensions = textension_registry_new();
+	assert(test_extensions);
+	assert(textension_registry_register(test_extensions, tstdlib_descriptor()));
+	tstandard_catalog_init(&test_standards, test_extensions);
 	test_type_presentation_provenance();
 	test_annotation_reference_index();
 	test_document_and_lossless_tokens();
@@ -1269,5 +1283,7 @@ int main(void)
 	test_static_recursive_types();
 	test_module_interface_and_standard_environment();
 	test_workspace_import_resolution();
+	tstandard_catalog_free(&test_standards);
+	textension_registry_free(test_extensions);
 	return 0;
 }

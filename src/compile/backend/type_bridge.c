@@ -522,7 +522,8 @@ static tstatic_type_id external_binding_type(
 		    value->val.v_tcompo &&
 		    value->val.v_tcompo->vtable->compo_code ==
 			    compo_ttypeval) {
-            tstatic_type_id declared = tstandard_type_resolve(arena,qualified_name,1);
+            tstatic_type_id declared = tstandard_type_resolve(
+			&cp->standards, arena, qualified_name, 1);
             if (declared != TSTATIC_TYPE_UNKNOWN) {
                 tobj_try_clear(&member_value);
                 return declared;
@@ -537,7 +538,8 @@ static tstatic_type_id external_binding_type(
 		}
         if (!static_value && value && value->type == tcompo && value->val.v_tcompo &&
             value->val.v_tcompo->vtable->compo_code == compo_trule_builtin) {
-            tstatic_type_id result = tstandard_type_resolve(arena,qualified_name,0);
+            tstatic_type_id result = tstandard_type_resolve(
+			&cp->standards, arena, qualified_name, 0);
             tobj_try_clear(&member_value);
             return result;
         }
@@ -588,6 +590,7 @@ void tcompile_frontend_init(tcp *cp, tfrontend *frontend,
 {
 	if (!frontend) return;
 	tfrontend_init_with_environment(frontend, name, source, mode,
+		cp ? &cp->standards : nullptr,
 		cp ? external_binding_type : nullptr, cp,
 		cp ? external_binding_semantic : nullptr, cp);
 }

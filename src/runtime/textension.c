@@ -8,7 +8,36 @@
  */
 #include "tapas/textension.h"
 
+#include <stdlib.h>
 #include <string.h>
+
+struct textension_registry {
+	const textension_descriptor **extensions;
+	uint32_t count;
+	uint32_t capacity;
+	uint64_t revision;
+};
+
+static int same_namespace(const textension_module *left,
+			  const textension_module *right);
+
+static int modules_conflict(const textension_module *left,
+			    const textension_module *right)
+{
+	if (left->scope == textension_root && right->scope == textension_package) {
+		for (uint32_t i = 0; i < left->symbol_count; i++)
+			if (!strcmp(left->symbols[i].name, right->name)) return 1;
+		return 0;
+	}
+	if (left->scope == textension_package && right->scope == textension_root)
+		return modules_conflict(right, left);
+	if (!same_namespace(left, right)) return 0;
+	for (uint32_t i = 0; i < left->symbol_count; i++)
+		for (uint32_t j = 0; j < right->symbol_count; j++)
+			if (!strcmp(left->symbols[i].name, right->symbols[j].name))
+				return 1;
+	return 0;
+}
 
 static int nominal_template_valid(const textension_nominal_template *schema)
 {
@@ -152,6 +181,90 @@ int textension_validate(const textension_descriptor *extension)
 					return 0;
 	}
 	return 1;
+}
+
+textension_registry *textension_registry_new(void)
+{
+	return (textension_registry *)calloc(1, sizeof(textension_registry));
+}
+
+void textension_registry_free(textension_registry *registry)
+{
+	if (!registry) return;
+	free(registry->extensions);
+	free(registry);
+}
+
+static int extensions_have_intrinsic_conflict(
+	const textension_descriptor *left, const textension_descriptor *right)
+{
+	for (uint32_t i = 0; i < textension_symbol_count(left); i++) {
+		textension_symbol_ref a;
+		if (!textension_symbol_at(left, i, &a) ||
+		    a.symbol->intrinsic == tnative_intrinsic_none) continue;
+		for (uint32_t j = 0; j < textension_symbol_count(right); j++) {
+			textension_symbol_ref b;
+			if (textension_symbol_at(right, j, &b) &&
+			    b.symbol->intrinsic == a.symbol->intrinsic)
+				return 1;
+		}
+	}
+	return 0;
+}
+
+int textension_registry_accepts(const textension_registry *registry,
+				const textension_descriptor *extension)
+{
+	if (!registry || !textension_validate(extension)) return 0;
+	for (uint32_t i = 0; i < registry->count; i++) {
+		const textension_descriptor *registered = registry->extensions[i];
+		if (registered == extension) return 1;
+		if (!strcmp(registered->name, extension->name) ||
+		    extensions_have_intrinsic_conflict(registered, extension))
+			return 0;
+		for (uint32_t left = 0; left < registered->module_count; left++)
+			for (uint32_t right = 0; right < extension->module_count; right++)
+				if (modules_conflict(registered->modules[left],
+						     extension->modules[right]))
+					return 0;
+	}
+	return 1;
+}
+
+int textension_registry_register(textension_registry *registry,
+				 const textension_descriptor *extension)
+{
+	if (!textension_registry_accepts(registry, extension)) return 0;
+	for (uint32_t i = 0; i < registry->count; i++)
+		if (registry->extensions[i] == extension) return 1;
+	if (registry->count == registry->capacity) {
+		uint32_t capacity = registry->capacity ? registry->capacity * 2 : 4;
+		const textension_descriptor **grown = realloc(registry->extensions,
+			capacity * sizeof(*grown));
+		if (!grown) abort();
+		registry->extensions = grown;
+		registry->capacity = capacity;
+	}
+	registry->extensions[registry->count++] = extension;
+	registry->revision++;
+	return 1;
+}
+
+uint32_t textension_registry_count(const textension_registry *registry)
+{
+	return registry ? registry->count : 0;
+}
+
+const textension_descriptor *textension_registry_at(
+	const textension_registry *registry, uint32_t index)
+{
+	return registry && index < registry->count ?
+		registry->extensions[index] : nullptr;
+}
+
+uint64_t textension_registry_revision(const textension_registry *registry)
+{
+	return registry ? registry->revision : 0;
 }
 
 uint32_t textension_symbol_count(const textension_descriptor *extension)

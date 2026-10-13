@@ -70,7 +70,8 @@ tstring *tlsp_present_source(const tfrontend *frontend, const tsemantic_symbol *
         &frontend->types.arena,id,definition,-1);
 }
 
-tstring *tlsp_present_standard(const tstandard_symbol *symbol)
+tstring *tlsp_present_standard(tstandard_catalog *catalog,
+	const tstandard_symbol *symbol)
 {
     tstatic_type_arena arena;
     tstatic_type_arena_init(&arena);
@@ -80,7 +81,8 @@ tstring *tlsp_present_standard(const tstandard_symbol *symbol)
     presentation_kind kind = symbol->kind == tmodule_symbol_function ? function_symbol :
         symbol->kind == tmodule_symbol_type ? type_symbol :
         symbol->kind == tmodule_symbol_package ? package_symbol : value_symbol;
-    tstatic_type_id id = tstandard_type_resolve(&arena,tstring_cstr(name),kind == type_symbol);
+    tstatic_type_id id = tstandard_type_resolve(
+		catalog, &arena, tstring_cstr(name), kind == type_symbol);
     if(kind == value_symbol && symbol->type) id = tstatic_type_parse(&arena,symbol->type,nullptr,nullptr);
 	const tstatic_type *function = tstatic_type_get(&arena, id);
 	size_t qualified_length = tstring_len(name);

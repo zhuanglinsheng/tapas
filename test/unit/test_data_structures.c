@@ -6,6 +6,7 @@
 #include "tapas/dsa/tstring.h"
 #include "tapas/objects/tarray.h"
 #include "tapas/objects/tcfn.h"
+#include "tapas/objects/tdict.h"
 #include "stdlib/rules/domain.h"
 #include "tapas/objects/tlist.h"
 #include "tapas/objects/tpair.h"
@@ -300,6 +301,71 @@ static void test_extension_descriptor(void) {
   assert(evaluator->kind == ttype_kind_named);
   assert(tstring_eq_cstr(evaluator->named_identity, "evaluators::Evaluator"));
   tobj_try_clear(&evaluator_type);
+}
+
+static void test_closure_snapshot_ownership(void) {
+  tlib *library = tlib_new();
+  tfunc *parent = tfunc_new(1, &library->env, 0, 0, 0, 0, 0);
+  tfunc *closure = tfunc_new(0, &parent->env, 0, 0, 0, 0, 0);
+  tobj captured = {.type = tint, .val.v_tint = 42};
+  tcompo_env_add_obj(&parent->env, 0);
+  tcompo_env_set_obj(&parent->env, 0, &captured);
+
+  tfunc_close_over(closure, &parent->env);
+  assert(closure->closure_parent != nullptr);
+  assert(closure->env.base.father_env ==
+         &closure->closure_parent->env.base);
+  assert(closure->closure_parent->compo_base.refctr == 1);
+  assert(tcompo_env_get_obj(tcompo_env_get_father(&closure->env), 0)
+             ->val.v_tint == 42);
+
+  tfunc *copy = closure->compo_base.vtable->copy(closure);
+  assert(copy->closure_parent == closure->closure_parent);
+  assert(closure->closure_parent->compo_base.refctr == 2);
+  copy->compo_base.vtable->free(copy);
+  assert(closure->closure_parent->compo_base.refctr == 1);
+
+  closure->compo_base.vtable->free(closure);
+  parent->compo_base.vtable->free(parent);
+  library->compo_base.vtable->free(library);
+}
+
+static void test_rule_named_binding(void) {
+  trule_ir *ir = trule_ir_new("Named", "");
+  trule_term *left = trule_term_parameter_new(
+      "left", ttypeval_builtin(tbuiltintype_int));
+  trule_term *right = trule_term_parameter_new(
+      "right", ttypeval_builtin(tbuiltintype_int));
+  trule_ir_add_parameter(ir, left);
+  trule_ir_add_parameter(ir, right);
+  trule *rule = trule_new_dynamic(ir, "");
+
+  tdict *named = tdict_new();
+  tobj key;
+  tobj value;
+  tobj_set_nil(&key);
+  tobj_set_compo(&key, (tcompo_v *)tstr_new("right"));
+  value = integer(22);
+  tdict_set(named, &key, &value);
+  tobj_try_clear(&key);
+  tobj_set_compo(&key, (tcompo_v *)tstr_new("left"));
+  value = integer(11);
+  tdict_set(named, &key, &value);
+  tobj_try_clear(&key);
+
+  tobj arguments;
+  tobj_set_nil(&arguments);
+  tobj_set_compo(&arguments, (tcompo_v *)named);
+  trule_instance *instance = trule_bind_call(rule, &arguments, 1);
+  assert(instance->arguments.len == 2);
+  assert(instance->arguments.data[0].val.v_tint == 11);
+  assert(instance->arguments.data[1].val.v_tint == 22);
+  instance->base.vtable->free(instance);
+  tobj_try_clear(&arguments);
+  if (rule->base.refctr > 0)
+    rule->base.refctr--;
+  if (rule->base.refctr == 0)
+    rule->base.vtable->free(rule);
 }
 
 static void test_numeric_array(void) {
@@ -914,6 +980,8 @@ int main(void) {
   test_rule_logic_ir();
   test_c_function_descriptor();
   test_extension_descriptor();
+  test_closure_snapshot_ownership();
+  test_rule_named_binding();
   test_numeric_array();
   test_empty_and_identity_arrays();
   test_boolean_array_and_time();

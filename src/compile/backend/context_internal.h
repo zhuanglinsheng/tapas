@@ -2,6 +2,7 @@
 #define TAPAS_COMPILE_CONTEXT_INTERNAL_H
 
 #include "compile/compiler.h"
+#include "compile/frontend/module.h"
 #include "runtime/tenv.h"
 #include "tapas/objects/ttype.h"
 
@@ -62,6 +63,7 @@ typedef struct {
 } tcompile_import_stack;
 
 struct tcp {
+	tstandard_catalog standards;
 	tobj_ctr objctr;
 	tobj_ctr tmpctr;
 	treg_ctr regctr;

@@ -434,9 +434,27 @@ static void *tfunc_copy(void *self)
 			tcompo_env_get_nparams(&f->env),
 			compo_tfunc);
 	n->env.owner_func = n;
+	if (f->closure_parent) {
+		n->closure_parent = f->closure_parent;
+		n->closure_parent->compo_base.refctr++;
+	}
+	n->library = f->library;
 	n->cmdloc = f->cmdloc;
 	n->ncmds = f->ncmds;
+	n->loop_state_kind = f->loop_state_kind;
 	return n;
+}
+
+static void tfunc_release_closure_parent(tfunc *f)
+{
+	tfunc *parent = f->closure_parent;
+	if (!parent)
+		return;
+	f->closure_parent = nullptr;
+	if (parent->compo_base.refctr > 0)
+		parent->compo_base.refctr--;
+	if (parent->compo_base.refctr == 0)
+		parent->compo_base.vtable->free(parent);
 }
 
 static void tfunc_free(void *self)
@@ -444,6 +462,7 @@ static void tfunc_free(void *self)
 	tfunc *f = (tfunc *)self;
 	tcompo_env_set_regmax(&f->env, 0);
 	tobj_array_free(&f->env.base.objs);
+	tfunc_release_closure_parent(f);
 	free(f);
 }
 
@@ -472,6 +491,15 @@ static tfunc *tfunc_snapshot_from_env(tcompo_env *env)
 			tcompo_env_get_nparams(env),
 			compo_tfunc);
 	n->env.owner_func = n;
+	/* If the current lexical parent is itself a closure snapshot, retain it so
+	 * a chain of returned closures has explicit ownership all the way back to
+	 * the library root. */
+	tcompo_env *parent = tcompo_env_get_father(env);
+	if (parent && parent->owner_func &&
+	    &parent->owner_func->env == parent) {
+		n->closure_parent = parent->owner_func;
+		n->closure_parent->compo_base.refctr++;
+	}
 	n->library = src->library;
 	n->cmdloc = src->cmdloc;
 	n->ncmds = src->ncmds;
@@ -494,6 +522,8 @@ void tfunc_close_over(tfunc *f, tcompo_env *env)
 	if (f->env.base.father_env != &env->base)
 		return;
 	tfunc *snapshot = tfunc_snapshot_from_env(env);
+	snapshot->compo_base.refctr++;
+	f->closure_parent = snapshot;
 	f->env.base.father_env = &snapshot->env.base;
 	f->env.base.loc_in_father_env =
 		tobj_array_get_len(&snapshot->env.base.objs);
@@ -613,6 +643,7 @@ static void *tlib_copy(void *self)
 static void tlib_free(void *self)
 {
 	tlib *l = (tlib *)self;
+	textension_registry_free(l->extensions);
 	if (l->wrapper)
 		tanalyser_clean_wrapper(l->wrapper);
 	if (l->exposed &&
@@ -698,6 +729,8 @@ tlib *tlib_new(void)
 	tlib *lb = (tlib *)calloc(1, sizeof(tlib));
 	lb->compo_base.vtable = &tlib_vtable;
 	tcompo_env_init(&lb->env, 0, nullptr, 0, 0, 0, compo_tlib);
+	lb->extensions = textension_registry_new();
+	if (!lb->extensions) abort();
 	lb->default_v_names = nullptr;
 	lb->ndefault = 0;
 	lb->ndefault_cap = 0;
@@ -926,7 +959,8 @@ int tlib_install_extension(tlib *library,
 			   const textension_descriptor *extension)
 {
 	if (!library || !textension_validate(extension) ||
-	    !tlib_accepts_extension(library, extension))
+	    !tlib_accepts_extension(library, extension) ||
+	    !textension_registry_accepts(library->extensions, extension))
 		return 0;
 	for (uint32_t i = 0; i < extension->module_count; i++) {
 		const textension_module *module = extension->modules[i];
@@ -949,7 +983,7 @@ int tlib_install_extension(tlib *library,
 			}
 		}
 	}
-	return 1;
+	return textension_registry_register(library->extensions, extension);
 }
 
 const tobj *tlib_find(const tlib *lb, const char *name)
@@ -1096,10 +1130,19 @@ uint_objs tlib_get_ndefault(tlib *lb)
 	return lb->ndefault;
 }
 
+const textension_registry *tlib_get_extension_registry(const tlib *lb)
+{
+	return lb ? lb->extensions : nullptr;
+}
+
 /** Recreate: copy only default objects (C functions) */
 tlib *tlib_recreate(tlib *lb)
 {
 	tlib *lib_rct = tlib_new();
+	for (uint32_t e = 0; e < textension_registry_count(lb->extensions); e++)
+		if (!textension_registry_register(lib_rct->extensions,
+			textension_registry_at(lb->extensions, e)))
+			abort();
 	uint_objs i;
 	for (i = 0; i < lb->ndefault; i++) {
 		tlib_lib_add_obj(lib_rct,

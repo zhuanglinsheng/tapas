@@ -7,6 +7,7 @@
 typedef struct tdiagnostics tdiagnostics;
 typedef struct tsemantic_model tsemantic_model;
 typedef struct tsemantic_symbol tsemantic_symbol;
+typedef struct tstandard_catalog tstandard_catalog;
 
 #ifdef __cplusplus
 extern "C" {
@@ -14,6 +15,7 @@ extern "C" {
 
 /* Shared static type facts. Unknown is an analysis state, not a Tapas Type. */
 typedef struct {
+	tstandard_catalog *standards;
 	tstatic_type_arena arena;
 	tstatic_type_id *node_type_ids;
 	tstatic_type_id *node_static_values;

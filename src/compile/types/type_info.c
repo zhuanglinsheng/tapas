@@ -56,6 +56,7 @@ static const tstandard_symbol *standard_callee(type_analyzer *analyzer,
 		tstring *name = tsource_document_slice(analyzer->document,
 			node->member.name);
 		const tstandard_symbol *result = tstandard_symbol_find(
+			analyzer->model->standards,
 			tstring_cstr(package->name), tstring_cstr(name));
 		tstring_free(name);
 		return result && result->kind == tmodule_symbol_function ?
@@ -71,7 +72,7 @@ static const tstandard_symbol *standard_callee(type_analyzer *analyzer,
 	tsource_span span = node->kind == tast_name ? node->span : node->member.name;
 	tstring *name = tsource_document_slice(analyzer->document, span);
 	const tstandard_symbol *result = tstandard_symbol_find(
-		nullptr, tstring_cstr(name));
+		analyzer->model->standards, nullptr, tstring_cstr(name));
 	tstring_free(name);
 	return result && result->kind == tmodule_symbol_function ? result : nullptr;
 }
@@ -259,8 +260,10 @@ static tstatic_type_id static_type_call(type_analyzer *analyzer,
 	tstring *member = types_member_name(analyzer, callee);
 	if (!member) return TSTATIC_TYPE_UNKNOWN;
 	const char *name = tstring_cstr(member);
-	ttype_constructor_id constructor = ttype_constructor_named(name);
-	const ttype_constructor *descriptor = ttype_constructor_get(constructor);
+	ttype_constructor_id constructor = ttype_constructor_named(
+		analyzer->model->standards, name);
+	const ttype_constructor *descriptor = ttype_constructor_get(
+		analyzer->model->standards, constructor);
 	const tast_id *arguments = tast_get_children(analyzer->ast,
 		node->aggregate.children, node->aggregate.count);
 	uint32_t count = node->aggregate.count;
@@ -373,6 +376,7 @@ static tstatic_type_id static_type_call(type_analyzer *analyzer,
 					analyzer->ast, pair->aggregate.receiver);
 				tstring *wrapper_name = types_member_name(analyzer, wrapper);
 				int optional = wrapper_name && ttype_constructor_named(
+					analyzer->model->standards,
 					tstring_cstr(wrapper_name)) == ttype_constructor_optional;
 				tstring_free(wrapper_name);
 				if (optional) {
@@ -785,7 +789,8 @@ static tstatic_type_id infer(type_analyzer *analyzer, tast_id id)
 				node->aggregate.count ? static_value(analyzer,
 				arguments[standard->result_argument]) : TSTATIC_TYPE_UNKNOWN;
 			tstatic_type_id template_id = standard->result_template ?
-				tstandard_type_resolve(&analyzer->model->arena,
+				tstandard_type_resolve(analyzer->model->standards,
+					&analyzer->model->arena,
 					standard->result_template->identity, 1) : result;
 			const tstatic_type *template_type = tstatic_type_get(
 				&analyzer->model->arena, template_id);
@@ -873,7 +878,8 @@ static tstatic_type_id infer(type_analyzer *analyzer, tast_id id)
 			if (standard->package)
 				tstring_append_fmt(qualified, "%s::", standard->package);
 			tstring_append(qualified, standard->name);
-			result = tstandard_type_resolve(&analyzer->model->arena,
+			result = tstandard_type_resolve(analyzer->model->standards,
+				&analyzer->model->arena,
 				tstring_cstr(qualified), 0);
 			tstring_free(qualified);
 		}
@@ -1056,8 +1062,10 @@ void ttype_info_analyze_with_resolver(
 	ttype_info_model *model,
 	ttype_info_external_resolver resolver, void *resolver_context)
 {
+	tstandard_catalog *standards = model->standards;
 	ttype_info_model_free(model);
 	ttype_info_model_init(model);
+	model->standards = standards;
 	model->node_count = arena->node_count;
 	model->symbol_count = semantic->symbol_count;
 	model->node_type_ids = (tstatic_type_id *)malloc(

@@ -36,6 +36,7 @@ typedef struct tworkspace_document {
 typedef struct tworkspace_reference_index tworkspace_reference_index;
 
 typedef struct {
+	tstandard_catalog standards;
 	tworkspace_document *documents;
 	tstring **roots;
 	uint32_t root_count;
@@ -62,7 +63,8 @@ typedef struct {
 } tworkspace_namespace;
 
 
-void tworkspace_init(tworkspace *workspace);
+void tworkspace_init(tworkspace *workspace,
+	const textension_registry *extensions);
 
 void tworkspace_free(tworkspace *workspace);
 

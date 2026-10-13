@@ -138,9 +138,11 @@ static char *read_file(const char *path)
 	return text;
 }
 
-void tworkspace_init(tworkspace *workspace)
+void tworkspace_init(tworkspace *workspace,
+	const textension_registry *extensions)
 {
 	*workspace = (tworkspace){ 0 };
+	tstandard_catalog_init(&workspace->standards, extensions);
 }
 
 static int has_tap_extension(const char *name)
@@ -217,6 +219,7 @@ void tworkspace_free(tworkspace *workspace)
 	for (uint32_t i = 0; i < workspace->root_count; i++)
 		tstring_free(workspace->roots[i]);
 	free(workspace->roots);
+	tstandard_catalog_free(&workspace->standards);
 	*workspace = (tworkspace){ 0 };
 }
 
@@ -369,8 +372,9 @@ static void index_module_members(tworkspace *workspace,
 static tstatic_type_id standard_type(void *context, tstatic_type_arena *arena,
 				     const char *qualified_name, int static_value)
 {
-	(void)context;
-	return tstandard_type_resolve(arena, qualified_name, static_value);
+	tworkspace *workspace = (tworkspace *)context;
+	return tstandard_type_resolve(&workspace->standards, arena,
+		qualified_name, static_value);
 }
 
 /* Type ids belong to their document's arena; preserve structure across modules
@@ -447,7 +451,8 @@ static tstatic_type_id workspace_type(void *opaque, tstatic_type_arena *arena,
 {
 	workspace_type_context *context = opaque;
 	const char *separator = strstr(name, "::");
-	if (!separator) return standard_type(nullptr, arena, name, static_value);
+	if (!separator) return standard_type(
+		context->workspace, arena, name, static_value);
 	for (uint32_t i = 0; i < context->document->import_count; i++) {
 		const tworkspace_import *imported = &context->document->imports[i];
 		if (!imported->resolved || !imported->alias ||
@@ -487,7 +492,7 @@ static tstatic_type_id workspace_type(void *opaque, tstatic_type_arena *arena,
 		free(copies);
 		return result;
 	}
-	return standard_type(nullptr, arena, name, static_value);
+	return standard_type(context->workspace, arena, name, static_value);
 }
 
 static tworkspace_document *analyze_document(tworkspace *workspace,
@@ -505,6 +510,7 @@ static tworkspace_document *analyze_document(tworkspace *workspace,
 	document->generation = ++workspace->generation;
 	tfrontend_init_with_resolver(&document->frontend,
 		tstring_cstr(document->uri), source, tfrontend_module,
+		&workspace->standards,
 		standard_type, workspace);
 	tmodule_interface_init(&document->interface, tstring_cstr(document->uri));
 	tmodule_interface_extract(&document->frontend, tstring_cstr(document->uri),
@@ -525,6 +531,7 @@ static tworkspace_document *analyze_document(tworkspace *workspace,
 	workspace_type_context context = { workspace, document };
 	ttype_info_model_free(&document->frontend.types);
 	ttype_info_model_init(&document->frontend.types);
+	document->frontend.types.standards = &workspace->standards;
 	ttype_info_analyze_with_resolver(&document->frontend.document,
 		&document->frontend.arena, &document->frontend.semantic,
 		&document->frontend.flow, &document->frontend.types, workspace_type, &context);
@@ -692,7 +699,8 @@ static int resolve_namespace(tworkspace *workspace,
 	if (!symbol) {
 		tstring *name = tsource_document_slice(&document->frontend.document,
 			node->span);
-		const tstandard_symbol *package = tstandard_package(tstring_cstr(name));
+		const tstandard_symbol *package = tstandard_package(
+			&workspace->standards, tstring_cstr(name));
 		if (package) result->standard_package = package->name;
 		tstring_free(name);
 		return package != nullptr;
@@ -717,7 +725,7 @@ int tworkspace_resolve_member_node(tworkspace *workspace,
 		tstring *name = tsource_document_slice(
 			&document->frontend.document, node->member.name);
 		const tstandard_symbol *standard = tstandard_symbol_find(
-			nullptr, tstring_cstr(name));
+			&workspace->standards, nullptr, tstring_cstr(name));
 		tstring_free(name);
 		if (!standard || standard->kind != tmodule_symbol_function) return 0;
 		if (result) *result = (tworkspace_member_resolution){
@@ -738,8 +746,10 @@ int tworkspace_resolve_member_node(tworkspace *workspace,
 		found.exported = tmodule_interface_find(&namespace.document->interface,
 			tstring_cstr(name));
 	} else {
-		for (uint32_t i = 0; i < tstandard_symbol_count(); i++) {
-			const tstandard_symbol *standard = tstandard_symbol_at(i);
+		for (uint32_t i = 0;
+		     i < tstandard_symbol_count(&workspace->standards); i++) {
+			const tstandard_symbol *standard = tstandard_symbol_at(
+				&workspace->standards, i);
 			if (standard->package &&
 			    strcmp(standard->package, namespace.standard_package) == 0 &&
 			    strcmp(standard->name, tstring_cstr(name)) == 0) {
@@ -783,9 +793,12 @@ int tworkspace_resolve_standard_at(
 		if (annotation->receiver != UINT32_MAX ||
 		    annotation->symbol != TSEMANTIC_INVALID_ID) return 0;
 		tstring *name = tsource_document_slice(&document->frontend.document, annotation->span);
-		const tstandard_symbol *found = tstandard_symbol_find(nullptr, tstring_cstr(name));
+		tstandard_catalog *standards = document->frontend.types.standards;
+		const tstandard_symbol *found = tstandard_symbol_find(
+			standards, nullptr, tstring_cstr(name));
 		if (!found) {
-			const tstandard_symbol *type = tstandard_symbol_find("types", tstring_cstr(name));
+			const tstandard_symbol *type = tstandard_symbol_find(
+				standards, "types", tstring_cstr(name));
 			if (type && type->kind == tmodule_symbol_type) found = type;
 		}
 		tstring_free(name);
@@ -803,8 +816,9 @@ int tworkspace_resolve_standard_at(
 	tstring *name = tsource_document_slice(
 		&document->frontend.document, node->span);
 	const tstandard_symbol *found = nullptr;
-	for (uint32_t i = 0; i < tstandard_symbol_count(); i++) {
-		const tstandard_symbol *candidate = tstandard_symbol_at(i);
+	tstandard_catalog *standards = document->frontend.types.standards;
+	for (uint32_t i = 0; i < tstandard_symbol_count(standards); i++) {
+		const tstandard_symbol *candidate = tstandard_symbol_at(standards, i);
 		if (!candidate->package &&
 		    strcmp(candidate->name, tstring_cstr(name)) == 0) {
 			found = candidate;
@@ -840,7 +854,8 @@ static int resolve_annotation_member(tworkspace *workspace,
 		    &document->frontend.semantic.symbols[reference->symbol], &namespace, 0)) return 0;
 	} else {
 		tstring *name = tsource_document_slice(&document->frontend.document, reference->span);
-		const tstandard_symbol *package = tstandard_package(tstring_cstr(name));
+		const tstandard_symbol *package = tstandard_package(
+			&workspace->standards, tstring_cstr(name));
 		tstring_free(name);
 		if (!package) return 0;
 		namespace.standard_package = package->name;
@@ -853,7 +868,8 @@ static int resolve_annotation_member(tworkspace *workspace,
 			found.document = namespace.document;
 			found.exported = tmodule_interface_find(&namespace.document->interface, tstring_cstr(name));
 		} else {
-			found.standard = tstandard_symbol_find(namespace.standard_package, tstring_cstr(name));
+			found.standard = tstandard_symbol_find(&workspace->standards,
+				namespace.standard_package, tstring_cstr(name));
 		}
 		tstring_free(name);
 		if (!found.exported && !found.standard) return 0;

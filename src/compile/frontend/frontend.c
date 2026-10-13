@@ -3,7 +3,8 @@
 
 void tfrontend_init_with_environment(
 	tfrontend *frontend, const char *name, const char *source,
-	tfrontend_mode mode, ttype_info_external_resolver type_resolver,
+	tfrontend_mode mode, tstandard_catalog *standards,
+	ttype_info_external_resolver type_resolver,
 	void *type_context, tsemantic_external_resolver semantic_resolver,
 	void *semantic_context)
 {
@@ -16,6 +17,7 @@ void tfrontend_init_with_environment(
 	tsemantic_model_init(&frontend->semantic);
 	tcontrol_flow_init(&frontend->flow);
 	ttype_info_model_init(&frontend->types);
+	frontend->types.standards = standards;
 	tparser parser;
 	tparser_init(&parser, &frontend->document, &frontend->tokens,
 		&frontend->arena, &frontend->diagnostics);
@@ -48,18 +50,25 @@ void tfrontend_init_with_environment(
 
 void tfrontend_init_with_resolver(
 	tfrontend *frontend, const char *name, const char *source,
-	tfrontend_mode mode, ttype_info_external_resolver resolver,
+	tfrontend_mode mode, tstandard_catalog *standards,
+	ttype_info_external_resolver resolver,
 	void *resolver_context)
 {
-	tfrontend_init_with_environment(frontend, name, source, mode,
+	tfrontend_init_with_environment(frontend, name, source, mode, standards,
 		resolver, resolver_context, nullptr, nullptr);
+}
+
+void tfrontend_init_with_catalog(tfrontend *frontend, const char *name,
+	const char *source, tfrontend_mode mode, tstandard_catalog *standards)
+{
+	tfrontend_init_with_resolver(frontend, name, source, mode,
+		standards, nullptr, nullptr);
 }
 
 void tfrontend_init(tfrontend *frontend, const char *name,
 		    const char *source, tfrontend_mode mode)
 {
-	tfrontend_init_with_resolver(
-		frontend, name, source, mode, nullptr, nullptr);
+	tfrontend_init_with_catalog(frontend, name, source, mode, nullptr);
 }
 
 void tfrontend_free(tfrontend *frontend)

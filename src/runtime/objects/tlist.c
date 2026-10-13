@@ -15,14 +15,16 @@
 static tlist *tlist_new_cap(uint_count cap)
 {
 	if (cap > TLIST_INLINE_ITEMS) {
-		tlist *list = (tlist *)tblockpool_calloc(sizeof(tlist));
+		tlist *list = (tlist *)tblockpool_alloc(sizeof(tlist));
 		list->base.vtable = &tlist_vtable;
+		list->base.refctr = 0;
 		tobj_vec_init_cap(&list->items, cap);
 		return list;
 	}
-	tlist *list = (tlist *)tblockpool_calloc(
+	tlist *list = (tlist *)tblockpool_alloc(
 		sizeof(tlist) + TLIST_INLINE_ITEMS * sizeof(tobj));
 	list->base.vtable = &tlist_vtable;
+	list->base.refctr = 0;
 	list->items.data = (tobj *)(list + 1);
 	list->items.len = 0;
 	list->items.capacity = TLIST_INLINE_ITEMS;
