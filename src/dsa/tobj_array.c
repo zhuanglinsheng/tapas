@@ -36,7 +36,10 @@ void tobj_array_try_expand(tobj_array *arr, uint_objs newcap)
 	if (newcap <= arr->capacity)
 		return;
 	uint_objs i;
-	arr->data = (tobj *)realloc(arr->data, newcap * sizeof(tobj));
+	tobj *grown = (tobj *)realloc(arr->data, newcap * sizeof(tobj));
+	if (!grown)
+		twarn(ErrRuntime_Other, "tobj_array_try_expand", "out of memory");
+	arr->data = grown;
 	for (i = arr->capacity; i < newcap; i++)
 		tobj_set_nil(&arr->data[i]);
 	arr->capacity = newcap;

@@ -629,7 +629,8 @@ void tstring_replace(tstring *s, const char *from, const char *to)
 		}
 	}
 	newdata[write_pos] = '\0';
-	free(s->data);
+	if (!tstring_uses_inline_storage(s))
+		free(s->data);
 	s->data = newdata;
 	s->len = newlen;
 	s->cap = newcap;

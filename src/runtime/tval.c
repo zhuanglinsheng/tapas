@@ -3,6 +3,13 @@
 
 /*----------------------- Value Lifetime and Assignment --------------------*/
 
+/* 循环结构（如包含自身的 List/Dictionary）会让递归式打印与比较失去终止点。
+ * 复合值的递归必然穿过 tobj_tostring/tobj_identical 这两个汇聚点，在这里
+ * 限深即可保护所有复合类型。 */
+#define TOBJ_RECURSE_LIMIT 512
+static _Thread_local unsigned tobj_tostring_depth;
+static _Thread_local unsigned tobj_identical_depth;
+
 static void tobj_release_compo(tcompo_v *compo)
 {
 	if (!compo)
@@ -107,19 +114,25 @@ int tobj_identical(const tobj *a, const tobj *b)
 		return a->val.v_tint == b->val.v_tint;
 	case tfloat:
 		return a->val.v_tfloat == b->val.v_tfloat;
-	case tcompo:
+	case tcompo: {
 		if (a->val.v_tcompo == b->val.v_tcompo)
 			return 1;
-		if (a->val.v_tcompo && b->val.v_tcompo &&
-		    a->val.v_tcompo->vtable && b->val.v_tcompo->vtable &&
-		    a->val.v_tcompo->vtable->compo_code ==
-			    b->val.v_tcompo->vtable->compo_code &&
-		    (a->val.v_tcompo->vtable->compo_code !=
-			    compo_extension ||
-		     a->val.v_tcompo->vtable == b->val.v_tcompo->vtable))
-			return a->val.v_tcompo->vtable->identical(
-				a->val.v_tcompo, b->val.v_tcompo);
-		return 0;
+		if (!a->val.v_tcompo || !b->val.v_tcompo ||
+		    !a->val.v_tcompo->vtable || !b->val.v_tcompo->vtable ||
+		    a->val.v_tcompo->vtable->compo_code !=
+			    b->val.v_tcompo->vtable->compo_code ||
+		    (a->val.v_tcompo->vtable->compo_code == compo_extension &&
+		     a->val.v_tcompo->vtable != b->val.v_tcompo->vtable))
+			return 0;
+		/* 深度耗尽时保守地报告不等；循环结构不再无限递归。 */
+		if (tobj_identical_depth >= TOBJ_RECURSE_LIMIT)
+			return 0;
+		tobj_identical_depth++;
+		int same = a->val.v_tcompo->vtable->identical(
+			a->val.v_tcompo, b->val.v_tcompo);
+		tobj_identical_depth--;
+		return same;
+	}
 	}
 	return 0;
 }
@@ -150,13 +163,18 @@ static tstring *tobj_tostring(const tobj *value, int full)
 		tstring_append_fmt(out, "%g", value->val.v_tfloat);
 		return out;
 	case tcompo:
-		if (value->val.v_tcompo && value->val.v_tcompo->vtable)
-			return full
-				? value->val.v_tcompo->vtable->tostring_full(
-					value->val.v_tcompo)
-				: value->val.v_tcompo->vtable->tostring_abbr(
-					value->val.v_tcompo);
-		return tstring_new("<null>");
+		if (!value->val.v_tcompo || !value->val.v_tcompo->vtable)
+			return tstring_new("<null>");
+		if (tobj_tostring_depth >= TOBJ_RECURSE_LIMIT)
+			return tstring_new("<recursive>");
+		tobj_tostring_depth++;
+		out = full
+			? value->val.v_tcompo->vtable->tostring_full(
+				value->val.v_tcompo)
+			: value->val.v_tcompo->vtable->tostring_abbr(
+				value->val.v_tcompo);
+		tobj_tostring_depth--;
+		return out;
 	}
 	return tstring_new("<unknown>");
 }

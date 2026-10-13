@@ -45,18 +45,23 @@ static const char *titer_get_type(void)
 static long titer_len(void *self)
 {
 	titer *it = (titer *)self;
+	if (it->step == 0)
+		return 0;
+	unsigned long span;
 	if (it->step > 0) {
 		if (it->start >= it->end)
 			return 0;
-		return (it->end - it->start + it->step - 1) / it->step;
-	}
-	if (it->step < 0) {
-		long step_abs = -it->step;
+		span = (unsigned long)it->end - (unsigned long)it->start;
+	} else {
 		if (it->start <= it->end)
 			return 0;
-		return (it->start - it->end + step_abs - 1) / step_abs;
+		span = (unsigned long)it->start - (unsigned long)it->end;
 	}
-	return 0;
+	unsigned long ustep = titer_abs_step(it->step);
+	unsigned long count = span / ustep + (span % ustep != 0);
+	if (count > (unsigned long)LONG_MAX)
+		twarn(ErrRuntime_IntOutOfRange, "len", "iterator length is too large");
+	return (long)count;
 }
 
 static void *titer_copy(void *self)
@@ -109,27 +114,31 @@ static tstring *titer_tostring_full(void *self)
 static int iterator_next(void *self, long *position, tobj *result)
 {
 	titer *it = (titer *)self;
-	long value = it->start + *position * it->step;
-	if ((it->step > 0 && value < it->end) ||
-	    (it->step < 0 && value > it->end)) {
-		tobj_set_int(result, value);
-		(*position)++;
-		return 1;
-	}
-	return 0;
+	long value;
+	if (!titer_step_value(it->start, it->step, it->end, *position, &value))
+		return 0;
+	tobj_set_int(result, value);
+	(*position)++;
+	return 1;
 }
 
 static int iterator_contains(void *self, const tobj *value)
 {
 	titer *it = (titer *)self;
-	if (value->type != tint)
+	if (value->type != tint || it->step == 0)
 		return 0;
 	long candidate = value->val.v_tint;
-	if (it->step > 0)
-		return candidate >= it->start && candidate < it->end &&
-		       (candidate - it->start) % it->step == 0;
-	return candidate <= it->start && candidate > it->end &&
-	       (it->start - candidate) % (-it->step) == 0;
+	unsigned long ustep = titer_abs_step(it->step);
+	if (it->step > 0) {
+		if (candidate < it->start || candidate >= it->end)
+			return 0;
+		return ((unsigned long)candidate - (unsigned long)it->start) %
+				ustep == 0;
+	}
+	if (candidate > it->start || candidate <= it->end)
+		return 0;
+	return ((unsigned long)it->start - (unsigned long)candidate) %
+			ustep == 0;
 }
 
 static const tcompo_capabilities iterator_capabilities = {

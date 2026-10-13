@@ -5,6 +5,7 @@
 #include "tapas/objects/ttype.h"
 #include "tapas/tval.h"
 
+#include <math.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <stddef.h>
@@ -42,9 +43,15 @@ static inline __attribute__((always_inline)) uint64_t thash_tobj_hash(
 	case tfloat: {
 		double v = key->val.v_tfloat;
 		uint64_t bits = 0;
-		if (v == 0.0)
-			v = 0.0;
-		memcpy(&bits, &v, sizeof(bits));
+		/* NaN 不与自身按位相等，归入规范位形才能满足哈希契约；
+		 * 键相等一侧对 NaN 有对应的特判。 */
+		if (isnan(v))
+			bits = 0x7ff8000000000000ULL;
+		else {
+			if (v == 0.0)
+				v = 0.0;
+			memcpy(&bits, &v, sizeof(bits));
+		}
 		hash = thash_mix(0x40 ^ bits);
 		break;
 	}
@@ -80,6 +87,11 @@ static int thash_tobj_key_eq(const tobj *a, const tobj *b)
 {
 	if (a->type != b->type)
 		return 0;
+	/* 键匹配协议不同于语言的 ==：-0.0 与 +0.0 已由哈希归一化，
+	 * NaN 键按规范位形互相视为相等。 */
+	if (a->type == tfloat)
+		return a->val.v_tfloat == b->val.v_tfloat ||
+		       (isnan(a->val.v_tfloat) && isnan(b->val.v_tfloat));
 	if (a->type != tcompo)
 		return tobj_identical(a, b);
 	if (a->val.v_tcompo == b->val.v_tcompo)
@@ -290,17 +302,21 @@ uint_count thashtbl_set(thashtbl *tbl, const tobj *key, const tobj *value)
 {
 	if (!tbl || !key || !value)
 		return 0;
+	/* 先快照键值：调用方传入的指针可能指向本表桶内（如以表中值更新表），
+	 * 扩容重排会释放旧桶数组，此后读原指针即悬垂。 */
+	tobj k = *key;
+	tobj v = *value;
 	if (tbl->capacity == 0)
 		thashtbl_alloc_entries(tbl, THASH_DEFAULT_CAP);
-	uint64_t hash = thash_tobj_hash(key);
+	uint64_t hash = thash_tobj_hash(&k);
 	int found = 0;
-	uint_count idx = thashtbl_find_slot(tbl, key, hash, &found);
+	uint_count idx = thashtbl_find_slot(tbl, &k, hash, &found);
 	if (found) {
 		thash_entry *entry = &tbl->entries[idx];
-		if (!thash_same_stored_value(&entry->value, value)) {
-			thash_retain(value);
+		if (!thash_same_stored_value(&entry->value, &v)) {
+			thash_retain(&v);
 			tobj_ddc_ref_clear(&entry->value);
-			entry->value = *value;
+			entry->value = v;
 		}
 		return idx;
 	}
@@ -308,16 +324,16 @@ uint_count thashtbl_set(thashtbl *tbl, const tobj *key, const tobj *value)
 	thashtbl_ensure_room(tbl);
 	if (tbl->entries != old_entries) {
 		found = 0;
-		idx = thashtbl_find_slot(tbl, key, hash, &found);
+		idx = thashtbl_find_slot(tbl, &k, hash, &found);
 	}
 	thash_entry *entry = &tbl->entries[idx];
 	if (entry->hash == 0)
 		tbl->used++;
-	entry->key = *key;
-	entry->value = *value;
+	entry->key = k;
+	entry->value = v;
 	entry->hash = hash;
-	thash_retain(key);
-	thash_retain(value);
+	thash_retain(&k);
+	thash_retain(&v);
 	tbl->len++;
 	return idx;
 }

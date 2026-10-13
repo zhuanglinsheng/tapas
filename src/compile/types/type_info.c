@@ -607,20 +607,23 @@ static tstatic_type_id infer_function_with_context(type_analyzer *analyzer,
 	tstatic_type_id *signature = (tstatic_type_id *)calloc(
 		count + 1, sizeof(*signature));
 	if (!signature) abort();
+	/* parse_annotation 会向类型 arena 追加类型并可能重排其存储，
+	 * 循环中再读 expected 就是悬垂指针；先把回退类型快照进来。 */
+	memcpy(signature, expected, (count + 1) * sizeof(*signature));
 	const tast_id *parameters = tast_get_children(analyzer->ast,
 		node->function.parameters, count);
 	for (uint32_t i = 0; i < count; i++) {
 		const tast_node *parameter = tast_get(analyzer->ast, parameters[i]);
-		signature[i] = parameter && parameter->parameter.has_annotation ?
-			parse_annotation(analyzer, parameter->parameter.annotation) :
-			expected[i];
+		if (parameter && parameter->parameter.has_annotation)
+			signature[i] = parse_annotation(analyzer,
+				parameter->parameter.annotation);
 		uint32_t sid = symbol_for_declaration(analyzer, parameters[i]);
 		if (sid < analyzer->model->symbol_count)
 			analyzer->model->symbol_type_ids[sid] = signature[i];
 	}
-	signature[count] = node->function.has_return_annotation ?
-		parse_annotation(analyzer, node->function.return_annotation) :
-		expected[count];
+	if (node->function.has_return_annotation)
+		signature[count] = parse_annotation(analyzer,
+			node->function.return_annotation);
 	tstatic_type_id result = tstatic_type_make(&analyzer->model->arena,
 		tstatic_type_function, signature, count + 1, node->function.variadic);
 	free(signature);
@@ -809,6 +812,9 @@ static tstatic_type_id infer(type_analyzer *analyzer, tast_id id)
 			}
 		}
 		tstring *rule_identity = nullptr;
+		/* 上面的模板解析/应用与递归 infer 都可能向类型 arena 追加并
+		 * 重排存储，早先取得的类型指针已失效；按 id 重新取回。 */
+		function = tstatic_type_get(&analyzer->model->arena, callee);
 		if (function && function->kind == tstatic_type_rule) {
 			const tast_node *callee = tast_get(
 				analyzer->ast, node->aggregate.receiver);

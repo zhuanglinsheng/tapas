@@ -1171,10 +1171,16 @@ static tcall_frame *tvm_replace_current_call_frame(
 	frame->tmps = vm->tmps;
 	tobj_array_set_len(&frame->tmps, 0);
 	tobj_array_set_len(&frame->env.base.objs, 0);
-	frame->loop_states = vm->loop_states;
-	frame->loop_state_cap = vm->loop_state_cap;
-	frame->loop_state_len = 0;
-	vm->loop_state_len = 0;
+	/* 与 tcall_frame_push 对称：只有含循环的函数才接管循环状态。否则
+	 * vm->loop_states 属于仍在活动的祖先帧，写进本帧记录会让两个
+	 * 帧记录指向同一数组——该记录之后复用到含循环的调用时会与祖先
+	 * 帧的循环状态互相覆盖，并在 tvm_clean 时双重释放。 */
+	if (vm_function_has_loops(function)) {
+		frame->loop_states = vm->loop_states;
+		frame->loop_state_cap = vm->loop_state_cap;
+		frame->loop_state_len = 0;
+		vm->loop_state_len = 0;
+	}
 
 	if (frame->initialized && frame->func == function &&
 	    frame->env.base.father_env == function->env.base.father_env)
@@ -2277,9 +2283,9 @@ static inline TVM_ALWAYS_INLINE tobj *vm_loop_target(tvm *vm, uint_objs idx, int
 static void vm_loop_range(tvm *vm, tloop_state *state, uint_objs idx,
 			  int isenv, tcompo_env *env, titer *iterator)
 {
-	long value = iterator->start + state->pos * iterator->step;
-	int has_next = (iterator->step > 0 && value < iterator->end) ||
-		       (iterator->step < 0 && value > iterator->end);
+	long value;
+	int has_next = titer_step_value(iterator->start, iterator->step,
+					iterator->end, state->pos, &value);
 	if (has_next) {
 		vm_set_int_result(vm_loop_target(vm, idx, isenv, env), value);
 		state->pos++;
@@ -2312,8 +2318,12 @@ static inline TVM_ALWAYS_INLINE int vm_loop_range_step(tvm *vm,
 		stk_fill(vm);
 		state->iterator_slot = stk_top(vm);
 	}
-	long value = state->range_start + state->pos * state->range_step;
-	int has_next = value < state->range_end;
+	/* range_step 恒为 1：终点差在无符号域中精确，位置比较无需乘法；
+	 * pos < end - start 时 start + pos < end，有符号加法不溢出。 */
+	int has_next = state->range_start < state->range_end &&
+		(unsigned long)state->pos <
+			(unsigned long)state->range_end - (unsigned long)state->range_start;
+	long value = state->range_start + state->pos;
 	if (has_next) {
 		/* 定态下循环变量槽已是 Int；只更新负载。 */
 		tobj *target = vm_loop_target(vm, idx, isenv, env);
