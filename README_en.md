@@ -150,6 +150,7 @@ for VSIX installation and runtime or language-server path configuration.
 
 ## Documentation
 
+- [Single-page Language Reference](docs/LanguageReference.html) (Chinese) — a language-focused guide for human learners and AI code generation, covering lexical structure, values, expressions, functions, Types, Rules, modules, errors, and the complete grammar, with offline search and Tapas code highlighting.
 - [Solver API](src/stdlib/solve/README.md) (Chinese) — feasibility queries, conflict
   diagnostics, supported expressions, and runtime configuration.
 - [Usage](docs/Usage_en.md) — building, command-line options, scripts, bytecode,
