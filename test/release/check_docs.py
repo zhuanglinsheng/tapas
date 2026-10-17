@@ -110,7 +110,8 @@ with tempfile.TemporaryDirectory(prefix='tapas-docs-') as tmp:
             errors.append(f'{mode} contract: {result.stdout}{result.stderr}')
     for name, text in negative.items():
         source.write_text(text)
-        command = [str(runtime), str(source)] if name == 'rule_instance_if' else [str(runtime), '-c', str(source)]
+        # The same source path is rewritten for every case; bypass automatic caches.
+        command = [str(runtime), '-ce' if name == 'rule_instance_if' else '-c', str(source)]
         result = subprocess.run(command, capture_output=True, timeout=30)
         if result.returncode == 0:
             errors.append(f'Expected rejection: {name}')
