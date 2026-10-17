@@ -1,24 +1,22 @@
+local sub = string.sub
+
 local BASES = "ACGT"
 local probes = {}
 for i = 1, 4 do
-    probes[#probes + 1] = string.sub(BASES, i, i)
+    probes[#probes + 1] = sub(BASES, i, i)
 end
 for a = 1, 4 do
     for b = 1, 4 do
         probes[#probes + 1] =
-            string.sub(BASES, a, a) .. string.sub(BASES, b, b)
+            sub(BASES, a, a) .. sub(BASES, b, b)
     end
 end
 
 local function count_kmers(sequence, k)
     local counts = {}
     for i = 1, #sequence - k + 1 do
-        local key = string.sub(sequence, i, i + k - 1)
-        if counts[key] then
-            counts[key] = counts[key] + 1
-        else
-            counts[key] = 1
-        end
+        local key = sub(sequence, i, i + k - 1)
+        counts[key] = (counts[key] or 0) + 1
     end
     return counts
 end
@@ -27,7 +25,7 @@ local seed = 42
 local parts = {}
 for _ = 1, 120000 do
     seed = (seed * 1103515245 + 12345) % 2147483648
-    parts[#parts + 1] = string.sub(BASES, seed % 4 + 1, seed % 4 + 1)
+    parts[#parts + 1] = sub(BASES, seed % 4 + 1, seed % 4 + 1)
 end
 local sequence = table.concat(parts)
 

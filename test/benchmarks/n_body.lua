@@ -2,6 +2,8 @@ local pi = 3.141592653589793
 local solar_mass = 4.0 * pi * pi
 local days_per_year = 365.24
 
+local sqrt = math.sqrt
+
 local function advance(bodies, dt)
     local count = #bodies
     for i = 1, count do
@@ -12,7 +14,7 @@ local function advance(bodies, dt)
             local dy = bi.y - bj.y
             local dz = bi.z - bj.z
             local d2 = dx * dx + dy * dy + dz * dz
-            local mag = dt / (d2 * math.sqrt(d2))
+            local mag = dt / (d2 * sqrt(d2))
             local mi = bi.mass * mag
             local mj = bj.mass * mag
             bi.vx = bi.vx - dx * mj
@@ -42,7 +44,7 @@ local function energy(bodies)
             local dx = bi.x - bj.x
             local dy = bi.y - bj.y
             local dz = bi.z - bj.z
-            e = e - bi.mass * bj.mass / math.sqrt(dx * dx + dy * dy + dz * dz)
+            e = e - bi.mass * bj.mass / sqrt(dx * dx + dy * dy + dz * dz)
         end
     end
     return e

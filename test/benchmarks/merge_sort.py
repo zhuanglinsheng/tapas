@@ -19,22 +19,21 @@ def merge_sort(values):
         else:
             merged.append(right[j])
             j += 1
-    while i < len(left):
-        merged.append(left[i])
-        i += 1
-    while j < len(right):
-        merged.append(right[j])
-        j += 1
-    return merged.copy()
+    merged.extend(left[i:])
+    merged.extend(right[j:])
+    return merged
 
 
 values = [(index * 73 + 19) % 1009 for index in range(4096)]
-started = time.process_time_ns()
-sorted_values = merge_sort(values)
-checksum = 0
-for index, value in enumerate(sorted_values):
-    checksum += value * (index + 1)
-elapsed = time.process_time_ns() - started
+def bench():
+    started = time.process_time_ns()
+    sorted_values = merge_sort(values)
+    checksum = sum(value * index for index, value in enumerate(sorted_values, 1))
+    elapsed = time.process_time_ns() - started
 
-print(checksum)
-print(elapsed)
+    print(checksum)
+    print(elapsed)
+
+
+if __name__ == "__main__":
+    bench()

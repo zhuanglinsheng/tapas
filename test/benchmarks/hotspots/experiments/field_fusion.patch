@@ -1,0 +1,126 @@
+--- a/src/runtime/tvm.c
++++ b/src/runtime/tvm.c
+@@ -2467,6 +2467,7 @@
+ }
+ 
+ /* Forward declare exec_tins (defined later) */
++
+ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env);
+ 
+ static void rule_result_field(tdict *result, const char *name, const tobj *value)
+@@ -3883,6 +3884,104 @@
+ 	return 1;
+ }
+ 
++
++/* Resolve an existing constant-string field. Cached slots are validated
++ * against the current table on every access, including after rehashing. */
++static tobj *vm_dict_field(thashtbl *items, tstr *key, tins_cache *cache)
++{
++	if (cache && cache->kind == tins_cache_idxr_dict_str &&
++	    cache->key == (tcompo_v *)key &&
++	    thashtbl_entry_value_at(items, cache->slot, (tcompo_v *)key))
++		return &items->entries[cache->slot].value;
++
++	tobj field = { .type = tcompo, .val.v_tcompo = (tcompo_v *)key };
++	uint_count slot;
++	if (!thashtbl_find(items, &field, &slot))
++		return nullptr;
++	if (cache && (cache->kind == tins_cache_empty ||
++	    (cache->kind == tins_cache_idxr_dict_str &&
++	     cache->key == (tcompo_v *)key))) {
++		cache->kind = tins_cache_idxr_dict_str;
++		cache->guard = &tdict_vtable;
++		cache->key = (tcompo_v *)key;
++		cache->slot = slot;
++	}
++	return &items->entries[slot].value;
++}
++
++/* Fuse two Dictionary field reads, numeric arithmetic, and an existing
++ * immediate field write. Guards preserve aliases, missing-field diagnostics,
++ * and composite operator hooks. */
++static int vm_field_arithmetic_fused(
++		tvm *vm, tcompo_env *env, tbycode *commands,
++		uint_cmds *pc, uint_cmds end, tstr **strings,
++		tvm_code_cache *cache)
++{
++	uint_cmds start = *pc;
++	if (start + 8 >= end)
++		return 0;
++	const tbycode *code = commands + start;
++	tins operation = tbycode_ins(code[6]);
++	if ((operation != OP_ADD && operation != OP_SUB &&
++	     operation != OP_MUL && operation != OP_DIV) ||
++	    tbycode_binop_named(code[6]) ||
++	    tbycode_get_L(code[6]) != 0 || tbycode_get_R(code[6]) != 1)
++		return 0;
++	if (tbycode_ins(code[8]) != OP_IDXL ||
++	    tbycode_get_b(code[8]) != 1 ||
++	    tbycode_ins(code[7]) != OP_PUSHS ||
++	    tbycode_ins(code[1]) != OP_PUSHX ||
++	    tbycode_ins(code[3]) != OP_PUSHS ||
++	    tbycode_ins(code[4]) != OP_PUSHX)
++		return 0;
++	for (unsigned offset = 2; offset <= 5; offset += 3) {
++		tbycode read = code[offset];
++		if (tbycode_ins(read) != OP_IDXR ||
++		    tbycode_idxr_named(read) ||
++		    tbycode_idxr_count(read) != 1 || tbycode_idxr_slice(read))
++			return 0;
++	}
++	tobj operands[2];
++	for (unsigned operand = 0; operand < 2; operand++) {
++		unsigned offset = operand * 3;
++		const tobj *receiver = vm_pushx_source(vm, env,
++			tbycode_get_L(code[offset + 1]),
++			tbycode_get_R(code[offset + 1]));
++		if (receiver->type != tcompo || !receiver->val.v_tcompo ||
++		    receiver->val.v_tcompo->vtable != &tdict_vtable)
++			return 0;
++		tobj *value = vm_dict_field(
++			((tdict *)receiver->val.v_tcompo)->items,
++			strings[tbycode_get_U(code[offset])],
++			tvm_instruction_cache(cache, start + offset + 2));
++		if (!value || (value->type != tint && value->type != tfloat))
++			return 0;
++		operands[operand] = *value;
++	}
++	tobj *receiver = tbycode_get_i(code[8]) ?
++		tcompo_env_get_obj(env, tbycode_get_L(code[8])) :
++		tmp_obj(vm, tbycode_get_L(code[8]));
++	if (receiver->type != tcompo || !receiver->val.v_tcompo ||
++	    receiver->val.v_tcompo->vtable != &tdict_vtable)
++		return 0;
++	tobj *destination = vm_dict_field(
++		((tdict *)receiver->val.v_tcompo)->items,
++		strings[tbycode_get_U(code[7])],
++		tvm_instruction_cache(cache, start + 8));
++	if (!destination || destination->type == tcompo)
++		return 0;
++	/* The top stack operand is the left operand in Tapas bytecode. Keep
++	 * integer division errors at their original diagnostic instruction. */
++	if (operation == OP_DIV && operands[1].type == tint &&
++	    operands[0].type == tint && operands[0].val.v_tint == 0)
++		return 0;
++	tobj result;
++	if (!vm_binop_fast(operation, &operands[1], &operands[0], &result))
++		return 0;
++	*destination = result;
++	*pc = vm_fused_next(commands, end, start + 9);
++	return 1;
++}
+ 
+ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
+ {
+@@ -4924,6 +5023,10 @@
+ 		}
+ 		VM_NEXT();
+ 		VM_CASE(OP_PUSHS): {
++			if (i + 8 < end && tbycode_ins(cmdarr[i + 8]) == OP_IDXL &&
++			    vm_field_arithmetic_fused(vm, env, cmdarr, &i, end,
++						      csobjs, &code_cache))
++				VM_NEXT();
+ 			/* `obj::field` / `obj['field']` 读取：常量字符串键 +
+ 			 * 槽位接收者 + IDXR。字典实例直接探测，键的内弦对象
+ 			 * 指针配合 IDXR 的槽位缓存免去了逐字符比较。 */

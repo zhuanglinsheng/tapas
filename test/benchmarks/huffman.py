@@ -1,12 +1,11 @@
 import time
+from collections import Counter
 
 SYMBOLS = "abcdefgh"
 
 
 def huffman_total(text):
-    freq = {}
-    for ch in text:
-        freq[ch] = freq.get(ch, 0) + 1
+    freq = Counter(text)
     # Fixed symbol order makes ties in the minimum scan deterministic.
     nodes = [(freq[ch], ch) for ch in SYMBOLS if ch in freq]
 
@@ -40,9 +39,14 @@ for _ in range(40000):
     chars.append(SYMBOLS[seed % 8])
 text = "".join(chars)
 
-started = time.process_time_ns()
-result = huffman_total(text)
-elapsed = time.process_time_ns() - started
+def bench():
+    started = time.process_time_ns()
+    result = huffman_total(text)
+    elapsed = time.process_time_ns() - started
 
-print(result)
-print(elapsed)
+    print(result)
+    print(elapsed)
+
+
+if __name__ == "__main__":
+    bench()

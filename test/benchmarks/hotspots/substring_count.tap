@@ -1,0 +1,25 @@
+// The high bits vary the DNA bases; the low two bits of this LCG only cycle.
+let parts = []
+let seed = 42
+for (let i in 0 to 120000) {
+    seed = (seed * 1103515245 + 12345) % 2147483648
+    parts.append('ACGT'[(seed / 65536) % 4])
+}
+let sequence = join(parts, '')
+
+function bench(sequence, k)
+{
+    let started = clock_ns()
+    let counts = {}
+    for (let i in 0 to (sequence.len() - k + 1)) {
+        let key = sequence[i:i + k]
+        counts[key] = idx_or(counts, key, 0) + 1
+    }
+    let result = counts.len()
+    for (let count in values(counts)) { result = result + count * count }
+    let elapsed = clock_ns() - started
+    print(result)
+    print(elapsed)
+}
+
+bench(sequence, 8)

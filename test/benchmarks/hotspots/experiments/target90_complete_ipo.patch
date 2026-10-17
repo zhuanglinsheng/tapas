@@ -1,0 +1,14 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 9badb95..bb494ad 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -264,7 +264,8 @@ if(TAPAS_ENABLE_IPO)
+     check_ipo_supported(RESULT TAPAS_IPO_SUPPORTED OUTPUT TAPAS_IPO_ERROR)
+     if(TAPAS_IPO_SUPPORTED)
+         foreach(TAPAS_IPO_TARGET IN ITEMS
+-                tapas_strings tapas_runtime tapas_core tapas)
++                tapas_strings tapas_syntax tapas_runtime tapas_stdlib
++                tapas_frontend tapas_core tapas)
+             set_property(TARGET ${TAPAS_IPO_TARGET} PROPERTY
+                 INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE)
+         endforeach()

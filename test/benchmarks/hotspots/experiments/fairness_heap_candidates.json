@@ -1,0 +1,154 @@
+{
+  "runs": 5,
+  "rounds": 2,
+  "rows": [
+    {
+      "case": "dijkstra",
+      "language": "tap",
+      "before_source": "function dijkstra(graph, source, size)\n{\n    let dist = replicate([1000000000000], size)\n    let visited = replicate([false], size)\n    dist[source] = 0\n    for (let step in 0 to size) {\n        let best = -1\n        let best_dist = 1000000000000\n        for (let i in 0 to size) {\n            if (not visited[i] and dist[i] < best_dist) {\n                best = i\n                best_dist = dist[i]\n            }\n        }\n        if (best < 0) {\n            break\n        }\n        visited[best] = true\n        if (best in graph) {\n            for (let edge in graph[best]) {\n                let target = edge[0]\n                let alt = dist[best] + edge[1]\n                if (alt < dist[target]) {\n                    dist[target] = alt\n                }\n            }\n        }\n    }\n    return copy(dist)\n}\n\nlet size = 250\nlet degree = 6\nlet graph = {}\nfor (let i in 0 to size) {\n    let edges = []\n    edges.append([(i + 1) % size, 1])\n    for (let k in 0 to degree) {\n        let j = (i * 7 + k * 13 + 3) % size\n        let w = (i * 5 + k * 11 + 7) % 19 + 1\n        edges.append([j, w])\n    }\n    graph[i] = edges\n}\nlet sources = [0, size / 4, size / 2, size * 3 / 4]\nlet rounds = 4\n\nlet started = clock_ns()\nvar checksum = 0\nfor (let round in 0 to rounds) {\n    for (let s in 0 to len(sources)) {\n        let dist = dijkstra(graph, sources[s], size)\n        for (let i in 0 to size) {\n            checksum = checksum + dist[i]\n        }\n    }\n}\nlet elapsed = clock_ns() - started\n\nprint(checksum)\nprint(elapsed)\n",
+      "after_source": "function heap_push(queue, item)\n{\n    queue.append(item)\n    let index = queue.len() - 1\n    while (index > 0) {\n        let parent = (index - 1) / 2\n        let above = queue[parent]\n        if (above[0] < item[0] or (above[0] == item[0] and above[1] <= item[1])) { break }\n        queue[index] = above\n        index = parent\n    }\n    queue[index] = item\n}\n\nfunction heap_pop(queue)\n{\n    let root = queue[0]\n    let last = queue[queue.len() - 1]\n    delete(queue, queue.len() - 1)\n    let size = queue.len()\n    if (size > 0) {\n        let index = 0\n        while (index * 2 + 1 < size) {\n            let child = index * 2 + 1\n            if (child + 1 < size) {\n                let a = queue[child]\n                let b = queue[child + 1]\n                if (b[0] < a[0] or (b[0] == a[0] and b[1] < a[1])) { child = child + 1 }\n            }\n            let below = queue[child]\n            if (last[0] < below[0] or (last[0] == below[0] and last[1] <= below[1])) { break }\n            queue[index] = below\n            index = child\n        }\n        queue[index] = last\n    }\n    return copy(root)\n}\n\nfunction dijkstra(graph, source, size)\n{\n    let dist = replicate([1000000000000], size)\n    dist[source] = 0\n    let queue = []\n    heap_push(queue, 0 : source)\n    while (queue.len() > 0) {\n        let entry = heap_pop(queue)\n        let distance = entry[0]\n        let vertex = entry[1]\n        if (distance == dist[vertex] and vertex in graph) {\n            for (let edge in graph[vertex]) {\n                let target = edge[0]\n                let alternative = distance + edge[1]\n                if (alternative < dist[target]) {\n                    dist[target] = alternative\n                    heap_push(queue, alternative : target)\n                }\n            }\n        }\n    }\n    return copy(dist)\n}\n\nlet size = 250\nlet degree = 6\nlet graph = {}\nfor (let i in 0 to size) {\n    let edges = []\n    edges.append([(i + 1) % size, 1])\n    for (let k in 0 to degree) {\n        let j = (i * 7 + k * 13 + 3) % size\n        let w = (i * 5 + k * 11 + 7) % 19 + 1\n        edges.append([j, w])\n    }\n    graph[i] = edges\n}\nlet sources = [0, size / 4, size / 2, size * 3 / 4]\nlet rounds = 4\n\nlet started = clock_ns()\nvar checksum = 0\nfor (let round in 0 to rounds) {\n    for (let s in 0 to len(sources)) {\n        let dist = dijkstra(graph, sources[s], size)\n        for (let i in 0 to size) {\n            checksum = checksum + dist[i]\n        }\n    }\n}\nlet elapsed = clock_ns() - started\n\nprint(checksum)\nprint(elapsed)\n",
+      "round_ratios": [
+        1.0466656319519891,
+        1.025746964276717
+      ],
+      "samples_ns": {
+        "before": [
+          19616000,
+          18963000,
+          19008000,
+          19329000,
+          20281000,
+          20194000,
+          20601000,
+          19552000,
+          19847000,
+          19540000
+        ],
+        "after": [
+          19934000,
+          20009000,
+          19900000,
+          20231000,
+          20081000,
+          20444000,
+          20753000,
+          20590000,
+          20358000,
+          20761000
+        ]
+      },
+      "checksum": 40796
+    },
+    {
+      "case": "dijkstra",
+      "language": "py",
+      "before_source": "import time\n\n\ndef dijkstra(graph, source, size):\n    dist = [1000000000000] * size\n    visited = [False] * size\n    dist[source] = 0\n    for step in range(size):\n        best = -1\n        best_dist = 1000000000000\n        for i in range(size):\n            if not visited[i] and dist[i] < best_dist:\n                best = i\n                best_dist = dist[i]\n        if best < 0:\n            break\n        visited[best] = True\n        for target, weight in graph.get(best, ()):\n            alt = best_dist + weight\n            if alt < dist[target]:\n                dist[target] = alt\n    return dist\n\n\nsize = 250\ndegree = 6\ngraph = {}\nfor i in range(size):\n    edges = []\n    edges.append([(i + 1) % size, 1])\n    for k in range(degree):\n        j = (i * 7 + k * 13 + 3) % size\n        w = (i * 5 + k * 11 + 7) % 19 + 1\n        edges.append([j, w])\n    graph[i] = edges\nsources = [0, size // 4, size // 2, size * 3 // 4]\nrounds = 4\n\ndef bench():\n    started = time.process_time_ns()\n    checksum = 0\n    for round in range(rounds):\n        for s in range(len(sources)):\n            dist = dijkstra(graph, sources[s], size)\n            checksum += sum(dist)\n    elapsed = time.process_time_ns() - started\n\n    print(checksum)\n    print(elapsed)\n\n\nif __name__ == \"__main__\":\n    bench()\n",
+      "after_source": "import time\nfrom heapq import heappop, heappush\n\n\ndef dijkstra(graph, source, size):\n    dist = [1000000000000] * size\n    dist[source] = 0\n    queue = [(0, source)]\n    while queue:\n        distance, vertex = heappop(queue)\n        if distance != dist[vertex]:\n            continue\n        for target, weight in graph.get(vertex, ()):\n            alternative = distance + weight\n            if alternative < dist[target]:\n                dist[target] = alternative\n                heappush(queue, (alternative, target))\n    return dist\n\n\nsize = 250\ndegree = 6\ngraph = {}\nfor i in range(size):\n    edges = []\n    edges.append([(i + 1) % size, 1])\n    for k in range(degree):\n        j = (i * 7 + k * 13 + 3) % size\n        w = (i * 5 + k * 11 + 7) % 19 + 1\n        edges.append([j, w])\n    graph[i] = edges\nsources = [0, size // 4, size // 2, size * 3 // 4]\nrounds = 4\n\ndef bench():\n    started = time.process_time_ns()\n    checksum = 0\n    for round in range(rounds):\n        for s in range(len(sources)):\n            dist = dijkstra(graph, sources[s], size)\n            checksum += sum(dist)\n    elapsed = time.process_time_ns() - started\n\n    print(checksum)\n    print(elapsed)\n\n\nif __name__ == \"__main__\":\n    bench()\n",
+      "round_ratios": [
+        0.18870038412291934,
+        0.18795233171899658
+      ],
+      "samples_ns": {
+        "before": [
+          19855000,
+          18777000,
+          18152000,
+          18744000,
+          18403000,
+          18226000,
+          18524000,
+          18633000,
+          18377000,
+          18372000
+        ],
+        "after": [
+          3333000,
+          3632000,
+          3546000,
+          3537000,
+          3314000,
+          3902000,
+          3395000,
+          3308000,
+          3454000,
+          3728000
+        ]
+      },
+      "checksum": 40796
+    },
+    {
+      "case": "dijkstra",
+      "language": "lua",
+      "before_source": "local function dijkstra(graph, source, size)\n    local dist, visited = {}, {}\n    for i = 1, size do\n        dist[i], visited[i] = 1000000000000, false\n    end\n    dist[source + 1] = 0\n    for _ = 1, size do\n        local best, best_dist = nil, 1000000000000\n        for i = 1, size do\n            local distance = dist[i]\n            if not visited[i] and distance < best_dist then\n                best, best_dist = i, distance\n            end\n        end\n        if best == nil then\n            break\n        end\n        visited[best] = true\n        local edges = graph[best] or {}\n        for i = 1, #edges do\n            local edge = edges[i]\n            local target = edge[1]\n            local alt = best_dist + edge[2]\n            if alt < dist[target] then\n                dist[target] = alt\n            end\n        end\n    end\n    return dist\nend\n\nlocal size, degree = 250, 6\nlocal graph = {}\nfor i = 0, size - 1 do\n    local edges = { { (i + 1) % size + 1, 1 } }\n    for k = 0, degree - 1 do\n        local j = (i * 7 + k * 13 + 3) % size\n        local w = (i * 5 + k * 11 + 7) % 19 + 1\n        edges[#edges + 1] = { j + 1, w }\n    end\n    graph[i + 1] = edges\nend\nlocal sources = { 0, size // 4, size // 2, size * 3 // 4 }\nlocal rounds = 4\nlocal started = os.clock()\nlocal checksum = 0\nfor _ = 1, rounds do\n    for _, source in ipairs(sources) do\n        local dist = dijkstra(graph, source, size)\n        for i = 1, size do\n            checksum = checksum + dist[i]\n        end\n    end\nend\nlocal elapsed = math.floor((os.clock() - started) * 1e9 + 0.5)\nprint(checksum)\nprint(elapsed)\n",
+      "after_source": "local function heap_push(queue, item)\n    local index = #queue + 1\n    while index > 1 do\n        local parent = index // 2\n        local above = queue[parent]\n        if above[1] < item[1] or (above[1] == item[1] and above[2] <= item[2]) then break end\n        queue[index] = above\n        index = parent\n    end\n    queue[index] = item\nend\n\nlocal function heap_pop(queue)\n    local root = queue[1]\n    local last = table.remove(queue)\n    local size = #queue\n    if size > 0 then\n        local index = 1\n        while index * 2 <= size do\n            local child = index * 2\n            if child < size then\n                local a, b = queue[child], queue[child + 1]\n                if b[1] < a[1] or (b[1] == a[1] and b[2] < a[2]) then child = child + 1 end\n            end\n            local below = queue[child]\n            if last[1] < below[1] or (last[1] == below[1] and last[2] <= below[2]) then break end\n            queue[index] = below\n            index = child\n        end\n        queue[index] = last\n    end\n    return root\nend\n\nlocal function dijkstra(graph, source, size)\n    local dist = {}\n    for i = 1, size do dist[i] = 1000000000000 end\n    dist[source + 1] = 0\n    local queue = {{0, source + 1}}\n    while #queue > 0 do\n        local entry = heap_pop(queue)\n        local distance, vertex = entry[1], entry[2]\n        if distance == dist[vertex] then\n            for _, edge in ipairs(graph[vertex] or {}) do\n                local target = edge[1]\n                local alternative = distance + edge[2]\n                if alternative < dist[target] then\n                    dist[target] = alternative\n                    heap_push(queue, {alternative, target})\n                end\n            end\n        end\n    end\n    return dist\nend\n\nlocal size, degree = 250, 6\nlocal graph = {}\nfor i = 0, size - 1 do\n    local edges = { { (i + 1) % size + 1, 1 } }\n    for k = 0, degree - 1 do\n        local j = (i * 7 + k * 13 + 3) % size\n        local w = (i * 5 + k * 11 + 7) % 19 + 1\n        edges[#edges + 1] = { j + 1, w }\n    end\n    graph[i + 1] = edges\nend\nlocal sources = { 0, size // 4, size // 2, size * 3 // 4 }\nlocal rounds = 4\nlocal started = os.clock()\nlocal checksum = 0\nfor _ = 1, rounds do\n    for _, source in ipairs(sources) do\n        local dist = dijkstra(graph, source, size)\n        for i = 1, size do\n            checksum = checksum + dist[i]\n        end\n    end\nend\nlocal elapsed = math.floor((os.clock() - started) * 1e9 + 0.5)\nprint(checksum)\nprint(elapsed)\n",
+      "round_ratios": [
+        0.5526551045950295,
+        0.5550867323019222
+      ],
+      "samples_ns": {
+        "before": [
+          11186000,
+          10744000,
+          11035000,
+          10580000,
+          10640000,
+          10644000,
+          10631000,
+          10695000,
+          10918000,
+          10665000
+        ],
+        "after": [
+          6182000,
+          5798000,
+          6147000,
+          5808000,
+          5926000,
+          5856000,
+          5942000,
+          6088000,
+          5925000,
+          5920000
+        ]
+      },
+      "checksum": 40796
+    },
+    {
+      "case": "huffman",
+      "language": "py",
+      "before_source": "import time\nfrom collections import Counter\n\nSYMBOLS = \"abcdefgh\"\n\n\ndef huffman_total(text):\n    freq = Counter(text)\n    # Fixed symbol order makes ties in the minimum scan deterministic.\n    nodes = [(freq[ch], ch) for ch in SYMBOLS if ch in freq]\n\n    def find_min():\n        best = -1\n        for i, node in enumerate(nodes):\n            if best < 0 or node[0] < nodes[best][0]:\n                best = i\n        return best\n\n    while len(nodes) > 1:\n        first = find_min()\n        left = nodes.pop(first)\n        second = find_min()\n        right = nodes.pop(second)\n        nodes.append((left[0] + right[0], (left, right)))\n\n    def total_length(node, depth):\n        if isinstance(node[1], str):\n            return node[0] * depth\n        return (total_length(node[1][0], depth + 1) +\n                total_length(node[1][1], depth + 1))\n\n    return total_length(nodes[0], 0)\n\n\nseed = 42\nchars = []\nfor _ in range(40000):\n    seed = (seed * 1103515245 + 12345) % 2147483648\n    chars.append(SYMBOLS[seed % 8])\ntext = \"\".join(chars)\n\ndef bench():\n    started = time.process_time_ns()\n    result = huffman_total(text)\n    elapsed = time.process_time_ns() - started\n\n    print(result)\n    print(elapsed)\n\n\nif __name__ == \"__main__\":\n    bench()\n",
+      "after_source": "import time\nfrom collections import Counter\nfrom heapq import heapify, heappop, heappush\n\nSYMBOLS = \"abcdefgh\"\n\n\ndef huffman_total(text):\n    freq = Counter(text)\n    # Serial numbers preserve the original stable tie order.\n    nodes = [(freq[ch], index, (freq[ch], ch))\n             for index, ch in enumerate(SYMBOLS) if ch in freq]\n    heapify(nodes)\n    serial = len(SYMBOLS)\n    while len(nodes) > 1:\n        left = heappop(nodes)[2]\n        right = heappop(nodes)[2]\n        weight = left[0] + right[0]\n        heappush(nodes, (weight, serial, (weight, (left, right))))\n        serial += 1\n\n    def total_length(node, depth):\n        if isinstance(node[1], str):\n            return node[0] * depth\n        return (total_length(node[1][0], depth + 1) +\n                total_length(node[1][1], depth + 1))\n\n    return total_length(nodes[0][2], 0)\n\n\nseed = 42\nchars = []\nfor _ in range(40000):\n    seed = (seed * 1103515245 + 12345) % 2147483648\n    chars.append(SYMBOLS[seed % 8])\ntext = \"\".join(chars)\n\ndef bench():\n    started = time.process_time_ns()\n    result = huffman_total(text)\n    elapsed = time.process_time_ns() - started\n\n    print(result)\n    print(elapsed)\n\n\nif __name__ == \"__main__\":\n    bench()\n",
+      "round_ratios": [
+        1.104810996563574,
+        1.0377668308702792
+      ],
+      "samples_ns": {
+        "before": [
+          1133000,
+          1244000,
+          1135000,
+          1164000,
+          1033000,
+          1143000,
+          1111000,
+          1074000,
+          1218000,
+          1438000
+        ],
+        "after": [
+          1250000,
+          1118000,
+          1359000,
+          1286000,
+          1262000,
+          1188000,
+          1226000,
+          1037000,
+          1264000,
+          1162000
+        ]
+      },
+      "checksum": 120000
+    }
+  ]
+}

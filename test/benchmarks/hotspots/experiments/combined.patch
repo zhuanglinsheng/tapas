@@ -1,0 +1,274 @@
+--- a/src/runtime/tvm.c
++++ b/src/runtime/tvm.c
+@@ -89,8 +89,10 @@
+ 
+ #if defined(__GNUC__) || defined(__clang__)
+ #define TVM_ALWAYS_INLINE __attribute__((always_inline))
++#define TVM_NOINLINE __attribute__((noinline))
+ #else
+ #define TVM_ALWAYS_INLINE
++#define TVM_NOINLINE
+ #endif
+ 
+ #define DEF_ALGO(fn_name, fll, fld, fdl, fdd)                                  \
+@@ -448,13 +450,44 @@
+ DEF_CMP(ge, >=)
+ DEF_CMP(le, <=)
+ 
++/* Pure built-in String equality, including the private indexed-byte form.
++ * Unknown objects must retain their operator hooks and normal fallback. */
++static int vm_string_equal(const tobj *left, const tobj *right, int *equal)
++{
++	int left_byte = vm_is_indexed_byte(left);
++	int right_byte = vm_is_indexed_byte(right);
++	if ((!left_byte && (left->type != tcompo || !left->val.v_tcompo ||
++			    left->val.v_tcompo->vtable != &tstr_vtable)) ||
++	    (!right_byte && (right->type != tcompo || !right->val.v_tcompo ||
++			     right->val.v_tcompo->vtable != &tstr_vtable)))
++		return 0;
++	if (left_byte && right_byte) {
++		*equal = left->val.v_tint == right->val.v_tint;
++	} else if (left_byte || right_byte) {
++		const tobj *byte = left_byte ? left : right;
++		tstr *string = (tstr *)(left_byte ? right : left)->val.v_tcompo;
++		*equal = tstring_len(string->data) == 1 &&
++			(unsigned char)tstring_cstr(string->data)[0] ==
++				byte->val.v_tint;
++	} else {
++		*equal = left->val.v_tcompo == right->val.v_tcompo ||
++			tstring_eq(((tstr *)left->val.v_tcompo)->data,
++				   ((tstr *)right->val.v_tcompo)->data);
++	}
++	return 1;
++}
++
+ static void operator_eq_slow(const tobj *v1, const tobj *v2, tobj *vre)
+ {
++	int equal;
++	if (vm_string_equal(v1, v2, &equal)) {
++		/* A stack result consumes the reference it replaces. */
++		if (vre == v1 || vre == v2)
++			tobj_ddc_ref_clear(vre);
++		vm_set_bool_result(vre, equal);
++		return;
++	}
+ 	if (vm_is_indexed_byte(v1) || vm_is_indexed_byte(v2)) {
+-		if (vm_is_indexed_byte(v1) && vm_is_indexed_byte(v2)) {
+-			vm_set_bool_result(vre, v1->val.v_tint == v2->val.v_tint);
+-			return;
+-		}
+ 		const tobj *byte_value = vm_is_indexed_byte(v1) ? v1 : v2;
+ 		const tobj *other = vm_is_indexed_byte(v1) ? v2 : v1;
+ 		char byte = (char)byte_value->val.v_tint;
+@@ -465,15 +498,6 @@
+ 		tobj_try_clear(&string);
+ 		return;
+ 	}
+-	if (v1->type == tcompo && v2->type == tcompo &&
+-	    v1->val.v_tcompo && v2->val.v_tcompo &&
+-	    v1->val.v_tcompo->vtable == &tstr_vtable &&
+-	    v2->val.v_tcompo->vtable == &tstr_vtable) {
+-		vm_set_bool_result(vre, tstring_eq(
+-			((tstr *)v1->val.v_tcompo)->data,
+-			((tstr *)v2->val.v_tcompo)->data));
+-		return;
+-	}
+ 	if (v1->type == tcompo && v1->val.v_tcompo->vtable->op_eq) {
+ 		v1->val.v_tcompo->vtable->op_eq(v1->val.v_tcompo, v2, 0, vre); return;
+ 	}
+@@ -502,11 +526,15 @@
+ 
+ static void operator_ne_slow(const tobj *v1, const tobj *v2, tobj *vre)
+ {
++	int equal;
++	if (vm_string_equal(v1, v2, &equal)) {
++		/* A stack result consumes the reference it replaces. */
++		if (vre == v1 || vre == v2)
++			tobj_ddc_ref_clear(vre);
++		vm_set_bool_result(vre, !equal);
++		return;
++	}
+ 	if (vm_is_indexed_byte(v1) || vm_is_indexed_byte(v2)) {
+-		if (vm_is_indexed_byte(v1) && vm_is_indexed_byte(v2)) {
+-			vm_set_bool_result(vre, v1->val.v_tint != v2->val.v_tint);
+-			return;
+-		}
+ 		const tobj *byte_value = vm_is_indexed_byte(v1) ? v1 : v2;
+ 		const tobj *other = vm_is_indexed_byte(v1) ? v2 : v1;
+ 		char byte = (char)byte_value->val.v_tint;
+@@ -515,15 +543,6 @@
+ 		operator_ne_slow(vm_is_indexed_byte(v1) ? &string : other,
+ 			vm_is_indexed_byte(v1) ? other : &string, vre);
+ 		tobj_try_clear(&string);
+-		return;
+-	}
+-	if (v1->type == tcompo && v2->type == tcompo &&
+-	    v1->val.v_tcompo && v2->val.v_tcompo &&
+-	    v1->val.v_tcompo->vtable == &tstr_vtable &&
+-	    v2->val.v_tcompo->vtable == &tstr_vtable) {
+-		vm_set_bool_result(vre, !tstring_eq(
+-			((tstr *)v1->val.v_tcompo)->data,
+-			((tstr *)v2->val.v_tcompo)->data));
+ 		return;
+ 	}
+ 	if (v1->type == tcompo && v1->val.v_tcompo->vtable->op_ne) {
+@@ -844,7 +863,8 @@
+ 	}
+ }
+ 
+-/* Mirrors tobj_array_set_len(array, 0) exactly (top-down release). */
++/* Inactive immediate slots own nothing and are initialized again before use.
++ * Release composites top-down without rewriting the discarded scalar slots. */
+ static inline TVM_ALWAYS_INLINE void tvm_array_clear(tobj_array *array)
+ {
+ 	while (array->len > 0) {
+@@ -852,8 +872,6 @@
+ 		tobj *slot = &array->data[array->len];
+ 		if (slot->type == tcompo)
+ 			tobj_ddc_ref_clear(slot);
+-		else
+-			tobj_set_nil(slot);
+ 	}
+ }
+ 
+@@ -1549,8 +1567,6 @@
+ 		tobj *slot = &array->data[--array->len];
+ 		if (slot->type == tcompo)
+ 			tobj_ddc_ref_clear(slot);
+-		else
+-			tobj_set_nil(slot);
+ 		count--;
+ 	}
+ }
+@@ -3883,6 +3899,105 @@
+ 	return 1;
+ }
+ 
++
++/* Resolve an existing constant-string field. Cached slots are validated
++ * against the current table on every access, including after rehashing. */
++static tobj *vm_dict_field(thashtbl *items, tstr *key, tins_cache *cache)
++{
++	if (cache && cache->kind == tins_cache_idxr_dict_str &&
++	    cache->key == (tcompo_v *)key &&
++	    thashtbl_entry_value_at(items, cache->slot, (tcompo_v *)key))
++		return &items->entries[cache->slot].value;
++
++	tobj field = { .type = tcompo, .val.v_tcompo = (tcompo_v *)key };
++	uint_count slot;
++	if (!thashtbl_find(items, &field, &slot))
++		return nullptr;
++	if (cache && (cache->kind == tins_cache_empty ||
++	    (cache->kind == tins_cache_idxr_dict_str &&
++	     cache->key == (tcompo_v *)key))) {
++		cache->kind = tins_cache_idxr_dict_str;
++		cache->guard = &tdict_vtable;
++		cache->key = (tcompo_v *)key;
++		cache->slot = slot;
++	}
++	return &items->entries[slot].value;
++}
++
++/* Fuse two Dictionary field reads, numeric arithmetic, and an existing
++ * immediate field write. Guards preserve aliases, missing-field diagnostics,
++ * and composite operator hooks. Keep this less common pattern out of the
++ * main dispatch body so ordinary scalar loops do not pay for its code size. */
++static TVM_NOINLINE int vm_field_arithmetic_fused(
++		tvm *vm, tcompo_env *env, tbycode *commands,
++		uint_cmds *pc, uint_cmds end, tstr **strings,
++		tvm_code_cache *cache)
++{
++	uint_cmds start = *pc;
++	if (start + 8 >= end)
++		return 0;
++	const tbycode *code = commands + start;
++	tins operation = tbycode_ins(code[6]);
++	if ((operation != OP_ADD && operation != OP_SUB &&
++	     operation != OP_MUL && operation != OP_DIV) ||
++	    tbycode_binop_named(code[6]) ||
++	    tbycode_get_L(code[6]) != 0 || tbycode_get_R(code[6]) != 1)
++		return 0;
++	if (tbycode_ins(code[8]) != OP_IDXL ||
++	    tbycode_get_b(code[8]) != 1 ||
++	    tbycode_ins(code[7]) != OP_PUSHS ||
++	    tbycode_ins(code[1]) != OP_PUSHX ||
++	    tbycode_ins(code[3]) != OP_PUSHS ||
++	    tbycode_ins(code[4]) != OP_PUSHX)
++		return 0;
++	for (unsigned offset = 2; offset <= 5; offset += 3) {
++		tbycode read = code[offset];
++		if (tbycode_ins(read) != OP_IDXR ||
++		    tbycode_idxr_named(read) ||
++		    tbycode_idxr_count(read) != 1 || tbycode_idxr_slice(read))
++			return 0;
++	}
++	tobj operands[2];
++	for (unsigned operand = 0; operand < 2; operand++) {
++		unsigned offset = operand * 3;
++		const tobj *receiver = vm_pushx_source(vm, env,
++			tbycode_get_L(code[offset + 1]),
++			tbycode_get_R(code[offset + 1]));
++		if (receiver->type != tcompo || !receiver->val.v_tcompo ||
++		    receiver->val.v_tcompo->vtable != &tdict_vtable)
++			return 0;
++		tobj *value = vm_dict_field(
++			((tdict *)receiver->val.v_tcompo)->items,
++			strings[tbycode_get_U(code[offset])],
++			tvm_instruction_cache(cache, start + offset + 2));
++		if (!value || (value->type != tint && value->type != tfloat))
++			return 0;
++		operands[operand] = *value;
++	}
++	tobj *receiver = tbycode_get_i(code[8]) ?
++		tcompo_env_get_obj(env, tbycode_get_L(code[8])) :
++		tmp_obj(vm, tbycode_get_L(code[8]));
++	if (receiver->type != tcompo || !receiver->val.v_tcompo ||
++	    receiver->val.v_tcompo->vtable != &tdict_vtable)
++		return 0;
++	tobj *destination = vm_dict_field(
++		((tdict *)receiver->val.v_tcompo)->items,
++		strings[tbycode_get_U(code[7])],
++		tvm_instruction_cache(cache, start + 8));
++	if (!destination || destination->type == tcompo)
++		return 0;
++	/* The top stack operand is the left operand in Tapas bytecode. Keep
++	 * integer division errors at their original diagnostic instruction. */
++	if (operation == OP_DIV && operands[1].type == tint &&
++	    operands[0].type == tint && operands[0].val.v_tint == 0)
++		return 0;
++	tobj result;
++	if (!vm_binop_fast(operation, &operands[1], &operands[0], &result))
++		return 0;
++	*destination = result;
++	*pc = vm_fused_next(commands, end, start + 9);
++	return 1;
++}
+ 
+ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
+ {
+@@ -4924,6 +5039,10 @@
+ 		}
+ 		VM_NEXT();
+ 		VM_CASE(OP_PUSHS): {
++			if (i + 8 < end && tbycode_ins(cmdarr[i + 8]) == OP_IDXL &&
++			    vm_field_arithmetic_fused(vm, env, cmdarr, &i, end,
++						      csobjs, &code_cache))
++				VM_NEXT();
+ 			/* `obj::field` / `obj['field']` 读取：常量字符串键 +
+ 			 * 槽位接收者 + IDXR。字典实例直接探测，键的内弦对象
+ 			 * 指针配合 IDXR 的槽位缓存免去了逐字符比较。 */
+--- a/src/runtime/tval.c
++++ b/src/runtime/tval.c
+@@ -90,6 +90,12 @@
+ {
+ 	if (dst == src)
+ 		return;
++	/* Immediate values own no references. Preserve the complete value,
++	 * including the name metadata, without clearing and rebuilding it. */
++	if (dst->type != tcompo && src->type != tcompo) {
++		*dst = *src;
++		return;
++	}
+ 	if (src->type == tcompo && src->val.v_tcompo) {
+ 		if (dst->type == tcompo && dst->val.v_tcompo == src->val.v_tcompo)
+ 			return;

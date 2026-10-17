@@ -1,23 +1,6 @@
-function find_min(nodes)
+function frequency_less(a, b)
 {
-    let best = -1
-    for (let i in 0 to nodes.len()) {
-        if (best < 0 or nodes[i][0] < nodes[best][0]) {
-            best = i
-        }
-    }
-    return best + 0
-}
-
-function remove_at(nodes, index)
-{
-    let rest = []
-    for (let i in 0 to nodes.len()) {
-        if (i != index) {
-            rest.append(nodes[i])
-        }
-    }
-    return rest.copy()
+    return a[0] < b[0]
 }
 
 function total_length(node, depth)
@@ -36,7 +19,7 @@ function huffman_total(text)
         freq[ch] = idx_or(freq, ch, 0) + 1
     }
 
-    // Fixed symbol order makes ties in the minimum scan deterministic.
+    // Fixed symbol order keeps initial heap entries reproducible.
     let nodes = []
     for (let i in 0 to 8) {
         let ch = 'abcdefgh'[i]
@@ -45,14 +28,11 @@ function huffman_total(text)
         }
     }
 
+    heap::heapify(nodes, frequency_less)
     while (nodes.len() > 1) {
-        let first = find_min(nodes)
-        let left = nodes[first]
-        nodes = remove_at(nodes, first)
-        let second = find_min(nodes)
-        let right = nodes[second]
-        nodes = remove_at(nodes, second)
-        nodes.append((left[0] + right[0]) : (left : right))
+        let left = heap::pop(nodes, frequency_less)
+        let right = heap::pop(nodes, frequency_less)
+        heap::push(nodes, (left[0] + right[0]) : (left : right), frequency_less)
     }
 
     return total_length(nodes[0], 0) + 0

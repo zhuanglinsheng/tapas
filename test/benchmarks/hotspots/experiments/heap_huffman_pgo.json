@@ -1,0 +1,204 @@
+{
+  "date": "2026-10-17T08:59:38.236076+00:00",
+  "runtime": {
+    "path": "/Users/zhuanglinsheng/Documents/Github/tapas/build-pgo/bin/tapas",
+    "sha256": "a5d555feb721378bdcc366e58e42b7ea2ceb07c282a7a9fd21e95253a04ca79e",
+    "version": "Tapas 0.1.0 Copyright (C) 2020-2026",
+    "build_config": [
+      "CMAKE_BUILD_TYPE:STRING=Release",
+      "CMAKE_C_COMPILER:FILEPATH=/usr/bin/cc",
+      "CMAKE_C_FLAGS:STRING=-flto=full -fprofile-instr-use=/Users/zhuanglinsheng/Documents/Github/tapas/build-pgo/profile/hotspots.profdata",
+      "CMAKE_C_FLAGS_RELEASE:STRING=-O3 -DNDEBUG",
+      "CMAKE_EXE_LINKER_FLAGS:STRING=",
+      "TAPAS_ENABLE_IPO:BOOL=OFF"
+    ]
+  },
+  "sources": {
+    "baseline": {
+      "path": "/private/tmp/tapas-heap-ab/huffman.tap",
+      "sha256": "2b11326fc41789a06ded6bdf77df3457525aa34515fc086081430d5fa63e1ffa",
+      "source": "function find_min(nodes)\n{\n    let best = -1\n    for (let i in 0 to nodes.len()) {\n        if (best < 0 or nodes[i][0] < nodes[best][0]) {\n            best = i\n        }\n    }\n    return best + 0\n}\n\nfunction total_length(node, depth)\n{\n    if (types::matches(node[1], types::String)) {\n        return node[0] * depth\n    }\n    let children = node[1]\n    return this(children[0], depth + 1) + this(children[1], depth + 1)\n}\n\nfunction huffman_total(text)\n{\n    let freq = {}\n    for (let ch in text) {\n        freq[ch] = idx_or(freq, ch, 0) + 1\n    }\n\n    // Fixed symbol order makes ties in the minimum scan deterministic.\n    let nodes = []\n    for (let i in 0 to 8) {\n        let ch = 'abcdefgh'[i]\n        if (ch in freq) {\n            nodes.append(freq[ch] : ch)\n        }\n    }\n\n    while (nodes.len() > 1) {\n        let first = find_min(nodes)\n        let left = nodes[first]\n        delete(nodes, first)\n        let second = find_min(nodes)\n        let right = nodes[second]\n        delete(nodes, second)\n        nodes.append((left[0] + right[0]) : (left : right))\n    }\n\n    return total_length(nodes[0], 0) + 0\n}\n\nlet chars = []\nlet seed = 42\nfor (let index in 0 to 40000) {\n    seed = (seed * 1103515245 + 12345) % 2147483648\n    chars.append('abcdefgh'[seed % 8])\n}\nlet text = join(chars, '')\n\nlet started = clock_ns()\nlet result = huffman_total(text)\nlet elapsed = clock_ns() - started\n\nprint(result)\nprint(elapsed)\n"
+    },
+    "candidate": {
+      "path": "/Users/zhuanglinsheng/Documents/Github/tapas/test/benchmarks/huffman.tap",
+      "sha256": "6010a85db62d33ce6346cc9e3370596bfd86f3067f36ff146a64f99d227c22a7",
+      "source": "function frequency_less(a, b)\n{\n    return a[0] < b[0]\n}\n\nfunction total_length(node, depth)\n{\n    if (types::matches(node[1], types::String)) {\n        return node[0] * depth\n    }\n    let children = node[1]\n    return this(children[0], depth + 1) + this(children[1], depth + 1)\n}\n\nfunction huffman_total(text)\n{\n    let freq = {}\n    for (let ch in text) {\n        freq[ch] = idx_or(freq, ch, 0) + 1\n    }\n\n    // Fixed symbol order keeps initial heap entries reproducible.\n    let nodes = []\n    for (let i in 0 to 8) {\n        let ch = 'abcdefgh'[i]\n        if (ch in freq) {\n            nodes.append(freq[ch] : ch)\n        }\n    }\n\n    heap::heapify(nodes, frequency_less)\n    while (nodes.len() > 1) {\n        let left = heap::pop(nodes, frequency_less)\n        let right = heap::pop(nodes, frequency_less)\n        heap::push(nodes, (left[0] + right[0]) : (left : right), frequency_less)\n    }\n\n    return total_length(nodes[0], 0) + 0\n}\n\nlet chars = []\nlet seed = 42\nfor (let index in 0 to 40000) {\n    seed = (seed * 1103515245 + 12345) % 2147483648\n    chars.append('abcdefgh'[seed % 8])\n}\nlet text = join(chars, '')\n\nlet started = clock_ns()\nlet result = huffman_total(text)\nlet elapsed = clock_ns() - started\n\nprint(result)\nprint(elapsed)\n"
+    }
+  },
+  "checksum": 120000,
+  "runs": 9,
+  "rounds": [
+    {
+      "samples_ns": {
+        "baseline": [
+          1994000,
+          1944000,
+          2043000,
+          1974000,
+          2088000,
+          1996000,
+          2038000,
+          2008000,
+          2048000
+        ],
+        "candidate": [
+          1954000,
+          2020000,
+          1941000,
+          2024000,
+          1970000,
+          2026000,
+          1985000,
+          1976000,
+          1975000
+        ]
+      },
+      "baseline_median_ns": 2008000,
+      "candidate_median_ns": 1976000,
+      "paired_ratio_median": 0.9799398194583752,
+      "paired_ratio_iqr": [
+        0.9572144450945301,
+        1.0201796703843349
+      ]
+    },
+    {
+      "samples_ns": {
+        "baseline": [
+          1996000,
+          2007000,
+          1993000,
+          1976000,
+          2048000,
+          1980000,
+          2042000,
+          1977000,
+          2094000
+        ],
+        "candidate": [
+          1976000,
+          2022000,
+          1944000,
+          2027000,
+          1987000,
+          2061000,
+          1937000,
+          2125000,
+          1993000
+        ]
+      },
+      "baseline_median_ns": 1996000,
+      "candidate_median_ns": 1993000,
+      "paired_ratio_median": 0.9899799599198397,
+      "paired_ratio_iqr": [
+        0.960990898474809,
+        1.0333594037541407
+      ]
+    },
+    {
+      "samples_ns": {
+        "baseline": [
+          2082000,
+          1998000,
+          2038000,
+          2059000,
+          2012000,
+          1996000,
+          2008000,
+          2137000,
+          2205000
+        ],
+        "candidate": [
+          2024000,
+          2124000,
+          2031000,
+          2044000,
+          2081000,
+          2077000,
+          2059000,
+          2048000,
+          2239000
+        ]
+      },
+      "baseline_median_ns": 2038000,
+      "candidate_median_ns": 2059000,
+      "paired_ratio_median": 1.0154195011337868,
+      "paired_ratio_iqr": [
+        0.982428540569996,
+        1.0374376984585472
+      ]
+    }
+  ],
+  "warmups_per_round": 1,
+  "round_ratio_medians": [
+    0.9799398194583752,
+    0.9899799599198397,
+    1.0154195011337868
+  ],
+  "samples_ns": {
+    "baseline": [
+      1994000,
+      1944000,
+      2043000,
+      1974000,
+      2088000,
+      1996000,
+      2038000,
+      2008000,
+      2048000,
+      1996000,
+      2007000,
+      1993000,
+      1976000,
+      2048000,
+      1980000,
+      2042000,
+      1977000,
+      2094000,
+      2082000,
+      1998000,
+      2038000,
+      2059000,
+      2012000,
+      1996000,
+      2008000,
+      2137000,
+      2205000
+    ],
+    "candidate": [
+      1954000,
+      2020000,
+      1941000,
+      2024000,
+      1970000,
+      2026000,
+      1985000,
+      1976000,
+      1975000,
+      1976000,
+      2022000,
+      1944000,
+      2027000,
+      1987000,
+      2061000,
+      1937000,
+      2125000,
+      1993000,
+      2024000,
+      2124000,
+      2031000,
+      2044000,
+      2081000,
+      2077000,
+      2059000,
+      2048000,
+      2239000
+    ]
+  },
+  "baseline_median_ns": 2008000,
+  "candidate_median_ns": 2024000,
+  "paired_ratio_median": 0.9927149101505586,
+  "paired_ratio_iqr": [
+    0.97021484375,
+    1.0258097165991902
+  ]
+}

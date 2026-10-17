@@ -8,5 +8,6 @@ end
 local started = os.clock()
 local result = fibonacci(24)
 
+local elapsed = math.floor((os.clock() - started) * 1e9 + 0.5)
 print(result)
-print(math.floor((os.clock() - started) * 1e9 + 0.5))
+print(elapsed)

@@ -1,26 +1,20 @@
 import time
+from heapq import heappop, heappush
 
 
 def dijkstra(graph, source, size):
     dist = [1000000000000] * size
-    visited = [False] * size
     dist[source] = 0
-    for step in range(size):
-        best = -1
-        best_dist = 1000000000000
-        for i in range(size):
-            if not visited[i] and dist[i] < best_dist:
-                best = i
-                best_dist = dist[i]
-        if best < 0:
-            break
-        visited[best] = True
-        if best in graph:
-            for edge in graph[best]:
-                target = edge[0]
-                alt = dist[best] + edge[1]
-                if alt < dist[target]:
-                    dist[target] = alt
+    queue = [(0, source)]
+    while queue:
+        distance, vertex = heappop(queue)
+        if distance != dist[vertex]:
+            continue
+        for target, weight in graph.get(vertex, ()):
+            alternative = distance + weight
+            if alternative < dist[target]:
+                dist[target] = alternative
+                heappush(queue, (alternative, target))
     return dist
 
 
@@ -38,14 +32,18 @@ for i in range(size):
 sources = [0, size // 4, size // 2, size * 3 // 4]
 rounds = 4
 
-started = time.process_time_ns()
-checksum = 0
-for round in range(rounds):
-    for s in range(len(sources)):
-        dist = dijkstra(graph, sources[s], size)
-        for i in range(size):
-            checksum += dist[i]
-elapsed = time.process_time_ns() - started
+def bench():
+    started = time.process_time_ns()
+    checksum = 0
+    for round in range(rounds):
+        for s in range(len(sources)):
+            dist = dijkstra(graph, sources[s], size)
+            checksum += sum(dist)
+    elapsed = time.process_time_ns() - started
 
-print(checksum)
-print(elapsed)
+    print(checksum)
+    print(elapsed)
+
+
+if __name__ == "__main__":
+    bench()

@@ -2,33 +2,24 @@ import time
 
 
 def solve_board(grid):
-    index = 0
-    while index < 81:
-        if grid[index] == 0:
-            row = (index // 9) * 9
-            column = index % 9
-            box = (index // 27) * 27 + (column // 3) * 3
-            digit = 1
-            while digit < 10:
-                valid = True
-                k = 0
-                while k < 9:
-                    if grid[row + k] == digit or grid[column + k * 9] == digit:
-                        valid = False
-                        break
-                    if grid[box + (k // 3) * 9 + k % 3] == digit:
-                        valid = False
-                        break
-                    k += 1
-                if valid:
-                    grid[index] = digit
-                    if solve_board(grid):
-                        return True
-                digit += 1
-            grid[index] = 0
-            return False
-        index += 1
-    return True
+    try:
+        index = grid.index(0)
+    except ValueError:
+        return True
+    row = (index // 9) * 9
+    column = index % 9
+    box = (index // 27) * 27 + (column // 3) * 3
+    for digit in range(1, 10):
+        for k in range(9):
+            if (grid[row + k] == digit or grid[column + k * 9] == digit or
+                    grid[box + (k // 3) * 9 + k % 3] == digit):
+                break
+        else:
+            grid[index] = digit
+            if solve_board(grid):
+                return True
+    grid[index] = 0
+    return False
 
 
 puzzle = [
@@ -44,18 +35,21 @@ puzzle = [
 ]
 repetitions = 10
 
-started = time.process_time_ns()
-checksum = -1
-for round in range(repetitions):
-    board = puzzle.copy()
-    solved = solve_board(board)
-    if not solved:
-        checksum = -1
-        break
-    checksum = 0
-    for index in range(81):
-        checksum += board[index] * (index + 1)
-elapsed = time.process_time_ns() - started
+def bench():
+    started = time.process_time_ns()
+    checksum = -1
+    for round in range(repetitions):
+        board = puzzle.copy()
+        solved = solve_board(board)
+        if not solved:
+            checksum = -1
+            break
+        checksum = sum(value * index for index, value in enumerate(board, 1))
+    elapsed = time.process_time_ns() - started
 
-print(checksum)
-print(elapsed)
+    print(checksum)
+    print(elapsed)
+
+
+if __name__ == "__main__":
+    bench()

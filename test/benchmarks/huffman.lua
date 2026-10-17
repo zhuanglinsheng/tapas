@@ -1,20 +1,18 @@
+local sub = string.sub
+
 local SYMBOLS = "abcdefgh"
 
 local function huffman_total(text)
     local freq = {}
     for i = 1, #text do
-        local ch = string.sub(text, i, i)
-        if freq[ch] then
-            freq[ch] = freq[ch] + 1
-        else
-            freq[ch] = 1
-        end
+        local ch = sub(text, i, i)
+        freq[ch] = (freq[ch] or 0) + 1
     end
 
     -- Fixed symbol order makes ties in the minimum scan deterministic.
     local nodes = {}
     for i = 1, 8 do
-        local ch = string.sub(SYMBOLS, i, i)
+        local ch = sub(SYMBOLS, i, i)
         if freq[ch] then
             nodes[#nodes + 1] = { freq[ch], ch }
         end
@@ -53,7 +51,7 @@ local seed = 42
 local chars = {}
 for _ = 1, 40000 do
     seed = (seed * 1103515245 + 12345) % 2147483648
-    chars[#chars + 1] = string.sub(SYMBOLS, seed % 8 + 1, seed % 8 + 1)
+    chars[#chars + 1] = sub(SYMBOLS, seed % 8 + 1, seed % 8 + 1)
 end
 local text = table.concat(chars)
 

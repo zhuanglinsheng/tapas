@@ -1,0 +1,568 @@
+diff --git a/src/runtime/tvm.c b/src/runtime/tvm.c
+index 2c8f568..39416fb 100644
+--- a/src/runtime/tvm.c
++++ b/src/runtime/tvm.c
+@@ -89,8 +89,10 @@ static inline void vm_set_bool_result(tobj *value, int result)
+ 
+ #if defined(__GNUC__) || defined(__clang__)
+ #define TVM_ALWAYS_INLINE __attribute__((always_inline))
++#define TVM_NOINLINE __attribute__((noinline))
+ #else
+ #define TVM_ALWAYS_INLINE
++#define TVM_NOINLINE
+ #endif
+ 
+ #define DEF_ALGO(fn_name, fll, fld, fdl, fdd)                                  \
+@@ -629,9 +631,18 @@ typedef enum {
+ 	tins_cache_polymorphic
+ } tins_cache_kind;
+ 
++typedef enum {
++	tins_field_unseen,
++	tins_field_plain,
++	tins_field_numeric
++} tins_field_fusion;
++
+ typedef struct {
+ 	tcompo_vtable *guard;
+-	uint_cmds state_slot;
++	union {
++		uint_cmds state_slot;  /* loop instructions */
++		uint8_t field_fusion;  /* constant-string IDXR instructions */
++	};
+ 	uint8_t kind;
+ 	const tcompo_v *key;   /* dict_str: the interned key object */
+ 	uint_count slot;       /* dict_str: learned entry slot */
+@@ -3884,6 +3895,142 @@ static inline TVM_ALWAYS_INLINE int vm_native_call_fused(
+ }
+ 
+ 
++/* Resolve an existing constant-string field. Cached slots are validated
++ * against the current table on every access, including after rehashing. */
++static tobj *vm_dict_field(thashtbl *items, tstr *key, tins_cache *cache)
++{
++	if (cache && cache->kind == tins_cache_idxr_dict_str &&
++	    cache->key == (tcompo_v *)key &&
++	    thashtbl_entry_value_at(items, cache->slot, (tcompo_v *)key))
++		return &items->entries[cache->slot].value;
++
++	tobj field = { .type = tcompo, .val.v_tcompo = (tcompo_v *)key };
++	uint_count slot;
++	if (!thashtbl_find(items, &field, &slot))
++		return nullptr;
++	if (cache && (cache->kind == tins_cache_empty ||
++	    (cache->kind == tins_cache_idxr_dict_str &&
++	     cache->key == (tcompo_v *)key))) {
++		cache->kind = tins_cache_idxr_dict_str;
++		cache->guard = &tdict_vtable;
++		cache->key = (tcompo_v *)key;
++		cache->slot = slot;
++	}
++	return &items->entries[slot].value;
++}
++
++/* Fuse two Dictionary field reads, numeric arithmetic, and an existing
++ * immediate field write. Guards preserve aliases, missing-field diagnostics,
++ * and composite operator hooks. Decode the pattern out of line so its
++ * temporary values do not compete with the main dispatch registers. */
++static TVM_NOINLINE int vm_field_arithmetic_fused(
++		tvm *vm, tcompo_env *env, const twrapper *wrapper,
++		tins_cache *entries, uint_cmds *pc, uint_cmds end)
++{
++	tvm_code_cache local_cache = {
++		.wrapper = wrapper, .entries = entries,
++		.entry_count = wrapper->ncmds
++	};
++	tvm_code_cache *cache = &local_cache;
++	tbycode *commands = wrapper->cmdarr;
++	tstr **strings = wrapper->consts.csobjs;
++	uint_cmds start = *pc;
++	if (start + 8 >= end)
++		return 0;
++	const tbycode *code = commands + start;
++	tins operation = tbycode_ins(code[6]);
++	tins_cache *shape = tvm_instruction_cache(cache, start + 2);
++	/* Bytecode is immutable; learn its shape once. Receiver, numeric,
++	 * and table-slot guards below still run on every execution. */
++	if (!shape || shape->field_fusion != tins_field_numeric) {
++		if ((operation != OP_ADD && operation != OP_SUB &&
++		     operation != OP_MUL && operation != OP_DIV) ||
++		    tbycode_binop_named(code[6]) ||
++		    tbycode_get_L(code[6]) != 0 || tbycode_get_R(code[6]) != 1)
++			goto plain_field;
++		if (tbycode_ins(code[8]) != OP_IDXL ||
++		    tbycode_get_b(code[8]) != 1 ||
++		    tbycode_ins(code[7]) != OP_PUSHS ||
++		    tbycode_ins(code[1]) != OP_PUSHX ||
++		    tbycode_ins(code[3]) != OP_PUSHS ||
++		    tbycode_ins(code[4]) != OP_PUSHX)
++			goto plain_field;
++		for (unsigned offset = 2; offset <= 5; offset += 3) {
++			tbycode read = code[offset];
++			if (tbycode_ins(read) != OP_IDXR ||
++			    tbycode_idxr_named(read) ||
++			    tbycode_idxr_count(read) != 1 || tbycode_idxr_slice(read))
++				goto plain_field;
++		}
++		if (shape)
++			shape->field_fusion = tins_field_numeric;
++	}
++
++	tobj operands[2];
++	for (unsigned operand = 0; operand < 2; operand++) {
++		unsigned offset = operand * 3;
++		tbycode load = code[offset + 1];
++		uint16_t address = tbycode_get_R(load);
++		tcompo_env_abstract *owner = &env->base;
++		if (tpushx_isenv(address) && tpushx_is_upval(address)) {
++			for (uint16_t depth = tpushx_depth(address); depth; depth--) {
++				if (!owner->father_env)
++					return 0;
++				owner = owner->father_env;
++			}
++		}
++		tobj_array *slots = tpushx_isenv(address) ? &owner->objs : &vm->tmps;
++		uint_objs slot = tbycode_get_L(load);
++		/* Speculation must not raise an error at an earlier instruction. */
++		if (slot >= slots->len)
++			return 0;
++		const tobj *receiver = &slots->data[slot];
++		if (receiver->type != tcompo || !receiver->val.v_tcompo ||
++		    receiver->val.v_tcompo->vtable != &tdict_vtable)
++			return 0;
++		tobj *value = vm_dict_field(
++			((tdict *)receiver->val.v_tcompo)->items,
++			strings[tbycode_get_U(code[offset])],
++			tvm_instruction_cache(cache, start + offset + 2));
++		if (!value || (value->type != tint && value->type != tfloat))
++			return 0;
++		operands[operand] = *value;
++	}
++	tobj_array *slots = tbycode_get_i(code[8]) ? &env->base.objs : &vm->tmps;
++	uint_objs slot = tbycode_get_L(code[8]);
++	/* Parent-environment destinations keep their normal lookup path. */
++	if (slot >= slots->len)
++		return 0;
++	tobj *receiver = &slots->data[slot];
++	if (receiver->type != tcompo || !receiver->val.v_tcompo ||
++	    receiver->val.v_tcompo->vtable != &tdict_vtable)
++		return 0;
++	tobj *destination = vm_dict_field(
++		((tdict *)receiver->val.v_tcompo)->items,
++		strings[tbycode_get_U(code[7])],
++		tvm_instruction_cache(cache, start + 8));
++	if (!destination || destination->type == tcompo)
++		return 0;
++	/* The top stack operand is the left operand in Tapas bytecode. Keep
++	 * integer division errors at their original diagnostic instruction. */
++	if (operation == OP_DIV && operands[1].type == tint &&
++	    operands[0].type == tint && operands[0].val.v_tint == 0)
++		return 0;
++	tobj result;
++	if (!vm_binop_fast(operation, &operands[1], &operands[0], &result))
++		return 0;
++	*destination = result;
++	*pc = vm_fused_next(commands, end, start + 9);
++	return 1;
++
++plain_field:
++	/* A static mismatch is permanent; ordinary field reads need not fetch
++	 * and decode the following instructions on every loop iteration. */
++	if (shape)
++		shape->field_fusion = tins_field_plain;
++	return 0;
++}
++
+ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
+ {
+ 	twrapper *wrapper = tfunc_get_wrapper_from_env(env);
+@@ -3922,7 +4069,18 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
+ #define TAPAS_VM_THREADED 1
+ #define VM_CASE(op) vm_lbl_##op
+ #define VM_DEFAULT vm_lbl_invalid
+-#define VM_NEXT() goto vm_advance
++/* Keep the indirect dispatch at each completed operation. The unique
++ * empty asm input prevents the compiler from folding all sites into one
++ * branch; it emits no machine instruction. Guarded paths within one
++ * opcode share its vm_done_* exit to limit duplicated dispatch code. */
++#define VM_NEXT() do {                                                       \
++		if (++i >= end)                                              \
++			goto dispatch;                                       \
++		iter = &cmdarr[i];                                           \
++		const void *next = vm_dispatch_table[tbycode_ins(*iter)];    \
++		__asm__ volatile("" : : "r"(next), "i"(__COUNTER__));        \
++		goto *next;                                                  \
++	} while (0)
+ #define VM_SWITCH_BEGIN goto *vm_dispatch_table[tbycode_ins(*iter)];
+ #define VM_SWITCH_END
+ #else
+@@ -4088,7 +4246,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
+ 							slots->data[dloc] = result;
+ 							i = vm_fused_next(cmdarr, end,
+ 									  i + 4);
+-							VM_NEXT();
++							goto vm_done_vcrt;
+ 						}
+ 					}
+ 				}
+@@ -4129,11 +4287,12 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
+ 							      "OP_POPCOV", "");
+ 						i = vm_fused_next(cmdarr, end,
+ 								  i + 4);
+-						VM_NEXT();
++						goto vm_done_vcrt;
+ 					}
+ 				}
+ 			}
+ 		}
++		vm_done_vcrt:
+ 		VM_NEXT();
+ 		VM_CASE(OP_TMPDEL):
+ 			vm_del_slots(&vm->tmps, (uint_objs)tbycode_get_U(*iter));
+@@ -4353,12 +4512,12 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
+ 					}
+ 					if (has_next) {
+ 						i++;
+-						VM_NEXT();
++						goto vm_done_loopas;
+ 					}
+ 					state->pos = 0;
+ 					state->iterator_slot = nullptr;
+ 					i += 1u + tbycode_get_U(cmdarr[i + 1]);
+-					VM_NEXT();
++					goto vm_done_loopas;
+ 				}
+ 			}
+ 			vm_loopas(vm,
+@@ -4366,6 +4525,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
+ 				  tbycode_get_L(*iter),
+ 				  tbycode_get_R(*iter),
+ 				  env);
++		vm_done_loopas:
+ 			VM_NEXT();
+ 		}
+ 		VM_CASE(OP_LOOPRANGE): {
+@@ -4381,9 +4541,10 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
+ 					i++;
+ 				else
+ 					i += 1u + tbycode_get_U(cmdarr[i + 1]);
+-				VM_NEXT();
++				goto vm_done_looprange;
+ 			}
+ 			vm_loop_push_cond(vm, has_next);
++		vm_done_looprange:
+ 			VM_NEXT();
+ 		}
+ 		VM_CASE(OP_JPF):
+@@ -4449,7 +4610,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
+ 						vm_slot_move(dslot, src);
+ 					}
+ 					i = vm_fused_next(cmdarr, end, i + 2);
+-					VM_NEXT();
++					goto vm_done_pushx;
+ 				}
+ 			} else if (store_kind == OP_VCRT &&
+ 				   (tbycode_get_R(cmdarr[i + 1]) &
+@@ -4466,7 +4627,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
+ 				vm_retain(src);
+ 				slots->data[slots->len - 1] = *src;
+ 				i = vm_fused_next(cmdarr, end, i + 2);
+-				VM_NEXT();
++				goto vm_done_pushx;
+ 			}
+ 
+ 			} else if (f1 == OP_PUSHX) {
+@@ -4506,7 +4667,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
+ 							key, src);
+ 						i = vm_fused_next(cmdarr, end,
+ 								  i + 3);
+-						VM_NEXT();
++						goto vm_done_pushx;
+ 					}
+ 					if (arr->vtable == &tlist_vtable) {
+ 						tlist *list = (tlist *)arr;
+@@ -4532,7 +4693,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
+ 								src);
+ 						i = vm_fused_next(cmdarr, end,
+ 								  i + 3);
+-						VM_NEXT();
++						goto vm_done_pushx;
+ 					}
+ 				}
+ 			}
+@@ -4577,7 +4738,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
+ 						vm_consume_popcov(vm, env,
+ 								  cmdarr, &i,
+ 								  end);
+-						VM_NEXT();
++						goto vm_done_pushx;
+ 					}
+ 				}
+ 			}
+@@ -4649,7 +4810,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
+ 							i + 5u + (uint_cmds)tbycode_get_U(jump));
+ 					else
+ 						i += 4;
+-					VM_NEXT();
++					goto vm_done_pushx;
+ 				}
+ 			}
+ 
+@@ -4668,7 +4829,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
+ 				if (fused == 2)
+ 					goto make_call;
+ 				if (fused)
+-					VM_NEXT();
++					goto vm_done_pushx;
+ 			}
+ 
+ 			} else if (f1 == OP_IDXR &&
+@@ -4683,7 +4844,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
+ 				if (fused == 2)
+ 					goto make_call;
+ 				if (fused)
+-					VM_NEXT();
++					goto vm_done_pushx;
+ 			}
+ 			} else if (f1 == OP_IDXL) {
+ 			/* `recv[key] = value` with the value already on the
+@@ -4710,7 +4871,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
+ 						stk_popc(vm);
+ 						i = vm_fused_next(cmdarr, end,
+ 								  i + 2);
+-						VM_NEXT();
++						goto vm_done_pushx;
+ 					}
+ 					if (arr->vtable == &tlist_vtable) {
+ 						tlist *list = (tlist *)arr;
+@@ -4728,7 +4889,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
+ 						stk_popc(vm);
+ 						i = vm_fused_next(cmdarr, end,
+ 								  i + 2);
+-						VM_NEXT();
++						goto vm_done_pushx;
+ 					}
+ 				}
+ 			}
+@@ -4738,7 +4899,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
+ 			 * slot` accumulate-into-slot resolve without stack
+ 			 * traffic. */
+ 			if (vm_cmp_branch_fused(vm, env, cmdarr, &i, end, src)) {
+-				VM_NEXT();
++				goto vm_done_pushx;
+ 			}
+ 			{
+ 				tobj call_params[VM_NATIVE_FUSED_MAX_PARAMS];
+@@ -4748,7 +4909,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
+ 				if (fused == 2)
+ 					goto make_call;
+ 				if (fused)
+-					VM_NEXT();
++					goto vm_done_pushx;
+ 			}
+ 
+ 			if (i + 1 < end &&
+@@ -4756,7 +4917,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
+ 				i++;
+ 				vm_consume_cjpop(vm, cmdarr, &i, end);
+ 				vm_consume_popcov(vm, env, cmdarr, &i, end);
+-				VM_NEXT();
++				goto vm_done_pushx;
+ 			}
+ 
+ 			} else if (f1 == OP_IDXR) {
+@@ -4769,7 +4930,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
+ 						vm, src, cmdarr[i],
+ 						tvm_instruction_cache(
+ 							&code_cache, i));
+-				VM_NEXT();
++				goto vm_done_pushx;
+ 			}
+ 
+ 			} else {
+@@ -4792,6 +4953,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
+ 				src->val.v_tcompo->refctr++;
+ 			vm->stklen++;
+ 		}
++		vm_done_pushx:
+ 		VM_NEXT();
+ 		VM_CASE(OP_PUSHI): {
+ 			long value = tbycode_pushi_is_immediate(*iter) ?
+@@ -4806,7 +4968,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
+ 				 * <op> const` 累加落槽，均无栈往返。 */
+ 				if (vm_cmp_branch_fused(vm, env, cmdarr, &i,
+ 							end, &cst))
+-					VM_NEXT();
++					goto vm_done_pushi;
+ 				{
+ 					tobj call_params[VM_NATIVE_FUSED_MAX_PARAMS];
+ 					int fused = vm_arith_named_fused(
+@@ -4815,7 +4977,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
+ 					if (fused == 2)
+ 						goto make_call;
+ 					if (fused)
+-						VM_NEXT();
++						goto vm_done_pushi;
+ 				}
+ 			} else if (f1 == OP_IDXR &&
+ 			    tbycode_idxr_named(cmdarr[i + 1]) &&
+@@ -4890,7 +5052,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
+ 						vm_consume_popcov(vm, env,
+ 								  cmdarr, &i,
+ 								  end);
+-						VM_NEXT();
++						goto vm_done_pushi;
+ 					}
+ 				}
+ 			} else {
+@@ -4901,13 +5063,14 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
+ 				if (fused == 2)
+ 					goto make_call;
+ 				if (fused)
+-					VM_NEXT();
++					goto vm_done_pushi;
+ 			}
+ 			tobj v;
+ 			tobj_set_nil(&v);
+ 			vm_set_int_result(&v, value);
+ 			stk_push(vm, &v);
+ 		}
++		vm_done_pushi:
+ 		VM_NEXT();
+ 		VM_CASE(OP_PUSHFLT): {
+ 			tobj v;
+@@ -4955,6 +5118,11 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
+ 							items, gcache->slot,
+ 							key.val.v_tcompo);
+ 					if (value) {
++						if (gcache->field_fusion != tins_field_plain &&
++						    vm_field_arithmetic_fused(
++							    vm, env, wrapper, code_cache.entries,
++							    &i, end))
++							goto vm_done_pushs;
+ 						/* 内弦键指针直中：内联返回。 */
+ 						tobj *dest = stk_free(vm);
+ 						*dest = *value;
+@@ -4968,7 +5136,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
+ 						vm_consume_popcov(vm, env,
+ 								  cmdarr, &i,
+ 								  end);
+-						VM_NEXT();
++						goto vm_done_pushs;
+ 					}
+ 					vm_idxr_value(vm, recv->val.v_tcompo, &key, 1,
+ 						tbycode_idxr_compare(idxr), 0,
+@@ -4983,7 +5151,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
+ 					 * 紧随的条件跳与赋值一并消费。 */
+ 					vm_consume_cjpop(vm, cmdarr, &i, end);
+ 					vm_consume_popcov(vm, env, cmdarr, &i, end);
+-					VM_NEXT();
++					goto vm_done_pushs;
+ 				}
+ 			}
+ 			tobj v;
+@@ -4995,6 +5163,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
+ 			stk_push(vm, &v);
+ 			tobj_set_nil(&v);
+ 		}
++		vm_done_pushs:
+ 		VM_NEXT();
+ 		VM_CASE(OP_PUSHDICT): {
+ 			uint_regs n = (uint_regs)tbycode_pushdict_count(*iter);
+@@ -5108,10 +5277,11 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
+ 				    vm, cmdarr, i, end,
+ 				    nparams + (direct ? 0 : 1))) {
+ 				i++;
+-				VM_NEXT();
++				goto vm_done_evalsf;
+ 			}
+ 			vm_finish_eval(vm, nparams + (direct ? 0 : 1));
+ 		}
++		vm_done_evalsf:
+ 		VM_NEXT();
+ 		VM_CASE(OP_EVALCF): {
+ 			int direct = tbycode_get_i(*iter) != 0;
+@@ -5133,10 +5303,11 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
+ 				    vm, cmdarr, i, end,
+ 				    nparams + (direct ? 0 : 1))) {
+ 				i++;
+-				VM_NEXT();
++				goto vm_done_evalcf;
+ 			}
+ 			vm_finish_eval(vm, nparams + (direct ? 0 : 1));
+ 		}
++		vm_done_evalcf:
+ 		VM_NEXT();
+ 		VM_CASE(OP_EVALTF): {
+ 			uint_regs nparams = (uint_regs)tbycode_get_U(*iter);
+@@ -5217,7 +5388,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
+ 							key, stk_at(vm, 1));
+ 					stk_popcn(vm, 2);
+ 					i = vm_fused_next(cmdarr, end, i + 1);
+-					VM_NEXT();
++					goto vm_done_idxl;
+ 				}
+ 				if (key->type == tint &&
+ 				    arr->vtable == &tlist_vtable) {
+@@ -5240,7 +5411,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
+ 							     value);
+ 					stk_popcn(vm, 2);
+ 					i = vm_fused_next(cmdarr, end, i + 1);
+-					VM_NEXT();
++					goto vm_done_idxl;
+ 				}
+ 				/* 结构成员写 `obj['field'] = ...`：内弦键配合
+ 				 * 每点槽位缓存，指针直中时内联写回。 */
+@@ -5269,7 +5440,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
+ 							stk_popcn(vm, 2);
+ 							i = vm_fused_next(cmdarr, end,
+ 									  i + 1);
+-							VM_NEXT();
++							goto vm_done_idxl;
+ 						}
+ 					}
+ 				}
+@@ -5280,6 +5451,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
+ 				isenv,
+ 				env,
+ 				tvm_instruction_cache(&code_cache, i));
++		vm_done_idxl:
+ 			VM_NEXT();
+ 		}
+ 		VM_CASE(OP_PUSHF): {
+@@ -5377,7 +5549,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
+ 			    tobj_compo_type(condition) == compo_trule_instance) {
+ 				tobj_vec_push(&vm->rule.output->items, condition);
+ 				stk_popc(vm);
+-				VM_NEXT();
++				goto vm_done_ruleimply;
+ 			}
+ 			if (tbycode_get_U(*iter) == TRULE_ANTECEDENT_RECORD) {
+ 				/* Keep the original Bool/RuleInstance available through source IR.
+@@ -5396,7 +5568,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
+ 				tobj_set_nil(&value);
+ 				tobj_set_bool(&value, truth);
+ 				stk_push(vm, &value);
+-				VM_NEXT();
++				goto vm_done_ruleimply;
+ 			}
+ 			if (condition->type != tbool)
+ 				twarn(ErrRuntime_ParamsType, "Rule condition",
+@@ -5414,6 +5586,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
+ 			tobj_try_clear(&description);
+ 			stk_popc(vm);
+ 		}
++		vm_done_ruleimply:
+ 		VM_NEXT();
+ 		VM_CASE(OP_ADD): {
+ 			VM_PARSE_BINOP(vm, operator_add, *iter, env);
+@@ -5515,9 +5688,6 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
+ 			twarn(ErrRuntime_Other, "exec_tins",
+ 			      "invalid bytecode instruction");
+ 		VM_SWITCH_END
+-#ifdef TAPAS_VM_THREADED
+-		vm_advance:
+-#endif
+ 		i++;
+ 		goto dispatch;
+ 

@@ -1,0 +1,31 @@
+--- a/src/runtime/tvm.c
++++ b/src/runtime/tvm.c
+@@ -3922,7 +3922,17 @@
+ #define TAPAS_VM_THREADED 1
+ #define VM_CASE(op) vm_lbl_##op
+ #define VM_DEFAULT vm_lbl_invalid
+-#define VM_NEXT() goto vm_advance
++/* Keep the indirect dispatch at each completed operation. The unique
++ * empty asm input prevents the compiler from folding all sites into one
++ * branch; it emits no machine instruction. */
++#define VM_NEXT() do {                                                     \
++		if (++i >= end)                                                   \
++			goto dispatch;                                           \
++		iter = &cmdarr[i];                                               \
++		const void *next = vm_dispatch_table[tbycode_ins(*iter)];          \
++		__asm__ volatile("" : : "r"(next), "i"(__COUNTER__));              \
++		goto *next;                                                      \
++	} while (0)
+ #define VM_SWITCH_BEGIN goto *vm_dispatch_table[tbycode_ins(*iter)];
+ #define VM_SWITCH_END
+ #else
+@@ -5515,9 +5525,6 @@
+ 			twarn(ErrRuntime_Other, "exec_tins",
+ 			      "invalid bytecode instruction");
+ 		VM_SWITCH_END
+-#ifdef TAPAS_VM_THREADED
+-		vm_advance:
+-#endif
+ 		i++;
+ 		goto dispatch;
+ 

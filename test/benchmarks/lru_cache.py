@@ -32,9 +32,14 @@ def lru_work(capacity, operations):
 capacity = 64
 operations = 300000
 
-started = time.process_time_ns()
-result = lru_work(capacity, operations)
-elapsed = time.process_time_ns() - started
+def bench():
+    started = time.process_time_ns()
+    result = lru_work(capacity, operations)
+    elapsed = time.process_time_ns() - started
 
-print(result)
-print(elapsed)
+    print(result)
+    print(elapsed)
+
+
+if __name__ == "__main__":
+    bench()

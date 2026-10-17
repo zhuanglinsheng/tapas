@@ -7,6 +7,8 @@ days_per_year = 365.24
 
 
 class Body:
+    __slots__ = ("x", "y", "z", "vx", "vy", "vz", "mass")
+
     def __init__(self, x, y, z, vx, vy, vz, mass):
         self.x = x
         self.y = y
@@ -114,11 +116,16 @@ bodies = [
 steps = 5000
 
 offset_momentum(bodies)
-started = time.process_time_ns()
-for step in range(steps):
-    advance(bodies, 0.01)
-result = int((energy(bodies) + 200.0) * 1000000000.0)
-elapsed = time.process_time_ns() - started
+def bench():
+    started = time.process_time_ns()
+    for step in range(steps):
+        advance(bodies, 0.01)
+    result = int((energy(bodies) + 200.0) * 1000000000.0)
+    elapsed = time.process_time_ns() - started
 
-print(result)
-print(elapsed)
+    print(result)
+    print(elapsed)
+
+
+if __name__ == "__main__":
+    bench()

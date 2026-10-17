@@ -1,0 +1,1071 @@
+{
+  "date": "2026-10-17T11:56:10.432234+08:00",
+  "system": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+  "architecture": "arm64",
+  "python": "3.14.2 (main, Oct  9 2026, 23:40:19) [Clang 21.0.0 (clang-2100.3.34.2)]",
+  "python_executable": "/Users/zhuanglinsheng/.pyenv/versions/3.14.2/bin/python3",
+  "tapas": "/Users/zhuanglinsheng/Documents/Github/tapas/build-release/bin/tapas",
+  "tapas_version": "Tapas 0.1.0 Copyright (C) 2020-2026",
+  "tapas_sha256": "2f6ad6c89b390bd58c387aca7593b7ba61679803c57b2f1097174c2a6adaf967",
+  "git_head": "99ea72197b3e277c668a01124297b3ed7be1752e",
+  "source_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "git_status": "M test/benchmarks/README.md\n M test/benchmarks/README_en.md\n M test/benchmarks/compare_script.py\n?? test/benchmarks/diagnose_script.py\n?? test/benchmarks/hotspots/",
+  "build_config": [
+    "CMAKE_BUILD_TYPE:STRING=Release",
+    "CMAKE_C_COMPILER:FILEPATH=/usr/bin/cc",
+    "CMAKE_C_FLAGS_RELEASE:STRING=-O3 -DNDEBUG",
+    "TAPAS_ENABLE_IPO:BOOL=ON"
+  ],
+  "runs": 7,
+  "warmups": 1,
+  "rows": [
+    {
+      "name": "while_search",
+      "kind": "hotspot",
+      "checksum": 2750000,
+      "samples_ns": {
+        "tapas": [
+          58478000,
+          57984000,
+          59402000,
+          61865000,
+          59657000,
+          59017000,
+          57906000
+        ],
+        "python_optimized": [
+          28302000,
+          27751000,
+          28244000,
+          29516000,
+          28239000,
+          27833000,
+          27970000
+        ],
+        "python_matched": [
+          60354000,
+          58925000,
+          60389000,
+          61590000,
+          63178000,
+          60640000,
+          60267000
+        ]
+      },
+      "median_ns": {
+        "tapas": 59017000,
+        "python_optimized": 28239000,
+        "python_matched": 60389000
+      },
+      "tapas_over": {
+        "python_optimized": 2.0899111158327135,
+        "python_matched": 0.9772806305784166
+      }
+    },
+    {
+      "name": "dp_row",
+      "kind": "hotspot",
+      "checksum": 190439,
+      "samples_ns": {
+        "tapas": [
+          42597000,
+          43780000,
+          43535000,
+          43028000,
+          43636000,
+          43485000,
+          43418000
+        ],
+        "python_optimized": [
+          31881000,
+          32251000,
+          32195000,
+          31398000,
+          31424000,
+          31960000,
+          32436000
+        ],
+        "python_matched": [
+          34142000,
+          33587000,
+          33914000,
+          34066000,
+          34147000,
+          34356000,
+          33330000
+        ]
+      },
+      "median_ns": {
+        "tapas": 43485000,
+        "python_optimized": 31960000,
+        "python_matched": 34066000
+      },
+      "tapas_over": {
+        "python_optimized": 1.3606070087609512,
+        "python_matched": 1.2764926906593084
+      }
+    },
+    {
+      "name": "recursive_loops",
+      "kind": "hotspot",
+      "checksum": 1310710,
+      "samples_ns": {
+        "tapas": [
+          16163000,
+          16095000,
+          16548000,
+          16615000,
+          16805000,
+          16651000,
+          17054000
+        ],
+        "python_optimized": [
+          11696000,
+          12009000,
+          11715000,
+          11927000,
+          12282000,
+          11955000,
+          12048000
+        ],
+        "python_matched": [
+          13853000,
+          13702000,
+          13904000,
+          13821000,
+          13963000,
+          14205000,
+          14284000
+        ]
+      },
+      "median_ns": {
+        "tapas": 16615000,
+        "python_optimized": 11955000,
+        "python_matched": 13904000
+      },
+      "tapas_over": {
+        "python_optimized": 1.3897950648264326,
+        "python_matched": 1.1949798619102416
+      }
+    },
+    {
+      "name": "tree_build",
+      "kind": "hotspot",
+      "checksum": 2647,
+      "samples_ns": {
+        "tapas": [
+          31495000,
+          32092000,
+          31525000,
+          30664000,
+          31050000,
+          31668000,
+          30751000
+        ],
+        "python_optimized": [
+          25158000,
+          25013000,
+          24777000,
+          24239000,
+          24914000,
+          25134000,
+          26074000
+        ],
+        "python_matched": [
+          44934000,
+          45462000,
+          45561000,
+          45229000,
+          45246000,
+          46978000,
+          46232000
+        ]
+      },
+      "median_ns": {
+        "tapas": 31495000,
+        "python_optimized": 25013000,
+        "python_matched": 45462000
+      },
+      "tapas_over": {
+        "python_optimized": 1.2591452444728741,
+        "python_matched": 0.6927763846729137
+      }
+    },
+    {
+      "name": "record_update",
+      "kind": "hotspot",
+      "checksum": 125000,
+      "samples_ns": {
+        "tapas": [
+          15992000,
+          15831000,
+          16261000,
+          16022000,
+          16381000,
+          16086000,
+          15726000
+        ],
+        "python_optimized": [
+          12454000,
+          12602000,
+          12749000,
+          12554000,
+          12711000,
+          12296000,
+          12507000
+        ],
+        "python_matched": [
+          13255000,
+          13246000,
+          13467000,
+          13605000,
+          13675000,
+          13328000,
+          13399000
+        ]
+      },
+      "median_ns": {
+        "tapas": 16022000,
+        "python_optimized": 12554000,
+        "python_matched": 13399000
+      },
+      "tapas_over": {
+        "python_optimized": 1.2762466146248208,
+        "python_matched": 1.1957608776774387
+      }
+    },
+    {
+      "name": "string_count",
+      "kind": "hotspot",
+      "checksum": 1375000,
+      "samples_ns": {
+        "tapas": [
+          26273000,
+          28431000,
+          26908000,
+          26331000,
+          26456000,
+          26293000,
+          27062000
+        ],
+        "python_optimized": [
+          12705000,
+          13741000,
+          13044000,
+          13689000,
+          12796000,
+          12627000,
+          14770000
+        ],
+        "python_matched": [
+          26512000,
+          23520000,
+          24204000,
+          23978000,
+          23237000,
+          24983000,
+          23802000
+        ]
+      },
+      "median_ns": {
+        "tapas": 26456000,
+        "python_optimized": 13044000,
+        "python_matched": 23978000
+      },
+      "tapas_over": {
+        "python_optimized": 2.0282122048451394,
+        "python_matched": 1.1033447326716157
+      }
+    },
+    {
+      "name": "substring_count",
+      "kind": "control",
+      "checksum": 441866,
+      "samples_ns": {
+        "tapas": [
+          19509000,
+          18975000,
+          22992000,
+          19234000,
+          18853000,
+          18646000,
+          25781000
+        ],
+        "python_optimized": [
+          20846000,
+          23698000,
+          22178000,
+          21517000,
+          21368000,
+          21866000,
+          24134000
+        ],
+        "python_matched": [
+          22248000,
+          24368000,
+          24606000,
+          21909000,
+          21751000,
+          22385000,
+          25007000
+        ]
+      },
+      "median_ns": {
+        "tapas": 19234000,
+        "python_optimized": 21866000,
+        "python_matched": 22385000
+      },
+      "tapas_over": {
+        "python_optimized": 0.8796304765389189,
+        "python_matched": 0.8592360955997319
+      }
+    },
+    {
+      "name": "constraint_probe",
+      "kind": "control",
+      "checksum": 390117,
+      "samples_ns": {
+        "tapas": [
+          74458000,
+          74253000,
+          74209000,
+          73491000,
+          73369000,
+          74136000,
+          73475000
+        ],
+        "python_optimized": [
+          79091000,
+          80245000,
+          77887000,
+          78132000,
+          78560000,
+          78107000,
+          81802000
+        ],
+        "python_matched": [
+          77975000,
+          79239000,
+          78968000,
+          79159000,
+          78198000,
+          78309000,
+          80203000
+        ]
+      },
+      "median_ns": {
+        "tapas": 74136000,
+        "python_optimized": 78560000,
+        "python_matched": 78968000
+      },
+      "tapas_over": {
+        "python_optimized": 0.9436863543788188,
+        "python_matched": 0.9388106574815115
+      }
+    },
+    {
+      "name": "recursive_fibonacci",
+      "kind": "algorithm",
+      "checksum": 46368,
+      "samples_ns": {
+        "tapas": [
+          4381000,
+          4222000,
+          4402000,
+          4521000,
+          4363000,
+          4350000,
+          4450000
+        ],
+        "python_matched": [
+          5540000,
+          5415000,
+          5329000,
+          5496000,
+          5494000,
+          5758000,
+          5540000
+        ]
+      },
+      "median_ns": {
+        "tapas": 4381000,
+        "python_matched": 5496000
+      },
+      "tapas_over": {
+        "python_matched": 0.7971251819505094
+      }
+    },
+    {
+      "name": "sieve",
+      "kind": "algorithm",
+      "checksum": 2262,
+      "samples_ns": {
+        "tapas": [
+          1083000,
+          1112000,
+          1053000,
+          1034000,
+          1046000,
+          1032000,
+          1051000
+        ],
+        "python_matched": [
+          1173000,
+          1142000,
+          1131000,
+          1137000,
+          1141000,
+          1180000,
+          1132000
+        ]
+      },
+      "median_ns": {
+        "tapas": 1051000,
+        "python_matched": 1141000
+      },
+      "tapas_over": {
+        "python_matched": 0.9211218229623137
+      }
+    },
+    {
+      "name": "merge_sort",
+      "kind": "algorithm",
+      "checksum": 5638402144,
+      "samples_ns": {
+        "tapas": [
+          5165000,
+          5286000,
+          5261000,
+          5255000,
+          5249000,
+          5190000,
+          5187000
+        ],
+        "python_matched": [
+          4819000,
+          4782000,
+          4627000,
+          4693000,
+          4875000,
+          4644000,
+          4780000
+        ]
+      },
+      "median_ns": {
+        "tapas": 5249000,
+        "python_matched": 4780000
+      },
+      "tapas_over": {
+        "python_matched": 1.0981171548117155
+      }
+    },
+    {
+      "name": "n_queens",
+      "kind": "algorithm",
+      "checksum": 724,
+      "samples_ns": {
+        "tapas": [
+          132843000,
+          134486000,
+          134784000,
+          137410000,
+          134496000,
+          134543000,
+          138285000
+        ],
+        "python_matched": [
+          125447000,
+          127271000,
+          126669000,
+          125347000,
+          127330000,
+          125606000,
+          125117000
+        ]
+      },
+      "median_ns": {
+        "tapas": 134543000,
+        "python_matched": 125606000
+      },
+      "tapas_over": {
+        "python_matched": 1.071151059662755
+      }
+    },
+    {
+      "name": "longest_common_subsequence",
+      "kind": "algorithm",
+      "checksum": 1480,
+      "samples_ns": {
+        "tapas": [
+          17631000,
+          17646000,
+          19066000,
+          17999000,
+          17014000,
+          16991000,
+          16711000
+        ],
+        "python_matched": [
+          13173000,
+          12616000,
+          13593000,
+          13065000,
+          12988000,
+          12909000,
+          12810000
+        ]
+      },
+      "median_ns": {
+        "tapas": 17631000,
+        "python_matched": 12988000
+      },
+      "tapas_over": {
+        "python_matched": 1.3574838312288267
+      }
+    },
+    {
+      "name": "matrix_multiply",
+      "kind": "algorithm",
+      "checksum": 817318963,
+      "samples_ns": {
+        "tapas": [
+          3262000,
+          3423000,
+          3404000,
+          3277000,
+          3338000,
+          3342000,
+          3310000
+        ],
+        "python_matched": [
+          5041000,
+          5068000,
+          5343000,
+          4993000,
+          4890000,
+          4986000,
+          4885000
+        ]
+      },
+      "median_ns": {
+        "tapas": 3338000,
+        "python_matched": 4993000
+      },
+      "tapas_over": {
+        "python_matched": 0.6685359503304626
+      }
+    },
+    {
+      "name": "sudoku",
+      "kind": "algorithm",
+      "checksum": 16605,
+      "samples_ns": {
+        "tapas": [
+          401254000,
+          400517000,
+          401700000,
+          399999000,
+          399829000,
+          403784000,
+          400733000
+        ],
+        "python_matched": [
+          335959000,
+          337124000,
+          336405000,
+          338236000,
+          335208000,
+          336073000,
+          337779000
+        ]
+      },
+      "median_ns": {
+        "tapas": 400733000,
+        "python_matched": 336405000
+      },
+      "tapas_over": {
+        "python_matched": 1.19122189028106
+      }
+    },
+    {
+      "name": "dijkstra",
+      "kind": "algorithm",
+      "checksum": 40796,
+      "samples_ns": {
+        "tapas": [
+          20597000,
+          21763000,
+          20607000,
+          20571000,
+          20527000,
+          20177000,
+          20745000
+        ],
+        "python_matched": [
+          18616000,
+          18847000,
+          19002000,
+          18682000,
+          18684000,
+          18531000,
+          18634000
+        ]
+      },
+      "median_ns": {
+        "tapas": 20597000,
+        "python_matched": 18682000
+      },
+      "tapas_over": {
+        "python_matched": 1.1025050851086609
+      }
+    },
+    {
+      "name": "optimize",
+      "kind": "algorithm",
+      "checksum": 8058,
+      "samples_ns": {
+        "tapas": [
+          19772000,
+          19938000,
+          19947000,
+          20241000,
+          19797000,
+          20340000,
+          20080000
+        ],
+        "python_matched": [
+          22076000,
+          21846000,
+          21900000,
+          21928000,
+          21856000,
+          22513000,
+          22206000
+        ]
+      },
+      "median_ns": {
+        "tapas": 19947000,
+        "python_matched": 21928000
+      },
+      "tapas_over": {
+        "python_matched": 0.9096588836191171
+      }
+    },
+    {
+      "name": "kmp",
+      "kind": "algorithm",
+      "checksum": 149850000,
+      "samples_ns": {
+        "tapas": [
+          24184000,
+          24408000,
+          24519000,
+          24325000,
+          24431000,
+          24323000,
+          24318000
+        ],
+        "python_matched": [
+          21425000,
+          21203000,
+          21650000,
+          21348000,
+          21236000,
+          21033000,
+          21234000
+        ]
+      },
+      "median_ns": {
+        "tapas": 24325000,
+        "python_matched": 21236000
+      },
+      "tapas_over": {
+        "python_matched": 1.1454605387078547
+      }
+    },
+    {
+      "name": "k_nucleotide",
+      "kind": "algorithm",
+      "checksum": 1439994,
+      "samples_ns": {
+        "tapas": [
+          183819000,
+          182553000,
+          184418000,
+          186713000,
+          185401000,
+          187272000,
+          187680000
+        ],
+        "python_matched": [
+          176051000,
+          176104000,
+          179578000,
+          182454000,
+          185037000,
+          181900000,
+          174472000
+        ]
+      },
+      "median_ns": {
+        "tapas": 185401000,
+        "python_matched": 179578000
+      },
+      "tapas_over": {
+        "python_matched": 1.0324260210048002
+      }
+    },
+    {
+      "name": "binary_trees",
+      "kind": "algorithm",
+      "checksum": 6782980,
+      "samples_ns": {
+        "tapas": [
+          759576000,
+          763792000,
+          770148000,
+          761877000,
+          759567000,
+          757277000,
+          758615000
+        ],
+        "python_matched": [
+          603060000,
+          591309000,
+          604258000,
+          625664000,
+          609999000,
+          593974000,
+          601573000
+        ]
+      },
+      "median_ns": {
+        "tapas": 759576000,
+        "python_matched": 603060000
+      },
+      "tapas_over": {
+        "python_matched": 1.2595363645408417
+      }
+    },
+    {
+      "name": "lru_cache",
+      "kind": "algorithm",
+      "checksum": -11217876,
+      "samples_ns": {
+        "tapas": [
+          46077000,
+          45899000,
+          46442000,
+          45585000,
+          47634000,
+          46424000,
+          47765000
+        ],
+        "python_matched": [
+          71750000,
+          72376000,
+          72425000,
+          72076000,
+          72605000,
+          71503000,
+          71876000
+        ]
+      },
+      "median_ns": {
+        "tapas": 46424000,
+        "python_matched": 72076000
+      },
+      "tapas_over": {
+        "python_matched": 0.6440978966646318
+      }
+    },
+    {
+      "name": "huffman",
+      "kind": "algorithm",
+      "checksum": 120000,
+      "samples_ns": {
+        "tapas": [
+          2181000,
+          2326000,
+          2207000,
+          2256000,
+          2192000,
+          2303000,
+          2306000
+        ],
+        "python_matched": [
+          1839000,
+          2087000,
+          2325000,
+          2001000,
+          1954000,
+          2110000,
+          1907000
+        ]
+      },
+      "median_ns": {
+        "tapas": 2256000,
+        "python_matched": 2001000
+      },
+      "tapas_over": {
+        "python_matched": 1.1274362818590704
+      }
+    },
+    {
+      "name": "fannkuch",
+      "kind": "algorithm",
+      "checksum": 180282,
+      "samples_ns": {
+        "tapas": [
+          41502000,
+          41365000,
+          41963000,
+          41421000,
+          41340000,
+          41840000,
+          41306000
+        ],
+        "python_matched": [
+          37545000,
+          38044000,
+          37680000,
+          38084000,
+          38092000,
+          38977000,
+          37891000
+        ]
+      },
+      "median_ns": {
+        "tapas": 41421000,
+        "python_matched": 38044000
+      },
+      "tapas_over": {
+        "python_matched": 1.0887656397855114
+      }
+    },
+    {
+      "name": "n_body",
+      "kind": "algorithm",
+      "checksum": 199830979999,
+      "samples_ns": {
+        "tapas": [
+          23599000,
+          23964000,
+          23726000,
+          23581000,
+          23587000,
+          23604000,
+          23958000
+        ],
+        "python_matched": [
+          21238000,
+          20907000,
+          20871000,
+          20692000,
+          20825000,
+          20694000,
+          20840000
+        ]
+      },
+      "median_ns": {
+        "tapas": 23604000,
+        "python_matched": 20840000
+      },
+      "tapas_over": {
+        "python_matched": 1.132629558541267
+      }
+    },
+    {
+      "name": "lcs_character_lists",
+      "kind": "ablation",
+      "checksum": 1480,
+      "samples_ns": {
+        "tapas": [
+          23416000,
+          23590000,
+          23397000,
+          23487000,
+          23838000,
+          23837000,
+          23621000
+        ],
+        "python_matched": [
+          12632000,
+          12674000,
+          12503000,
+          12318000,
+          12649000,
+          12537000,
+          12918000
+        ]
+      },
+      "median_ns": {
+        "tapas": 23590000,
+        "python_matched": 12632000
+      },
+      "tapas_over": {
+        "python_matched": 1.867479417352755
+      }
+    },
+    {
+      "name": "binary_fresh_lists",
+      "kind": "ablation",
+      "checksum": 6782980,
+      "samples_ns": {
+        "tapas": [
+          747171000,
+          754670000,
+          758585000,
+          753458000,
+          758863000,
+          752119000,
+          746838000
+        ],
+        "python_matched": [
+          784341000,
+          795954000,
+          806320000,
+          792037000,
+          812769000,
+          797777000,
+          800183000
+        ]
+      },
+      "median_ns": {
+        "tapas": 753458000,
+        "python_matched": 797777000
+      },
+      "tapas_over": {
+        "python_matched": 0.944446881772726
+      }
+    },
+    {
+      "name": "queens_reuse_locals",
+      "kind": "ablation",
+      "checksum": 724,
+      "samples_ns": {
+        "tapas": [
+          128943000,
+          128193000,
+          131489000,
+          130150000,
+          128894000,
+          127201000,
+          126638000
+        ],
+        "python_matched": [
+          126031000,
+          127892000,
+          125359000,
+          127837000,
+          127615000,
+          129748000,
+          125134000
+        ]
+      },
+      "median_ns": {
+        "tapas": 128894000,
+        "python_matched": 127615000
+      },
+      "tapas_over": {
+        "python_matched": 1.0100223327978686
+      }
+    },
+    {
+      "name": "sudoku_for",
+      "kind": "ablation",
+      "checksum": 16605,
+      "samples_ns": {
+        "tapas": [
+          392748000,
+          401790000,
+          395667000,
+          393522000,
+          392113000,
+          393799000,
+          394483000
+        ],
+        "python_matched": [
+          358334000,
+          359099000,
+          356370000,
+          361545000,
+          359404000,
+          357235000,
+          357804000
+        ]
+      },
+      "median_ns": {
+        "tapas": 393799000,
+        "python_matched": 358334000
+      },
+      "tapas_over": {
+        "python_matched": 1.0989719088894718
+      }
+    },
+    {
+      "name": "merge_cached_lengths",
+      "kind": "ablation",
+      "checksum": 5638402144,
+      "samples_ns": {
+        "tapas": [
+          4314000,
+          4400000,
+          4462000,
+          4466000,
+          4332000,
+          4449000,
+          4334000
+        ],
+        "python_matched": [
+          4374000,
+          4202000,
+          4033000,
+          3949000,
+          4083000,
+          4039000,
+          3952000
+        ]
+      },
+      "median_ns": {
+        "tapas": 4400000,
+        "python_matched": 4039000
+      },
+      "tapas_over": {
+        "python_matched": 1.0893785590492697
+      }
+    },
+    {
+      "name": "record_list_storage",
+      "kind": "ablation",
+      "checksum": 125000,
+      "samples_ns": {
+        "tapas": [
+          14797000,
+          14783000,
+          14805000,
+          14634000,
+          14655000,
+          14742000,
+          15091000
+        ],
+        "python_optimized": [
+          15609000,
+          12765000,
+          13164000,
+          12834000,
+          12749000,
+          13173000,
+          13135000
+        ]
+      },
+      "median_ns": {
+        "tapas": 14783000,
+        "python_optimized": 13135000
+      },
+      "tapas_over": {
+        "python_optimized": 1.1254663113818044
+      }
+    }
+  ]
+}

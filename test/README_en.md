@@ -13,7 +13,8 @@ Test files are organized by purpose:
   also executed by the language tests;
 - `cmake/` contains integration-test drivers;
 - [`benchmarks/`](benchmarks/README_en.md) contains matching Tapas and Python
-  performance programs and bilingual results.
+  performance programs and bilingual results; basic and algorithm-derived
+  hotspots live in [`benchmarks/hotspots/`](benchmarks/hotspots/README.md).
 
 Explicit bytecode tests may create `.tapc` files beside their source, while
 direct source execution and imported modules use `__tapas_build__` below the

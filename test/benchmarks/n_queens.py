@@ -11,12 +11,9 @@ def count_queens(positions, row, size):
         for previous in range(row):
             placed = positions[previous]
             distance = row - previous
-            if placed == column:
+            if placed == column or abs(placed - column) == distance:
                 valid = False
-            if placed == column - distance:
-                valid = False
-            if placed == column + distance:
-                valid = False
+                break
         if valid:
             positions[row] = column
             count += count_queens(positions, row + 1, size)
@@ -25,9 +22,14 @@ def count_queens(positions, row, size):
 
 size = 10
 positions = [-1] * size
-started = time.process_time_ns()
-result = count_queens(positions, 0, size)
-elapsed = time.process_time_ns() - started
+def bench():
+    started = time.process_time_ns()
+    result = count_queens(positions, 0, size)
+    elapsed = time.process_time_ns() - started
 
-print(result)
-print(elapsed)
+    print(result)
+    print(elapsed)
+
+
+if __name__ == "__main__":
+    bench()

@@ -1,39 +1,36 @@
 local function lru_work(capacity, operations)
-    local order = {}
     local values = {}
+    local previous = { [-2] = -1 }
+    local next_key = { [-1] = -2 }
+    local count = 0
     local checksum = 0
     local seed = 12345
     for _ = 1, operations do
         seed = (seed * 1103515245 + 12345) % 2147483648
         local key = seed % 256
-        if seed % 10 < 7 then
-            if values[key] ~= nil then
-                for i = 1, #order do
-                    if order[i] == key then
-                        table.remove(order, i)
-                        break
-                    end
-                end
-                order[#order + 1] = key
-                checksum = checksum + values[key]
+        local reading = seed % 10 < 7
+        local present = values[key] ~= nil
+        if present then
+            local before, after = previous[key], next_key[key]
+            next_key[before], previous[after] = after, before
+        elseif not reading then
+            if count >= capacity then
+                local evicted = next_key[-1]
+                local after = next_key[evicted]
+                next_key[-1], previous[after] = after, -1
+                values[evicted], previous[evicted], next_key[evicted] = nil, nil, nil
+                checksum = checksum - evicted
+                count = count - 1
             end
-        else
-            if values[key] ~= nil then
-                for i = 1, #order do
-                    if order[i] == key then
-                        table.remove(order, i)
-                        break
-                    end
-                end
-                order[#order + 1] = key
-                values[key] = key * 3
+            count = count + 1
+        end
+        if present or not reading then
+            local tail = previous[-2]
+            previous[key], next_key[key] = tail, -2
+            next_key[tail], previous[-2] = key, key
+            if reading then
+                checksum = checksum + values[key]
             else
-                if #order >= capacity then
-                    local evicted = table.remove(order, 1)
-                    values[evicted] = nil
-                    checksum = checksum - evicted
-                end
-                order[#order + 1] = key
                 values[key] = key * 3
             end
         end
@@ -41,12 +38,8 @@ local function lru_work(capacity, operations)
     return checksum
 end
 
-local capacity = 64
-local operations = 300000
-
 local started = os.clock()
-local result = lru_work(capacity, operations)
+local result = lru_work(64, 300000)
 local elapsed = math.floor((os.clock() - started) * 1e9 + 0.5)
-
 print(result)
 print(elapsed)

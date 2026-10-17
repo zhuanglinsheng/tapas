@@ -1,0 +1,18 @@
+--- a/src/runtime/tval.c
++++ b/src/runtime/tval.c
+@@ -95,10 +95,11 @@
+ 			return;
+ 		src->val.v_tcompo->refctr++;
+ 	}
+-	tobj_ddc_ref_clear(dst);
+-	dst->type = src->type;
+-	dst->name_loc = src->name_loc;
+-	dst->val = src->val;
++	/* Immediate values own no references; only composites need releasing.
++	 * Retain the source first, then preserve its complete value and metadata. */
++	if (dst->type == tcompo)
++		tobj_ddc_ref_clear(dst);
++	*dst = *src;
+ }
+ 
+ int tobj_identical(const tobj *a, const tobj *b)

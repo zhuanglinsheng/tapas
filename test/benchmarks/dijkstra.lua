@@ -1,31 +1,52 @@
+local function heap_push(queue, item)
+    local index = #queue + 1
+    while index > 1 do
+        local parent = index // 2
+        local above = queue[parent]
+        if above[1] < item[1] or (above[1] == item[1] and above[2] <= item[2]) then break end
+        queue[index] = above
+        index = parent
+    end
+    queue[index] = item
+end
+
+local function heap_pop(queue)
+    local root = queue[1]
+    local last = table.remove(queue)
+    local size = #queue
+    if size > 0 then
+        local index = 1
+        while index * 2 <= size do
+            local child = index * 2
+            if child < size then
+                local a, b = queue[child], queue[child + 1]
+                if b[1] < a[1] or (b[1] == a[1] and b[2] < a[2]) then child = child + 1 end
+            end
+            local below = queue[child]
+            if last[1] < below[1] or (last[1] == below[1] and last[2] <= below[2]) then break end
+            queue[index] = below
+            index = child
+        end
+        queue[index] = last
+    end
+    return root
+end
+
 local function dijkstra(graph, source, size)
     local dist = {}
-    local visited = {}
-    for i = 0, size - 1 do
-        dist[i] = 1000000000000
-        visited[i] = false
-    end
-    dist[source] = 0
-    for step = 0, size - 1 do
-        local best = -1
-        local best_dist = 1000000000000
-        for i = 0, size - 1 do
-            if not visited[i] and dist[i] < best_dist then
-                best = i
-                best_dist = dist[i]
-            end
-        end
-        if best < 0 then
-            break
-        end
-        visited[best] = true
-        if graph[best] ~= nil then
-            for edge = 0, #graph[best] do
-                local pair = graph[best][edge]
-                local target = pair[0]
-                local alt = dist[best] + pair[1]
-                if alt < dist[target] then
-                    dist[target] = alt
+    for i = 1, size do dist[i] = 1000000000000 end
+    dist[source + 1] = 0
+    local queue = {{0, source + 1}}
+    while #queue > 0 do
+        local entry = heap_pop(queue)
+        local distance, vertex = entry[1], entry[2]
+        if distance == dist[vertex] then
+            for _, edge in ipairs(graph[vertex] or {}) do
+                local target = edge[1]
+                local alternative = distance + edge[2]
+                if alternative < dist[target] then
+                    dist[target] = alternative
+                    heap_push(queue, {alternative, target})
                 end
             end
         end
@@ -33,33 +54,29 @@ local function dijkstra(graph, source, size)
     return dist
 end
 
-local size = 250
-local degree = 6
+local size, degree = 250, 6
 local graph = {}
 for i = 0, size - 1 do
-    local edges = {}
-    edges[0] = {[0] = (i + 1) % size, 1}
+    local edges = { { (i + 1) % size + 1, 1 } }
     for k = 0, degree - 1 do
         local j = (i * 7 + k * 13 + 3) % size
         local w = (i * 5 + k * 11 + 7) % 19 + 1
-        edges[k + 1] = {[0] = j, w}
+        edges[#edges + 1] = { j + 1, w }
     end
-    graph[i] = edges
+    graph[i + 1] = edges
 end
-local sources = {[0] = 0, size // 4, size // 2, size * 3 // 4}
+local sources = { 0, size // 4, size // 2, size * 3 // 4 }
 local rounds = 4
-
 local started = os.clock()
 local checksum = 0
-for round = 0, rounds - 1 do
-    for s = 0, #sources do
-        local dist = dijkstra(graph, sources[s], size)
-        for i = 0, size - 1 do
+for _ = 1, rounds do
+    for _, source in ipairs(sources) do
+        local dist = dijkstra(graph, source, size)
+        for i = 1, size do
             checksum = checksum + dist[i]
         end
     end
 end
 local elapsed = math.floor((os.clock() - started) * 1e9 + 0.5)
-
 print(checksum)
 print(elapsed)

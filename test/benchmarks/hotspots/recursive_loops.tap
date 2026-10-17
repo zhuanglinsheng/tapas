@@ -1,0 +1,17 @@
+function visit(depth, values)
+{
+    let total = 0
+    for (let value in values) { total = total + value }
+    if (depth == 0) { return total + 0 }
+    return total + this(depth - 1, values) + this(depth - 1, values)
+}
+function bench()
+{
+    let values = [1, 2, 3, 4]
+    let started = clock_ns()
+    let result = visit(16, values)
+    let elapsed = clock_ns() - started
+    print(result)
+    print(elapsed)
+}
+bench()

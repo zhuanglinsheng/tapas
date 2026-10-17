@@ -1,0 +1,302 @@
+{
+  "runs": 5,
+  "rounds": 2,
+  "rows": [
+    {
+      "case": "dijkstra",
+      "language": "lua",
+      "variant": "numeric_edges",
+      "source": "local function dijkstra(graph, source, size)\n    local dist, visited = {}, {}\n    for i = 1, size do\n        dist[i], visited[i] = 1000000000000, false\n    end\n    dist[source + 1] = 0\n    for _ = 1, size do\n        local best, best_dist = nil, 1000000000000\n        for i = 1, size do\n            local distance = dist[i]\n            if not visited[i] and distance < best_dist then\n                best, best_dist = i, distance\n            end\n        end\n        if best == nil then\n            break\n        end\n        visited[best] = true\n        local edges = graph[best]\n        for i = 1, #edges do\n            local edge = edges[i]\n            local target = edge[1]\n            local alt = best_dist + edge[2]\n            if alt < dist[target] then\n                dist[target] = alt\n            end\n        end\n    end\n    return dist\nend\n\nlocal size, degree = 250, 6\nlocal graph = {}\nfor i = 0, size - 1 do\n    local edges = { { (i + 1) % size + 1, 1 } }\n    for k = 0, degree - 1 do\n        local j = (i * 7 + k * 13 + 3) % size\n        local w = (i * 5 + k * 11 + 7) % 19 + 1\n        edges[#edges + 1] = { j + 1, w }\n    end\n    graph[i + 1] = edges\nend\nlocal sources = { 0, size // 4, size // 2, size * 3 // 4 }\nlocal rounds = 4\nlocal started = os.clock()\nlocal checksum = 0\nfor _ = 1, rounds do\n    for _, source in ipairs(sources) do\n        local dist = dijkstra(graph, source, size)\n        for i = 1, size do\n            checksum = checksum + dist[i]\n        end\n    end\nend\nlocal elapsed = math.floor((os.clock() - started) * 1e9 + 0.5)\nprint(checksum)\nprint(elapsed)\n",
+      "samples_ns": {
+        "before": [
+          10453000,
+          10478000,
+          10726000,
+          10577000,
+          10495000,
+          10721000,
+          10680000,
+          10405000,
+          10584000,
+          10759000
+        ],
+        "after": [
+          10645000,
+          10472000,
+          10434000,
+          10822000,
+          10529000,
+          10700000,
+          10365000,
+          10503000,
+          10746000,
+          10785000
+        ]
+      },
+      "round_ratios": [
+        1.0032396379228203,
+        1.002416581466679
+      ],
+      "checksum": 40796
+    },
+    {
+      "case": "dijkstra",
+      "language": "py",
+      "variant": "indexed",
+      "source": "import time\n\n\ndef dijkstra(graph, source, size):\n    dist = [1000000000000] * size\n    visited = [False] * size\n    dist[source] = 0\n    for step in range(size):\n        best = -1\n        best_dist = 1000000000000\n        for i in range(size):\n            if not visited[i] and dist[i] < best_dist:\n                best = i\n                best_dist = dist[i]\n        if best < 0:\n            break\n        visited[best] = True\n        for target, weight in graph.get(best, ()):\n            alt = best_dist + weight\n            if alt < dist[target]:\n                dist[target] = alt\n    return dist\n\n\nsize = 250\ndegree = 6\ngraph = {}\nfor i in range(size):\n    edges = []\n    edges.append([(i + 1) % size, 1])\n    for k in range(degree):\n        j = (i * 7 + k * 13 + 3) % size\n        w = (i * 5 + k * 11 + 7) % 19 + 1\n        edges.append([j, w])\n    graph[i] = edges\nsources = [0, size // 4, size // 2, size * 3 // 4]\nrounds = 4\n\nstarted = time.process_time_ns()\nchecksum = 0\nfor round in range(rounds):\n    for s in range(len(sources)):\n        dist = dijkstra(graph, sources[s], size)\n        checksum += sum(dist)\nelapsed = time.process_time_ns() - started\n\nprint(checksum)\nprint(elapsed)\n",
+      "samples_ns": {
+        "before": [
+          18974000,
+          18915000,
+          18803000,
+          19091000,
+          18848000,
+          18969000,
+          18903000,
+          19298000,
+          19892000,
+          18940000
+        ],
+        "after": [
+          18311000,
+          18340000,
+          19000000,
+          18442000,
+          23330000,
+          19291000,
+          18549000,
+          19256000,
+          20012000,
+          17923000
+        ]
+      },
+      "round_ratios": [
+        0.9696008458895057,
+        0.9978236086641102
+      ],
+      "checksum": 40796
+    },
+    {
+      "case": "fannkuch",
+      "language": "py",
+      "variant": "flip_only",
+      "source": "import time\n\n\ndef fannkuch(n):\n    perm1 = list(range(n))\n    count = [0] * n\n    checksum = 0\n    maxflips = 0\n    r = n\n    while True:\n        while r != 1:\n            count[r - 1] = r\n            r -= 1\n\n        perm = perm1[:]\n        flips = 0\n        k = perm[0]\n        while k != 0:\n            perm[:k + 1] = perm[k::-1]\n            flips += 1\n            k = perm[0]\n        checksum += flips\n        if flips > maxflips:\n            maxflips = flips\n\n        while True:\n            if r == n:\n                return checksum + maxflips\n            first = perm1[0]\n            for i in range(r):\n                perm1[i] = perm1[i + 1]\n            perm1[r] = first\n            count[r] -= 1\n            if count[r] > 0:\n                break\n            r += 1\n\n\nn = 8\n\nstarted = time.process_time_ns()\nresult = fannkuch(n)\nelapsed = time.process_time_ns() - started\n\nprint(result)\nprint(elapsed)\n",
+      "samples_ns": {
+        "before": [
+          37995000,
+          37925000,
+          37581000,
+          37807000,
+          37723000,
+          37525000,
+          37742000,
+          37649000,
+          37497000,
+          37726000
+        ],
+        "after": [
+          40177000,
+          40547000,
+          40274000,
+          40349000,
+          41080000,
+          40008000,
+          39957000,
+          40043000,
+          40431000,
+          39884000
+        ]
+      },
+      "round_ratios": [
+        1.0691364535266974,
+        1.0635873462774577
+      ],
+      "checksum": 180282
+    },
+    {
+      "case": "fannkuch",
+      "language": "py",
+      "variant": "rotation_only",
+      "source": "import time\n\n\ndef fannkuch(n):\n    perm1 = list(range(n))\n    count = [0] * n\n    checksum = 0\n    maxflips = 0\n    r = n\n    while True:\n        while r != 1:\n            count[r - 1] = r\n            r -= 1\n\n        perm = perm1[:]\n        flips = 0\n        k = perm[0]\n        while k != 0:\n            i = 0\n            j = k\n            while i < j:\n                perm[i], perm[j] = perm[j], perm[i]\n                i += 1\n                j -= 1\n            flips += 1\n            k = perm[0]\n        checksum += flips\n        if flips > maxflips:\n            maxflips = flips\n\n        while True:\n            if r == n:\n                return checksum + maxflips\n            first = perm1[0]\n            perm1[:r] = perm1[1:r + 1]\n            perm1[r] = first\n            count[r] -= 1\n            if count[r] > 0:\n                break\n            r += 1\n\n\nn = 8\n\nstarted = time.process_time_ns()\nresult = fannkuch(n)\nelapsed = time.process_time_ns() - started\n\nprint(result)\nprint(elapsed)\n",
+      "samples_ns": {
+        "before": [
+          39221000,
+          38428000,
+          38034000,
+          37569000,
+          37757000,
+          37497000,
+          37602000,
+          37569000,
+          37872000,
+          37926000
+        ],
+        "after": [
+          39176000,
+          39628000,
+          39015000,
+          39017000,
+          39331000,
+          39206000,
+          39210000,
+          39095000,
+          39328000,
+          40288000
+        ]
+      },
+      "round_ratios": [
+        1.031227230144686,
+        1.0427636827828306
+      ],
+      "checksum": 180282
+    },
+    {
+      "case": "lru_cache",
+      "language": "py",
+      "variant": "ordered_dict_builtin",
+      "source": "import time\n\n\ndef lru_work(capacity, operations):\n    values = {}\n    checksum = 0\n    seed = 12345\n    for _ in range(operations):\n        seed = (seed * 1103515245 + 12345) % 2147483648\n        key = seed % 256\n        if seed % 10 < 7:\n            value = values.pop(key, None)\n            if value is not None:\n                values[key] = value\n                checksum += value\n        else:\n            if key in values:\n                del values[key]\n            elif len(values) >= capacity:\n                evicted = next(iter(values))\n                del values[evicted]\n                checksum -= evicted\n            values[key] = key * 3\n    return checksum\n\n\ncapacity = 64\noperations = 300000\nstarted = time.process_time_ns()\nresult = lru_work(capacity, operations)\nelapsed = time.process_time_ns() - started\nprint(result)\nprint(elapsed)\n",
+      "samples_ns": {
+        "before": [
+          70187000,
+          69976000,
+          69700000,
+          70441000,
+          70412000,
+          69652000,
+          70359000,
+          70283000,
+          70802000,
+          70333000
+        ],
+        "after": [
+          79294000,
+          78700000,
+          78069000,
+          79002000,
+          80380000,
+          78183000,
+          79122000,
+          79917000,
+          78849000,
+          78653000
+        ]
+      },
+      "round_ratios": [
+        1.1246713158797301,
+        1.1224803307873428
+      ],
+      "checksum": -11217876
+    },
+    {
+      "case": "matrix_multiply",
+      "language": "py",
+      "variant": "map",
+      "source": "import time\nfrom operator import mul\n\n\ndef multiply_checksum(left, right, size):\n    result = [[0] * size for _ in range(size)]\n    columns = list(zip(*right))\n    for row, left_row in enumerate(left):\n        for column, right_column in enumerate(columns):\n            result[row][column] = sum(map(mul, left_row, right_column))\n\n    return sum(value * (row + column + 1)\n               for row, result_row in enumerate(result)\n               for column, value in enumerate(result_row))\n\n\nsize = 48\nleft = [\n    [(row * 17 + column * 11 + 3) % 23 for column in range(size)]\n    for row in range(size)\n]\nright = [\n    [(row * 7 + column * 19 + 5) % 29 for column in range(size)]\n    for row in range(size)\n]\n\nstarted = time.process_time_ns()\nresult = multiply_checksum(left, right, size)\nelapsed = time.process_time_ns() - started\n\nprint(result)\nprint(elapsed)\n",
+      "samples_ns": {
+        "before": [
+          4916000,
+          4962000,
+          4911000,
+          4858000,
+          4813000,
+          4984000,
+          5149000,
+          4841000,
+          4995000,
+          4943000
+        ],
+        "after": [
+          3001000,
+          2941000,
+          2970000,
+          3089000,
+          3049000,
+          3003000,
+          3152000,
+          2942000,
+          3141000,
+          3003000
+        ]
+      },
+      "round_ratios": [
+        0.6104556550040684,
+        0.6077256765131172
+      ],
+      "checksum": 817318963
+    },
+    {
+      "case": "sudoku",
+      "language": "lua",
+      "variant": "shift_once",
+      "source": "local function solve_board(grid)\n    local index = 0\n    while index < 81 do\n        if grid[index + 1] == 0 then\n            local row = (index // 9) * 9 + 1\n            local column = index % 9 + 1\n            local box = (index // 27) * 27 + ((column - 1) // 3) * 3 + 1\n            local digit = 1\n            while digit < 10 do\n                local valid = true\n                local k = 0\n                while k < 9 do\n                    if grid[row + k] == digit or grid[column + k * 9] == digit then\n                        valid = false\n                        break\n                    end\n                    if grid[box + (k // 3) * 9 + k % 3] == digit then\n                        valid = false\n                        break\n                    end\n                    k = k + 1\n                end\n                if valid then\n                    grid[index + 1] = digit\n                    if solve_board(grid) then\n                        return true\n                    end\n                end\n                digit = digit + 1\n            end\n            grid[index + 1] = 0\n            return false\n        end\n        index = index + 1\n    end\n    return true\nend\n\nlocal puzzle = {\n    1, 0, 0, 0, 0, 7, 0, 9, 0,\n    0, 3, 0, 0, 2, 0, 0, 0, 8,\n    0, 0, 9, 6, 0, 0, 5, 0, 0,\n    0, 0, 5, 3, 0, 0, 9, 0, 0,\n    0, 1, 0, 0, 8, 0, 0, 0, 2,\n    6, 0, 0, 0, 0, 4, 0, 0, 0,\n    3, 0, 0, 0, 0, 0, 0, 1, 0,\n    0, 4, 0, 0, 0, 0, 0, 0, 7,\n    0, 0, 7, 0, 0, 0, 3, 0, 0,\n}\nlocal repetitions = 10\n\nlocal started = os.clock()\nlocal checksum = -1\nfor round = 0, repetitions - 1 do\n    local board = {}\n    for index = 0, 80 do\n        board[index + 1] = puzzle[index + 1]\n    end\n    local solved = solve_board(board)\n    if not solved then\n        checksum = -1\n        break\n    end\n    checksum = 0\n    for index = 0, 80 do\n        checksum = checksum + board[index + 1] * (index + 1)\n    end\nend\nlocal elapsed = math.floor((os.clock() - started) * 1e9 + 0.5)\n\nprint(checksum)\nprint(elapsed)\n",
+      "samples_ns": {
+        "before": [
+          159639000,
+          159948000,
+          164580000,
+          166273000,
+          162515000,
+          172973000,
+          170318000,
+          165788000,
+          163671000,
+          165176000
+        ],
+        "after": [
+          165865000,
+          165274000,
+          173392000,
+          177066000,
+          168511000,
+          185257000,
+          206028000,
+          170212000,
+          170241000,
+          169821000
+        ]
+      },
+      "round_ratios": [
+        1.0390004948665426,
+        1.0401415033817842
+      ],
+      "checksum": 16605
+    },
+    {
+      "case": "sudoku",
+      "language": "py",
+      "variant": "native_search",
+      "source": "import time\n\n\ndef solve_board(grid):\n    try:\n        index = grid.index(0)\n    except ValueError:\n        return True\n    row = (index // 9) * 9\n    column = index % 9\n    box = (index // 27) * 27 + (column // 3) * 3\n    for digit in range(1, 10):\n        for k in range(9):\n            if (grid[row + k] == digit or grid[column + k * 9] == digit or\n                    grid[box + (k // 3) * 9 + k % 3] == digit):\n                break\n        else:\n            grid[index] = digit\n            if solve_board(grid):\n                return True\n    grid[index] = 0\n    return False\n\n\npuzzle = [\n    1, 0, 0, 0, 0, 7, 0, 9, 0,\n    0, 3, 0, 0, 2, 0, 0, 0, 8,\n    0, 0, 9, 6, 0, 0, 5, 0, 0,\n    0, 0, 5, 3, 0, 0, 9, 0, 0,\n    0, 1, 0, 0, 8, 0, 0, 0, 2,\n    6, 0, 0, 0, 0, 4, 0, 0, 0,\n    3, 0, 0, 0, 0, 0, 0, 1, 0,\n    0, 4, 0, 0, 0, 0, 0, 0, 7,\n    0, 0, 7, 0, 0, 0, 3, 0, 0,\n]\nrepetitions = 10\n\nstarted = time.process_time_ns()\nchecksum = -1\nfor round in range(repetitions):\n    board = puzzle.copy()\n    solved = solve_board(board)\n    if not solved:\n        checksum = -1\n        break\n    checksum = sum(value * index for index, value in enumerate(board, 1))\nelapsed = time.process_time_ns() - started\n\nprint(checksum)\nprint(elapsed)\n",
+      "samples_ns": {
+        "before": [
+          342821000,
+          343017000,
+          337695000,
+          345008000,
+          334649000,
+          344257000,
+          343718000,
+          340017000,
+          349548000,
+          338013000
+        ],
+        "after": [
+          299766000,
+          304949000,
+          300550000,
+          309127000,
+          303468000,
+          300680000,
+          308083000,
+          305774000,
+          307455000,
+          311332000
+        ]
+      },
+      "round_ratios": [
+        0.8900042938154251,
+        0.8963248942447006
+      ],
+      "checksum": 16605
+    }
+  ]
+}

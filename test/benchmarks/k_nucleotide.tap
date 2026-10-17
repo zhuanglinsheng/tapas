@@ -3,11 +3,7 @@ function count_kmers(sequence, k)
     let counts = {}
     for (let i in 0 to (sequence.len() - k + 1)) {
         let key = sequence[i:i + k]
-        if (key in counts) {
-            counts[key] = counts[key] + 1
-        } else {
-            counts[key] = 1
-        }
+        counts[key] = idx_or(counts, key, 0) + 1
     }
     return counts.copy()
 }

@@ -10,14 +10,9 @@ function count_queens(positions, row, size)
         for (let previous in 0 to row) {
             let placed = positions[previous]
             let distance = row - previous
-            if (placed == column) {
+            if (placed == column or placed == column - distance or placed == column + distance) {
                 valid = false
-            }
-            if (placed == column - distance) {
-                valid = false
-            }
-            if (placed == column + distance) {
-                valid = false
+                break
             }
         }
         if (valid) {

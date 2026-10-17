@@ -1,0 +1,305 @@
+{
+  "python": "3.14.2 (main, Oct  9 2026, 23:40:19) [Clang 21.0.0 (clang-2100.3.34.2)]",
+  "system": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+  "runtime": {
+    "path": "/Users/zhuanglinsheng/Documents/Github/tapas/build-pgo/bin/tapas",
+    "sha256": "a5d555feb721378bdcc366e58e42b7ea2ceb07c282a7a9fd21e95253a04ca79e",
+    "version": "Tapas 0.1.0 Copyright (C) 2020-2026",
+    "build_config": [
+      "CMAKE_BUILD_TYPE:STRING=Release",
+      "CMAKE_C_COMPILER:FILEPATH=/usr/bin/cc",
+      "CMAKE_C_FLAGS:STRING=-flto=full -fprofile-instr-use=/Users/zhuanglinsheng/Documents/Github/tapas/build-pgo/profile/hotspots.profdata",
+      "CMAKE_C_FLAGS_RELEASE:STRING=-O3 -DNDEBUG",
+      "CMAKE_EXE_LINKER_FLAGS:STRING=",
+      "TAPAS_ENABLE_IPO:BOOL=OFF"
+    ]
+  },
+  "runs": 11,
+  "warmups": 1,
+  "variants": {
+    "tap_list": {
+      "source": "function primes_up_to(limit)\n{\n    let is_prime = replicate([true], limit + 1)\n    is_prime[0] = false\n    is_prime[1] = false\n\n    let candidate = 2\n    while (candidate * candidate <= limit) {\n        if (is_prime[candidate]) {\n            let multiple = candidate * candidate\n            while (multiple <= limit) {\n                is_prime[multiple] = false\n                multiple = multiple + candidate\n            }\n        }\n        candidate = candidate + 1\n    }\n\n    let count = 0\n    for (let value in 2 to (limit + 1)) {\n        if (is_prime[value]) {\n            count = count + 1\n        }\n    }\n    return count + 0\n}\n\nlet started = clock_ns()\nlet result = primes_up_to(20000)\n\nlet elapsed = clock_ns() - started\nprint(result)\nprint(elapsed)\n",
+      "source_sha256": "fd56cc7e91592e862e1a7b3a039414336d76655b0b77f119cc9c86c84801ac47",
+      "samples_ns": [
+        1082000,
+        1021000,
+        1077000,
+        1020000,
+        1041000,
+        996000,
+        1040000,
+        1018000,
+        1088000,
+        1084000,
+        1079000
+      ],
+      "median_ns": 1041000,
+      "checksum": 2262
+    },
+    "tap_bool_array": {
+      "source": "function primes_up_to(limit)\n{\n    let is_prime = array(1, limit + 1, true)\n    is_prime[0, 0] = false\n    is_prime[0, 1] = false\n\n    let candidate = 2\n    while (candidate * candidate <= limit) {\n        if (is_prime[0, candidate]) {\n            let multiple = candidate * candidate\n            while (multiple <= limit) {\n                is_prime[0, multiple] = false\n                multiple = multiple + candidate\n            }\n        }\n        candidate = candidate + 1\n    }\n\n    let count = 0\n    for (let value in 2 to (limit + 1)) {\n        if (is_prime[0, value]) {\n            count = count + 1\n        }\n    }\n    return count + 0\n}\n\nlet started = clock_ns()\nlet result = primes_up_to(20000)\n\nlet elapsed = clock_ns() - started\nprint(result)\nprint(elapsed)\n",
+      "source_sha256": "3b01ab5b94d52c6133d87c9906760293a11cce16943dabdb6e206448c0c3b68b",
+      "samples_ns": [
+        1458000,
+        1474000,
+        1499000,
+        1533000,
+        1538000,
+        1644000,
+        1500000,
+        1464000,
+        1468000,
+        1488000,
+        1482000
+      ],
+      "median_ns": 1488000,
+      "checksum": 2262
+    },
+    "py_bulk_sum": {
+      "source": "import math\nimport time\n\n\ndef primes_up_to(limit):\n    is_prime = bytearray(b\"\\x01\") * (limit + 1)\n    is_prime[:2] = b\"\\x00\\x00\"\n    for candidate in range(2, math.isqrt(limit) + 1):\n        if is_prime[candidate]:\n            start = candidate * candidate\n            is_prime[start::candidate] = bytes((limit - start) // candidate + 1)\n    return sum(is_prime)\n\n\ndef bench():\n    started = time.process_time_ns()\n    result = primes_up_to(20_000)\n\n    elapsed = time.process_time_ns() - started\n    print(result)\n    print(elapsed)\n\n\nif __name__ == \"__main__\":\n    bench()\n",
+      "source_sha256": "2f183356c628b5c430c5ac741f06c338e3dfd94d552e8863e7614383b75740ca",
+      "samples_ns": [
+        119000,
+        102000,
+        106000,
+        106000,
+        106000,
+        113000,
+        111000,
+        106000,
+        112000,
+        115000,
+        113000
+      ],
+      "median_ns": 111000,
+      "checksum": 2262
+    },
+    "py_loop_sum": {
+      "source": "import math\nimport time\n\n\ndef primes_up_to(limit):\n    is_prime = bytearray(b\"\\x01\") * (limit + 1)\n    is_prime[:2] = b\"\\x00\\x00\"\n    for candidate in range(2, math.isqrt(limit) + 1):\n        if is_prime[candidate]:\n            multiple = candidate * candidate\n            while multiple <= limit:\n                is_prime[multiple] = 0\n                multiple += candidate\n    return sum(is_prime)\n\n\ndef bench():\n    started = time.process_time_ns()\n    result = primes_up_to(20_000)\n\n    elapsed = time.process_time_ns() - started\n    print(result)\n    print(elapsed)\n\n\nif __name__ == \"__main__\":\n    bench()\n",
+      "source_sha256": "60d8e77c36dbfa392f1dda1fe1006176c34d82f53767e1ba868c55e1b6be6c19",
+      "samples_ns": [
+        1117000,
+        1070000,
+        1091000,
+        1104000,
+        1122000,
+        1068000,
+        1079000,
+        1068000,
+        1099000,
+        1075000,
+        1485000
+      ],
+      "median_ns": 1091000,
+      "checksum": 2262
+    },
+    "py_bulk_loopcount": {
+      "source": "import math\nimport time\n\n\ndef primes_up_to(limit):\n    is_prime = bytearray(b\"\\x01\") * (limit + 1)\n    is_prime[:2] = b\"\\x00\\x00\"\n    for candidate in range(2, math.isqrt(limit) + 1):\n        if is_prime[candidate]:\n            start = candidate * candidate\n            is_prime[start::candidate] = bytes((limit - start) // candidate + 1)\n    count = 0\n    for value in range(2, limit + 1):\n        if is_prime[value]:\n            count += 1\n    return count\n\n\ndef bench():\n    started = time.process_time_ns()\n    result = primes_up_to(20_000)\n\n    elapsed = time.process_time_ns() - started\n    print(result)\n    print(elapsed)\n\n\nif __name__ == \"__main__\":\n    bench()\n",
+      "source_sha256": "1738c5a66b7c83ea3180e88b9402b6b12682d04bd3e215d7e740766bca12e1d6",
+      "samples_ns": [
+        554000,
+        534000,
+        641000,
+        549000,
+        528000,
+        533000,
+        579000,
+        531000,
+        545000,
+        573000,
+        533000
+      ],
+      "median_ns": 545000,
+      "checksum": 2262
+    },
+    "py_loop_loopcount": {
+      "source": "import math\nimport time\n\n\ndef primes_up_to(limit):\n    is_prime = bytearray(b\"\\x01\") * (limit + 1)\n    is_prime[:2] = b\"\\x00\\x00\"\n    for candidate in range(2, math.isqrt(limit) + 1):\n        if is_prime[candidate]:\n            multiple = candidate * candidate\n            while multiple <= limit:\n                is_prime[multiple] = 0\n                multiple += candidate\n    count = 0\n    for value in range(2, limit + 1):\n        if is_prime[value]:\n            count += 1\n    return count\n\n\ndef bench():\n    started = time.process_time_ns()\n    result = primes_up_to(20_000)\n\n    elapsed = time.process_time_ns() - started\n    print(result)\n    print(elapsed)\n\n\nif __name__ == \"__main__\":\n    bench()\n",
+      "source_sha256": "9495dcd192cefbd88fd3ea87a36ce57a2b9f54664d94f60b4c0298e394c00d4c",
+      "samples_ns": [
+        1488000,
+        1504000,
+        1559000,
+        1548000,
+        1501000,
+        1495000,
+        1539000,
+        1618000,
+        1484000,
+        1563000,
+        1536000
+      ],
+      "median_ns": 1536000,
+      "checksum": 2262
+    },
+    "py_list_loop_loopcount": {
+      "source": "import math\nimport time\n\n\ndef primes_up_to(limit):\n    is_prime = [True] * (limit + 1)\n    is_prime[:2] = [False, False]\n    for candidate in range(2, math.isqrt(limit) + 1):\n        if is_prime[candidate]:\n            multiple = candidate * candidate\n            while multiple <= limit:\n                is_prime[multiple] = 0\n                multiple += candidate\n    count = 0\n    for value in range(2, limit + 1):\n        if is_prime[value]:\n            count += 1\n    return count\n\n\ndef bench():\n    started = time.process_time_ns()\n    result = primes_up_to(20_000)\n\n    elapsed = time.process_time_ns() - started\n    print(result)\n    print(elapsed)\n\n\nif __name__ == \"__main__\":\n    bench()\n",
+      "source_sha256": "86fe4d558397cdda2f51ee640269af2de9edbeabcdf670a51655c013fc1418a6",
+      "samples_ns": [
+        1193000,
+        1280000,
+        1182000,
+        1184000,
+        1132000,
+        1128000,
+        1172000,
+        1308000,
+        1150000,
+        1329000,
+        1156000
+      ],
+      "median_ns": 1182000,
+      "checksum": 2262
+    },
+    "py_bulk_count": {
+      "source": "import math\nimport time\n\n\ndef primes_up_to(limit):\n    is_prime = bytearray(b\"\\x01\") * (limit + 1)\n    is_prime[:2] = b\"\\x00\\x00\"\n    for candidate in range(2, math.isqrt(limit) + 1):\n        if is_prime[candidate]:\n            start = candidate * candidate\n            is_prime[start::candidate] = bytes((limit - start) // candidate + 1)\n    return is_prime.count(1)\n\n\ndef bench():\n    started = time.process_time_ns()\n    result = primes_up_to(20_000)\n\n    elapsed = time.process_time_ns() - started\n    print(result)\n    print(elapsed)\n\n\nif __name__ == \"__main__\":\n    bench()\n",
+      "source_sha256": "eac1d7280c8777a54ec204f7673bcd55f7fe2cc2c461e3aa4a76796f82a902d0",
+      "samples_ns": [
+        48000,
+        49000,
+        55000,
+        51000,
+        50000,
+        56000,
+        88000,
+        48000,
+        58000,
+        60000,
+        47000
+      ],
+      "median_ns": 51000,
+      "checksum": 2262
+    }
+  },
+  "phases": {
+    "tap": {
+      "source": "function primes_up_to(limit)\n{\n    let phase_start = clock_ns()\n    let is_prime = replicate([true], limit + 1)\n    is_prime[0] = false\n    is_prime[1] = false\n\n    let init_done = clock_ns()\n    let candidate = 2\n    while (candidate * candidate <= limit) {\n        if (is_prime[candidate]) {\n            let multiple = candidate * candidate\n            while (multiple <= limit) {\n                is_prime[multiple] = false\n                multiple = multiple + candidate\n            }\n        }\n        candidate = candidate + 1\n    }\n\n    let marking_done = clock_ns()\n    let count = 0\n    for (let value in 2 to (limit + 1)) {\n        if (is_prime[value]) {\n            count = count + 1\n        }\n    }\n    let counting_done = clock_ns()\n    print(init_done - phase_start)\n    print(marking_done - init_done)\n    print(counting_done - marking_done)\n    return count + 0\n}\n\nlet started = clock_ns()\nlet result = primes_up_to(20000)\n\nlet elapsed = clock_ns() - started\nprint(result)\nprint(elapsed)\n",
+      "samples_ns": [
+        [
+          32000,
+          788000,
+          277000
+        ],
+        [
+          30000,
+          697000,
+          269000
+        ],
+        [
+          29000,
+          690000,
+          261000
+        ],
+        [
+          28000,
+          693000,
+          261000
+        ],
+        [
+          30000,
+          689000,
+          279000
+        ],
+        [
+          28000,
+          689000,
+          261000
+        ],
+        [
+          30000,
+          714000,
+          271000
+        ],
+        [
+          34000,
+          713000,
+          269000
+        ],
+        [
+          29000,
+          690000,
+          261000
+        ],
+        [
+          29000,
+          709000,
+          268000
+        ],
+        [
+          30000,
+          690000,
+          264000
+        ]
+      ],
+      "medians_ns": {
+        "initialization": 30000,
+        "marking": 693000,
+        "counting": 268000
+      }
+    },
+    "py": {
+      "source": "import math\nimport time\n\n\ndef primes_up_to(limit):\n    phase_start = time.process_time_ns()\n    is_prime = bytearray(b\"\\x01\") * (limit + 1)\n    is_prime[:2] = b\"\\x00\\x00\"\n    init_done = time.process_time_ns()\n    for candidate in range(2, math.isqrt(limit) + 1):\n        if is_prime[candidate]:\n            start = candidate * candidate\n            is_prime[start::candidate] = bytes((limit - start) // candidate + 1)\n    marking_done = time.process_time_ns()\n    result = sum(is_prime)\n    counting_done = time.process_time_ns()\n    print(init_done - phase_start)\n    print(marking_done - init_done)\n    print(counting_done - marking_done)\n    return result\n\n\ndef bench():\n    started = time.process_time_ns()\n    result = primes_up_to(20_000)\n\n    elapsed = time.process_time_ns() - started\n    print(result)\n    print(elapsed)\n\n\nif __name__ == \"__main__\":\n    bench()\n",
+      "samples_ns": [
+        [
+          5000,
+          34000,
+          63000
+        ],
+        [
+          6000,
+          47000,
+          74000
+        ],
+        [
+          2000,
+          40000,
+          67000
+        ],
+        [
+          6000,
+          35000,
+          66000
+        ],
+        [
+          5000,
+          36000,
+          65000
+        ],
+        [
+          3000,
+          33000,
+          65000
+        ],
+        [
+          5000,
+          38000,
+          64000
+        ],
+        [
+          6000,
+          36000,
+          71000
+        ],
+        [
+          3000,
+          36000,
+          66000
+        ],
+        [
+          3000,
+          36000,
+          66000
+        ],
+        [
+          3000,
+          36000,
+          66000
+        ]
+      ],
+      "medians_ns": {
+        "initialization": 5000,
+        "marking": 36000,
+        "counting": 66000
+      }
+    }
+  }
+}

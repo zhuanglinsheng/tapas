@@ -1,0 +1,12 @@
+diff --git a/src/stdlib/syntax/syntax.c b/src/stdlib/syntax/syntax.c
+index ed7d362..c21b8e4 100644
+--- a/src/stdlib/syntax/syntax.c
++++ b/src/stdlib/syntax/syntax.c
+@@ -20,6 +20,7 @@ static void dictionary_set(tdict *dictionary, const char *name, const tobj *valu
+ static void dictionary_set_int(tdict *dictionary, const char *name, long value)
+ {
+ 	tobj object;
++	tobj_set_nil(&object);
+ 	tobj_set_int(&object, value);
+ 	dictionary_set(dictionary, name, &object);
+ }

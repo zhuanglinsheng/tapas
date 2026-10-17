@@ -8,13 +8,23 @@ local function multiply_checksum(left, right, size)
         result[row] = result_row
     end
 
+    local columns = {}
+    for column = 1, size do
+        local values = {}
+        for inner = 1, size do
+            values[inner] = right[inner][column]
+        end
+        columns[column] = values
+    end
     for row = 1, size do
+        local left_row, result_row = left[row], result[row]
         for column = 1, size do
+            local right_column = columns[column]
             local total = 0
             for inner = 1, size do
-                total = total + left[row][inner] * right[inner][column]
+                total = total + left_row[inner] * right_column[inner]
             end
-            result[row][column] = total
+            result_row[column] = total
         end
     end
 

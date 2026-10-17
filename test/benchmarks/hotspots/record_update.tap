@@ -1,0 +1,13 @@
+let Body = types::make_type('x': types::Float, 'vx': types::Float)
+let body: Body = {x = 0.0, vx = 0.25}
+function bench(n, body)
+{
+    let started = clock_ns()
+    for (let i in 0 to n) { body['x'] = body::x + body::vx }
+    let result = int(body::x)
+    let elapsed = clock_ns() - started
+    print(result)
+    print(elapsed)
+}
+
+bench(500000, body)

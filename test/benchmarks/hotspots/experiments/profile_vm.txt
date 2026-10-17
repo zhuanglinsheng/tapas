@@ -1,0 +1,70 @@
+Diagnostic CPU sampling: prolonged float workload (200,000,000 iterations).
+These are stack samples, not hardware counters or the published A/B timings.
+
+Analysis of sampling tapas-ab-baseline (pid 21387) every 1 millisecond
+Process:         tapas-ab-baseline [21387]
+Path:            /Users/USER/Documents/*/tapas-ab-baseline
+Load Address:    0x10066c000
+Identifier:      tapas-ab-baseline
+Version:         0
+Code Type:       ARM64
+Platform:        macOS
+Parent Process:  python3.14 [21357]
+Target Type:     live task
+
+Date/Time:       2026-10-17 12:54:51.312 +0800
+Launch Time:     2026-10-17 12:54:51.244 +0800
+OS Version:      macOS 27.0.1 (26A434)
+Report Version:  7
+Analysis Tool:   /usr/bin/sample
+
+Physical footprint:         1536K
+Physical footprint (peak):  1536K
+Idle exit:                  untracked
+----
+
+Call graph:
+    2521 Thread_6782217   DispatchQueue_1: com.apple.main-thread  (serial)
+      2521 start  (in dyld) + 6688  [0x19fbf3e80]
+        2521 main  (in tapas-ab-baseline) + 1188  [0x10066d3e4]
+          2521 tsession_execute_file  (in tapas-ab-baseline) + 520  [0x100696e38]
+            2521 exec_tins  (in tapas-ab-baseline) + 600,564,...  [0x10067b228,0x10067b204,...]
+
+Total number in stack (recursive counted multiple, when >=5):
+
+Sort by top of stack, same collapsed (when >= 5):
+        exec_tins  (in tapas-ab-baseline)        2521
+
+Analysis of sampling tapas (pid 21391) every 1 millisecond
+Process:         tapas [21391]
+Path:            /Users/USER/Documents/*/tapas
+Load Address:    0x1004e8000
+Identifier:      tapas
+Version:         0
+Code Type:       ARM64
+Platform:        macOS
+Parent Process:  python3.14 [21357]
+Target Type:     live task
+
+Date/Time:       2026-10-17 12:54:56.236 +0800
+Launch Time:     2026-10-17 12:54:56.184 +0800
+OS Version:      macOS 27.0.1 (26A434)
+Report Version:  7
+Analysis Tool:   /usr/bin/sample
+
+Physical footprint:         1472K
+Physical footprint (peak):  1472K
+Idle exit:                  untracked
+----
+
+Call graph:
+    2526 Thread_6782280   DispatchQueue_1: com.apple.main-thread  (serial)
+      2526 start  (in dyld) + 6688  [0x19fbf3e80]
+        2526 main  (in tapas) + 1188  [0x1004e93e4]
+          2526 tsession_execute_file  (in tapas) + 520  [0x100513484]
+            2526 exec_tins  (in tapas) + 604,568,...  [0x1004f722c,0x1004f7208,...]
+
+Total number in stack (recursive counted multiple, when >=5):
+
+Sort by top of stack, same collapsed (when >= 5):
+        exec_tins  (in tapas)        2526

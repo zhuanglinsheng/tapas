@@ -1,0 +1,515 @@
+{
+  "baseline": {
+    "path": "/tmp/tapas-builtins-before",
+    "sha256": "86f4ec5f0efb799a1b71b46f346d2b9f36963284c5c00fc2f6d04362481cc2a2",
+    "version": "Tapas 0.1.0 Copyright (C) 2020-2026",
+    "build_config": null
+  },
+  "candidate": {
+    "path": "/Users/zhuanglinsheng/Documents/Github/tapas/build-release/bin/tapas",
+    "sha256": "14159bed7f19ad9e4624447a1ac53afce9c583276cf252a9bc361d176130d9c7",
+    "version": "Tapas 0.1.0 Copyright (C) 2020-2026",
+    "build_config": [
+      "CMAKE_BUILD_TYPE:STRING=Release",
+      "CMAKE_C_COMPILER:FILEPATH=/usr/bin/cc",
+      "CMAKE_C_FLAGS:STRING=",
+      "CMAKE_C_FLAGS_RELEASE:STRING=-O3 -DNDEBUG",
+      "CMAKE_EXE_LINKER_FLAGS:STRING=",
+      "TAPAS_ENABLE_IPO:BOOL=ON"
+    ]
+  },
+  "rows": [
+    {
+      "name": "join_list",
+      "source": "let chunks = replicate(['abcdefgh'], 128)\nlet started = clock_ns()\nlet checksum = 0\nfor (let repetition in 0 to 5000) {\n    let result = join(chunks, '-')\n    checksum = checksum + len(result)\n}\nlet elapsed = clock_ns() - started\nprint(checksum)\nprint(elapsed)\n",
+      "checksum": 5755000,
+      "source_sha256": "9547a9724e6a66fb1df25a4ff6fa39ca853bc856ba5fda0ba63880d48cc32543",
+      "samples_ns": {
+        "baseline": [
+          8525000,
+          8677000,
+          8649000,
+          8564000,
+          8667000,
+          8638000,
+          8676000,
+          8762000,
+          8448000,
+          8618000,
+          8781000,
+          8525000,
+          8529000,
+          8525000,
+          8732000,
+          8588000,
+          8603000,
+          8434000,
+          8509000,
+          8768000,
+          8546000
+        ],
+        "candidate": [
+          9242000,
+          9150000,
+          9347000,
+          9147000,
+          9077000,
+          9196000,
+          9055000,
+          9483000,
+          9257000,
+          9183000,
+          9076000,
+          9202000,
+          9422000,
+          9273000,
+          9379000,
+          9145000,
+          9134000,
+          9279000,
+          9326000,
+          9102000,
+          9746000
+        ]
+      },
+      "baseline_median_ns": 8603000,
+      "candidate_median_ns": 9202000,
+      "paired_ratio_median": 1.0740952817224003,
+      "paired_ratio_iqr": [
+        1.058117291486787,
+        1.0917521230449658
+      ],
+      "round_ratio_medians": [
+        1.064598286640426,
+        1.0822871490527277,
+        1.0740952817224003
+      ],
+      "rounds": [
+        {
+          "checksum": 5755000,
+          "source_sha256": "9547a9724e6a66fb1df25a4ff6fa39ca853bc856ba5fda0ba63880d48cc32543",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              8525000,
+              8677000,
+              8649000,
+              8564000,
+              8667000,
+              8638000,
+              8676000
+            ],
+            "candidate": [
+              9242000,
+              9150000,
+              9347000,
+              9147000,
+              9077000,
+              9196000,
+              9055000
+            ]
+          },
+          "baseline_median_ns": 8649000,
+          "candidate_median_ns": 9150000,
+          "paired_ratio_median": 1.064598286640426,
+          "paired_ratio_iqr": [
+            1.0473058728510443,
+            1.0807029714417853
+          ]
+        },
+        {
+          "checksum": 5755000,
+          "source_sha256": "9547a9724e6a66fb1df25a4ff6fa39ca853bc856ba5fda0ba63880d48cc32543",
+          "first": "candidate",
+          "samples_ns": {
+            "baseline": [
+              8762000,
+              8448000,
+              8618000,
+              8781000,
+              8525000,
+              8529000,
+              8525000
+            ],
+            "candidate": [
+              9483000,
+              9257000,
+              9183000,
+              9076000,
+              9202000,
+              9422000,
+              9273000
+            ]
+          },
+          "baseline_median_ns": 8529000,
+          "candidate_median_ns": 9257000,
+          "paired_ratio_median": 1.0822871490527277,
+          "paired_ratio_iqr": [
+            1.0655604548619169,
+            1.0957623106060606
+          ]
+        },
+        {
+          "checksum": 5755000,
+          "source_sha256": "9547a9724e6a66fb1df25a4ff6fa39ca853bc856ba5fda0ba63880d48cc32543",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              8732000,
+              8588000,
+              8603000,
+              8434000,
+              8509000,
+              8768000,
+              8546000
+            ],
+            "candidate": [
+              9379000,
+              9145000,
+              9134000,
+              9279000,
+              9326000,
+              9102000,
+              9746000
+            ]
+          },
+          "baseline_median_ns": 8588000,
+          "candidate_median_ns": 9279000,
+          "paired_ratio_median": 1.0740952817224003,
+          "paired_ratio_iqr": [
+            1.0617226548878298,
+            1.1001897083234526
+          ]
+        }
+      ]
+    },
+    {
+      "name": "concat_lists",
+      "source": "let chunks = list(iter(0, 128))\nlet started = clock_ns()\nlet checksum = 0\nfor (let repetition in 0 to 5000) {\n    let result = concat(chunks, chunks)\n    checksum = checksum + len(result)\n}\nlet elapsed = clock_ns() - started\nprint(checksum)\nprint(elapsed)\n",
+      "checksum": 1280000,
+      "source_sha256": "6ecca9b6d1aaa0f237972349bc62daa28c75795d621072a5b5a738daa76b12e8",
+      "samples_ns": {
+        "baseline": [
+          4376000,
+          4372000,
+          4550000,
+          4393000,
+          4407000,
+          4350000,
+          4639000,
+          4387000,
+          4502000,
+          4386000,
+          4390000,
+          4481000,
+          4346000,
+          4412000,
+          4412000,
+          4580000,
+          4713000,
+          4498000,
+          4531000,
+          4357000,
+          4379000
+        ],
+        "candidate": [
+          4367000,
+          4497000,
+          4374000,
+          4657000,
+          4477000,
+          4736000,
+          4416000,
+          4458000,
+          4350000,
+          4372000,
+          4347000,
+          4407000,
+          4355000,
+          4422000,
+          4493000,
+          4425000,
+          4764000,
+          4401000,
+          4391000,
+          4501000,
+          4361000
+        ]
+      },
+      "baseline_median_ns": 4407000,
+      "candidate_median_ns": 4416000,
+      "paired_ratio_median": 0.9979433272394881,
+      "paired_ratio_iqr": [
+        0.9737683017411107,
+        1.0172716006928078
+      ],
+      "round_ratio_medians": [
+        1.0158838211935557,
+        0.9968080255357957,
+        0.9958894724823019
+      ],
+      "rounds": [
+        {
+          "checksum": 1280000,
+          "source_sha256": "6ecca9b6d1aaa0f237972349bc62daa28c75795d621072a5b5a738daa76b12e8",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              4376000,
+              4372000,
+              4550000,
+              4393000,
+              4407000,
+              4350000,
+              4639000
+            ],
+            "candidate": [
+              4367000,
+              4497000,
+              4374000,
+              4657000,
+              4477000,
+              4736000,
+              4416000
+            ]
+          },
+          "baseline_median_ns": 4393000,
+          "candidate_median_ns": 4477000,
+          "paired_ratio_median": 1.0158838211935557,
+          "paired_ratio_iqr": [
+            0.9613186813186814,
+            1.0600956066469382
+          ]
+        },
+        {
+          "checksum": 1280000,
+          "source_sha256": "6ecca9b6d1aaa0f237972349bc62daa28c75795d621072a5b5a738daa76b12e8",
+          "first": "candidate",
+          "samples_ns": {
+            "baseline": [
+              4387000,
+              4502000,
+              4386000,
+              4390000,
+              4481000,
+              4346000,
+              4412000
+            ],
+            "candidate": [
+              4458000,
+              4350000,
+              4372000,
+              4347000,
+              4407000,
+              4355000,
+              4422000
+            ]
+          },
+          "baseline_median_ns": 4390000,
+          "candidate_median_ns": 4372000,
+          "paired_ratio_median": 0.9968080255357957,
+          "paired_ratio_iqr": [
+            0.9834858290560143,
+            1.0022665457842248
+          ]
+        },
+        {
+          "checksum": 1280000,
+          "source_sha256": "6ecca9b6d1aaa0f237972349bc62daa28c75795d621072a5b5a738daa76b12e8",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              4412000,
+              4580000,
+              4713000,
+              4498000,
+              4531000,
+              4357000,
+              4379000
+            ],
+            "candidate": [
+              4493000,
+              4425000,
+              4764000,
+              4401000,
+              4391000,
+              4501000,
+              4361000
+            ]
+          },
+          "baseline_median_ns": 4498000,
+          "candidate_median_ns": 4425000,
+          "paired_ratio_median": 0.9958894724823019,
+          "paired_ratio_iqr": [
+            0.9691017435444714,
+            1.0183590208522213
+          ]
+        }
+      ]
+    },
+    {
+      "name": "list_from_list",
+      "source": "let chunks = list(iter(0, 128))\nlet started = clock_ns()\nlet checksum = 0\nfor (let repetition in 0 to 5000) {\n    let result = list(chunks)\n    checksum = checksum + len(result)\n}\nlet elapsed = clock_ns() - started\nprint(checksum)\nprint(elapsed)\n",
+      "checksum": 640000,
+      "source_sha256": "6de9c224384f0cdb8ae149acd4c71aee87e34cfd7c8618494968540481321862",
+      "samples_ns": {
+        "baseline": [
+          3031000,
+          2909000,
+          2974000,
+          2915000,
+          3027000,
+          2911000,
+          3002000,
+          3059000,
+          2986000,
+          2958000,
+          3166000,
+          2911000,
+          2978000,
+          2909000,
+          3080000,
+          2962000,
+          2976000,
+          2909000,
+          2972000,
+          2923000,
+          2935000
+        ],
+        "candidate": [
+          1949000,
+          1896000,
+          1915000,
+          1915000,
+          1901000,
+          1935000,
+          1961000,
+          1943000,
+          1904000,
+          1908000,
+          1926000,
+          1918000,
+          1940000,
+          1921000,
+          1917000,
+          2006000,
+          1947000,
+          1899000,
+          1898000,
+          1945000,
+          2036000
+        ]
+      },
+      "baseline_median_ns": 2972000,
+      "candidate_median_ns": 1921000,
+      "paired_ratio_median": 0.6517703678239944,
+      "paired_ratio_iqr": [
+        0.6381347589784179,
+        0.6596222481574672
+      ],
+      "round_ratio_medians": [
+        0.6517703678239944,
+        0.6450304259634888,
+        0.6542338709677419
+      ],
+      "rounds": [
+        {
+          "checksum": 640000,
+          "source_sha256": "6de9c224384f0cdb8ae149acd4c71aee87e34cfd7c8618494968540481321862",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              3031000,
+              2909000,
+              2974000,
+              2915000,
+              3027000,
+              2911000,
+              3002000
+            ],
+            "candidate": [
+              1949000,
+              1896000,
+              1915000,
+              1915000,
+              1901000,
+              1935000,
+              1961000
+            ]
+          },
+          "baseline_median_ns": 2974000,
+          "candidate_median_ns": 1915000,
+          "paired_ratio_median": 0.6517703678239944,
+          "paired_ratio_iqr": [
+            0.6430221049158693,
+            0.6569468267581475
+          ]
+        },
+        {
+          "checksum": 640000,
+          "source_sha256": "6de9c224384f0cdb8ae149acd4c71aee87e34cfd7c8618494968540481321862",
+          "first": "candidate",
+          "samples_ns": {
+            "baseline": [
+              3059000,
+              2986000,
+              2958000,
+              3166000,
+              2911000,
+              2978000,
+              2909000
+            ],
+            "candidate": [
+              1943000,
+              1904000,
+              1908000,
+              1926000,
+              1918000,
+              1940000,
+              1921000
+            ]
+          },
+          "baseline_median_ns": 2978000,
+          "candidate_median_ns": 1921000,
+          "paired_ratio_median": 0.6450304259634888,
+          "paired_ratio_iqr": [
+            0.6351748937561295,
+            0.6588801099278598
+          ]
+        },
+        {
+          "checksum": 640000,
+          "source_sha256": "6de9c224384f0cdb8ae149acd4c71aee87e34cfd7c8618494968540481321862",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              3080000,
+              2962000,
+              2976000,
+              2909000,
+              2972000,
+              2923000,
+              2935000
+            ],
+            "candidate": [
+              1917000,
+              2006000,
+              1947000,
+              1899000,
+              1898000,
+              1945000,
+              2036000
+            ]
+          },
+          "baseline_median_ns": 2962000,
+          "candidate_median_ns": 1945000,
+          "paired_ratio_median": 0.6542338709677419,
+          "paired_ratio_iqr": [
+            0.6386271870794078,
+            0.6772451046590142
+          ]
+        }
+      ]
+    }
+  ]
+}

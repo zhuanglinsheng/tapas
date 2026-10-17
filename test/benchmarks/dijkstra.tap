@@ -1,27 +1,24 @@
+function distance_less(a, b)
+{
+    return a[0] < b[0]
+}
+
 function dijkstra(graph, source, size)
 {
     let dist = replicate([1000000000000], size)
-    let visited = replicate([false], size)
     dist[source] = 0
-    for (let step in 0 to size) {
-        let best = -1
-        let best_dist = 1000000000000
-        for (let i in 0 to size) {
-            if (not visited[i] and dist[i] < best_dist) {
-                best = i
-                best_dist = dist[i]
-            }
-        }
-        if (best < 0) {
-            break
-        }
-        visited[best] = true
-        if (best in graph) {
-            for (let edge in graph[best]) {
+    let queue = [[0, source]]
+    while (len(queue) > 0) {
+        let current = heap::pop(queue, distance_less)
+        let distance = current[0]
+        let vertex = current[1]
+        if (distance == dist[vertex] and vertex in graph) {
+            for (let edge in graph[vertex]) {
                 let target = edge[0]
-                let alt = dist[best] + edge[1]
+                let alt = distance + edge[1]
                 if (alt < dist[target]) {
                     dist[target] = alt
+                    heap::push(queue, [alt, target], distance_less)
                 }
             }
         }

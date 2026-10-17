@@ -1,22 +1,12 @@
 local function merge_sort(values)
     local n = #values
     if n <= 1 then
-        local copy = {}
-        for index = 1, n do
-            copy[index] = values[index]
-        end
-        return copy
+        return table.move(values, 1, n, 1, {})
     end
 
     local middle = n // 2
-    local left_slice = {}
-    for index = 1, middle do
-        left_slice[index] = values[index]
-    end
-    local right_slice = {}
-    for index = middle + 1, n do
-        right_slice[index - middle] = values[index]
-    end
+    local left_slice = table.move(values, 1, middle, 1, {})
+    local right_slice = table.move(values, middle + 1, n, 1, {})
     local left = merge_sort(left_slice)
     local right = merge_sort(right_slice)
     local merged = {}
@@ -34,22 +24,10 @@ local function merge_sort(values)
             j = j + 1
         end
     end
-    while i <= #left do
-        k = k + 1
-        merged[k] = left[i]
-        i = i + 1
-    end
-    while j <= #right do
-        k = k + 1
-        merged[k] = right[j]
-        j = j + 1
-    end
-
-    local copy = {}
-    for index = 1, k do
-        copy[index] = merged[index]
-    end
-    return copy
+    table.move(left, i, #left, k + 1, merged)
+    k = k + #left - i + 1
+    table.move(right, j, #right, k + 1, merged)
+    return merged
 end
 
 local values = {}

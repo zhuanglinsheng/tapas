@@ -12,8 +12,9 @@ local function lcs_length(left, right)
 
     for i = 1, left_length do
         current[0] = 0
+        local ch = byte(left, i)
         for j = 1, right_length do
-            if byte(left, i) == byte(right, j) then
+            if ch == byte(right, j) then
                 current[j] = previous[j - 1] + 1
             elseif previous[j] >= current[j - 1] then
                 current[j] = previous[j]

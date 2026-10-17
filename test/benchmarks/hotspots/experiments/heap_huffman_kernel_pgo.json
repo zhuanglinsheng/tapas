@@ -1,0 +1,180 @@
+{
+  "date": "2026-10-17T08:59:43.275158+00:00",
+  "runtime": {
+    "path": "/Users/zhuanglinsheng/Documents/Github/tapas/build-pgo/bin/tapas",
+    "sha256": "a5d555feb721378bdcc366e58e42b7ea2ceb07c282a7a9fd21e95253a04ca79e",
+    "version": "Tapas 0.1.0 Copyright (C) 2020-2026",
+    "build_config": [
+      "CMAKE_BUILD_TYPE:STRING=Release",
+      "CMAKE_C_COMPILER:FILEPATH=/usr/bin/cc",
+      "CMAKE_C_FLAGS:STRING=-flto=full -fprofile-instr-use=/Users/zhuanglinsheng/Documents/Github/tapas/build-pgo/profile/hotspots.profdata",
+      "CMAKE_C_FLAGS_RELEASE:STRING=-O3 -DNDEBUG",
+      "CMAKE_EXE_LINKER_FLAGS:STRING=",
+      "TAPAS_ENABLE_IPO:BOOL=OFF"
+    ]
+  },
+  "sources": {
+    "baseline": {
+      "path": "/private/tmp/tapas-heap-ab/huffman_kernel.tap",
+      "sha256": "1646409645afe58e3253b877af209aaaf5e83f341a3e585f86c8420ba238d330",
+      "source": "function find_min(nodes)\n{\n    let best = -1\n    for (let i in 0 to nodes.len()) {\n        if (best < 0 or nodes[i][0] < nodes[best][0]) {\n            best = i\n        }\n    }\n    return best + 0\n}\n\nfunction total_length(node, depth)\n{\n    if (types::matches(node[1], types::String)) {\n        return node[0] * depth\n    }\n    let children = node[1]\n    return this(children[0], depth + 1) + this(children[1], depth + 1)\n}\n\nfunction huffman_total(freq)\n{\n    // Fixed symbol order makes ties in the minimum scan deterministic.\n    let nodes = []\n    for (let i in 0 to 8) {\n        let ch = 'abcdefgh'[i]\n        if (ch in freq) {\n            nodes.append(freq[ch] : ch)\n        }\n    }\n\n    while (nodes.len() > 1) {\n        let first = find_min(nodes)\n        let left = nodes[first]\n        delete(nodes, first)\n        let second = find_min(nodes)\n        let right = nodes[second]\n        delete(nodes, second)\n        nodes.append((left[0] + right[0]) : (left : right))\n    }\n\n    return total_length(nodes[0], 0) + 0\n}\n\nlet freq = {}\nfor (let ch in 'abcdefgh') { freq[ch] = 5000 }\nlet started = clock_ns()\nlet result = 0\nfor (let round in 0 to 10000) { result = result + huffman_total(freq) }\nlet elapsed = clock_ns() - started\nprint(result)\nprint(elapsed)\n"
+    },
+    "candidate": {
+      "path": "/private/tmp/tapas-heap-ab/huffman_heap_kernel.tap",
+      "sha256": "9f1b4634b6b0c5828663b582aa124a855fbb6f0e29c771dd9d0926b48a137b19",
+      "source": "function frequency_less(a, b)\n{\n    return a[0] < b[0]\n}\n\nfunction total_length(node, depth)\n{\n    if (types::matches(node[1], types::String)) {\n        return node[0] * depth\n    }\n    let children = node[1]\n    return this(children[0], depth + 1) + this(children[1], depth + 1)\n}\n\nfunction huffman_total(freq)\n{\n    // Fixed symbol order makes ties in the minimum scan deterministic.\n    let nodes = []\n    for (let i in 0 to 8) {\n        let ch = 'abcdefgh'[i]\n        if (ch in freq) {\n            nodes.append(freq[ch] : ch)\n        }\n    }\n\n    heap::heapify(nodes, frequency_less)\n    while (nodes.len() > 1) {\n        let left = heap::pop(nodes, frequency_less)\n        let right = heap::pop(nodes, frequency_less)\n        heap::push(nodes, (left[0] + right[0]) : (left : right), frequency_less)\n    }\n\n    return total_length(nodes[0], 0) + 0\n}\n\nlet freq = {}\nfor (let ch in 'abcdefgh') { freq[ch] = 5000 }\nlet started = clock_ns()\nlet result = 0\nfor (let round in 0 to 10000) { result = result + huffman_total(freq) }\nlet elapsed = clock_ns() - started\nprint(result)\nprint(elapsed)\n"
+    }
+  },
+  "checksum": 1200000000,
+  "runs": 7,
+  "rounds": [
+    {
+      "samples_ns": {
+        "baseline": [
+          107755000,
+          102133000,
+          104885000,
+          102582000,
+          103987000,
+          102482000,
+          102154000
+        ],
+        "candidate": [
+          88212000,
+          83457000,
+          85132000,
+          83009000,
+          84123000,
+          84778000,
+          84691000
+        ]
+      },
+      "baseline_median_ns": 102582000,
+      "candidate_median_ns": 84691000,
+      "paired_ratio_median": 0.8171403953668256,
+      "paired_ratio_iqr": [
+        0.8091965452028621,
+        0.8272477117932905
+      ]
+    },
+    {
+      "samples_ns": {
+        "baseline": [
+          104459000,
+          102704000,
+          102510000,
+          102785000,
+          102486000,
+          102295000,
+          102591000
+        ],
+        "candidate": [
+          85002000,
+          83408000,
+          84614000,
+          83186000,
+          83796000,
+          84130000,
+          82728000
+        ]
+      },
+      "baseline_median_ns": 102591000,
+      "candidate_median_ns": 83796000,
+      "paired_ratio_median": 0.8137355326013077,
+      "paired_ratio_iqr": [
+        0.8093204261322178,
+        0.8224253384818417
+      ]
+    },
+    {
+      "samples_ns": {
+        "baseline": [
+          103681000,
+          101967000,
+          102280000,
+          102133000,
+          102290000,
+          101611000,
+          101536000
+        ],
+        "candidate": [
+          83398000,
+          83296000,
+          84353000,
+          83007000,
+          83068000,
+          82575000,
+          82851000
+        ]
+      },
+      "baseline_median_ns": 102133000,
+      "candidate_median_ns": 83068000,
+      "paired_ratio_median": 0.812734375764934,
+      "paired_ratio_iqr": [
+        0.8120832925994721,
+        0.816891739484343
+      ]
+    }
+  ],
+  "warmups_per_round": 1,
+  "round_ratio_medians": [
+    0.8171403953668256,
+    0.8137355326013077,
+    0.812734375764934
+  ],
+  "samples_ns": {
+    "baseline": [
+      107755000,
+      102133000,
+      104885000,
+      102582000,
+      103987000,
+      102482000,
+      102154000,
+      104459000,
+      102704000,
+      102510000,
+      102785000,
+      102486000,
+      102295000,
+      102591000,
+      103681000,
+      101967000,
+      102280000,
+      102133000,
+      102290000,
+      101611000,
+      101536000
+    ],
+    "candidate": [
+      88212000,
+      83457000,
+      85132000,
+      83009000,
+      84123000,
+      84778000,
+      84691000,
+      85002000,
+      83408000,
+      84614000,
+      83186000,
+      83796000,
+      84130000,
+      82728000,
+      83398000,
+      83296000,
+      84353000,
+      83007000,
+      83068000,
+      82575000,
+      82851000
+    ]
+  },
+  "baseline_median_ns": 102486000,
+  "candidate_median_ns": 83457000,
+  "paired_ratio_median": 0.8137355326013077,
+  "paired_ratio_iqr": [
+    0.8104951751674581,
+    0.8205301023066719
+  ]
+}

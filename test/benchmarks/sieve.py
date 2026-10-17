@@ -1,29 +1,25 @@
+import math
 import time
 
 
 def primes_up_to(limit):
-    is_prime = [True] * (limit + 1)
-    is_prime[0] = False
-    is_prime[1] = False
-
-    candidate = 2
-    while candidate * candidate <= limit:
+    is_prime = bytearray(b"\x01") * (limit + 1)
+    is_prime[:2] = b"\x00\x00"
+    for candidate in range(2, math.isqrt(limit) + 1):
         if is_prime[candidate]:
-            multiple = candidate * candidate
-            while multiple <= limit:
-                is_prime[multiple] = False
-                multiple = multiple + candidate
-        candidate = candidate + 1
-
-    count = 0
-    for value in range(2, limit + 1):
-        if is_prime[value]:
-            count = count + 1
-    return count
+            start = candidate * candidate
+            is_prime[start::candidate] = bytes((limit - start) // candidate + 1)
+    return sum(is_prime)
 
 
-started = time.process_time_ns()
-result = primes_up_to(20_000)
+def bench():
+    started = time.process_time_ns()
+    result = primes_up_to(20_000)
 
-print(result)
-print(time.process_time_ns() - started)
+    elapsed = time.process_time_ns() - started
+    print(result)
+    print(elapsed)
+
+
+if __name__ == "__main__":
+    bench()

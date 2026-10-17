@@ -7,8 +7,14 @@ def fibonacci(n):
     return fibonacci(n - 1) + fibonacci(n - 2)
 
 
-started = time.process_time_ns()
-result = fibonacci(24)
+def bench():
+    started = time.process_time_ns()
+    result = fibonacci(24)
 
-print(result)
-print(time.process_time_ns() - started)
+    elapsed = time.process_time_ns() - started
+    print(result)
+    print(elapsed)
+
+
+if __name__ == "__main__":
+    bench()

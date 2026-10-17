@@ -9,14 +9,9 @@ local function count_queens(positions, row, size)
         for previous = 0, row - 1 do
             local placed = positions[previous]
             local distance = row - previous
-            if placed == column then
+            if placed == column or math.abs(placed - column) == distance then
                 valid = false
-            end
-            if placed == column - distance then
-                valid = false
-            end
-            if placed == column + distance then
-                valid = false
+                break
             end
         end
         if valid then

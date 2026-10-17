@@ -1,0 +1,763 @@
+{
+  "date": "2026-10-17T05:45:45.728521+00:00",
+  "system": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+  "architecture": "arm64",
+  "runs": 5,
+  "warmups": 1,
+  "rounds": 2,
+  "first": "baseline",
+  "seed": 0,
+  "round_orders": [
+    [
+      "n_queens",
+      "kmp",
+      "dp_row",
+      "longest_common_subsequence",
+      "float_arithmetic",
+      "sudoku",
+      "n_body"
+    ],
+    [
+      "dp_row",
+      "longest_common_subsequence",
+      "n_queens",
+      "float_arithmetic",
+      "n_body",
+      "kmp",
+      "sudoku"
+    ]
+  ],
+  "baseline": {
+    "path": "/Users/zhuanglinsheng/Documents/Github/tapas/build-release/bin/tapas-target90-baseline",
+    "sha256": "4eb45fc24208ee395859c7d2a6ca05da6d9beaf26a29d6eb75c199aa43601ad7",
+    "version": "Tapas 0.1.0 Copyright (C) 2020-2026",
+    "build_config": [
+      "CMAKE_BUILD_TYPE:STRING=Release",
+      "CMAKE_C_COMPILER:FILEPATH=/usr/bin/cc",
+      "CMAKE_C_FLAGS_RELEASE:STRING=-O3 -DNDEBUG",
+      "TAPAS_ENABLE_IPO:BOOL=ON"
+    ]
+  },
+  "candidate": {
+    "path": "/Users/zhuanglinsheng/Documents/Github/tapas/build-release/bin/tapas",
+    "sha256": "00c1d99fddae357c77e8ef8762358edfcc890cfdaae317062f998a18db6aa9f6",
+    "version": "Tapas 0.1.0 Copyright (C) 2020-2026",
+    "build_config": [
+      "CMAKE_BUILD_TYPE:STRING=Release",
+      "CMAKE_C_COMPILER:FILEPATH=/usr/bin/cc",
+      "CMAKE_C_FLAGS_RELEASE:STRING=-O3 -DNDEBUG",
+      "TAPAS_ENABLE_IPO:BOOL=ON"
+    ]
+  },
+  "rows": [
+    {
+      "checksum": 1480,
+      "source_sha256": "cf2367f9721b2f2fe0e6c3eb7a7686f45f26b42508a29ce1ee89da777d5e8e89",
+      "samples_ns": {
+        "baseline": [
+          15507000,
+          15876000,
+          15447000,
+          15759000,
+          15608000,
+          15514000,
+          15499000,
+          15626000,
+          15735000,
+          15499000
+        ],
+        "candidate": [
+          15569000,
+          15747000,
+          16307000,
+          16156000,
+          16093000,
+          16211000,
+          15774000,
+          15451000,
+          16052000,
+          16110000
+        ]
+      },
+      "baseline_median_ns": 15561000,
+      "candidate_median_ns": 16072500,
+      "paired_ratio_median": 1.022669062380321,
+      "paired_ratio_iqr": [
+        1.0009672776700802,
+        1.0407982142809464
+      ],
+      "round_ratio_medians": [
+        1.0251919538041754,
+        1.0201461709564665
+      ],
+      "rounds": [
+        {
+          "checksum": 1480,
+          "source_sha256": "cf2367f9721b2f2fe0e6c3eb7a7686f45f26b42508a29ce1ee89da777d5e8e89",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              15507000,
+              15876000,
+              15447000,
+              15759000,
+              15608000
+            ],
+            "candidate": [
+              15569000,
+              15747000,
+              16307000,
+              16156000,
+              16093000
+            ]
+          },
+          "baseline_median_ns": 15608000,
+          "candidate_median_ns": 16093000,
+          "paired_ratio_median": 1.0251919538041754,
+          "paired_ratio_iqr": [
+            0.9979363609763245,
+            1.0433740246281848
+          ]
+        },
+        {
+          "checksum": 1480,
+          "source_sha256": "cf2367f9721b2f2fe0e6c3eb7a7686f45f26b42508a29ce1ee89da777d5e8e89",
+          "first": "candidate",
+          "samples_ns": {
+            "baseline": [
+              15514000,
+              15499000,
+              15626000,
+              15735000,
+              15499000
+            ],
+            "candidate": [
+              16211000,
+              15774000,
+              15451000,
+              16052000,
+              16110000
+            ]
+          },
+          "baseline_median_ns": 15514000,
+          "candidate_median_ns": 16052000,
+          "paired_ratio_median": 1.0201461709564665,
+          "paired_ratio_iqr": [
+            1.003271898476425,
+            1.042174530374913
+          ]
+        }
+      ],
+      "name": "longest_common_subsequence",
+      "kind": "algorithm"
+    },
+    {
+      "checksum": 190439,
+      "source_sha256": "771c17658395f0ca95262b63029a31ef7713a3c3a4d21175f5988dd789d68975",
+      "samples_ns": {
+        "baseline": [
+          41634000,
+          41378000,
+          41421000,
+          41867000,
+          41549000,
+          41674000,
+          40895000,
+          41179000,
+          41401000,
+          41568000
+        ],
+        "candidate": [
+          40905000,
+          40577000,
+          40806000,
+          41249000,
+          41304000,
+          41376000,
+          41009000,
+          41429000,
+          41471000,
+          41408000
+        ]
+      },
+      "baseline_median_ns": 41485000,
+      "candidate_median_ns": 41276500,
+      "paired_ratio_median": 0.9934763031924196,
+      "paired_ratio_iqr": [
+        0.9844869122666307,
+        1.001964992024261
+      ],
+      "round_ratio_medians": [
+        0.9851524588976606,
+        1.001690780415932
+      ],
+      "rounds": [
+        {
+          "checksum": 190439,
+          "source_sha256": "771c17658395f0ca95262b63029a31ef7713a3c3a4d21175f5988dd789d68975",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              41634000,
+              41378000,
+              41421000,
+              41867000,
+              41549000
+            ],
+            "candidate": [
+              40905000,
+              40577000,
+              40806000,
+              41249000,
+              41304000
+            ]
+          },
+          "baseline_median_ns": 41549000,
+          "candidate_median_ns": 40905000,
+          "paired_ratio_median": 0.9851524588976606,
+          "paired_ratio_iqr": [
+            0.9815660796833144,
+            0.9896711594408207
+          ]
+        },
+        {
+          "checksum": 190439,
+          "source_sha256": "771c17658395f0ca95262b63029a31ef7713a3c3a4d21175f5988dd789d68975",
+          "first": "candidate",
+          "samples_ns": {
+            "baseline": [
+              41674000,
+              40895000,
+              41179000,
+              41401000,
+              41568000
+            ],
+            "candidate": [
+              41376000,
+              41009000,
+              41429000,
+              41471000,
+              41408000
+            ]
+          },
+          "baseline_median_ns": 41401000,
+          "candidate_median_ns": 41408000,
+          "paired_ratio_median": 1.001690780415932,
+          "paired_ratio_iqr": [
+            0.9945000719134403,
+            1.004429341242201
+          ]
+        }
+      ],
+      "name": "dp_row",
+      "kind": "hotspot"
+    },
+    {
+      "checksum": 149850000,
+      "source_sha256": "210e4bb137830cbab28b647418c7666864b0c89c41fe16fd08191e15005d94cf",
+      "samples_ns": {
+        "baseline": [
+          23651000,
+          23784000,
+          23563000,
+          23369000,
+          23431000,
+          24400000,
+          23665000,
+          23659000,
+          23390000,
+          23819000
+        ],
+        "candidate": [
+          24080000,
+          24491000,
+          23737000,
+          23711000,
+          23629000,
+          24564000,
+          24097000,
+          24474000,
+          24212000,
+          24089000
+        ]
+      },
+      "baseline_median_ns": 23655000,
+      "candidate_median_ns": 24093000,
+      "paired_ratio_median": 1.0163867702393654,
+      "paired_ratio_iqr": [
+        1.0081838723427676,
+        1.0309063443108524
+      ],
+      "round_ratio_medians": [
+        1.0146347725619411,
+        1.0182548066765265
+      ],
+      "rounds": [
+        {
+          "checksum": 149850000,
+          "source_sha256": "210e4bb137830cbab28b647418c7666864b0c89c41fe16fd08191e15005d94cf",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              23651000,
+              23784000,
+              23563000,
+              23369000,
+              23431000
+            ],
+            "candidate": [
+              24080000,
+              24491000,
+              23737000,
+              23711000,
+              23629000
+            ]
+          },
+          "baseline_median_ns": 23563000,
+          "candidate_median_ns": 23737000,
+          "paired_ratio_median": 1.0146347725619411,
+          "paired_ratio_iqr": [
+            1.0079174011235872,
+            1.02393231702264
+          ]
+        },
+        {
+          "checksum": 149850000,
+          "source_sha256": "210e4bb137830cbab28b647418c7666864b0c89c41fe16fd08191e15005d94cf",
+          "first": "candidate",
+          "samples_ns": {
+            "baseline": [
+              24400000,
+              23665000,
+              23659000,
+              23390000,
+              23819000
+            ],
+            "candidate": [
+              24564000,
+              24097000,
+              24474000,
+              24212000,
+              24089000
+            ]
+          },
+          "baseline_median_ns": 23665000,
+          "candidate_median_ns": 24212000,
+          "paired_ratio_median": 1.0182548066765265,
+          "paired_ratio_iqr": [
+            1.0090283999754983,
+            1.0347955012288845
+          ]
+        }
+      ],
+      "name": "kmp",
+      "kind": "algorithm"
+    },
+    {
+      "checksum": 16605,
+      "source_sha256": "be77ea8f64d4a7f400e51ec3a48df88922dc9936846d616ce05cf9a03de772cf",
+      "samples_ns": {
+        "baseline": [
+          367655000,
+          369531000,
+          377799000,
+          375046000,
+          370268000,
+          372294000,
+          375249000,
+          375236000,
+          378569000,
+          368567000
+        ],
+        "candidate": [
+          381304000,
+          377319000,
+          383688000,
+          386261000,
+          382886000,
+          382735000,
+          394035000,
+          388099000,
+          384017000,
+          381488000
+        ]
+      },
+      "baseline_median_ns": 373670000,
+      "candidate_median_ns": 383287000,
+      "paired_ratio_median": 1.0319905088650032,
+      "paired_ratio_iqr": [
+        1.0197034357596353,
+        1.0355741680101835
+      ],
+      "round_ratio_medians": [
+        1.0299029985655093,
+        1.0342797599377458
+      ],
+      "rounds": [
+        {
+          "checksum": 16605,
+          "source_sha256": "be77ea8f64d4a7f400e51ec3a48df88922dc9936846d616ce05cf9a03de772cf",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              367655000,
+              369531000,
+              377799000,
+              375046000,
+              370268000
+            ],
+            "candidate": [
+              381304000,
+              377319000,
+              383688000,
+              386261000,
+              382886000
+            ]
+          },
+          "baseline_median_ns": 370268000,
+          "candidate_median_ns": 382886000,
+          "paired_ratio_median": 1.0299029985655093,
+          "paired_ratio_iqr": [
+            1.0183315084238878,
+            1.035601248637885
+          ]
+        },
+        {
+          "checksum": 16605,
+          "source_sha256": "be77ea8f64d4a7f400e51ec3a48df88922dc9936846d616ce05cf9a03de772cf",
+          "first": "candidate",
+          "samples_ns": {
+            "baseline": [
+              372294000,
+              375249000,
+              375236000,
+              378569000,
+              368567000
+            ],
+            "candidate": [
+              382735000,
+              394035000,
+              388099000,
+              384017000,
+              381488000
+            ]
+          },
+          "baseline_median_ns": 375236000,
+          "candidate_median_ns": 384017000,
+          "paired_ratio_median": 1.0342797599377458,
+          "paired_ratio_iqr": [
+            1.0212180376945124,
+            1.0425600781524786
+          ]
+        }
+      ],
+      "name": "sudoku",
+      "kind": "algorithm"
+    },
+    {
+      "checksum": 724,
+      "source_sha256": "53cfa352837cb48ab4ee8cebeb6c6d77a5d978165df2ec228a263689c05084d9",
+      "samples_ns": {
+        "baseline": [
+          133262000,
+          132210000,
+          132687000,
+          139841000,
+          136147000,
+          131370000,
+          130969000,
+          131685000,
+          133881000,
+          131795000
+        ],
+        "candidate": [
+          133576000,
+          135089000,
+          137791000,
+          136904000,
+          137663000,
+          134883000,
+          135137000,
+          134301000,
+          137830000,
+          138138000
+        ]
+      },
+      "baseline_median_ns": 132448500,
+      "candidate_median_ns": 136020500,
+      "paired_ratio_median": 1.024258613806476,
+      "paired_ratio_iqr": [
+        1.0089403325299664,
+        1.033484860178892
+      ],
+      "round_ratio_medians": [
+        1.0111350231734817,
+        1.029496343767973
+      ],
+      "rounds": [
+        {
+          "checksum": 724,
+          "source_sha256": "53cfa352837cb48ab4ee8cebeb6c6d77a5d978165df2ec228a263689c05084d9",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              133262000,
+              132210000,
+              132687000,
+              139841000,
+              136147000
+            ],
+            "candidate": [
+              133576000,
+              135089000,
+              137791000,
+              136904000,
+              137663000
+            ]
+          },
+          "baseline_median_ns": 133262000,
+          "candidate_median_ns": 136904000,
+          "paired_ratio_median": 1.0111350231734817,
+          "paired_ratio_iqr": [
+            0.9906769182088357,
+            1.0301212143394034
+          ]
+        },
+        {
+          "checksum": 724,
+          "source_sha256": "53cfa352837cb48ab4ee8cebeb6c6d77a5d978165df2ec228a263689c05084d9",
+          "first": "candidate",
+          "samples_ns": {
+            "baseline": [
+              131370000,
+              130969000,
+              131685000,
+              133881000,
+              131795000
+            ],
+            "candidate": [
+              134883000,
+              135137000,
+              134301000,
+              137830000,
+              138138000
+            ]
+          },
+          "baseline_median_ns": 131685000,
+          "candidate_median_ns": 135137000,
+          "paired_ratio_median": 1.029496343767973,
+          "paired_ratio_iqr": [
+            1.0233034267324133,
+            1.0399760495175008
+          ]
+        }
+      ],
+      "name": "n_queens",
+      "kind": "algorithm"
+    },
+    {
+      "checksum": 125627,
+      "source_sha256": "809035a281ee689b086bfd6cc354c515fb476da706753c1c2f6b33d469db1aae",
+      "samples_ns": {
+        "baseline": [
+          22650000,
+          22850000,
+          23362000,
+          26924000,
+          27104000,
+          22236000,
+          22577000,
+          22597000,
+          22333000,
+          22255000
+        ],
+        "candidate": [
+          22668000,
+          22663000,
+          22881000,
+          22903000,
+          22482000,
+          21972000,
+          22677000,
+          22129000,
+          22423000,
+          22363000
+        ]
+      },
+      "baseline_median_ns": 22623500,
+      "candidate_median_ns": 22572500,
+      "paired_ratio_median": 0.9899717767981664,
+      "paired_ratio_iqr": [
+        0.9471303876096795,
+        1.004129754781133
+      ],
+      "round_ratio_medians": [
+        0.9794110093313929,
+        1.0040299108941924
+      ],
+      "rounds": [
+        {
+          "checksum": 125627,
+          "source_sha256": "809035a281ee689b086bfd6cc354c515fb476da706753c1c2f6b33d469db1aae",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              22650000,
+              22850000,
+              23362000,
+              26924000,
+              27104000
+            ],
+            "candidate": [
+              22668000,
+              22663000,
+              22881000,
+              22903000,
+              22482000
+            ]
+          },
+          "baseline_median_ns": 23362000,
+          "candidate_median_ns": 22668000,
+          "paired_ratio_median": 0.9794110093313929,
+          "paired_ratio_iqr": [
+            0.8400626782861794,
+            0.9963054472734649
+          ]
+        },
+        {
+          "checksum": 125627,
+          "source_sha256": "809035a281ee689b086bfd6cc354c515fb476da706753c1c2f6b33d469db1aae",
+          "first": "candidate",
+          "samples_ns": {
+            "baseline": [
+              22236000,
+              22577000,
+              22597000,
+              22333000,
+              22255000
+            ],
+            "candidate": [
+              21972000,
+              22677000,
+              22129000,
+              22423000,
+              22363000
+            ]
+          },
+          "baseline_median_ns": 22333000,
+          "candidate_median_ns": 22363000,
+          "paired_ratio_median": 1.0040299108941924,
+          "paired_ratio_iqr": [
+            0.9837083236122949,
+            1.0046410642499595
+          ]
+        }
+      ],
+      "name": "float_arithmetic",
+      "kind": "hotspot"
+    },
+    {
+      "checksum": 199830979999,
+      "source_sha256": "ccddd921a563d3796dbeb3cced8d9bfc59f029b56761d6ae033833702721935a",
+      "samples_ns": {
+        "baseline": [
+          23982000,
+          24319000,
+          24105000,
+          24112000,
+          24408000,
+          24511000,
+          24345000,
+          23824000,
+          24453000,
+          24253000
+        ],
+        "candidate": [
+          25245000,
+          25001000,
+          24733000,
+          24495000,
+          24885000,
+          24801000,
+          24587000,
+          24400000,
+          25360000,
+          25118000
+        ]
+      },
+      "baseline_median_ns": 24286000,
+      "candidate_median_ns": 24843000,
+      "paired_ratio_median": 1.0251149931830867,
+      "paired_ratio_iqr": [
+        1.0148710109320254,
+        1.0360221589836158
+      ],
+      "round_ratio_medians": [
+        1.0260526861646961,
+        1.0241773002014776
+      ],
+      "rounds": [
+        {
+          "checksum": 199830979999,
+          "source_sha256": "ccddd921a563d3796dbeb3cced8d9bfc59f029b56761d6ae033833702721935a",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              23982000,
+              24319000,
+              24105000,
+              24112000,
+              24408000
+            ],
+            "candidate": [
+              25245000,
+              25001000,
+              24733000,
+              24495000,
+              24885000
+            ]
+          },
+          "baseline_median_ns": 24112000,
+          "candidate_median_ns": 24885000,
+          "paired_ratio_median": 1.0260526861646961,
+          "paired_ratio_iqr": [
+            1.0177134899475995,
+            1.0403542073266163
+          ]
+        },
+        {
+          "checksum": 199830979999,
+          "source_sha256": "ccddd921a563d3796dbeb3cced8d9bfc59f029b56761d6ae033833702721935a",
+          "first": "candidate",
+          "samples_ns": {
+            "baseline": [
+              24511000,
+              24345000,
+              23824000,
+              24453000,
+              24253000
+            ],
+            "candidate": [
+              24801000,
+              24587000,
+              24400000,
+              25360000,
+              25118000
+            ]
+          },
+          "baseline_median_ns": 24345000,
+          "candidate_median_ns": 24801000,
+          "paired_ratio_median": 1.0241773002014776,
+          "paired_ratio_iqr": [
+            1.0108859310709384,
+            1.0363786271248614
+          ]
+        }
+      ],
+      "name": "n_body",
+      "kind": "algorithm"
+    }
+  ],
+  "git_head": "99ea72197b3e277c668a01124297b3ed7be1752e",
+  "runtime_diff_sha256": "9f2d19f9ed97bf46249acb0f059e0f91cd8af69facf111d5a38578d732b28dff"
+}

@@ -1,20 +1,17 @@
 import time
+from operator import mul
 
 
 def multiply_checksum(left, right, size):
     result = [[0] * size for _ in range(size)]
-    for row in range(size):
-        for column in range(size):
-            total = 0
-            for inner in range(size):
-                total += left[row][inner] * right[inner][column]
-            result[row][column] = total
+    columns = list(zip(*right))
+    for row, left_row in enumerate(left):
+        for column, right_column in enumerate(columns):
+            result[row][column] = sum(map(mul, left_row, right_column))
 
-    checksum = 0
-    for row in range(size):
-        for column in range(size):
-            checksum += result[row][column] * (row + column + 1)
-    return checksum
+    return sum(value * (row + column + 1)
+               for row, result_row in enumerate(result)
+               for column, value in enumerate(result_row))
 
 
 size = 48
@@ -27,9 +24,14 @@ right = [
     for row in range(size)
 ]
 
-started = time.process_time_ns()
-result = multiply_checksum(left, right, size)
-elapsed = time.process_time_ns() - started
+def bench():
+    started = time.process_time_ns()
+    result = multiply_checksum(left, right, size)
+    elapsed = time.process_time_ns() - started
 
-print(result)
-print(elapsed)
+    print(result)
+    print(elapsed)
+
+
+if __name__ == "__main__":
+    bench()

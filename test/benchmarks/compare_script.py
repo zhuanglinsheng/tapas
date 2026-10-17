@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 import argparse
 import datetime
+import hashlib
+import json
+import os
 import platform
 import statistics
 import subprocess
@@ -9,6 +12,7 @@ from pathlib import Path
 
 
 HERE = Path(__file__).resolve().parent
+HOT_PATH_CATALOG = json.loads((HERE / "hotspots/catalog.json").read_text())
 ALGORITHM_BENCHMARKS = (
     "recursive_fibonacci",
     "sieve",
@@ -27,8 +31,9 @@ ALGORITHM_BENCHMARKS = (
     "fannkuch",
     "n_body",
 )
+ALGORITHM_TARGET_RATIO = 0.90
 
-HOT_PATH_BENCHMARKS = (
+BASIC_HOT_PATH_BENCHMARKS = (
     "vm_hot_paths",
     "float_arithmetic",
     "function_call_baseline",
@@ -50,7 +55,59 @@ HOT_PATH_BENCHMARKS = (
     "branch_logic",
 )
 
+
+def discover_hot_paths(directory: Path = HERE / "hotspots") -> tuple[str, ...]:
+    names = []
+    for source in sorted(directory.glob("*.tap")):
+        if not source.with_suffix(".py").is_file():
+            raise RuntimeError(f"missing Python reference for {source}")
+        if source.stem in ALGORITHM_BENCHMARKS:
+            raise RuntimeError(f"duplicate algorithm/hotspot name: {source.stem}")
+        names.append(source.stem)
+    return tuple(names)
+
+
+# Preserve the established order while including every new .tap/.py pair.
+_discovered_hot_paths = discover_hot_paths()
+HOT_PATH_BENCHMARKS = (
+    tuple(name for name in BASIC_HOT_PATH_BENCHMARKS if name in _discovered_hot_paths)
+    + tuple(name for name in _discovered_hot_paths if name not in BASIC_HOT_PATH_BENCHMARKS)
+)
 BENCHMARKS = ALGORITHM_BENCHMARKS + HOT_PATH_BENCHMARKS
+BenchmarkRow = tuple[str, int, int, int | None, float, float | None]
+
+
+def algorithm_ratio(rows: list[BenchmarkRow]) -> float:
+    ratios = {row[0]: row[4] for row in rows}
+    return statistics.geometric_mean(ratios[name] for name in ALGORITHM_BENCHMARKS)
+
+
+def hotspot_description(name: str, language: str) -> str:
+    entry = HOT_PATH_CATALOG.get(name)
+    if entry is None:
+        return "待审查" if language == "zh" else "not yet reviewed"
+    if language == "zh":
+        kinds = {"kernel": "内核", "task": "任务", "representation": "表示", "semantics": "语义"}
+        return f"{kinds[entry['kind']]}：{entry['zh']}"
+    return f"{entry['kind']}: {entry['en']}"
+
+
+def build_configuration(tapas: Path) -> list[str] | None:
+    cache = tapas.resolve().parent.parent / "CMakeCache.txt"
+    if not cache.is_file():
+        return None
+    keys = ("CMAKE_BUILD_TYPE:", "CMAKE_C_COMPILER:", "CMAKE_C_FLAGS:",
+            "CMAKE_C_FLAGS_RELEASE:", "CMAKE_EXE_LINKER_FLAGS:", "TAPAS_ENABLE_IPO:")
+    return [line for line in cache.read_text().splitlines() if line.startswith(keys)]
+
+
+def benchmark_source(name: str) -> Path:
+    """Source stem relative to this directory, shared by execution and reports."""
+    if name in HOT_PATH_BENCHMARKS:
+        return Path("hotspots") / name
+    if name in ALGORITHM_BENCHMARKS:
+        return Path(name)
+    raise ValueError(f"unknown benchmark: {name}")
 
 
 def lua_version_text(lua: str) -> str:
@@ -75,8 +132,9 @@ def write_markdown(
     tapas: Path,
     lua_version: str,
     runs: int,
-    rows: list[tuple[str, int, int, int, float, float]],
+    rows: list[BenchmarkRow],
     language: str,
+    matched: dict[str, tuple[int, float]] | None = None,
 ) -> None:
     tapas_version = subprocess.run(
         [str(tapas), "-v"], check=True, capture_output=True, text=True
@@ -91,6 +149,7 @@ def write_markdown(
         system_label = "系统"
         architecture_label = "处理器架构"
         executable_label = "Tapas 可执行文件"
+        build_label = "构建参数"
         lua_label = "Lua 解释器"
         runs_text = f"有效运行次数：每项 {runs} 次，另预热 1 次"
         results_title = "## 结果"
@@ -98,14 +157,16 @@ def write_markdown(
         ratio_text = ("比值小于 1 表示 Tapas 更快（分别相对 Python 与 Lua）。")
         columns = "| 项目 | 源码 | Tapas | Python | Lua | Tapas/Python | Tapas/Lua |"
         algorithm_title = "综合算法"
-        algorithm_description = "这些程序组合使用递归、分支、容器、索引和内存分配，更接近完整算法负载。"
+        algorithm_description = "保留指定算法，允许各语言使用惯用容器和标准库批量操作；不要求逐行翻译。输入、重复次数、输出及计时边界保持等价。规则见 SEMANTICS.md。"
         hot_path_title = "基础热路径"
-        hot_path_description = ("这些程序把计时循环放在函数内，并让循环体只保留被测的那一种 VM 操作或容器访问模式，"
-                                "用来定位解释器的基础开销；与目标操作无关的取模寻址、增长整数累加和模块级变量访问均已移除，"
-                                "避免把其他语言的长短处混进单项结果。"
-                                "`vm_hot_paths` 与 `float_arithmetic` 的循环体本身就是被测的混合算术负载；"
-                                "`function_call_baseline` 与 `function_calls` 共享同一循环体，两者相减可估算直接调用净成本，"
-                                "`function_callbacks` 在其上增加一层高阶回调。")
+        hot_path_description = (
+            "本表自动收录 `hotspots/` 中全部 Tapas/Python 案例，包括基础 VM 操作、"
+            "综合算法提取的组合热点及负对照。Python 列运行各文件的默认实现；"
+            "新增诊断案例默认使用惯用优化写法；七组 Python 结构对照在下表单独列出。"
+            "缺少 Lua 实现时标为 —，不计入 Lua 几何平均；两种比值分别标注实际样本数。"
+            "`function_call_baseline` 与 `function_calls` 共享循环体，可估算直接调用净成本；"
+            "`function_callbacks` 增加高阶回调。"
+        )
         group_mean = "本组几何平均数"
         usage_title = "## 用法"
         usage = (
@@ -115,21 +176,29 @@ def write_markdown(
             "python3 test/benchmarks/compare_script.py build-release/bin/tapas",
             "```",
             "",
-            ("脚本先预热一次，再比较每项 3 次有效运行的中位数（可用 `--runs` "
+            ("脚本会重新测量全部综合算法和 `hotspots/` 案例，先预热一次，再比较每项 3 次有效运行的中位数（可用 `--runs` "
              "调整），打印摘要并更新本目录的两份 README 文档。"),
             ("只查看控制台输出、不更新文档时，加 `--no-markdown`；"
              "用 `--markdown 路径` 可指定其他报告位置。"),
             ("重复 `--markdown` 会用同一组测量数据生成多份报告，"
              "避免数字因重复运行而不同。"),
             "要求每一项都快于 Python 时，使用 `--require-faster`。",
+            "验收综合性能目标时，使用 Python 3.14 运行并加 `--require-algorithm-target`：固定 16 项综合算法的 Tapas/Python 耗时比几何平均必须 ≤ 0.90，热点不计入。",
+            "",
+            "综合算法源码保留在本目录；基础热点与算法退化热点统一放在 `hotspots/`，运行入口仍在本目录。",
+            "算法退化热点另见 [诊断分析](hotspots/ANALYSIS.md)，包含优化 Python 写法、同结构对照及单因素实验。",
+            "运行：`python3.14 test/benchmarks/diagnose_script.py build-release/bin/tapas --algorithms --ablations --controls`。",
+            "运行时优化另见 [实施说明](hotspots/OPTIMIZATION.md) 与 [A/B 结果](hotspots/AB_RESULTS.md)；使用 `ab_script.py BASELINE CANDIDATE --rounds 3 --runs 8` 对相同源码多轮交替测量，传入同一二进制可检查 A/A 噪声。",
+            "PGO 的热点训练与构建步骤见实施说明；`profile_script.py` 会记录训练输入、二进制和 profile 的哈希。",
+            "原生 heap 包与 Dijkstra、Huffman 的写法 A/B 见 [heap 实验](hotspots/HEAP.md)；`source_ab_script.py` 比较同一运行时上的两份等价 Tapas 源码。",
             ("性能门槛不属于常规测试，因为 CPU 负载、电源状态、编译器和 "
              "Python 版本都会影响结果；发布比较结果时应同时记录运行环境。"),
         )
         notes_title = "## 说明"
         notes = (
-            "这些程序用于比较三种实现执行相同算法时的解释器开销，不代表大型应用的完整性能。",
+            "这些程序用于比较各实现执行语义等价任务时的性能，不代表大型应用的完整性能。",
             "各语言使用语义等价的惯用实现；内建批量操作和数据结构带来的优势属于比较结果的一部分。",
-            "计时区域都位于函数内部，三种语言保持一致；比较脚本会校验三种实现的输出完全相同。",
+            "比较脚本核对固定负载输出；verify_semantics.py 额外检查小输入与完整结果序列。",
             "结果会受系统负载、电源状态、编译器版本、Python 版本和 Lua 版本影响。",
             "更新 VM 或运行环境后，应使用上文「用法」中的命令重新生成。",
         )
@@ -143,6 +212,7 @@ def write_markdown(
         system_label = "System"
         architecture_label = "Architecture"
         executable_label = "Tapas executable"
+        build_label = "Build options"
         lua_label = "Lua interpreter"
         runs_text = f"Measured runs: {runs} per benchmark, after 1 warm-up run"
         results_title = "## Results"
@@ -152,13 +222,17 @@ def write_markdown(
         columns = ("| Benchmark | Source | Tapas | Python | Lua | "
                    "Tapas/Python | Tapas/Lua |")
         algorithm_title = "Complete Algorithms"
-        algorithm_description = "These programs combine recursion, branching, containers, indexing, and allocation to approximate complete algorithm workloads."
+        algorithm_description = "Keep the specified algorithm while allowing idiomatic containers and standard-library bulk operations. Inputs, repetitions, outputs, and timing boundaries are equivalent; line-by-line translations are not required. See SEMANTICS.md for the contracts."
         hot_path_title = "VM Hot Paths"
-        hot_path_description = ("Each program times a loop inside a function and keeps only the measured VM operation or container access pattern in the loop body, "
-                                "to help isolate interpreter overhead. Modular index arithmetic, growing-integer accumulation, and module-scope variable access are kept out, "
-                                "so one language's unrelated strengths or weaknesses cannot leak into a single-item result. "
-                                "The loop bodies of `vm_hot_paths` and `float_arithmetic` are themselves the measured arithmetic workload; "
-                                "`function_call_baseline` shares the loop body of `function_calls`, so subtracting the two estimates direct-call overhead, and `function_callbacks` adds a higher-order callback layer.")
+        hot_path_description = (
+            "This table automatically includes every Tapas/Python case in `hotspots/`: "
+            "basic VM operations, algorithm-derived composite workloads, and negative controls. "
+            "The Python column runs each file's default implementation; new diagnostic cases use "
+            "idiomatic optimized references. Seven Python structural controls are reported separately below. "
+            "Missing Lua implementations are shown as — and excluded from the Lua geometric mean; "
+            "each mean states its actual sample count. `function_call_baseline` and `function_calls` "
+            "share a loop body to estimate direct-call overhead; `function_callbacks` adds a callback layer."
+        )
         group_mean = "The geometric mean ratio for this group"
         usage_title = "## Usage"
         usage = (
@@ -169,7 +243,7 @@ def write_markdown(
             "python3 test/benchmarks/compare_script.py build-release/bin/tapas",
             "```",
             "",
-            ("The script performs one warm-up and compares the median of "
+            ("The script remeasures all complete algorithms and `hotspots/` cases, performs one warm-up, and compares the median of "
              "three measured runs per benchmark (tune with `--runs`), prints "
              "a summary, and updates both README documents in this directory."),
             ("Add `--no-markdown` for console output only, or pass "
@@ -179,6 +253,13 @@ def write_markdown(
              "second run."),
             ("To require Tapas to be faster than Python in every benchmark, "
              "use `--require-faster`."),
+            "Run under Python 3.14 with `--require-algorithm-target` to require a geometric mean Tapas/Python time ratio ≤ 0.90 across the fixed 16 complete algorithms; hotspots are excluded.",
+            "Complete algorithm sources live here; basic and algorithm-derived hotspots live in `hotspots/`. Runner scripts remain here.",
+            "Algorithm-derived deficits are covered in the [diagnostic analysis](hotspots/ANALYSIS.md), with optimized Python references, matched controls, and ablations.",
+            "Run `python3.14 test/benchmarks/diagnose_script.py build-release/bin/tapas --algorithms --ablations --controls`.",
+            "See the [implementation notes](hotspots/OPTIMIZATION.md) and [A/B results](hotspots/AB_RESULTS.md). Use `ab_script.py BASELINE CANDIDATE --rounds 3 --runs 8` for alternating rounds on identical sources; pass the same binary twice for an A/A noise control.",
+            "See the implementation notes for hotspot-only PGO training and build commands; `profile_script.py` records training inputs, binary hashes, and the profile hash.",
+            "See the [heap experiments](hotspots/HEAP.md) for Dijkstra and Huffman source A/B tests. `source_ab_script.py` compares two equivalent Tapas programs on the same runtime.",
             ("Performance thresholds are not part of the regular test suite "
              "because CPU load, power settings, compiler version, and Python "
              "version affect the results; published comparisons should "
@@ -186,9 +267,9 @@ def write_markdown(
         )
         notes_title = "## Notes"
         notes = (
-            "These programs compare interpreter overhead while all implementations execute the same algorithms; they do not represent complete application performance.",
+            "These programs compare semantically equivalent tasks across the available implementations; they do not represent complete application performance.",
             "Each language uses an idiomatic implementation with equivalent semantics; advantages from built-in bulk operations and data structures are part of the comparison.",
-            "Timed regions live inside functions in all three languages, and the comparison script verifies that all implementations print identical results.",
+            "The comparison checks fixed-workload results; verify_semantics.py additionally checks small kernel inputs and complete output sequences.",
             "Results depend on system load, power settings, compiler version, Python version, and Lua version.",
             "Regenerate the reports with the commands in the Usage section after changing the VM or runtime environment.",
         )
@@ -216,16 +297,30 @@ def write_markdown(
         "",
     ]
     rows_by_name = {row[0]: row for row in rows}
+    configuration = build_configuration(tapas)
+    if configuration:
+        environment_end = lines.index(f"- {runs_text}") + 1
+        lines[environment_end:environment_end] = [
+            f"- {build_label}{separator}`{entry}`" for entry in configuration
+        ]
 
     def append_group(title: str, names: tuple[str, ...], description: str) -> None:
+        is_hotspot = names == HOT_PATH_BENCHMARKS
+        group_columns = columns
+        separator_row = "| --- | --- | ---: | ---: | ---: | ---: | ---: |"
+        if is_hotspot:
+            label = "测量内容" if language == "zh" else "Measured workload"
+            source_label = "源码" if language == "zh" else "Source"
+            group_columns = columns.replace(f"| {source_label} |", f"| {label} | {source_label} |")
+            separator_row = "| --- | --- | --- | ---: | ---: | ---: | ---: | ---: |"
         lines.extend(
             [
                 f"### {title}",
                 "",
                 description,
                 "",
-                columns,
-                "| --- | --- | ---: | ---: | ---: | ---: | ---: |",
+                group_columns,
+                separator_row,
             ]
         )
         python_ratios = []
@@ -235,23 +330,34 @@ def write_markdown(
                 name
             ]
             python_ratios.append(ratio_py)
-            lua_ratios.append(ratio_lua)
+            if ratio_lua is not None:
+                lua_ratios.append(ratio_lua)
+            source = Path(os.path.relpath(HERE / benchmark_source(name), path.parent.resolve())).as_posix()
+            sources = f"[Tapas]({source}.tap) · [Python]({source}.py)"
+            if lua_ns is not None:
+                sources += f" · [Lua]({source}.lua)"
+            lua_time = format_micros(lua_ns) if lua_ns is not None else "—"
+            lua_ratio = f"{ratio_lua:.3f}×" if ratio_lua is not None else "—"
+            purpose = ""
+            if is_hotspot:
+                purpose = f"{hotspot_description(name, language)} | "
             lines.append(
-                f"| `{name}` | [Tapas]({name}.tap) · [Python]({name}.py) · "
-                f"[Lua]({name}.lua) | {format_micros(tapas_ns)} | "
-                f"{format_micros(python_ns)} | {format_micros(lua_ns)} | "
-                f"{ratio_py:.3f}× | {ratio_lua:.3f}× |"
+                f"| `{name}` | {purpose}{sources} | {format_micros(tapas_ns)} | "
+                f"{format_micros(python_ns)} | {lua_time} | "
+                f"{ratio_py:.3f}× | {lua_ratio} |"
             )
-        lines.extend(
-            [
-                "",
-                (f"{group_mean}{separator}Tapas/Python "
-                 f"**{statistics.geometric_mean(python_ratios):.3f}×**，"
-                 f"Tapas/Lua **{statistics.geometric_mean(lua_ratios):.3f}×**"
-                 f"{period}"),
-                "",
-            ]
-        )
+
+        def mean_text(label: str, ratios: list[float]) -> str:
+            value = f"**{statistics.geometric_mean(ratios):.3f}×**" if ratios else "—"
+            count = f"（{len(ratios)} 项）" if language == "zh" else f" ({len(ratios)} cases)"
+            return f"{label} {value}{count}"
+
+        lines.extend([
+            "",
+            f"{group_mean}{separator}{mean_text('Tapas/Python', python_ratios)}, "
+            f"{mean_text('Tapas/Lua', lua_ratios)}{period}",
+            "",
+        ])
 
     append_group(
         algorithm_title,
@@ -263,6 +369,27 @@ def write_markdown(
         HOT_PATH_BENCHMARKS,
         hot_path_description,
     )
+    audit_link = Path(os.path.relpath(HERE / "hotspots/AUDIT.md", path.parent.resolve())).as_posix()
+    lines.extend([
+        (f"内核、任务、表示与语义案例测量的层面不同，不能把本组均值解释成纯 VM 性能。逐项结论见[热路径审查]({audit_link})。" if language == "zh" else
+         f"Kernels, tasks, representations and semantic cases measure different layers; this group mean is not a pure VM score. See the [case audit]({audit_link})."),
+        "",
+    ])
+    if matched:
+        lines.extend([
+            "### Python 结构对照" if language == "zh" else "### Python structural controls",
+            "",
+            ("主表保留惯用默认写法；本表另测显式循环或常规对象表示。它有助于区分原生批量操作、迭代方式及对象布局的影响，但仍不等于单条 VM 指令成本。两种 Python 写法的输出必须一致；结构对照不计入任何几何平均。" if language == "zh" else
+             "The main table keeps idiomatic defaults. These additional explicit-loop or conventional-object controls expose bulk-operation, iteration and layout effects; they do not isolate a VM instruction cost. Both Python variants must agree. Controls are excluded from all geometric means."),
+            "",
+            "| 案例 | Python 默认 | Python 结构对照 | Tapas/默认 | Tapas/结构对照 |" if language == "zh" else
+            "| Case | Python default | Python structural control | Tapas/default | Tapas/control |",
+            "| --- | ---: | ---: | ---: | ---: |",
+        ])
+        for name, (duration, ratio) in matched.items():
+            row = rows_by_name[name]
+            lines.append(f"| `{name}` | {format_micros(row[2])} | {format_micros(duration)} | {row[4]:.3f}× | {ratio:.3f}× |")
+        lines.append("")
     lines.extend(
         [
             usage_title,
@@ -284,7 +411,7 @@ def measure(command: list[str], runs: int) -> tuple[int, list[int]]:
     elapsed: list[int] = []
     for _ in range(runs + 1):
         result = subprocess.run(
-            command, check=True, capture_output=True, text=True
+            command, check=True, capture_output=True, text=True, timeout=120
         )
         lines = result.stdout.splitlines()
         if len(lines) != 2:
@@ -293,6 +420,8 @@ def measure(command: list[str], runs: int) -> tuple[int, list[int]]:
             )
         totals.append(int(lines[0]))
         elapsed.append(int(lines[1]))
+        if elapsed[-1] <= 0:
+            raise RuntimeError(f"nonpositive CPU time from {command}: {elapsed[-1]}")
     if len(set(totals)) != 1:
         raise RuntimeError(f"result changed between runs: {totals}")
     return totals[0], elapsed[1:]
@@ -321,6 +450,11 @@ def main() -> int:
         help="fail when the Tapas median is not lower than Python's",
     )
     parser.add_argument(
+        "--require-algorithm-target",
+        action="store_true",
+        help="fail unless the 16-algorithm geometric mean Tapas/Python time ratio is <= 0.90",
+    )
+    parser.add_argument(
         "--markdown",
         type=Path,
         action="append",
@@ -330,6 +464,9 @@ def main() -> int:
               "updated from one run"),
     )
     parser.add_argument(
+        "--json", type=Path, help="save samples, checksums, controls and source hashes"
+    )
+    parser.add_argument(
         "--no-markdown",
         action="store_true",
         help="skip writing Markdown reports (console output only)",
@@ -337,6 +474,8 @@ def main() -> int:
     args = parser.parse_args()
     if args.runs < 3:
         parser.error("--runs must be at least 3")
+    if args.require_algorithm_target and sys.version_info[:2] != (3, 14):
+        parser.error("--require-algorithm-target must run under Python 3.14")
 
     lua_version = lua_version_text(args.lua)
     print(f"Lua interpreter: {lua_version}")
@@ -344,31 +483,55 @@ def main() -> int:
     failed = False
     python_ratios: list[float] = []
     lua_ratios: list[float] = []
-    rows: list[tuple[str, int, int, int, float, float]] = []
+    rows: list[BenchmarkRow] = []
+    matched_rows: dict[str, tuple[int, float]] = {}
+    samples = {}
+    sources = [HERE / benchmark_source(name).with_suffix(extension)
+               for name in BENCHMARKS for extension in (".tap", ".py", ".lua")
+               if (HERE / benchmark_source(name).with_suffix(extension)).is_file()]
+    hashes = {str(p.relative_to(HERE)): hashlib.sha256(p.read_bytes()).hexdigest() for p in sources}
+    binary_hash = hashlib.sha256(args.tapas.read_bytes()).hexdigest() if args.json else None
     for name in BENCHMARKS:
+        source = HERE / benchmark_source(name)
         tapas_total, tapas_times = measure(
-            [str(args.tapas), str(HERE / f"{name}.tap")], args.runs
+            [str(args.tapas), str(source.with_suffix(".tap"))], args.runs
         )
         python_total, python_times = measure(
-            [sys.executable, str(HERE / f"{name}.py")], args.runs
+            [sys.executable, str(source.with_suffix(".py"))], args.runs
         )
-        lua_total, lua_times = measure(
-            [args.lua, str(HERE / f"{name}.lua")], args.runs
-        )
-        if not (tapas_total == python_total == lua_total):
+        lua_source = source.with_suffix(".lua")
+        lua_times = None
+        if lua_source.is_file():
+            lua_total, lua_times = measure([args.lua, str(lua_source)], args.runs)
+            if lua_total != tapas_total:
+                raise RuntimeError(
+                    f"{name}: different results: Tapas={tapas_total}, Lua={lua_total}"
+                )
+        if tapas_total != python_total:
             raise RuntimeError(
-                f"{name}: different results: "
-                f"Tapas={tapas_total}, Python={python_total}, "
-                f"Lua={lua_total}"
+                f"{name}: different results: Tapas={tapas_total}, Python={python_total}"
             )
+
+        samples[name] = {"checksum": tapas_total, "tapas": tapas_times,
+                         "python": python_times, "lua": lua_times}
+        if HOT_PATH_CATALOG.get(name, {}).get("python_matched"):
+            control_total, control_times = measure(
+                [sys.executable, str(source.with_suffix(".py")), "--matched"], args.runs
+            )
+            if control_total != tapas_total:
+                raise RuntimeError(f"{name}: structural control has a different result")
+            duration = int(statistics.median(control_times))
+            matched_rows[name] = (duration, int(statistics.median(tapas_times)) / duration)
+            samples[name]["python_matched"] = control_times
 
         tapas_median = int(statistics.median(tapas_times))
         python_median = int(statistics.median(python_times))
-        lua_median = int(statistics.median(lua_times))
+        lua_median = int(statistics.median(lua_times)) if lua_times is not None else None
         ratio_python = tapas_median / python_median
-        ratio_lua = tapas_median / lua_median
+        ratio_lua = tapas_median / lua_median if lua_median is not None else None
         python_ratios.append(ratio_python)
-        lua_ratios.append(ratio_lua)
+        if ratio_lua is not None:
+            lua_ratios.append(ratio_lua)
         rows.append(
             (name, tapas_median, python_median, lua_median,
              ratio_python, ratio_lua)
@@ -377,28 +540,43 @@ def main() -> int:
         print(f"  result:        {tapas_total}")
         print(f"  Tapas median:  {tapas_median:,} ns")
         print(f"  Python median: {python_median:,} ns")
-        print(f"  Lua median:    {lua_median:,} ns")
+        print(f"  Lua median:    {lua_median:,} ns" if lua_median is not None
+              else "  Lua median:    — (no Lua implementation)")
         print(f"  Tapas/Python:  {ratio_python:.3f}x")
-        print(f"  Tapas/Lua:     {ratio_lua:.3f}x")
+        print(f"  Tapas/Lua:     {ratio_lua:.3f}x" if ratio_lua is not None
+              else "  Tapas/Lua:     —")
         if args.require_faster and ratio_python >= 1.0:
             failed = True
 
     ratios_by_name = {row[0]: (row[4], row[5]) for row in rows}
 
-    def family_mean(runtimes: "list[tuple[str, ...]]", index: int) -> float:
-        return statistics.geometric_mean(
-            ratios_by_name[name][index] for name in runtimes
-        )
+    for family, names in (("algorithm", ALGORITHM_BENCHMARKS),
+                          ("hot-path", HOT_PATH_BENCHMARKS)):
+        for index, language in enumerate(("Python", "Lua")):
+            ratios = [ratios_by_name[name][index] for name in names
+                      if ratios_by_name[name][index] is not None]
+            mean = f"{statistics.geometric_mean(ratios):.3f}x" if ratios else "—"
+            print(f"{family} geometric mean Tapas/{language}: {mean} ({len(ratios)} cases)")
 
-    print("algorithm geometric mean Tapas/Python: "
-          f"{family_mean(list(ALGORITHM_BENCHMARKS), 0):.3f}x")
-    print("hot-path geometric mean Tapas/Python: "
-          f"{family_mean(list(HOT_PATH_BENCHMARKS), 0):.3f}x")
-    print("algorithm geometric mean Tapas/Lua: "
-          f"{family_mean(list(ALGORITHM_BENCHMARKS), 1):.3f}x")
-    print("hot-path geometric mean Tapas/Lua: "
-          f"{family_mean(list(HOT_PATH_BENCHMARKS), 1):.3f}x")
-
+    target_met = algorithm_ratio(rows) <= ALGORITHM_TARGET_RATIO
+    print(f"algorithm target <= {ALGORITHM_TARGET_RATIO:.2f}: {'PASS' if target_met else 'FAIL'}")
+    for source in sources:
+        if hashlib.sha256(source.read_bytes()).hexdigest() != hashes[str(source.relative_to(HERE))]:
+            raise RuntimeError(f"benchmark changed during measurement: {source}")
+    if args.json:
+        if hashlib.sha256(args.tapas.read_bytes()).hexdigest() != binary_hash:
+            raise RuntimeError("Tapas binary changed during measurement")
+        args.json.parent.mkdir(parents=True, exist_ok=True)
+        args.json.write_text(json.dumps({
+            "date": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            "system": platform.platform(), "python": sys.version, "lua": lua_version,
+            "tapas": str(args.tapas.resolve()),
+            "tapas_sha256": binary_hash,
+            "catalog_sha256": hashlib.sha256((HERE / "hotspots/catalog.json").read_bytes()).hexdigest(),
+            "build_config": build_configuration(args.tapas),
+            "runs": args.runs, "warmups": 1, "samples_ns": samples,
+            "sources_sha256": hashes,
+        }, indent=2) + "\n")
     markdowns = args.markdown
     if markdowns is None and not args.no_markdown:
         markdowns = [HERE / "README.md", HERE / "README_en.md"]
@@ -411,6 +589,7 @@ def main() -> int:
             args.runs,
             rows,
             markdown_language,
+            matched=matched_rows,
         )
         print(f"wrote Markdown report: {markdown}")
     if failed:
@@ -418,6 +597,9 @@ def main() -> int:
             "Tapas is not faster than Python in every benchmark.",
             file=sys.stderr,
         )
+        return 1
+    if args.require_algorithm_target and not target_met:
+        print("The 16-algorithm performance target has not been reached.", file=sys.stderr)
         return 1
     return 0
 
