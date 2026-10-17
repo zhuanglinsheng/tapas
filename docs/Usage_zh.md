@@ -310,7 +310,7 @@ __path__().pprint()
 __ls__().pprint()
 ```
 <pre class='Tapas-Return'>
-[print, pprint, input, int, float, bool, str, list, push_front, push_back, pop_front, pop_back, insert, concat, array, pair, idx, append, delete, iter, keys, values, sort, len, type, copy, identical, parameters, arguments, clock, clock_ns, now, __ls__, __path__, __param__, __nparam__, __binary__, assert, dense, io, syntax, time, random, finite, math, types, rules, evaluators, solve]
+[print, pprint, input, int, float, bool, str, list, replicate, push_front, push_back, pop_front, pop_back, insert, concat, array, pair, idx, idx_or, append, delete, iter, keys, values, sort, len, type, copy, join, identical, parameters, arguments, clock, clock_ns, now, __ls__, __path__, __param__, __nparam__, __binary__, assert, dense, io, syntax, time, random, finite, math, heap, types, rules, evaluators, solve]
 </pre>
 
 ## 常用示例

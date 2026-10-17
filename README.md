@@ -108,7 +108,6 @@ Tapas 的 Visual Studio Code 扩展提供语法高亮、实时诊断、类型悬
 
 ## 文档
 
-- [单页语言参考](docs/LanguageReference.html)：面向人类学习与 AI 代码生成，集中说明 Tapas 的词法、值、表达式、函数、Type、Rule、模块、错误与完整语法，支持离线搜索、章节链接和代码高亮。
 - [求解接口](src/stdlib/solve/README.md)：可行性查询、冲突诊断、支持范围和运行配置。
 - [使用说明](docs/Usage_zh.md)：构建、命令行选项、脚本、字节码、Markdown 执行和模块路径。
 - [语言规范](docs/Syntax_zh.md)：语法、值类别、运算符、语句、函数、模块和数组。
