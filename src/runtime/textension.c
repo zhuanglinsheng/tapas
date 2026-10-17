@@ -7,9 +7,70 @@
  * standard package's private implementation.
  */
 #include "tapas/textension.h"
+#include "tapas/tval.h"
 
 #include <stdlib.h>
 #include <string.h>
+
+/* One mapping serves runtime Type matching and static extension metadata. */
+#define CAPABILITY_RULES(X) \
+	X(indexable, indexable) \
+	X(index_settable, index_settable) \
+	X(appendable, appendable) \
+	X(deletable, deletable) \
+	X(contains, member_testable) \
+	X(iterable, iterable)
+
+uint32_t textension_capability_flag(tbuiltintype_id type)
+{
+	switch (type) {
+#define FLAG(field, builtin) case tbuiltintype_##builtin: return textension_type_##field;
+	CAPABILITY_RULES(FLAG)
+#undef FLAG
+	default: return 0;
+	}
+}
+
+uint32_t textension_capability_mask(const tcompo_capabilities *capabilities)
+{
+	if (!capabilities)
+		return 0;
+	uint32_t mask = 0;
+#define MASK(field, builtin) if (capabilities->field) mask |= textension_type_##field;
+	CAPABILITY_RULES(MASK)
+#undef MASK
+	return mask;
+}
+
+int textension_capability_matches(const tcompo_capabilities *capabilities,
+				 tbuiltintype_id type)
+{
+	if (!capabilities)
+		return 0;
+	switch (type) {
+#define MATCH(field, builtin) case tbuiltintype_##builtin: return capabilities->field != nullptr;
+	CAPABILITY_RULES(MATCH)
+#undef MATCH
+	default: return 0;
+	}
+}
+
+#undef CAPABILITY_RULES
+
+int textension_symbol_capabilities(const textension_symbol *symbol, uint32_t *mask)
+{
+	if (!symbol || !mask || symbol->kind != textension_type)
+		return 0;
+	if (symbol->instance_capabilities) {
+		*mask = textension_capability_mask(symbol->instance_capabilities);
+		return 1;
+	}
+	if (symbol->nominal_template) {
+		*mask = symbol->nominal_template->capabilities;
+		return 1;
+	}
+	return 0;
+}
 
 struct textension_registry {
 	const textension_descriptor **extensions;
@@ -46,7 +107,9 @@ static int nominal_template_valid(const textension_nominal_template *schema)
 	    (!schema->value_parameters && schema->value_parameter_count) ||
 	    (!schema->type_parameter_count && !schema->value_parameter_count) ||
 	    (schema->capabilities & ~(textension_type_indexable |
-		textension_type_contains | textension_type_iterable)))
+		textension_type_contains | textension_type_iterable |
+		textension_type_index_settable | textension_type_appendable |
+		textension_type_deletable)))
 		return 0;
 	uint_regs count = schema->type_parameter_count +
 		schema->value_parameter_count;
@@ -93,6 +156,14 @@ static int symbol_valid(const textension_symbol *symbol)
 	    !symbol->type || !*symbol->type ||
 	    symbol->kind < textension_function ||
 	    symbol->kind > textension_type)
+		return 0;
+	if (symbol->instance_capabilities && symbol->kind != textension_type)
+		return 0;
+	/* A template's runtime Type and the tooling metadata must describe the
+	 * same capabilities. Reject conflicting declarations before installation. */
+	if (symbol->instance_capabilities && symbol->nominal_template &&
+	    textension_capability_mask(symbol->instance_capabilities) !=
+		    symbol->nominal_template->capabilities)
 		return 0;
 	if (symbol->kind == textension_function) {
 		if (!!symbol->function == !!symbol->session_function ||

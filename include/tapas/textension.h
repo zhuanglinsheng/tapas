@@ -13,11 +13,13 @@
 #define TAPAS_TEXTENSION_H
 
 #include "tapas/basic_defs/tbasis.h"
+#include "tapas/basic_defs/tbuiltintype.h"
 
 #include <stdint.h>
 
 typedef struct tobj tobj;             /**< Tapas 值。 */
 typedef struct tcompo_env tcompo_env; /**< 运行时执行环境。 */
+typedef struct tcompo_capabilities tcompo_capabilities;
 typedef struct tlib tlib;             /**< 可安装扩展的符号库。 */
 typedef struct textension_registry textension_registry; /**< 扩展元数据集合。 */
 
@@ -26,7 +28,7 @@ extern "C" {
 #endif
 
 /** 当前原生扩展描述符 ABI 版本。 */
-#define TAPAS_EXTENSION_ABI 4u
+#define TAPAS_EXTENSION_ABI 6u
 
 /** 普通原生函数回调；参数只在调用期间有效，结果写入 `result`。 */
 typedef void (*tnative_function)(tobj *arguments, uint_regs argument_count,
@@ -81,7 +83,10 @@ typedef enum {
 typedef enum {
 	textension_type_indexable = 1u << 0, /**< 对象支持索引读取。 */
 	textension_type_contains = 1u << 1,  /**< 对象支持成员判断。 */
-	textension_type_iterable = 1u << 2   /**< 对象支持迭代。 */
+	textension_type_iterable = 1u << 2,  /**< 对象支持迭代。 */
+	textension_type_index_settable = 1u << 3, /**< 对象支持索引写入。 */
+	textension_type_appendable = 1u << 4, /**< 对象支持追加。 */
+	textension_type_deletable = 1u << 5 /**< 对象支持删除。 */
 } textension_type_capability;
 
 /** Type 模板中的一个 Type 参数。 */
@@ -121,10 +126,11 @@ typedef struct {
 	tnative_intrinsic intrinsic; /**< 编译器可识别的通用内建语义。 */
 	tnative_result_relation result_relation; /**< 返回 Type 与参数的关系。 */
 	uint_regs result_argument; /**< 结果关系引用的参数索引。 */
-	const textension_nominal_template *nominal_template; /**< Type 符号的命名模板。 */
+	const textension_nominal_template *nominal_template; /**< Type 符号的命名模板描述。 */
 	const textension_nominal_template *result_template; /**< 结果 Type 使用的模板。 */
 	uint8_t following_arguments_match_result_parameter; /**< 后续参数是否匹配结果参数。 */
 	uint8_t compile_time_signature; /**< 是否启用编译期签名检查。 */
+	const tcompo_capabilities *instance_capabilities; /**< Type 实例共享的运行时能力表；为空表示未声明。 */
 } textension_symbol;
 
 /** 一组安装到根库或包字典的扩展符号。 */
@@ -135,6 +141,14 @@ typedef struct {
 	const textension_symbol *symbols; /**< 导出符号数组。 */
 	uint32_t symbol_count; /**< 导出符号数量。 */
 } textension_module;
+
+/** Read capability metadata without constructing values or executing callbacks. */
+uint32_t textension_capability_mask(const tcompo_capabilities *capabilities);
+uint32_t textension_capability_flag(tbuiltintype_id type);
+int textension_capability_matches(const tcompo_capabilities *capabilities,
+				 tbuiltintype_id type);
+/** 读取 Type 符号的能力声明；返回零表示缺少元数据，不改写 mask。 */
+int textension_symbol_capabilities(const textension_symbol *symbol, uint32_t *mask);
 
 /** 一个完整原生扩展的顶层描述符。 */
 typedef struct textension_descriptor {

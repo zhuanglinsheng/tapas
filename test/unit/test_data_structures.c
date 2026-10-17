@@ -1161,7 +1161,20 @@ static void test_rule_representations(void) {
   r->base.vtable->free(r);
 }
 
+static void test_builtin_type_pin(void) {
+  ttypeval *type = ttypeval_builtin(tbuiltintype_int);
+  /* Generic values and Type-specific release must both preserve the pin. */
+  assert(type->base.refctr == 1);
+  tobj value = {.type = tcompo, .val.v_tcompo = (tcompo_v *)type};
+  tobj_ddc_ref_clear(&value);
+  assert(ttypeval_builtin(tbuiltintype_int) == type);
+  assert(type->base.refctr == 1);
+  ttypeval_release(type);
+  assert(type->base.refctr == 1);
+}
+
 int main(void) {
+  test_builtin_type_pin();
   test_value_copy_lifetime();
   test_compact_instruction_encodings();
   test_bytecode_source_map_roundtrip();

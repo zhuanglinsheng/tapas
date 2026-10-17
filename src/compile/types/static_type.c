@@ -9,6 +9,7 @@
 #include "compile/types/static_type.h"
 #include "tapas/dsa/tstring.h"
 #include "tapas/textension.h"
+#include "tapas/objects/ttype.h"
 
 #include <ctype.h>
 #include <stdlib.h>
@@ -289,11 +290,13 @@ static tstatic_type_id substitute_static_template(tstatic_type_arena *arena,
 			return TSTATIC_TYPE_UNKNOWN;
 		}
 	}
-	tstatic_type_id result = tstatic_type_make(arena, source->kind,
-		children, source->child_count, source->variadic);
-	if (source->value_reference)
+	/* Recursive substitution and the allocation below can relocate types. */
+	tstatic_type snapshot = *tstatic_type_get(arena, source_id);
+	tstatic_type_id result = tstatic_type_make(arena, snapshot.kind,
+		children, snapshot.child_count, snapshot.variadic);
+	if (snapshot.value_reference)
 		arena->types[result].value_reference =
-			tstring_dup(source->value_reference);
+			tstring_dup(snapshot.value_reference);
 	free(children);
 	return result;
 }
@@ -468,23 +471,8 @@ tstatic_type_id tstatic_type_builtin_named(tstatic_type_arena *arena,
 tstatic_type_id tstatic_type_make_named(tstatic_type_arena *arena,
 					 const char *qualified_name)
 {
-	if (!arena || !qualified_name || !*qualified_name ||
-	    !strstr(qualified_name, "::"))
-		return TSTATIC_TYPE_UNKNOWN;
-	for (uint32_t i = 0; i < arena->type_count; i++) {
-		const tstatic_type *type = &arena->types[i];
-		if (type->kind == tstatic_type_named && type->value_reference &&
-		    !type->field_count &&
-		    tstring_eq_cstr(type->value_reference, qualified_name))
-			return i;
-	}
-	reserve_types(arena, 1);
-	tstatic_type_id id = arena->type_count++;
-	arena->types[id] = (tstatic_type){
-		.kind = tstatic_type_named,
-		.value_reference = tstring_new(qualified_name)
-	};
-	return id;
+	return tstatic_type_make_named_application(arena, qualified_name,
+		nullptr, 0, TSTATIC_CAPABILITIES_UNKNOWN);
 }
 
 tstatic_type_id tstatic_type_make_named_application(tstatic_type_arena *arena,
@@ -492,7 +480,7 @@ tstatic_type_id tstatic_type_make_named_application(tstatic_type_arena *arena,
 	uint32_t parameter_count, uint32_t capabilities)
 {
 	if (!arena || !qualified_name || !*qualified_name ||
-	    !strstr(qualified_name, "::") || !parameters || !parameter_count)
+	    !strstr(qualified_name, "::") || (!parameters && parameter_count))
 		return TSTATIC_TYPE_UNKNOWN;
 	for (uint32_t i = 0; i < arena->type_count; i++) {
 		const tstatic_type *type = &arena->types[i];
@@ -508,6 +496,16 @@ tstatic_type_id tstatic_type_make_named_application(tstatic_type_arena *arena,
 			    !tstatic_type_equal(arena, existing[matched].type,
 				parameters[matched].type)) break;
 		if (matched == parameter_count) return i;
+	}
+	if (!parameter_count) {
+		reserve_types(arena, 1);
+		tstatic_type_id id = arena->type_count++;
+		arena->types[id] = (tstatic_type){
+			.kind = tstatic_type_named,
+			.value_reference = tstring_new(qualified_name),
+			.capabilities = capabilities
+		};
+		return id;
 	}
 	tstatic_type_id id = tstatic_type_make_fields(arena, parameters,
 		parameter_count);
@@ -917,10 +915,10 @@ static int compare_seen_or_add(tstatic_compare_state *state,
 	return 0;
 }
 
-static int static_type_equal_graph(const tstatic_type_arena *arena,
+static int static_type_compare_graph(const tstatic_type_arena *arena,
 				   tstatic_type_id left,
 				   tstatic_type_id right,
-				   tstatic_compare_state *state)
+				   tstatic_compare_state *state, int allow_unknown_capabilities)
 {
 	if (left == right) return left != TSTATIC_TYPE_UNKNOWN;
 	if (left == TSTATIC_TYPE_UNKNOWN || right == TSTATIC_TYPE_UNKNOWN)
@@ -933,11 +931,13 @@ static int static_type_equal_graph(const tstatic_type_arena *arena,
 	const tstatic_type_id *bc = tstatic_type_children(arena, b);
 	if (a->kind == tstatic_type_recursive) {
 		if (a->child_count != 1) return 0;
-		return static_type_equal_graph(arena, ac[0], right, state);
+		return static_type_compare_graph(arena, ac[0], right, state,
+			allow_unknown_capabilities);
 	}
 	if (b->kind == tstatic_type_recursive) {
 		if (b->child_count != 1) return 0;
-		return static_type_equal_graph(arena, left, bc[0], state);
+		return static_type_compare_graph(arena, left, bc[0], state,
+			allow_unknown_capabilities);
 	}
 	if (a->kind != b->kind) return 0;
 	if ((a->kind == tstatic_type_instance_of ||
@@ -949,7 +949,10 @@ static int static_type_equal_graph(const tstatic_type_arena *arena,
 	if (a->kind == tstatic_type_builtin) return a->builtin == b->builtin;
 	if (a->variadic != b->variadic || a->child_count != b->child_count ||
 	    a->field_count != b->field_count ||
-	    a->capabilities != b->capabilities ||
+	    (a->capabilities != b->capabilities &&
+	     (!allow_unknown_capabilities ||
+	      (a->capabilities != TSTATIC_CAPABILITIES_UNKNOWN &&
+	       b->capabilities != TSTATIC_CAPABILITIES_UNKNOWN))) ||
 	    a->template_type_parameter_count != b->template_type_parameter_count)
 		return 0;
 	if (a->kind == tstatic_type_union) {
@@ -957,8 +960,8 @@ static int static_type_equal_graph(const tstatic_type_arena *arena,
 			int found = 0;
 			for (uint32_t j = 0; j < b->child_count && !found; j++) {
 				uint32_t saved = state->count;
-				found = static_type_equal_graph(
-					arena, ac[i], bc[j], state);
+				found = static_type_compare_graph(
+					arena, ac[i], bc[j], state, allow_unknown_capabilities);
 				if (!found) state->count = saved;
 			}
 			if (!found) return 0;
@@ -966,14 +969,15 @@ static int static_type_equal_graph(const tstatic_type_arena *arena,
 		return 1;
 	}
 	for (uint32_t i = 0; i < a->child_count; i++)
-		if (!static_type_equal_graph(arena, ac[i], bc[i], state)) return 0;
+		if (!static_type_compare_graph(arena, ac[i], bc[i], state,
+			allow_unknown_capabilities)) return 0;
 	const tstatic_field *af = tstatic_type_field_items(arena, a);
 	const tstatic_field *bf = tstatic_type_field_items(arena, b);
 	if (a->kind == tstatic_type_template) {
 		for (uint32_t i = 0; i < a->field_count; i++)
 			if (!tstring_eq(af[i].name, bf[i].name) ||
-			    !static_type_equal_graph(arena, af[i].type, bf[i].type,
-				state)) return 0;
+			    !static_type_compare_graph(arena, af[i].type, bf[i].type,
+				state, allow_unknown_capabilities)) return 0;
 		return 1;
 	}
 	for (uint32_t i = 0; i < a->field_count; i++) {
@@ -982,8 +986,9 @@ static int static_type_equal_graph(const tstatic_type_arena *arena,
 			uint32_t saved = state->count;
 			if (tstring_eq(af[i].name, bf[j].name) &&
 			    af[i].optional == bf[j].optional &&
-			    static_type_equal_graph(
-				    arena, af[i].type, bf[j].type, state))
+			    static_type_compare_graph(
+				    arena, af[i].type, bf[j].type, state,
+				    allow_unknown_capabilities))
 				break;
 			state->count = saved;
 		}
@@ -992,13 +997,37 @@ static int static_type_equal_graph(const tstatic_type_arena *arena,
 	return 1;
 }
 
+static int static_type_compare(const tstatic_type_arena *arena,
+	tstatic_type_id left, tstatic_type_id right, int allow_unknown_capabilities)
+{
+	tstatic_compare_state state = { 0 };
+	int equal = static_type_compare_graph(arena, left, right, &state,
+		allow_unknown_capabilities);
+	free(state.items);
+	return equal;
+}
+
+/* Equality remains transitive. Only assignment compatibility may defer
+ * missing capability information, including inside container parameters. */
 int tstatic_type_equal(const tstatic_type_arena *arena,
 			       tstatic_type_id left, tstatic_type_id right)
 {
-	tstatic_compare_state state = { 0 };
-	int equal = static_type_equal_graph(arena, left, right, &state);
-	free(state.items);
-	return equal;
+	return static_type_compare(arena, left, right, 0);
+}
+
+/* Structural container Types use the capabilities of their runtime family. */
+static tbuiltintype_id static_type_builtin_family(const tstatic_type *type)
+{
+	switch (type->kind) {
+	case tstatic_type_builtin: return type->builtin;
+	case tstatic_type_list: return tbuiltintype_list;
+	case tstatic_type_enum: return tbuiltintype_string;
+	case tstatic_type_iterator: return tbuiltintype_iterator;
+	case tstatic_type_pair: return tbuiltintype_pair;
+	case tstatic_type_dictionary:
+	case tstatic_type_fields: return tbuiltintype_dictionary;
+	default: return tbuiltintype_count;
+	}
 }
 
 static int static_type_assignable_graph(const tstatic_type_arena *arena,
@@ -1008,7 +1037,7 @@ static int static_type_assignable_graph(const tstatic_type_arena *arena,
 {
 	if (actual == TSTATIC_TYPE_UNKNOWN || target == TSTATIC_TYPE_UNKNOWN)
 		return 1;
-	if (tstatic_type_equal(arena, actual, target) ||
+	if (static_type_compare(arena, actual, target, 1) ||
 	    actual == tbuiltintype_any || target == tbuiltintype_any) return 1;
 	if (compare_seen_or_add(state, actual, target)) return 1;
 	const tstatic_type *a = tstatic_type_get(arena, actual);
@@ -1072,62 +1101,14 @@ static int static_type_assignable_graph(const tstatic_type_arena *arena,
 	if (a->kind == tstatic_type_enum && b->kind == tstatic_type_builtin &&
 	    b->builtin == tbuiltintype_string)
 		return 1;
-	if (b->kind == tstatic_type_builtin &&
-	    (b->builtin == tbuiltintype_indexable ||
-	     b->builtin == tbuiltintype_index_settable ||
-	     b->builtin == tbuiltintype_appendable ||
-	     b->builtin == tbuiltintype_deletable ||
-	     b->builtin == tbuiltintype_member_testable ||
-	     b->builtin == tbuiltintype_iterable)) {
-		if (a->kind == tstatic_type_named) {
-			if (b->builtin == tbuiltintype_indexable)
-				return (a->capabilities &
-					textension_type_indexable) != 0;
-			if (b->builtin == tbuiltintype_member_testable)
-				return (a->capabilities &
-					textension_type_contains) != 0;
-			if (b->builtin == tbuiltintype_iterable)
-				return (a->capabilities &
-					textension_type_iterable) != 0;
-			return 0;
-		}
-		tbuiltintype_id builtin = a->kind == tstatic_type_builtin ?
-			a->builtin : a->kind == tstatic_type_list ? tbuiltintype_list :
-			a->kind == tstatic_type_enum ? tbuiltintype_string :
-			a->kind == tstatic_type_iterator ? tbuiltintype_iterator :
-			a->kind == tstatic_type_pair ? tbuiltintype_pair :
-			a->kind == tstatic_type_dictionary ||
-			a->kind == tstatic_type_fields ? tbuiltintype_dictionary :
-			tbuiltintype_count;
-		if (b->builtin == tbuiltintype_indexable)
-			return builtin == tbuiltintype_string || builtin == tbuiltintype_list ||
-			       builtin == tbuiltintype_pair ||
-			       builtin == tbuiltintype_dictionary ||
-			       builtin == tbuiltintype_library ||
-			       builtin == tbuiltintype_real_array ||
-			       builtin == tbuiltintype_bool_array ||
-			       builtin == tbuiltintype_type;
-		if (b->builtin == tbuiltintype_index_settable)
-			return builtin == tbuiltintype_string ||
-			       builtin == tbuiltintype_list ||
-			       builtin == tbuiltintype_pair ||
-			       builtin == tbuiltintype_dictionary ||
-			       builtin == tbuiltintype_real_array ||
-			       builtin == tbuiltintype_bool_array;
-		if (b->builtin == tbuiltintype_appendable)
-			return builtin == tbuiltintype_string ||
-			       builtin == tbuiltintype_list ||
-			       builtin == tbuiltintype_dictionary;
-		if (b->builtin == tbuiltintype_deletable)
-			return builtin == tbuiltintype_list ||
-			       builtin == tbuiltintype_dictionary;
-		if (b->builtin == tbuiltintype_member_testable)
-			return builtin == tbuiltintype_list || builtin == tbuiltintype_dictionary ||
-			       builtin == tbuiltintype_iterator;
-		return builtin == tbuiltintype_string ||
-		       builtin == tbuiltintype_list ||
-		       builtin == tbuiltintype_iterator ||
-		       builtin == tbuiltintype_type;
+	uint32_t capability = b->kind == tstatic_type_builtin ?
+		textension_capability_flag(b->builtin) : 0;
+	if (capability) {
+		if (a->kind == tstatic_type_named)
+			return a->capabilities == TSTATIC_CAPABILITIES_UNKNOWN ||
+				(a->capabilities & capability) != 0;
+		tbuiltintype_id builtin = static_type_builtin_family(a);
+		return (ttypeval_builtin_capabilities(builtin) & capability) != 0;
 	}
 	if ((a->kind == tstatic_type_list && target == tbuiltintype_list) ||
 	    (a->kind == tstatic_type_iterator && target == tbuiltintype_iterator) ||

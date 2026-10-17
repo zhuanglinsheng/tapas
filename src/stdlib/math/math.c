@@ -58,6 +58,22 @@ static long math_arg_long(const tobj *v, const char *fname)
 				      math_arg_double(&params[1], "math::" #name)));  \
 	}
 
+/* A floating estimate is corrected with integer division, keeping the result
+ * exact at Int boundaries without overflowing a square. */
+static void math_isqrt(tobj *params, uint_regs len, tobj *result)
+{
+	tstdlib_require_arguments("math::isqrt", len, 1);
+	if (params[0].type != tint || params[0].val.v_tint < 0)
+		twarn(ErrRuntime_ParamsType, "math::isqrt", "non-negative Int required");
+	unsigned long value = (unsigned long)params[0].val.v_tint;
+	unsigned long root = (unsigned long)sqrt((double)value);
+	while (root && root > value / root)
+		root--;
+	while (root + 1 <= value / (root + 1))
+		root++;
+	tobj_set_int(result, (long)root);
+}
+
 DEF_MATH_UNARY_FLOAT(fabs, fabs)
 DEF_MATH_UNARY_FLOAT(sqrt, sqrt)
 DEF_MATH_UNARY_FLOAT(cbrt, cbrt)
@@ -890,6 +906,15 @@ static const textension_symbol symbols[] = {
 		.function = math_isunordered,
 		.minimum_arguments = 2,
 		.maximum_arguments = 2
+	},
+	{
+		.name = "isqrt",
+		.type = "Function[Int] -> Int",
+		.detail = "math::isqrt(value: Int) -> Int",
+		.kind = textension_function,
+		.function = math_isqrt,
+		.minimum_arguments = 1,
+		.maximum_arguments = 1
 	}
 };
 

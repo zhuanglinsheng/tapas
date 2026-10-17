@@ -28,7 +28,10 @@ static const textension_module *const modules[] = {
 	&tstdlib_types_module,
 	&tstdlib_rules_module,
 	&tstdlib_evaluators_module,
-	&tstdlib_solve_module
+	&tstdlib_solve_module,
+	/* Append new root bindings so existing bytecode keeps its slot numbers. */
+	&tstdlib_bulk_functions,
+	&tstdlib_bytes_module
 };
 
 const textension_descriptor *tstdlib_descriptor(void)

@@ -47,3 +47,7 @@ dense::gemm(alpha: Int | Float, left: RealArray, right: RealArray, beta: Int | F
 除 shape 查询与转置外，线性代数操作只接受 RealArray。需要相同 shape、向量或矩阵乘法相容 shape 的操作不会执行隐式广播或重排。
 
 所有函数只接受签名及约束明确允许的输入；类型、shape、别名关系或参数不合法，以及无法识别的输入，一律返回错误。
+
+## 一维视图
+
+`FlatView` 类型由 dense 包拥有。`flat(value: RealArray | BoolArray) -> FlatView` 返回行优先共享视图，保留源对象引用；copy(view) 创建独立存储。视图支持单索引、负索引、迭代、fill/count，不扩容，也不改变原数组二维接口。RealArray 视图读取 Float，BoolArray 视图读取 Bool；count 按此类型使用 identical 规则。

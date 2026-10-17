@@ -9,6 +9,7 @@ extern const textension_module tstdlib_list_functions;
 extern const textension_module tstdlib_array_functions;
 extern const textension_module tstdlib_pair_functions;
 extern const textension_module tstdlib_capability_functions;
+extern const textension_module tstdlib_bulk_functions;
 extern const textension_module tstdlib_iterator_functions;
 extern const textension_module tstdlib_dict_functions;
 extern const textension_module tstdlib_sort_functions;
@@ -19,6 +20,7 @@ extern const textension_module tstdlib_session_functions;
 extern const textension_module tstdlib_rule_functions;
 
 extern const textension_module tstdlib_dense_module;
+extern const textension_module tstdlib_bytes_module;
 extern const textension_module tstdlib_io_module;
 extern const textension_module tstdlib_syntax_module;
 extern const textension_module tstdlib_time_module;

@@ -125,6 +125,9 @@ void tformat_type(struct tformat_context *context, ttypeval *type);
  */
 ttypeval *ttypeval_builtin(tbuiltintype_id builtin);
 
+/** 从核心内建对象的运行时 vtable 读取通用能力位。 */
+uint32_t ttypeval_builtin_capabilities(tbuiltintype_id builtin);
+
 /**
  * @brief 按核心 Type 名称取得共享对象。
  *

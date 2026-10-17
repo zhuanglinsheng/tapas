@@ -56,6 +56,7 @@ typedef struct {
 	uint32_t result_argument;
 	uint8_t result_from_argument;
 	uint8_t result_template_from_argument;
+	uint32_t type_capabilities;
 	const textension_nominal_template *nominal_template;
 	const textension_nominal_template *result_template;
 	uint8_t following_arguments_match_result_parameter;

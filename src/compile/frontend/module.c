@@ -32,6 +32,14 @@ static int package_added(const tstandard_catalog *catalog, const char *name)
 	return 0;
 }
 
+static uint32_t standard_type_capabilities(const textension_symbol *symbol)
+{
+	uint32_t mask;
+	if (textension_symbol_capabilities(symbol, &mask))
+		return mask;
+	return TSTATIC_CAPABILITIES_UNKNOWN;
+}
+
 static void initialize_standard_symbols(tstandard_catalog *catalog)
 {
 	if (!catalog) return;
@@ -81,6 +89,7 @@ static void initialize_standard_symbols(tstandard_catalog *catalog)
 						.result_template_from_argument =
 							symbol->result_relation ==
 							tnative_result_template_argument,
+						.type_capabilities = standard_type_capabilities(symbol),
 						.nominal_template = symbol->nominal_template,
 						.result_template = symbol->result_template,
 						.following_arguments_match_result_parameter =
@@ -323,7 +332,7 @@ static tstatic_type_id standard_type_name(void *opaque, const char *name)
 
 static tstatic_type_id standard_nominal_template(
 	standard_type_context *context,
-	const textension_nominal_template *schema)
+	const textension_nominal_template *schema, uint32_t capabilities)
 {
 	uint32_t type_count = schema->type_parameter_count;
 	uint32_t value_count = schema->value_parameter_count;
@@ -355,7 +364,7 @@ static tstatic_type_id standard_nominal_template(
 				parameter->name, 1) };
 	}
 	tstatic_type_id body = tstatic_type_make_named_application(context->arena,
-		schema->identity, body_parameters, count, schema->capabilities);
+		schema->identity, body_parameters, count, capabilities);
 	tstatic_type_id result = tstatic_type_make_template(context->arena,
 		parameters, type_count, value_count, body);
 	for (uint32_t i = 0; i < count; i++) {
@@ -382,7 +391,8 @@ static tstatic_type_id resolve_standard_type(standard_type_context *context, con
 	if (symbol->kind == tmodule_symbol_type && !static_value)
 		return tstatic_type_builtin_id(context->arena, tbuiltintype_type);
 	if (symbol->kind == tmodule_symbol_type && symbol->nominal_template)
-		return standard_nominal_template(context, symbol->nominal_template);
+		return standard_nominal_template(context, symbol->nominal_template,
+			symbol->type_capabilities);
 	if (symbol->kind == tmodule_symbol_type && !strcmp(symbol->type, "Type")) {
 		tstatic_type_id builtin = tstatic_type_builtin_named(
 			context->arena, symbol->name);
@@ -391,8 +401,9 @@ static tstatic_type_id resolve_standard_type(standard_type_context *context, con
 		tstring *qualified = tstring_new(symbol->package);
 		tstring_append(qualified, "::");
 		tstring_append(qualified, symbol->name);
-		tstatic_type_id result = tstatic_type_make_named(
-			context->arena, tstring_cstr(qualified));
+		tstatic_type_id result = tstatic_type_make_named_application(
+			context->arena, tstring_cstr(qualified), nullptr, 0,
+			symbol->type_capabilities);
 		tstring_free(qualified);
 		return result;
 	}

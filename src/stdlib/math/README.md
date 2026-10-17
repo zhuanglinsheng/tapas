@@ -138,3 +138,5 @@ math::isunordered(left: Number, right: Number) -> Bool
 超出函数数学定义域、发生上溢或下溢，以及包含 NaN 或无穷时，结果遵循运行平台的浮点与 C 数学库行为，可能是 NaN、无穷或平台相关分类值；本包不将所有数学域错误转换为 Tapas 错误。
 
 将 Float 结果转换为 Int 的函数要求结果可由 Tapas Int 表示。所有函数只接受签名明确允许的 Int 或 Float；类型或参数数量不合法，以及无法识别的输入，一律返回错误。
+
+`isqrt(value: Int) -> Int` 返回非负整数平方根的向下取整。通过整数除法校正浮点初值，避免整数平方溢出，完整 Int 范围内精确；不接受 Float 或负数。

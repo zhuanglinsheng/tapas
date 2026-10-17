@@ -106,7 +106,7 @@ typedef void (*tcompo_runtime_type_fn)(void *self, tobj *result);
 typedef int (*tcompo_matches_type_fn)(void *self, const tobj *type);
 
 /** 引用对象可以选择实现的通用能力表。 */
-typedef struct {
+typedef struct tcompo_capabilities {
 	tcompo_index_fn indexable;            /**< 索引读取能力。 */
 	tcompo_try_index_fn try_indexable;    /**< 非抛错索引读取能力。 */
 	tcompo_index_set_fn index_settable;   /**< 索引写入能力。 */
@@ -117,6 +117,14 @@ typedef struct {
 	tcompo_runtime_type_fn runtime_type;  /**< 精确运行时 Type 查询能力。 */
 	tcompo_matches_type_fn matches_type;  /**< 包对象自定义 Type 匹配能力。 */
 } tcompo_capabilities;
+
+/* Optional implementations of existing bulk operations. Returning zero means
+ * unhandled and must have no observable effects; callers then use iteration.
+ * These hooks do not introduce new language capability Types. */
+typedef struct {
+	int (*fill)(void *self, const tobj *value, const tcompo_v *indices);
+	int (*count)(void *self, const tobj *value, long *result);
+} tcompo_bulk_operations;
 
 /** 所有引用对象共享的 vtable 布局。 */
 typedef struct {
@@ -153,6 +161,7 @@ typedef struct {
 	/* 可选能力 */
 
 	const tcompo_capabilities *capabilities; /**< 可为空的能力表。 */
+	const tcompo_bulk_operations *bulk_operations; /**< 可为空的批量操作实现。 */
 } tcompo_vtable;
 
 /** 所有引用对象共有的对象头。 */

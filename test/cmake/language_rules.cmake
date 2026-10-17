@@ -26,6 +26,9 @@ set(ENVIRONMENT_INVALID_DIR "${FIXTURE_DIR}/invalid/environment")
 
 # Cover guarded VM fast paths in both compiler entry modes.
 foreach(fast_path_fixture IN ITEMS
+        "${REGRESSION_DIR}/bulk_operations.tap"
+        "${REGRESSION_DIR}/compact_sequences.tap"
+
         "${REGRESSION_DIR}/member_testable.tap"
         "${REGRESSION_DIR}/builtin_capabilities.tap"
         "${REGRESSION_DIR}/heap.tap"
@@ -1096,6 +1099,11 @@ if(NOT ast_import_output STREQUAL "42\ntrue\n2.5\nDelivered\nPending\n")
 endif()
 
 set(invalid_fixtures
+    bulk_count_not_iterable.tap
+    bulk_fill_not_writable.tap
+    bulk_fill_indices_not_iterable.tap
+    bulk_fill_arity.tap
+    bulk_count_arity.tap
     builtin_join_not_iterable.tap builtin_concat_not_iterable.tap
     chained_comparison.tap
     chained_range.tap
@@ -1187,6 +1195,17 @@ foreach(fixture IN LISTS invalid_fixtures)
 endforeach()
 
 set(runtime_error_fixtures
+    bulk_fill_bounds.tap
+    bulk_fill_index_type.tap
+    bulk_fill_array_indices.tap
+    bytes_bounds.tap
+    bytes_index_type.tap
+    bytes_length.tap
+    bytes_value.tap
+    bytes_write.tap
+    flat_bounds.tap
+    flat_value.tap
+    math_isqrt_negative.tap
     builtin_idx_type.tap builtin_idx_arity.tap builtin_idx_or_arity.tap
     builtin_idx_or_array_type.tap builtin_join_element.tap
     heap_empty_pop.tap heap_empty_peek.tap heap_invalid_list.tap

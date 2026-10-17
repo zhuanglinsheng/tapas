@@ -5,6 +5,8 @@
 #include "compile/frontend/workspace.h"
 #include "tapas/textension.h"
 #include "tapas/tstdlib.h"
+#include "tapas/tval.h"
+#include "tapas/objects/ttype.h"
 
 #include <assert.h>
 #include <string.h>
@@ -803,6 +805,231 @@ static void test_capability_types(void)
 	tfrontend_free(&frontend);
 }
 
+/* Analysis must read metadata, never invoke a provider to manufacture values. */
+static void metadata_only_factory(tobj *result)
+{
+	(void)result;
+	assert(!"static analysis executed a value factory");
+}
+
+static void metadata_only_call(tobj *arguments, uint_regs count, tobj *result)
+{
+	(void)arguments;
+	(void)count;
+	(void)result;
+	assert(!"static analysis executed an extension function");
+}
+
+static void metadata_only_index(void *self, const tobj *arguments,
+	uint_regs count, tobj *result)
+{
+	(void)self;
+	metadata_only_call((tobj *)arguments, count, result);
+}
+
+static int metadata_only_next(void *self, long *position, tobj *result)
+{
+	(void)self;
+	(void)position;
+	metadata_only_factory(result);
+	return 0;
+}
+
+static const tcompo_capabilities external_read_capabilities = {
+	.indexable = metadata_only_index,
+	.iterable = metadata_only_next
+};
+static const tcompo_capabilities external_empty_capabilities = {0};
+
+static const textension_symbol external_capability_symbols[] = {
+	{.name = "ReadOnly", .type = "Type", .kind = textension_type,
+	 .value_factory = metadata_only_factory,
+	 .instance_capabilities = &external_read_capabilities},
+	{.name = "Empty", .type = "Type", .kind = textension_type,
+	 .value_factory = metadata_only_factory,
+	 .instance_capabilities = &external_empty_capabilities},
+	{.name = "Opaque", .type = "Type", .kind = textension_type,
+	 .value_factory = metadata_only_factory},
+	{.name = "reader", .type = "Function[] -> ReadOnly",
+	 .kind = textension_function, .function = metadata_only_call},
+	{.name = "empty", .type = "Function[] -> Empty",
+	 .kind = textension_function, .function = metadata_only_call},
+	{.name = "opaque", .type = "Function[] -> Opaque",
+	 .kind = textension_function, .function = metadata_only_call}
+};
+static const textension_module external_capability_module = {
+	.scope = textension_package, .name = "custom_container",
+	.symbols = external_capability_symbols,
+	.symbol_count = sizeof(external_capability_symbols) / sizeof(*external_capability_symbols)
+};
+static const textension_module *const external_capability_modules[] = {
+	&external_capability_module
+};
+static const textension_descriptor external_capability_extension =
+	TAPAS_EXTENSION("custom_container", "1", external_capability_modules);
+
+static void test_external_capability_rules(void)
+{
+	static const textension_template_type_parameter parameters[] = {
+		{.name = "T", .slot = "item"}
+	};
+	textension_nominal_template schema = {
+		.identity = "custom_container::ReadOnly", .type_parameters = parameters,
+		.type_parameter_count = 1,
+		.capabilities = textension_type_indexable | textension_type_iterable
+	};
+	textension_symbol symbol = external_capability_symbols[0];
+	symbol.nominal_template = &schema;
+	textension_module module = external_capability_module;
+	module.symbols = &symbol;
+	module.symbol_count = 1;
+	const textension_module *modules[] = {&module};
+	textension_descriptor extension = TAPAS_EXTENSION("metadata", "1", modules);
+	uint32_t mask = 123;
+	assert(textension_validate(&extension));
+	assert(textension_symbol_capabilities(&symbol, &mask));
+	assert(mask == schema.capabilities);
+	schema.capabilities = textension_type_iterable;
+	assert(!textension_validate(&extension));
+	symbol.instance_capabilities = nullptr;
+	assert(textension_validate(&extension));
+	assert(textension_symbol_capabilities(&symbol, &mask));
+	assert(mask == textension_type_iterable);
+	symbol.nominal_template = nullptr;
+	assert(!textension_symbol_capabilities(&symbol, &mask));
+	assert(mask == textension_type_iterable);
+	symbol.instance_capabilities = &external_empty_capabilities;
+	assert(textension_symbol_capabilities(&symbol, &mask) && mask == 0);
+
+	assert(textension_registry_register(test_extensions, &external_capability_extension));
+	tworkspace workspace;
+	tworkspace_init(&workspace, test_extensions);
+	tworkspace_document *document = tworkspace_open(&workspace,
+		"file:///custom-capabilities.tap",
+		"let reader = custom_container::reader()\n"
+		"let input: Iterable = reader\n"
+		"let indexed: Indexable = copy(reader)\n"
+		"let found = count(reader, 0)\n"
+		"let opaque = custom_container::opaque()\n"
+		"let deferred = count(opaque, 0)\n",
+		1);
+	assert(document && document->frontend.diagnostics.count == 0);
+	for (uint32_t i = 0; i < document->frontend.semantic.symbol_count; i++) {
+		const tsemantic_symbol *symbol = &document->frontend.semantic.symbols[i];
+		if (tstring_eq_cstr(symbol->name, "reader"))
+			assert(!strcmp(ttype_info_for_symbol(&document->frontend.types,
+				&document->frontend.semantic, symbol), "custom_container::ReadOnly"));
+	}
+	document = tworkspace_update(&workspace, "file:///custom-capabilities.tap",
+		"let reader = custom_container::reader()\n"
+		"fill(reader, 0, iter(0, 3))\n"
+		"append(reader, 0)\n"
+		"delete(reader, 0)\n"
+		"count(custom_container::empty(), 0)\n", 2);
+	assert(document && document->frontend.diagnostics.count == 4);
+
+	const tbuiltintype_id capabilities[] = {tbuiltintype_indexable,
+		tbuiltintype_index_settable, tbuiltintype_appendable,
+		tbuiltintype_deletable, tbuiltintype_member_testable, tbuiltintype_iterable};
+	tstatic_type_arena arena;
+	tstatic_type_arena_init(&arena);
+	tstatic_type_id type = tstandard_type_resolve(&workspace.standards, &arena,
+		"custom_container::ReadOnly", 1);
+	tcompo_vtable vtable = {.compo_code = compo_extension,
+		.capabilities = &external_read_capabilities};
+	tcompo_v instance = {.vtable = &vtable};
+	tobj value = {.type = tcompo, .val.v_tcompo = &instance};
+	for (unsigned i = 0; i < sizeof(capabilities) / sizeof(*capabilities); i++)
+		assert(!!tstatic_type_assignable(&arena, type, capabilities[i]) ==
+			!!ttypeval_matches(&value, ttypeval_builtin(capabilities[i])));
+	/* An undeclared table and an explicitly empty table are different facts. */
+	tstatic_type_id opaque = tstatic_type_make_named(&arena, "custom_container::ReadOnly");
+	tstatic_type_id empty = tstatic_type_make_named_application(&arena,
+		"custom_container::ReadOnly", nullptr, 0, 0);
+	assert(!tstatic_type_equal(&arena, type, opaque));
+	assert(!tstatic_type_equal(&arena, opaque, empty));
+	assert(!tstatic_type_equal(&arena, type, empty));
+	assert(tstatic_type_assignable(&arena, opaque, type));
+	assert(tstatic_type_assignable(&arena, type, opaque));
+	tstatic_type_id known_list = tstatic_type_make(&arena, tstatic_type_list, &type, 1, 0);
+	tstatic_type_id opaque_list = tstatic_type_make(&arena, tstatic_type_list, &opaque, 1, 0);
+	assert(!tstatic_type_equal(&arena, known_list, opaque_list));
+	assert(tstatic_type_assignable(&arena, known_list, opaque_list));
+	assert(tstatic_type_assignable(&arena, opaque_list, known_list));
+	assert(!tstatic_type_assignable(&arena, type, empty));
+	tstatic_type_id other = tstatic_type_make_named(&arena, "custom_container::Other");
+	assert(!tstatic_type_assignable(&arena, other, type));
+	tstring *slot = tstring_new("item");
+	tstatic_field int_parameter = {.name = slot, .type = tbuiltintype_int};
+	tstatic_field float_parameter = {.name = slot, .type = tbuiltintype_float};
+	tstatic_type_id int_container = tstatic_type_make_named_application(&arena,
+		"custom_container::Box", &int_parameter, 1, TSTATIC_CAPABILITIES_UNKNOWN);
+	tstatic_type_id float_container = tstatic_type_make_named_application(&arena,
+		"custom_container::Box", &float_parameter, 1, textension_type_iterable);
+	assert(!tstatic_type_assignable(&arena, int_container, float_container));
+	assert(!tstatic_type_assignable(&arena, float_container, int_container));
+	tstring_free(slot);
+	tstatic_type_arena_free(&arena);
+	tworkspace_free(&workspace);
+}
+
+static void test_package_capability_types(void)
+{
+	tworkspace workspace;
+	tworkspace_init(&workspace, test_extensions);
+	tworkspace_document *document = tworkspace_open(&workspace,
+		"file:///compact-capabilities.tap",
+		"let flags = dense::flat(array(1, 8, true))\n"
+		"let writable: IndexSettable = flags\n"
+		"let iterable: Iterable = copy(flags)\n"
+		"let indexed: Indexable = flags\n"
+		"let searchable: MemberTestable = flags\n"
+		"fill(flags, false, iter(0, 2, 8))\n"
+		"let matches = count(flags, true)\n"
+		"let buffer = bytes::buffer(8, 1)\n"
+		"let bytes_writable: IndexSettable = buffer\n"
+		"let bytes_iterable: Iterable = buffer\n"
+		"fill(buffer, 0, iter(0, 8))\n"
+		"let zeros = count(copy(buffer), 0)\n",
+		1);
+	assert(document && document->frontend.diagnostics.count == 0);
+
+	document = tworkspace_update(&workspace,
+		"file:///compact-capabilities.tap",
+		"let buffer = bytes::buffer(8, 0)\n"
+		"append(buffer, 1)\n"
+		"delete(buffer, 0)\n",
+		2);
+	assert(document && document->frontend.diagnostics.count == 2);
+	tworkspace_free(&workspace);
+
+	const uint32_t flags[] = {textension_type_indexable,
+		textension_type_index_settable, textension_type_appendable,
+		textension_type_deletable, textension_type_contains,
+		textension_type_iterable};
+	const tbuiltintype_id capabilities[] = {tbuiltintype_indexable,
+		tbuiltintype_index_settable, tbuiltintype_appendable,
+		tbuiltintype_deletable, tbuiltintype_member_testable,
+		tbuiltintype_iterable};
+	tstatic_type_arena arena;
+	tstatic_type_arena_init(&arena);
+	/* Rule item subtypes share their runtime capabilities; String does not
+	 * acquire Appendable just because other sequence Types provide it. */
+	assert(tstatic_type_assignable(&arena, tbuiltintype_rule_condition,
+		tbuiltintype_indexable));
+	assert(tstatic_type_assignable(&arena, tbuiltintype_rule_requirement,
+		tbuiltintype_indexable));
+	assert(!tstatic_type_assignable(&arena, tbuiltintype_string,
+		tbuiltintype_appendable));
+	for (unsigned i = 0; i < sizeof(flags) / sizeof(*flags); i++) {
+		tstatic_type_id type = tstatic_type_make_named_application(
+			&arena, "example::Container", nullptr, 0, flags[i]);
+		for (unsigned j = 0; j < sizeof(flags) / sizeof(*flags); j++)
+			assert(!!tstatic_type_assignable(&arena, type, capabilities[j]) == (i == j));
+	}
+	tstatic_type_arena_free(&arena);
+}
+
 static void test_shared_type_diagnostics_and_narrowing(void)
 {
 	tfrontend frontend;
@@ -1283,6 +1510,8 @@ int main(void)
 	test_editor_type_information();
 	test_dictionary_literals_are_not_field_constraints();
 	test_capability_types();
+	test_package_capability_types();
+	test_external_capability_rules();
 	test_shared_type_diagnostics_and_narrowing();
 	test_external_type_information();
 	test_declaration_without_initializer();

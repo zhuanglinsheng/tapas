@@ -1,0 +1,42 @@
+let flags = replicate([true], 10)
+fill(flags, false, iter(2, 2, 10))
+assert(rule { count(flags, true) == 6 and count(flags, false) == 4 })
+fill(flags, false, iter(-1, -2, -11))
+assert(rule { count(flags, true) == 1 })
+fill(flags, true, iter(0, 0, 10))
+fill(flags, true, iter(8, 1, 0))
+fill([], 1, iter(0, 0))
+assert(rule { count(flags, true) == 1 and count([], true) == 0 })
+
+let data = {'a': 1, 'b': 2}
+fill(data, 7, ['a', 'b', 'c', 'a'])
+assert(rule { data::a == 7 and data::b == 7 and data::c == 7 })
+assert(rule { count(values(data), 7) == 3 })
+let pair_key = 1 : 2
+let keyed = {}
+fill(keyed, 3, [pair_key])
+assert(rule { keyed[pair_key] == 3 })
+
+let payload = [9]
+let items = [[1], [2], [3]]
+fill(items, payload, iter(0, 3))
+payload.append(10)
+assert(rule { items[0][1] == 10 and items[2][1] == 10 })
+assert(rule { count(items, [9, 10]) == 3 })
+fill(items, 4, iter(2, -1, -1))
+assert(rule { count(items, 4) == 3 })
+let mixed = [1, 1.0, true, 1, '1']
+assert(rule { count(mixed, 1) == 2 and count(mixed, 1.0) == 1 })
+assert(rule { count(mixed, true) == 1 and count(mixed, '1') == 1 })
+assert(rule { count('ababa', 'a') == 3 and count('ababa', 'aba') == 0 })
+assert(rule { count('ababa', 97) == 0 and count('', '') == 0 })
+assert(rule { count(iter(1, 2, 10), 5) == 1 })
+assert(rule { count(iter(1, 2, 10), 5.0) == 0 })
+assert(rule { count(iter(10, -2, 0), 4) == 1 })
+let not_a_number = math::make_nan()
+assert(rule { count([not_a_number], not_a_number) == 0 })
+assert(rule { count([0.0, -0.0], 0.0) == 2 })
+// Extreme strides must stop without overflowing on the final increment.
+fill([1], 2, iter(0, 9223372036854775807, 1))
+fill([1], 2, iter(0, -9223372036854775807, -1))
+print('ok')

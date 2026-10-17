@@ -20,6 +20,8 @@ extern "C" {
 
 typedef uint32_t tstatic_type_id;
 #define TSTATIC_TYPE_UNKNOWN UINT32_MAX
+/* Missing capability metadata is dynamic, not evidence of incompatibility. */
+#define TSTATIC_CAPABILITIES_UNKNOWN UINT32_MAX
 #define TSTATIC_TYPE_INVALID_NAME (UINT32_MAX - 1)
 #define TSTATIC_TYPE_INVALID_APPLICATION (UINT32_MAX - 2)
 

@@ -14,6 +14,9 @@
 #include "tapas/tformat.h"
 
 #include "tapas/objects/tdict.h"
+#include "tapas/objects/tarray.h"
+#include "tapas/objects/titer.h"
+#include "runtime/tenv.h"
 #include "tapas/objects/tlist.h"
 #include "tapas/objects/tpair.h"
 #include "tapas/objects/tstr.h"
@@ -1743,6 +1746,31 @@ static int ttypeval_next_key(const ttypeval *type, long *position, tobj *result)
 	return 1;
 }
 
+uint32_t ttypeval_builtin_capabilities(tbuiltintype_id builtin)
+{
+	const tcompo_vtable *vtable;
+	switch (builtin) {
+	case tbuiltintype_string: vtable = &tstr_vtable; break;
+	case tbuiltintype_list: vtable = &tlist_vtable; break;
+	case tbuiltintype_pair: vtable = &tpair_vtable; break;
+	case tbuiltintype_dictionary: vtable = &tdict_vtable; break;
+	case tbuiltintype_iterator: vtable = &titer_vtable; break;
+	case tbuiltintype_real_array: vtable = &tdarr_vtable; break;
+	case tbuiltintype_bool_array: vtable = &tbarr_vtable; break;
+	case tbuiltintype_type: vtable = &ttypeval_vtable; break;
+	case tbuiltintype_library: vtable = &tlib_vtable; break;
+	case tbuiltintype_rule_ir: vtable = &trule_ir_vtable; break;
+	case tbuiltintype_rule_parameter:
+	case tbuiltintype_rule_capture:
+	case tbuiltintype_rule_term: vtable = &trule_term_vtable; break;
+	case tbuiltintype_rule_condition:
+	case tbuiltintype_rule_requirement:
+	case tbuiltintype_rule_item: vtable = &trule_item_vtable; break;
+	default: return 0;
+	}
+	return textension_capability_mask(vtable->capabilities);
+}
+
 static int tbuiltintype_matches(const tobj *value, tbuiltintype_id builtin)
 {
 	if (!value)
@@ -1789,23 +1817,13 @@ static int tbuiltintype_matches(const tobj *value, tbuiltintype_id builtin)
 	case tbuiltintype_type:
 		return code == compo_ttypeval;
 	case tbuiltintype_indexable:
-		return value->val.v_tcompo->vtable->capabilities &&
-		       value->val.v_tcompo->vtable->capabilities->indexable;
 	case tbuiltintype_index_settable:
-		return value->val.v_tcompo->vtable->capabilities &&
-		       value->val.v_tcompo->vtable->capabilities->index_settable;
 	case tbuiltintype_appendable:
-		return value->val.v_tcompo->vtable->capabilities &&
-		       value->val.v_tcompo->vtable->capabilities->appendable;
 	case tbuiltintype_deletable:
-		return value->val.v_tcompo->vtable->capabilities &&
-		       value->val.v_tcompo->vtable->capabilities->deletable;
 	case tbuiltintype_member_testable:
-		return value->val.v_tcompo->vtable->capabilities &&
-		       value->val.v_tcompo->vtable->capabilities->contains;
 	case tbuiltintype_iterable:
-		return value->val.v_tcompo->vtable->capabilities &&
-		       value->val.v_tcompo->vtable->capabilities->iterable;
+		return textension_capability_matches(
+			value->val.v_tcompo->vtable->capabilities, builtin);
 	case tbuiltintype_rule:
 		return code == compo_trule;
 	case tbuiltintype_rule_instance:
@@ -2165,6 +2183,14 @@ static void *ttypeval_copy(void *self)
 static void ttypeval_free(void *self)
 {
 	ttypeval *type = (ttypeval *)self;
+	/* Generic object release reaches this vtable directly, bypassing
+	 * ttypeval_release. Honor the same process-wide singleton pin here. */
+	if ((type->kind == ttype_kind_any || type->kind == ttype_kind_builtin) &&
+	    type->builtin >= 0 && type->builtin < tbuiltintype_count &&
+	    builtin_types[type->builtin] == type) {
+		type->base.refctr = 1;
+		return;
+	}
 	if (type->kind == ttype_kind_instance_of) tobj_try_clear(&type->instance_rule);
 	tstring_free(type->instance_reference);
 	tstring_free(type->named_identity);

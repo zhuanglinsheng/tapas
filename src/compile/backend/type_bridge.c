@@ -309,7 +309,8 @@ static ttypeval *static_to_runtime(to_runtime_context *context,
 		}
 		ttypeval *result = ttypeval_new_named_application(
 			tstring_cstr(type->value_reference), parameters,
-			type->field_count, type->capabilities);
+			type->field_count, type->capabilities == TSTATIC_CAPABILITIES_UNKNOWN ?
+			0 : type->capabilities);
 		for (uint32_t i = 0; i < type->field_count; i++)
 			ttypeval_release(parameters[i].type);
 		free(parameters);

@@ -100,12 +100,15 @@ set(TAPAS_RUNTIME_SOURCES
 
 set(TAPAS_STDLIB_SOURCES
     src/stdlib/tstdlib.c
+    src/stdlib/compact.c
+    src/stdlib/bytes/bytes.c
     src/stdlib/builtins/console.c
     src/stdlib/builtins/conversion.c
     src/stdlib/builtins/list.c
     src/stdlib/builtins/array.c
     src/stdlib/builtins/pair.c
     src/stdlib/builtins/capability.c
+    src/stdlib/builtins/bulk.c
     src/stdlib/builtins/iterator.c
     src/stdlib/builtins/dict.c
     src/stdlib/builtins/sort.c
@@ -371,6 +374,11 @@ if(BUILD_TESTING)
     target_link_libraries(test_builtin_capabilities PRIVATE tapas_stdlib)
     tapas_enable_test_assertions(test_builtin_capabilities)
     add_test(NAME builtin_capabilities COMMAND test_builtin_capabilities)
+
+    add_executable(test_compact test/unit/test_compact.c)
+    target_link_libraries(test_compact PRIVATE tapas_stdlib)
+    tapas_enable_test_assertions(test_compact)
+    add_test(NAME compact COMMAND test_compact)
 
 	add_executable(test_finite test/unit/test_finite.c)
 	target_link_libraries(test_finite PRIVATE tapas_stdlib)

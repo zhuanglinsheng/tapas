@@ -1,6 +1,8 @@
 #include "tapas/textension.h"
 
 #include "../arguments.h"
+#include "../compact.h"
+#include "tapas/objects/ttype.h"
 
 #include "tapas/objects/tarray.h"
 #include "dsa/tblas.h"
@@ -48,6 +50,41 @@ static void require_same_shape(const tdarr *left, const tdarr *right,
 {
 	if (left->rows != right->rows || left->cols != right->cols)
 		twarn(ErrRuntime_LenInconsis, where, "array shapes differ");
+}
+
+static const char *flat_view_type(void)
+{
+	return "dense::FlatView";
+}
+
+static tcompo_vtable flat_view_vtable = {
+	.get_type = flat_view_type,
+	.compo_code = compo_extension,
+	.len = tcompact_len,
+	.copy = tcompact_copy,
+	.free = tcompact_free,
+	.identical = tcompact_identical,
+	.tostring_abbr = tcompact_string,
+	.tostring_full = tcompact_string,
+	.capabilities = &tcompact_capabilities,
+	.bulk_operations = &tcompact_bulk_operations
+};
+
+static void create_flat_view_type(tobj *result)
+{
+	tobj_set_compo(result, (tcompo_v *)ttypeval_new_named("dense::FlatView"));
+}
+
+static void dense_flat(tobj *params, uint_regs len, tobj *result)
+{
+	tcompo_v *source = array_param(params, len, "dense::flat");
+	size_t rows = tarr_rows(source), cols = tarr_cols(source);
+	tcompact_kind kind = source->vtable->compo_code == compo_tbarr ?
+		tcompact_bool : tcompact_real;
+	void *data = kind == tcompact_bool ? (void *)((tbarr *)source)->data :
+		(void *)((tdarr *)source)->data;
+	tobj_set_compo(result, (tcompo_v *)tcompact_new(&flat_view_vtable,
+		kind, rows * cols, source, data));
 }
 
 static void dense_rows(tobj *p, uint_regs n, tobj *r)
@@ -214,6 +251,23 @@ static void dense_gemm(tobj *params, uint_regs len, tobj *result)
 }
 
 static const textension_symbol package_symbols[] = {
+	{
+		.name = "FlatView",
+		.type = "Type",
+		.detail = "dense::FlatView: Type",
+		.kind = textension_type,
+		.value_factory = create_flat_view_type,
+		.instance_capabilities = &tcompact_capabilities
+	},
+	{
+		.name = "flat",
+		.type = "Function[RealArray | BoolArray] -> FlatView",
+		.detail = "dense::flat(value: RealArray | BoolArray) -> FlatView",
+		.kind = textension_function,
+		.function = dense_flat,
+		.minimum_arguments = 1,
+		.maximum_arguments = 1
+	},
 	{
 		.name = "rows",
 		.type = "Function[RealArray | BoolArray] -> Int",
