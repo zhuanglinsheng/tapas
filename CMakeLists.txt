@@ -274,6 +274,38 @@ if(TAPAS_ENABLE_IPO)
 endif()
 
 if(BUILD_TESTING)
+    # Solve-dependent tests need a Python interpreter with OR-Tools. An
+    # explicit TAPAS_SOLVE_PYTHON override wins; otherwise probe the usual
+    # interpreter names and use the first one that can import ortools, so a
+    # pyenv/virtualenv install next to a bare system python3 is still found.
+    set(TAPAS_TEST_SOLVE_PYTHON "")
+    if(DEFINED ENV{TAPAS_SOLVE_PYTHON} AND NOT "$ENV{TAPAS_SOLVE_PYTHON}" STREQUAL "")
+        set(TAPAS_TEST_SOLVE_PYTHON "$ENV{TAPAS_SOLVE_PYTHON}")
+    else()
+        find_program(TAPAS_TEST_PYTHON3 NAMES python3)
+        find_program(TAPAS_TEST_PYTHON NAMES python)
+        foreach(TAPAS_TEST_CANDIDATE IN LISTS TAPAS_TEST_PYTHON3 TAPAS_TEST_PYTHON)
+            if(TAPAS_TEST_CANDIDATE AND NOT TAPAS_TEST_SOLVE_PYTHON)
+                execute_process(
+                    COMMAND "${TAPAS_TEST_CANDIDATE}" -c
+                        "from ortools.sat.python import cp_model"
+                    RESULT_VARIABLE TAPAS_TEST_ORTOOLS_RESULT
+                    OUTPUT_QUIET ERROR_QUIET)
+                if(TAPAS_TEST_ORTOOLS_RESULT EQUAL 0)
+                    set(TAPAS_TEST_SOLVE_PYTHON "${TAPAS_TEST_CANDIDATE}")
+                endif()
+            endif()
+        endforeach()
+        unset(TAPAS_TEST_PYTHON3 CACHE)
+        unset(TAPAS_TEST_PYTHON CACHE)
+    endif()
+    if(TAPAS_TEST_SOLVE_PYTHON)
+        set(TAPAS_TEST_SOLVE_ENV "TAPAS_SOLVE_PYTHON=${TAPAS_TEST_SOLVE_PYTHON}")
+        message(STATUS "Solve integration tests use Python: ${TAPAS_TEST_SOLVE_PYTHON}")
+    else()
+        message(STATUS "Solve integration tests skipped: no Python with OR-Tools found")
+    endif()
+
     function(tapas_enable_test_assertions target)
         if(MSVC)
             target_compile_options(${target} PRIVATE /UNDEBUG)
@@ -359,6 +391,10 @@ if(BUILD_TESTING)
             -DSOURCE_ROOT=${CMAKE_CURRENT_SOURCE_DIR}
             -P ${CMAKE_CURRENT_SOURCE_DIR}/test/cmake/solve.cmake)
     set_tests_properties(solve_hold PROPERTIES TIMEOUT 90 RESOURCE_LOCK solve_bytecode)
+    if(TAPAS_TEST_SOLVE_PYTHON)
+        set_property(TEST solve_hold APPEND PROPERTY
+            ENVIRONMENT "${TAPAS_TEST_SOLVE_ENV}")
+    endif()
 
     add_test(
         NAME format_package
@@ -410,6 +446,10 @@ if(BUILD_TESTING)
     set_tests_properties(retail_partial_queries PROPERTIES
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
         RESOURCE_LOCK retail_bytecode)
+    if(TAPAS_TEST_SOLVE_PYTHON)
+        set_property(TEST retail_partial_queries APPEND PROPERTY
+            ENVIRONMENT "${TAPAS_TEST_SOLVE_ENV}")
+    endif()
 
     add_test(NAME retail_state_model
         COMMAND $<TARGET_FILE:tapas>
@@ -424,6 +464,10 @@ if(BUILD_TESTING)
     set_tests_properties(retail_contract_detection PROPERTIES
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
         RESOURCE_LOCK retail_bytecode)
+    if(TAPAS_TEST_SOLVE_PYTHON)
+        set_property(TEST retail_contract_detection APPEND PROPERTY
+            ENVIRONMENT "${TAPAS_TEST_SOLVE_ENV}")
+    endif()
 
     add_test(NAME markdown_update
         COMMAND ${CMAKE_COMMAND}
@@ -458,6 +502,10 @@ if(BUILD_TESTING)
             WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
             RESOURCE_LOCK source_bytecode
         )
+        if(TAPAS_TEST_SOLVE_PYTHON)
+            set_property(TEST "documentation_${DOCUMENT_TEST_NAME}" APPEND PROPERTY
+                ENVIRONMENT "${TAPAS_TEST_SOLVE_ENV}")
+        endif()
     endforeach()
 endif()
 
