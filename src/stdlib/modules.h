@@ -22,6 +22,7 @@ extern const textension_module tstdlib_rule_functions;
 extern const textension_module tstdlib_dense_module;
 extern const textension_module tstdlib_bytes_module;
 extern const textension_module tstdlib_io_module;
+extern const textension_module tstdlib_json_module;
 extern const textension_module tstdlib_syntax_module;
 extern const textension_module tstdlib_time_module;
 extern const textension_module tstdlib_random_module;

@@ -100,6 +100,7 @@ set(TAPAS_RUNTIME_SOURCES
 
 set(TAPAS_STDLIB_SOURCES
     src/stdlib/tstdlib.c
+    src/stdlib/result.c
     src/stdlib/compact.c
     src/stdlib/bytes/bytes.c
     src/stdlib/builtins/console.c
@@ -119,6 +120,7 @@ set(TAPAS_STDLIB_SOURCES
     src/stdlib/builtins/rules.c
     src/stdlib/dense/dense.c
     src/stdlib/io/io.c
+    src/stdlib/json/json.c
     src/stdlib/syntax/syntax.c
     src/stdlib/math/math.c
     src/stdlib/heap/heap.c
@@ -384,6 +386,11 @@ if(BUILD_TESTING)
     target_link_libraries(test_compact PRIVATE tapas_stdlib)
     tapas_enable_test_assertions(test_compact)
     add_test(NAME compact COMMAND test_compact)
+
+    add_executable(test_json test/unit/test_json.c)
+    target_link_libraries(test_json PRIVATE tapas_stdlib)
+    tapas_enable_test_assertions(test_json)
+    add_test(NAME json COMMAND test_json)
 
     add_executable(test_sort test/unit/test_sort.c)
     target_link_libraries(test_sort PRIVATE tapas_stdlib)

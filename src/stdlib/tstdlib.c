@@ -31,7 +31,8 @@ static const textension_module *const modules[] = {
 	&tstdlib_solve_module,
 	/* Append new root bindings so existing bytecode keeps its slot numbers. */
 	&tstdlib_bulk_functions,
-	&tstdlib_bytes_module
+	&tstdlib_bytes_module,
+	&tstdlib_json_module
 };
 
 const textension_descriptor *tstdlib_descriptor(void)

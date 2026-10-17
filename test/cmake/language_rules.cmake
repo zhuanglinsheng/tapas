@@ -29,6 +29,7 @@ foreach(fast_path_fixture IN ITEMS
         "${REGRESSION_DIR}/bulk_operations.tap"
         "${REGRESSION_DIR}/compact_sequences.tap"
         "${REGRESSION_DIR}/list_order.tap"
+        "${REGRESSION_DIR}/json.tap"
 
         "${REGRESSION_DIR}/member_testable.tap"
         "${REGRESSION_DIR}/builtin_capabilities.tap"
@@ -1216,6 +1217,11 @@ set(runtime_error_fixtures
     heap_order_payload.tap
     sort_order_mismatch.tap
     sort_order_nan.tap
+    json_parse_invalid.tap
+    json_key_invalid.tap
+    json_cycle.tap
+    json_nan.tap
+    json_unsupported.tap
     builtin_idx_type.tap builtin_idx_arity.tap builtin_idx_or_arity.tap
     builtin_idx_or_array_type.tap builtin_join_element.tap
     heap_empty_pop.tap heap_empty_peek.tap heap_invalid_list.tap
