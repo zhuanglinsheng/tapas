@@ -101,6 +101,9 @@ set(TAPAS_RUNTIME_SOURCES
 set(TAPAS_STDLIB_SOURCES
     src/stdlib/tstdlib.c
     src/stdlib/result.c
+    src/stdlib/system.c
+    src/stdlib/strings/strings.c
+    src/stdlib/path/path.c
     src/stdlib/compact.c
     src/stdlib/bytes/bytes.c
     src/stdlib/builtins/console.c
@@ -387,6 +390,11 @@ if(BUILD_TESTING)
     tapas_enable_test_assertions(test_compact)
     add_test(NAME compact COMMAND test_compact)
 
+    add_executable(test_text_foundations test/unit/test_text_foundations.c)
+    target_link_libraries(test_text_foundations PRIVATE tapas_stdlib)
+    tapas_enable_test_assertions(test_text_foundations)
+    add_test(NAME text_foundations COMMAND test_text_foundations)
+
     add_executable(test_json test/unit/test_json.c)
     target_link_libraries(test_json PRIVATE tapas_stdlib)
     tapas_enable_test_assertions(test_json)
@@ -443,6 +451,11 @@ if(BUILD_TESTING)
             -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/test-format
             -P ${CMAKE_CURRENT_SOURCE_DIR}/test/cmake/format.cmake
     )
+
+    add_test(NAME standard_streams COMMAND ${CMAKE_COMMAND}
+        -DTAPAS=$<TARGET_FILE:tapas>
+        -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/test-streams
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/test/cmake/streams.cmake)
 
     # General examples are standalone programs and form part of the public
     # language surface. Product examples live in sibling directories and have

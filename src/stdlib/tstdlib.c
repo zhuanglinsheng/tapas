@@ -32,7 +32,10 @@ static const textension_module *const modules[] = {
 	/* Append new root bindings so existing bytecode keeps its slot numbers. */
 	&tstdlib_bulk_functions,
 	&tstdlib_bytes_module,
-	&tstdlib_json_module
+	&tstdlib_json_module,
+	&tstdlib_conversion_try_functions,
+	&tstdlib_strings_module,
+	&tstdlib_path_module
 };
 
 const textension_descriptor *tstdlib_descriptor(void)

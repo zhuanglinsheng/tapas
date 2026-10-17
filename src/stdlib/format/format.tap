@@ -17,7 +17,7 @@ function expand_indentation(indentation: String) -> String
             parts.append(indentation[index])
         }
     }
-    return join(parts, '')
+    return strings::join(parts, '')
 }
 
 function whitespace_edits(
@@ -187,7 +187,7 @@ function parameter_indentation(
         indentation: String,
 ) -> Nil {
     let header_indent = expand_indentation(indentation)
-    let continuation = join([header_indent, '        '], '')
+    let continuation = strings::join([header_indent, '        '], '')
     let line_start = 0
     let first = true
     for (let token in tokens) {
@@ -316,7 +316,7 @@ function structural_edits(
         let header = function_braces[brace]
         let prefix = ' '
         if (lines[header] == lines[brace - 1]) {
-            prefix = join([line_break, expand_indentation(indents[header])], '')
+            prefix = strings::join([line_break, expand_indentation(indents[header])], '')
         }
         put_edit(
             edits, clean_before, tokens,
@@ -341,7 +341,7 @@ function apply_edits(source: String, edits: Dictionary[Int, Dictionary]) -> Stri
             position = position + 1
         }
     }
-    return join(parts, '')
+    return strings::join(parts, '')
 }
 
 function source_origins(source: String) -> List[Int]
@@ -377,7 +377,7 @@ function apply_mapped_edits(
         }
     }
     return {
-        'source': join(parts, ''),
+        'source': strings::join(parts, ''),
         'origins': output_origins.copy(),
     }
 }
@@ -517,7 +517,7 @@ function implication_edits(
             parts.append(indents[left])
             parts.append('}')
         }
-        let replacement = join(parts, '')
+        let replacement = strings::join(parts, '')
         edits[tokens[left]['start']] = {
             'end': tokens[end]['end'],
             'text': replacement.copy(),

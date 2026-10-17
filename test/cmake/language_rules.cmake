@@ -30,6 +30,7 @@ foreach(fast_path_fixture IN ITEMS
         "${REGRESSION_DIR}/compact_sequences.tap"
         "${REGRESSION_DIR}/list_order.tap"
         "${REGRESSION_DIR}/json.tap"
+        "${REGRESSION_DIR}/text_foundations.tap"
 
         "${REGRESSION_DIR}/member_testable.tap"
         "${REGRESSION_DIR}/builtin_capabilities.tap"
@@ -1222,6 +1223,15 @@ set(runtime_error_fixtures
     json_cycle.tap
     json_nan.tap
     json_unsupported.tap
+    int_empty.tap
+    float_empty.tap
+    int_nonfinite.tap
+    int_float_overflow.tap
+    int_embedded_nul.tap
+    float_embedded_nul.tap
+    path_embedded_nul.tap
+    strings_split_empty.tap
+    strings_replace_empty.tap
     builtin_idx_type.tap builtin_idx_arity.tap builtin_idx_or_arity.tap
     builtin_idx_or_array_type.tap builtin_join_element.tap
     heap_empty_pop.tap heap_empty_peek.tap heap_invalid_list.tap

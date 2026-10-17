@@ -26,12 +26,12 @@ require(idx_or({}, 'missing', 9) == 9)
 let builtin_default = idx_or({}, 'missing', ['retained'])
 require(builtin_default[0] == 'retained')
 
-require(join([], ',') == '')
-require(join(['ab', 'cd'], ':') == 'ab:cd')
-require(join('abc', '-') == 'a-b-c')
-require(join('', ',') == '')
-require(join(iter(0, 0), ',') == '')
-require(join('abc', '') == 'abc')
+require(strings::join([], ',') == '')
+require(strings::join(['ab', 'cd'], ':') == 'ab:cd')
+require(strings::join('abc', '-') == 'a-b-c')
+require(strings::join('', ',') == '')
+require(strings::join(iter(0, 0), ',') == '')
+require(strings::join('abc', '') == 'abc')
 
 let builtin_combined = concat(iter(1, 4), 'xy')
 require(len(builtin_combined) == 5)
@@ -47,7 +47,7 @@ require(builtin_shallow[0][0] == 8)
 require(len(builtin_shared) == 1)
 let builtin_same_source = ['a', 'b']
 require(len(concat(builtin_same_source, builtin_same_source)) == 4)
-require(join(builtin_same_source, '') == 'ab')
+require(strings::join(builtin_same_source, '') == 'ab')
 
 // Iterable does not imply Indexable, and a range can be traversed repeatedly.
 let builtin_range = iter(0, 3)

@@ -28,7 +28,7 @@ assert(rule { good::ok and good::error == '' and good::position == -1 })
 assert(rule { identical(good::value, json::null) })
 let bad = json::try_parse('[1,]')
 assert(rule { bad::position >= 0 })
-let deep = join([join(replicate(['['], 257), ''), '0', join(replicate([']'], 257), '')], '')
+let deep = strings::join([strings::join(replicate(['['], 257), ''), '0', strings::join(replicate([']'], 257), '')], '')
 assert(rule { not json::try_parse(deep)::ok })
 let shared = [1, 2]
 assert(rule { json::stringify([shared, shared]) == '[[1,2],[1,2]]' })

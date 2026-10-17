@@ -169,9 +169,9 @@ static tstring *tstr_tostring_full(void *self)
 
 /*
  * String is immutable: it supports indexed reads, including Pair ranges,
- * but no in-place writes or appends. Composition goes through join() and
- * friends, which allocate fresh strings. It is not Iterable because Tapas
- * has not defined byte, code-point, or grapheme iteration semantics.
+ * but no in-place writes or appends. Composition through strings::join() and
+ * related functions allocates fresh strings. Iteration yields one-byte Strings;
+ * it does not decode Unicode code points or grapheme clusters.
  */
 
 static int pair_to_range(const tobj *param, long len, long *start, long *end)

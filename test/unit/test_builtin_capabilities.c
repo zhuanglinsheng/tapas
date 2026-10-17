@@ -105,7 +105,10 @@ int main(void) {
   assert(probe.lookups == 3);
 
   tobj_set_compo(&arguments[1], (tcompo_v *)tstr_new(" / "));
-  builtin("join")(arguments, 2, &result);
+  textension_symbol_ref joined;
+  assert(textension_find(tstdlib_descriptor(), "strings", "join", &joined));
+  assert(joined.symbol->function == builtin("join")); /* Legacy slot stays valid. */
+  joined.symbol->function(arguments, 2, &result);
   assert(tobj_compo_type(&result) == compo_tstr);
   assert(strcmp(tstring_cstr(((tstr *)result.val.v_tcompo)->data),
                 "first / second") == 0);

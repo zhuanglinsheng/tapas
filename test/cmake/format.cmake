@@ -56,13 +56,13 @@ for (let change in changes) {
     position = change['end']
 }
 parts.append(source[position:source.len()])
-let output = join(parts, '')
+let output = strings::join(parts, '')
 let formatted = formatter::source(source)
 print(valid and len(changes) > 0)
 print(output == formatted)
 let first = changes[0]
 let partial_parts = [source[0:first['start']], first['text'], source[first['end']:source.len()]]
-let partial = join(partial_parts, '')
+let partial = strings::join(partial_parts, '')
 print(len(changes) > 1 and partial != source and partial != formatted)
 print(len(formatter::edits(formatted)) == 0)
 ")
