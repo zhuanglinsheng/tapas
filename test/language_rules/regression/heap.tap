@@ -1,0 +1,101 @@
+function check(condition)
+{
+    assert(rule { condition })
+}
+
+function callback_depth(depth)
+{
+    if (depth == 0) { return 0 }
+    return this(depth - 1) + 0
+}
+
+function check_heap()
+{
+    let empty = []
+    heap::heapify(empty)
+    check(len(empty) == 0)
+    heap::push(empty, 7)
+    check(heap::peek(empty) == 7)
+    check(len(empty) == 1)
+    check(heap::pop(empty) == 7)
+    check(len(empty) == 0)
+
+    // Exercise odd/even sizes, duplicates, negative values and both construction paths.
+    for (let size in 0 to 129) {
+        let batch_values = []
+        let incremental = []
+        for (let i in 0 to size) {
+            let value = (i * 31 + size * 7) % 47 - 23
+            batch_values.append(value)
+            heap::push(incremental, value)
+        }
+        let sorted_values = copy(batch_values)
+        sort(sorted_values)
+        let alias = batch_values
+        heap::heapify(batch_values)
+        for (let j in 0 to size) {
+            check(heap::peek(alias) == sorted_values[j])
+            check(heap::pop(batch_values) == sorted_values[j])
+            check(heap::pop(incremental) == sorted_values[j])
+        }
+        check(len(batch_values) == 0)
+        check(len(incremental) == 0)
+    }
+
+    let mixed = [3.5, -2, 0.0, -2.5, 3, 0]
+    heap::heapify(mixed)
+    for (let expected_mixed in [-2.5, -2, 0, 0, 3, 3.5]) {
+        check(heap::pop(mixed) == expected_mixed)
+    }
+
+    // Mixed numeric ordering must preserve integer distinctions above 2^53.
+    let large = [9007199254740993, 9007199254740992.0, 9007199254740992]
+    heap::heapify(large)
+    let large_first = heap::pop(large)
+    let large_second = heap::pop(large)
+    check(heap::pop(large) == 9007199254740993)
+    let extremes = [9223372036854775807, 9223372036854775808.0,
+                    -9223372036854775808.0, -9223372036854775807]
+    heap::heapify(extremes)
+    check(heap::pop(extremes) == -9223372036854775808.0)
+    check(heap::pop(extremes) == -9223372036854775807)
+    check(heap::pop(extremes) == 9223372036854775807)
+    check(heap::pop(extremes) == 9223372036854775808.0)
+
+    let greater = (a, b) { return a > b }
+    let maximum = [1, 4, 2]
+    heap::heapify(maximum, greater)
+    heap::push(maximum, 3, greater)
+    for (let expected_max in [4, 3, 2, 1]) {
+        check(heap::pop(maximum, greater) == expected_max)
+    }
+
+    // Records retain their payloads, including when peek outlives the queue.
+    let less = (a, b) { return a[0] < b[0] }
+    let payload = {'name': 'retained'}
+    let records = [3 : payload, 1 : ['first'], 2 : ['second']]
+    heap::heapify(records, less)
+    let first = heap::peek(records)
+    let removed_first = heap::pop(records, less)
+    removed_first = 0
+    check(first[1][0] == 'first')
+    check(heap::pop(records, less)[1][0] == 'second')
+    let last = heap::pop(records, less)
+    check(last[1]['name'] == 'retained')
+    check(payload['name'] == 'retained')
+
+    // A comparator can invoke the heap package recursively on a different list.
+    let nested_less = (a, b) {
+        let ignored = callback_depth(80)
+        let other = [3, 1, 2]
+        heap::heapify(other)
+        return a + heap::pop(other) < b + 1
+    }
+    let nested = [4, 2, 3]
+    heap::heapify(nested, nested_less)
+    check(heap::pop(nested, nested_less) == 2)
+
+}
+
+check_heap()
+print('ok')

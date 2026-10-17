@@ -24,6 +24,7 @@ static const textension_module *const modules[] = {
 	&tstdlib_random_module,
 	&tstdlib_finite_module,
 	&tstdlib_math_module,
+	&tstdlib_heap_module,
 	&tstdlib_types_module,
 	&tstdlib_rules_module,
 	&tstdlib_evaluators_module,

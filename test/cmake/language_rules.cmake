@@ -26,6 +26,7 @@ set(ENVIRONMENT_INVALID_DIR "${FIXTURE_DIR}/invalid/environment")
 
 # Cover guarded VM fast paths in both compiler entry modes.
 foreach(fast_path_fixture IN ITEMS
+        "${REGRESSION_DIR}/heap.tap"
         "${REGRESSION_DIR}/vm_value_fast_paths.tap"
         "${REGRESSION_DIR}/syntax_token_fields.tap")
     foreach(mode IN ITEMS source bytecode)
@@ -1183,6 +1184,10 @@ foreach(fixture IN LISTS invalid_fixtures)
 endforeach()
 
 set(runtime_error_fixtures
+    heap_empty_pop.tap heap_empty_peek.tap heap_invalid_list.tap
+    heap_invalid_number.tap heap_nan.tap heap_invalid_comparator.tap
+    heap_comparator_result.tap heap_comparator_mutation.tap
+    heap_comparator_error.tap heap_argument_count.tap
     vm_field_div_zero.tap
     arguments_unbound.tap parameters_unsupported.tap
     implies_instance_error.tap implies_instance_recursion.tap

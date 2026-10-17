@@ -25,6 +25,7 @@ extern const textension_module tstdlib_time_module;
 extern const textension_module tstdlib_random_module;
 extern const textension_module tstdlib_finite_module;
 extern const textension_module tstdlib_math_module;
+extern const textension_module tstdlib_heap_module;
 extern const textension_module tstdlib_types_module;
 extern const textension_module tstdlib_rules_module;
 extern const textension_module tstdlib_evaluators_module;

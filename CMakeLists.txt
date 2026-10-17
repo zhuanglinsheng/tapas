@@ -119,6 +119,7 @@ set(TAPAS_STDLIB_SOURCES
     src/stdlib/io/io.c
     src/stdlib/syntax/syntax.c
     src/stdlib/math/math.c
+    src/stdlib/heap/heap.c
     src/stdlib/time/time.c
     src/stdlib/random/random.c
     src/stdlib/random/object.c
