@@ -14,13 +14,14 @@
 > 返回 `Nil` 的过程结果不能保存。包内签名省略当前包前缀，实际调用仍写作 `dense::rows(...)`；
 > 跨包 Type 引用保留前缀。隧道调用 `items.append(value)` 等价于 `append(items, value)`。
 
-当前提供 12 个原生包和 1 个源码包 `format`，按与语言核心的关系和用途分为三类：
+当前提供 18 个原生包和 1 个源码包 `format`，按与语言核心的关系和用途分为四类：
 
 | 分类 | 包 |
 |---|---|
-| 语言补充包 | [`types`](../src/stdlib/types/README.md), [`syntax`](../src/stdlib/syntax/README.md), [`rules`](../src/stdlib/rules/README.md), [`evaluators`](../src/stdlib/evaluators/README.md) |
-| 基础工具包 | [`io`](../src/stdlib/io/README.md), [`time`](../src/stdlib/time/README.md), [`random`](../src/stdlib/random/README.md), [`heap`](../src/stdlib/heap/README.md), [`math`](../src/stdlib/math/README.md), [`dense`](../src/stdlib/dense/README.md) |
-| 应用包 | [`finite`](../src/stdlib/finite/README.md), [`solve`](../src/stdlib/solve/README.md), [`format`](../src/stdlib/format/README.md) |
+| 语言补充包 | [`types`](#package-types), [`syntax`](#package-syntax), [`rules`](#package-rules), [`evaluators`](#package-evaluators) |
+| 基础工具包 | [`bytes`](#package-bytes), [`strings`](#package-strings), [`json`](#package-json), [`heap`](#package-heap), [`os`](#package-os), [`path`](#package-path), [`fs`](#package-fs), [`io`](#package-io), [`time`](#package-time) |
+| 数学与概率包 | [`math`](#package-math), [`dense`](#package-dense), [`random`](#package-random), [`finite`](#package-finite) |
+| 应用包 | [`solve`](#package-solve), [`format`](#package-format) |
 
 `optimize` 目前只有[设计稿](../src/stdlib/optimize/README.md)，尚未作为可用包提供。
 
@@ -57,6 +58,8 @@
 |---|---|---|
 | `int(value: AnyType)` | `Int` | 接受 Bool、Int、Float、String；Float 向零截断，String 按宿主 C 的十进制解析规则处理。 |
 | `float(value: AnyType)` | `Float` | 接受 Bool、Int、Float、String；String 按宿主 C 浮点解析规则处理。 |
+| `try_int(value: AnyType)` | `Dictionary` | 按 int 合同尝试转换，失败时返回错误记录。 |
+| `try_float(value: AnyType)` | `Dictionary` | 按 float 合同尝试转换，失败时返回错误记录。 |
 | `bool(value: AnyType)` | `Bool` | nil、零值和长度为零的复合对象为 false；字符串 true、false 单独识别。 |
 | `str(value: AnyType)` | `String` | 完整文本表示。 |
 | `list()` / `list(iterable: Iterable)` | `List` | 建立空列表，或消费任意可迭代对象并生成新列表。 |
@@ -67,9 +70,17 @@
 | `array(rows: Int, cols: Int, value: AnyType)` | `RealArray \| BoolArray` | Bool 填充 BoolArray；数值填充 RealArray；List 按行优先填充。 |
 
 `int`、`float` 的导出签名接受 AnyType，但实现只处理 Bool、Int、Float、String，其他值报错。
-字符串转换调用宿主 C 的 strtol（十进制）和 strtod，允许前导空白；未消费的尾部字符（包括空白）或 errno 非零会报错。
-它们以首个 NUL 作为文本结尾，并非按 String 字节长度验证完整输入；当前 float('') 返回 0。
-Float 转 Int 使用宿主 C 转换，当前未单独检查非有限值或越界。Bool 转数值时 false 为 0，true 为 1。
+字符串转换使用宿主 C strtol（十进制）和 strtod 的语法及 locale 行为，允许前导空白，
+但必须实际消费数字并覆盖完整字节串。空串、纯空白、内嵌 NUL、未消费的尾部字符（包括空白）、
+非有限值或 errno 非零都会报错；范围错误包含上溢和下溢。
+Float 转 Int 向零截断并在转换前校验范围，拒绝 NaN、无穷和越界值；Int 转 Float 仍按浮点精度舍入。
+Bool 转数值时 false 为 0，true 为 1。str 保留完整字节长度，包括内嵌 NUL。
+
+`try_int`、`try_float` 与严格转换共用实现，返回 `ok`、`value`、`code`、`error`、`errno`。
+成功时 code/error 为空串；失败时 code 为 invalid_type、invalid_number、out_of_range 或 non_finite，
+value 分别为 Int 0 或 Float 0.0；必须先检查 ok，不能把回退值当成成功。errno 始终为 0。
+error 是诊断文本，不属于稳定错误码；内存耗尽等资源错误仍报错。
+这些结果无需依赖 json 包；与 json::try_parse 一样通过 ok 检查，但失败载荷和附加字段由各接口定义。
 `bool` 对 String 的 true、false 文本特殊处理，其他 String 和复合对象按长度判断；例如 bool('0') 为 true。
 
 `array` 的 List 长度必须等于 rows * cols，且元素必须全部为 Bool，或全部为 Int/Float（允许数值混合）。
@@ -95,8 +106,7 @@ false, true
 |---|---|---|
 | `push_front(list: List, value: AnyType)` | `Nil` | 在列表开头插入元素。 |
 | `push_back(list: List, value: AnyType)` | `Nil` | 在列表末尾插入元素。 |
-| `join(values: Iterable, separator: String)` | `String` | 依次拼接可迭代对象产生的 String 元素，分隔符可为空串。 |
-| `append(target: Appendable, value: AnyType)` | `Nil` | 追加元素或对（列表、字典等容器）。String 不可变，拼接请使用 `join`。 |
+| `append(target: Appendable, value: AnyType)` | `Nil` | 追加元素或对（列表、字典等容器）。String 不可变，拼接请使用 `strings::join`。 |
 | `insert(list: List, value: AnyType, index: Int)` | `Nil` | 在索引前插入；负数从末尾换算，最终位置允许等于列表长度。 |
 | `pop_front(list: List)` | `AnyType` | 删除并返回第一个元素。 |
 | `pop_back(list: List)` | `AnyType` | 删除并返回最后一个元素。 |
@@ -106,7 +116,9 @@ false, true
 | `keys(value: Dictionary \| Type)` | `List` | 返回 Dictionary 的键，或 Type 可枚举的字段名。 |
 | `values(dictionary: Dictionary)` | `List` | 按相应顺序返回值。 |
 | `concat(left: Iterable, right: Iterable)` | `List` | 依次消费两侧元素，返回新的浅复制 List。 |
-| `sort(values: List)` | `Nil` | 原地排序；数值按大小比较，其他值只按运行时存储类别排列。 |
+| `fill(target: IndexSettable, value: AnyType, indices: Iterable)` | `Nil` | 按索引序列依次填入同一值；每个元素作为一个完整索引或键。 |
+| `count(values: Iterable, value: AnyType)` | `Int` | 使用 identical 规则统计匹配元素的个数。 |
+| `sort(values: List)` | `Nil` | 原地排序；数值按大小、String 按字节字典序、List 按递归字典序比较；不保证稳定性。 |
 
 对字典调用`append`时，追加的值必须是`Pair`。
 `pop_front`和`pop_back`会转移被删除元素的所有权，不能用于空列表。
@@ -123,14 +135,14 @@ false, true
 | 类别 | 当前接口边界 |
 |---|---|
 | 通用对象操作 | `len`、`type`、`copy`、`identical`、`str` 使用值或对象自身的协议；数值转换仍校验输入类型。 |
-| 可迭代输入 | `list`、`join`、`concat` 接受 Iterable；`join` 仍要求每个元素为 String，空输入返回空串；`concat` 始终返回 List。 |
-| 通用索引与修改 | `idx`、`idx_or` 转发索引参数；`append`、`delete` 分别要求 Appendable、Deletable。能力类型不约束具体键类型。 |
+| 可迭代输入 | `list`、`concat`、`count` 接受 Iterable；`concat` 始终返回 List。字符串专用拼接使用 `strings::join`，元素必须为 String。 |
+| 通用索引与修改 | `idx`、`idx_or` 转发索引参数；`append`、`delete` 分别要求 Appendable、Deletable；`fill` 要求 IndexSettable 和显式索引序列。能力类型不约束具体键类型。 |
 | List 专用操作 | `replicate`、`insert`、首尾 push/pop、`sort` 操作具体的有序 List；仅支持索引读写不足以保证插入、移除或排序语义。 |
 | 键和值枚举 | Dictionary 不隐式选择迭代键或值；显式使用 `keys`、`values`。Indexable 本身不能枚举合法键。 |
 | 专用构造与反射 | `array`、`iter`、`pair`、Rule 反射和断言保留其对象领域约束。 |
 
-`join`、`concat` 按输入的迭代顺序读取，不修改输入；浅复制会保留复合元素的引用。
-String 的迭代单位是字节，因此 `join('abc', '-')` 得到 `a-b-c`，不表示 Unicode 代码点切分。
+`strings::join`、`concat` 按输入的迭代顺序读取，不修改输入；浅复制会保留复合元素的引用。
+String 的迭代单位是字节，因此 `strings::join('abc', '-')` 得到 `a-b-c`，不表示 Unicode 代码点切分。
 Array 当前不具备 Iterable 能力；用 `idx`/`idx_or` 访问时必须提供行、列两个索引。
 
 `idx_or` 至少需要一个索引，默认值始终是最后一个实参。List、String、Dictionary、
@@ -139,14 +151,57 @@ Array 提供非抛错查询；第三方对象需要实现 `try_indexable` 才能
 
 `copy` 遵循对象的复制协议：List、Dictionary 浅复制元素，Array 复制独立的数据存储，
 第三方对象可以定义自己的复制行为。`identical` 不只是比较地址：同类型 List 等对象会进行
-结构匹配，`identical(1, 1.0)` 为 false。`sort` 目前不是通用比较器接口，不保证字符串的
-字典序、复合值的内容顺序、NaN 顺序或稳定排序；Int 与 Float 混合比较会转换为 double，大整数可能丢失精度；需要可控优先级时可使用 heap 的比较函数。
+结构匹配，`identical(1, 1.0)` 为 false。`sort` 与 heap 默认顺序共用数值、String 和递归 List 的比较实现。
+Int/Float 混合比较保留整数精度；String 按完整字节内容比较（包括内嵌 NUL）；
+List 从首项起比较，首个不同位置决定顺序，共同前缀相同时短者在前。
+数值、String、List 三类之间不定义顺序；NaN、不支持的元素及过深或循环嵌套报错。
+`sort` 和默认 `heapify` 检查全部输入值，默认 `push` 检查新增值；List 运算符只比较决定结果所需的位置。
+`sort` 不保证稳定性，不接受比较函数；自定义优先级可使用 heap 的比较函数。
+数值列表使用内联比较的三路 introsort，小分区采用插入排序，深度耗尽后使用堆排序，
+保证最坏 O(n log n) 和 O(log n) 栈空间。单调输入或可用有限次移位整理的输入可在线性时间完成。
+String 和嵌套 List 的比较成本更高：大列表先探测已有顺序，其余输入保留平台 qsort。
+算法选择基于值类型、规模和已有顺序，不改变排序合同。
+大数值分区使用分层扰动取样；同构 Int/Float 在样本无重复时选用双向二路分区，有重复时使用三路分区；混合 Number 保留三路分区。
+
+报错后不保证恢复原排列，但保留所有元素及其引用。
+
+#### 批量填充与计数
+
+`fill` 和 `count` 保持通用能力约束；支持的包对象可以提供同语义的底层批量实现，其他对象继续逐项操作。
+
+`fill` 接受显式索引序列，用 `iter(start, step, end)` 表达半开区间和步长。
+也可以传入任意 Iterable 产生的键，例如 `fill(dictionary, 0, ['a', 'b'])`。
+它按顺序执行 target[index] = value，重复索引重复写入，不预先复制索引序列；
+复合填充值保留同一对象的引用，不为每个位置深复制。List 支持负索引且不会自动扩容。
+索引或写入错误会中止调用，此前写入不会回滚。空索引序列仍要求目标支持 IndexSettable。
+
+每个索引元素原样作为一个参数传给写入能力；Pair、List 键不会自动展开成多个坐标。
+Array 当前要求行、列两个索引，因此不能直接作为 fill 的目标使用；可使用 `dense::flat(array)` 视图。String 不可变。
+这避免了把 IndexSettable 误当成可枚举全部索引的序列，或将字典的复合键误解为坐标。
+
+`count` 使用与 identical、List 成员判断相同的规则，不调用重载的 ==，也不进行 Int/Float 转换。
+空输入返回 0。String 按字节迭代，因此 count('ababa', 'a') 为 3，count('ababa', 'aba') 为 0，
+不是子串计数。Dictionary 需显式传入 keys 或 values；Array 当前不具备 Iterable 能力；可显式使用 `dense::flat(array)` 获得一维可迭代视图。
+
+```tapas
+let stdlib_bulk_mask = replicate([true], 10)
+fill(stdlib_bulk_mask, false, iter(2, 2, 10))
+print(count(stdlib_bulk_mask, false))
+let stdlib_bulk_dictionary = {'a': 1, 'b': 2}
+fill(stdlib_bulk_dictionary, 7, ['a', 'b'])
+print(count(values(stdlib_bulk_dictionary), 7))
+```
+
+<pre class='Tapas-Return'>
+4
+2
+</pre>
 
 ```tapas
 let stdlib_access_matrix = array(2, 3, [1, 2, 3, 4, 5, 6])
 print(idx(stdlib_access_matrix, 1, 2))
 print(idx_or(stdlib_access_matrix, 9, 0, -1))
-print(join('abc', '-'))
+print(strings::join('abc', '-'))
 print(len(concat(iter(1, 4), 'xy')))
 ```
 
@@ -174,6 +229,8 @@ a-b-c
 ## 语言补充包
 
 这些包直接暴露或扩展类型系统、编译器词法设施，以及 Rule 的表示与执行协议。
+
+<a id="package-types"></a>
 
 ### `types`：Type 构造与反射包
 
@@ -219,6 +276,8 @@ a-b-c
 
 完整接口约束见 [`types` README](../src/stdlib/types/README.md)。
 
+<a id="package-syntax"></a>
+
 ### `syntax`：词法包
 
 与编译器共用词法视图，供格式化器和其他源码工具使用。
@@ -241,6 +300,8 @@ a-b-c
 | 签名 | 返回 | 行为 |
 |---|---|---|
 | `tokens(source: String)` | `List[Token]` | 返回包含 trivia 和 EOF 的有序 token 记录。位置是源文本中的半开字节区间。 |
+
+<a id="package-rules"></a>
 
 ### `rules`：Rule 检查、变换与 IR 包
 
@@ -299,6 +360,8 @@ target 可以是从 0 开始的直接 Item 下标、唯一说明字符串或属�
 
 完整接口约束见 [`rules` README](../src/stdlib/rules/README.md)。
 
+<a id="package-evaluators"></a>
+
 ### `evaluators`：自定义 Rule evaluator 包
 
 #### 类型
@@ -328,9 +391,255 @@ Result.status 为 Success、Unsupported 或 Failed。回调在所有状态下都
 
 ## 基础工具包
 
-这些包提供通用运算、系统访问、数据结构和数组计算。
+按数据处理、数据结构和系统访问组织，表格与正文使用相同顺序：
 
-### `io`：文本文件包
+- 数据处理：`bytes`、`strings`、`json`。
+- 数据结构：`heap`。
+- 系统访问：`os`（环境与程序）、`path`（路径文本）、`fs`（文件系统）、`io`（内容与标准流）、`time`（时间）。
+
+<a id="package-bytes"></a>
+
+### `bytes`：字节缓冲区包
+
+#### 类型
+
+| 名称 | 含义 |
+|---|---|
+| `Buffer` | 固定长度、可变的一维字节缓冲区；每项一个字节，读取为 Int。 |
+
+#### 函数
+
+| 签名 | 返回 | 行为 |
+|---|---|---|
+| `buffer(length: Int, value: Int)` | `Buffer` | 建立 length 项缓冲区并填入 value；长度非负，value 在 0..255。 |
+| `from_string(value: String)` | `Buffer` | 按实际字节长度复制 String，保留 NUL 和非 UTF-8 字节。 |
+| `to_string(value: Buffer)` | `String` | 按实际字节长度复制 Buffer，不进行编码转换。 |
+
+Buffer 支持 Int 索引、负索引、`idx_or`、Iterable、MemberTestable、`len`、`copy`、`fill` 和 `count`。
+写入只接受 0..255 的 Int，不进行截断或 Bool/Float 转换；不支持追加、删除或扩容。
+`copy` 返回独立存储。`count` 与迭代得到的 Int 使用 identical 规则，故 Int 1 不匹配 Float 1.0 或 Bool true。
+`fill` 仍接受任意 Iterable 索引；合法 Iterator 范围使用底层批量写入，连续字节填充使用 memset。
+String/Buffer 转换使用直接内存复制，不逐项装箱，返回独立存储；修改 Buffer 不会改变已有 String。
+此包不执行文本编码转换或 UTF-8 校验；需要文本时使用 strings::is_utf8 显式检查。文件读写仍属于 io 的职责。
+
+```tapas
+let stdlib_byte_buffer = bytes::buffer(6, 1)
+fill(stdlib_byte_buffer, 255, iter(1, 2, 6))
+print(count(stdlib_byte_buffer, 255))
+let stdlib_view_array = array(1, 3, true)
+let stdlib_flat_view = dense::flat(stdlib_view_array)
+fill(stdlib_flat_view, false, iter(1, 3))
+print(count(stdlib_flat_view, true))
+```
+
+<pre class='Tapas-Return'>
+3
+1
+</pre>
+
+<a id="package-strings"></a>
+
+### `strings`：基础字符串操作包
+
+字符串拼接统一使用 `strings::join`。根作用域的 `join` 保留为历史兼容入口，
+共用实现并保持已有字节码槽位；新代码使用包接口。
+
+| 签名 | 返回 | 行为 |
+|---|---|---|
+| `join(values: Iterable, separator: String)` | `String` | 按迭代顺序拼接 String 元素，分隔符可为空串；空输入返回空串。 |
+| `split(text: String, separator: String)` | `List` | 按非空分隔串拆分，保留空项；空输入返回包含一个空串的 List。 |
+| `lines(text: String)` | `List` | 按 LF、CRLF、CR 分行并去除换行；空输入返回空 List，尾部换行不增加空项。 |
+| `trim(text: String)` | `String` | 移除两端 ASCII 空白：空格、HT、LF、VT、FF、CR。 |
+| `find(text: String, needle: String, [start: Int])` | `Int` | 返回首次匹配的绝对字节偏移，未找到为 -1；start 默认 0。 |
+| `replace(text: String, old: String, replacement: String)` | `String` | 从左到右替换所有非重叠匹配，old 不得为空。 |
+| `starts_with(text: String, prefix: String)` | `Bool` | 检查前缀，空前缀为 true。 |
+| `ends_with(text: String, suffix: String)` | `Bool` | 检查后缀，空后缀为 true。 |
+| `is_utf8(text: String)` | `Bool` | 严格校验 UTF-8；空串和内嵌 NUL 合法。 |
+
+操作保留完整字节长度，不修改输入，也不执行 Unicode 正规化或大小写折叠。
+join 接受任意 Iterable，但每个元素必须为 String；String 按字节迭代，因此 strings::join 并非 Unicode 字符切分。
+find 的负 start 从末尾换算，过小从 0 开始，超过长度返回 -1；空 needle 在有效 start 处匹配。
+拆分和替换拒绝空模式；lines 保留实际空行。完整合同见 [`strings` README](../src/stdlib/strings/README.md)。
+
+```tapas
+print(strings::join(strings::split('a::b::', '::'), '|'))
+print(strings::find('ababa', 'aba', 1))
+print(strings::replace('你好你好', '你好', '好'))
+print(try_int('')::ok)
+```
+
+<pre class='Tapas-Return'>
+a|b|
+2
+好好
+false
+</pre>
+
+<a id="package-json"></a>
+
+### `json`：JSON 编解码包
+
+| 签名 | 返回 | 行为 |
+|---|---|---|
+| `parse(text: String)` | `AnyType` | 严格解析完整 JSON，错误时产生运行时错误。 |
+| `try_parse(text: String)` | `Dictionary` | 返回 `ok`、`value`、`error`、`position` 字段，便于处理无效数据。 |
+| `stringify(value: AnyType, [pretty: Bool])` | `String` | 输出紧凑 JSON；pretty 为 true 时缩进输出。 |
+
+`Null` 是包导出的 Type；`json::null` 是可保存的空值，与 `Nil` 不同。
+JSON 对象和数组分别映射为 Dictionary 和 List；整数必须在 Int 范围内，不静默转为浮点数。
+文本必须是合法 UTF-8，内嵌 NUL 按长度保留。重复键、超出 256 层的嵌套、非有限数值、
+非 String 字典键和循环引用报错。字典输出顺序未规定。
+`try_parse` 成功时 error 为空串、position 为 -1；失败时 value 为 json::null，
+语法错误 position 为零起始字节偏移，映射错误为 -1；参数类型和资源错误仍报错。
+完整映射和限制见 [`json` README](../src/stdlib/json/README.md)。
+
+<a id="package-heap"></a>
+
+### `heap`：二叉堆包
+
+`heap` 在普通 List 上原地维护二叉堆，不需要额外的堆对象。
+
+| 函数 | 说明 | 时间复杂度 |
+|---|---|---|
+| `heapify(items[, less])` | 原地建堆，返回 Nil | O(n) |
+| `push(items, value[, less])` | 插入元素，返回 Nil | 均摊 O(log n) |
+| `pop(items[, less])` | 移除并返回堆顶 | O(log n) |
+| `peek(items)` | 查看堆顶 | O(1) |
+
+默认构建最小堆，支持 Int、非 NaN Float、String，以及由这些值递归组成的 List。
+List 使用字典序，共同前缀相同时短者在前；例如 `[1, 3]` 先于 `[1, 9]`。
+Int/Float 混合比较保留整数精度，不同类别之间不定义顺序。
+`heapify` 和默认 `push` 验证输入，遇到 NaN、不支持的载荷及过深或循环嵌套时会报错；有此类载荷的记录请使用显式比较函数。
+验证输入需 O(v)，v 为本次输入递归包含的值数；每次比较成本取决于公共前缀长度。
+可选的 `less(a, b)` 必须返回 Bool 并满足严格弱序。同一个堆的修改操作
+必须使用一致的比较规则；比较函数不得修改当前堆或元素的排序依据。
+相同优先级不保证顺序，空堆的 `pop`、`peek` 报错。
+
+```tapas
+let stdlib_heap_items = [4, 1, 3]
+heap::heapify(stdlib_heap_items)
+heap::push(stdlib_heap_items, 2)
+print(heap::pop(stdlib_heap_items))
+print(heap::peek(stdlib_heap_items))
+```
+
+<pre class='Tapas-Return'>
+1
+2
+</pre>
+
+记录可使用 `(a, b) { return a[0] < b[0] }` 比较优先级，最大堆可使用
+`(a, b) { return a > b }`。空堆直接使用 `[]`，长度使用 `len`。
+直接修改列表或优先级后，需要重新建堆；接口不做 O(n) 的有效性检查。
+完整语义见 [heap 包说明](../src/stdlib/heap/README.md)。
+
+<a id="package-os"></a>
+
+### `os`：运行环境与程序执行包
+
+| 签名 | 返回 | 行为 |
+|---|---|---|
+| `getenv(name: String)` | `Dictionary` | 返回 found/value，区分未设置与空字符串。 |
+| `cwd()` | `String` | 当前工作目录。 |
+| `home()` | `String` | 非空 HOME，或当前用户的账户目录。 |
+| `temp_dir()` | `String` | 非空 TMPDIR，否则 `/tmp`；只查询，不创建。 |
+| `platform()` | `String` | 当前支持 linux、macos。 |
+| `run(arguments: List[String], *, ...)` | `Dictionary` | 直接同步执行程序并捕获输入输出，不自动使用 shell。 |
+
+run 的命名选项为 stdin（String 或 bytes::Buffer，默认空串）、cwd（默认继承）、
+env（String 键值字典，默认空字典）、inherit_env（默认 true）、timeout（默认 30 秒，必须为有限正数，最大 1e9）、
+output_limit（每路默认 1048576 字节，非负 Int）。文件名无 `/` 时按子进程 PATH 搜索，缺省 PATH 为 `/usr/bin:/bin`。
+参数和环境不允许 NUL，stdin 允许；未知或重复选项、类型错误在启动前报错。
+
+结果 status 为 exited、signaled、timeout、cancelled、spawn_error、io_error。exit_code 仅 exited 时有效，其他情况为 -1；
+signal 为观察到的终止信号，cancel_signal 为触发取消的信号，无信号时为 0。
+stdout/stderr 保存原始字节，elapsed 是单调耗时，errno/error 是系统诊断，
+output_truncated、stdout_truncated、stderr_truncated 表示捕获是否不完整。非零退出码作为正常程序结果返回。
+输出超限后继续排空；超时或取消终止进程组并回收直接子进程。调用线程等待期间处理 SIGINT/SIGTERM，返回后恢复信号掩码。
+不修改进程全局 cwd、环境或信号处理器；多线程宿主需协调信号路由。详细限制见 [`os` README](../src/stdlib/os/README.md)。
+
+```tapas
+let stdlib_os_run = os::run(['/bin/sh', '-c', 'printf hello; printf log >&2; exit 7'])
+print(stdlib_os_run::status)
+print(stdlib_os_run::exit_code)
+print(stdlib_os_run::stdout)
+print(stdlib_os_run::stderr)
+```
+
+<pre class='Tapas-Return'>
+exited
+7
+hello
+log
+</pre>
+
+<a id="package-path"></a>
+
+### `path`：路径文本包
+
+| 签名 | 返回 | 行为 |
+|---|---|---|
+| `join(...parts: String)` | `String` | 至少一个参数；跳过空项，按需插入 `/`，后续绝对路径丢弃此前部分。 |
+| `normalize(value: String)` | `String` | 合并 `/`、移除 `.`、词法消去 `..`；空路径返回 `.`。 |
+| `basename(value: String)` | `String` | 忽略尾部 `/` 后取最后一段；根返回 `/`，空输入返回空串。 |
+| `dirname(value: String)` | `String` | 忽略尾部 `/` 后取父路径；无父路径返回 `.`，根返回 `/`。 |
+| `extension(value: String)` | `String` | 取最后一个扩展名，包含 `.`；只含前导点的文件名没有扩展名。 |
+| `is_absolute(value: String)` | `Bool` | 检查是否以 `/` 开头。 |
+
+采用 Linux/macOS 的 POSIX 路径文本约定，拒绝内嵌 NUL；不访问文件系统或解析符号链接，
+不展开 `~`、变量或通配符，不识别 Windows 盘符。join 保留 `.`、`..`；normalize 才显式化简。
+词法消去 `..` 不保证在存在符号链接时指向同一文件。完整约束见 [`path` README](../src/stdlib/path/README.md)。
+
+```tapas
+print(path::join('fixtures', 'orders.json'))
+print(path::normalize('/a/../../b//'))
+print(path::extension('/a/.env.local'))
+```
+
+<pre class='Tapas-Return'>
+fixtures/orders.json
+/b
+.local
+</pre>
+
+<a id="package-fs"></a>
+
+### `fs`：文件系统操作包
+
+| 签名 | 返回 | 行为 |
+|---|---|---|
+| `stat(path: String)` / `lstat(path: String)` | `Dictionary` | 跟随链接/查询末段链接本身；字段 kind、size、permissions、modified。 |
+| `exists(path: String)` | `Bool` | 不存在为 false，权限等其他查询错误仍报错。 |
+| `list_dir(path: String)` | `List` | 按字节排序的名称，不包含 `.`、`..`。 |
+| `mkdir(path: String, [parents: Bool])` | `Nil` | 创建目录；parents 默认 false，为 true 时创建父目录并接受已有目录。 |
+| `copy(source: String, target: String)` | `Nil` | 复制普通文件数据，拒绝源链接、特殊文件和已有目标。 |
+| `rename(source: String, target: String)` | `Nil` | POSIX 重命名，可替换目标，跨设备报错。 |
+| `remove(path: String)` | `Nil` | 删除文件、末段链接或空目录，不递归。 |
+| `temp_dir([parent: String])` / `temp_file([parent: String])` | `String` | 创建唯一临时项；默认 TMPDIR 或 `/tmp`，由调用方清理。 |
+
+kind 为 file、directory、symlink 或 other；size 是字节数，modified 是秒精度 Time。
+每个函数提供 try_ 版本，参数位置相同，返回 ok/value/code/error/errno。失败时元数据为空字典、
+目录枚举为空 List、临时路径为空 String；exists 为 false，其他修改操作成功 true、失败 false。
+必须先检查 ok；内存耗尽等资源错误仍报错。详细错误代码和副作用合同见 [`fs` README](../src/stdlib/fs/README.md)。
+
+```tapas
+let stdlib_fs_root = fs::temp_dir()
+let stdlib_fs_path = path::join(stdlib_fs_root, 'fixture.json')
+io::write_text(stdlib_fs_path, '{}')
+print(fs::stat(stdlib_fs_path)::kind)
+print(len(fs::list_dir(stdlib_fs_root)))
+fs::remove(stdlib_fs_path)
+fs::remove(stdlib_fs_root)
+```
+
+<pre class='Tapas-Return'>
+file
+1
+</pre>
+
+<a id="package-io"></a>
+
+### `io`：文件内容与标准流
 
 | 签名 | 返回 | 行为 |
 |---|---|---|
@@ -340,7 +649,36 @@ Result.status 为 Success、Unsupported 或 Failed。回调在所有状态下都
 | `replace_text(path: String, text: String)` | `Nil` | 在同一目录写入临时文件，再原子替换目标文件。 |
 
 这些函数精确保留字符串的字节长度。
-当前接口不引入文件句柄、模式字符串或二进制值；它们需要独立的生命周期和类型设计。
+文件接口分别使用 String 和 bytes::Buffer；当前不暴露需要调用者管理生命周期的文件句柄或模式字符串。
+
+
+可恢复接口 `try_read_text(path)`、`try_write_text(path, text)`、`try_append_text(path, text)`、
+`try_replace_text(path, text)` 返回 Dictionary；这些接口的参数签名为 AnyType，便于记录类型错误。
+记录包含 ok、value、code、error、errno：读取成功时 value 为 String，失败为空串；
+写操作成功为 true、失败为 false。读取 value 前必须检查 ok。
+code 在成功时为空串，失败时为 invalid_type、invalid_path、not_found、permission_denied、
+is_directory、not_directory、no_space、already_exists、not_empty、symlink_loop、cross_device 或 io_error。
+io/fs 共用系统错误映射；errno 是平台错误号，参数错误为 0。
+严格接口仍报错；两组接口都拒绝空路径或内嵌 NUL，写入前验证文本类型。
+普通写入失败可能已产生部分写入；原子替换失败会清理临时文件。资源耗尽仍可能报错。
+完整约束见 [`io` README](../src/stdlib/io/README.md)。
+
+#### 二进制文件与标准流
+
+| 签名 | 返回 | 行为 |
+|---|---|---|
+| `read_bytes(path: String)` | `bytes::Buffer` | 直接读取字节存储，不经过 String 中转。 |
+| `write_bytes(path: String, buffer: bytes::Buffer)` | `Nil` | 创建或覆盖二进制文件。 |
+| `append_bytes(path: String, buffer: bytes::Buffer)` | `Nil` | 追加字节。 |
+| `replace_bytes(path: String, buffer: bytes::Buffer)` | `Nil` | 临时文件写入后原子替换。 |
+| `write(text: String)` / `write_error(text: String)` | `Nil` | 向 stdout/stderr 写完整字节，不自动换行。 |
+| `flush([stream: String])` | `Nil` | 刷新 stdout（默认）或 stderr。 |
+| `is_terminal(stream: String)` | `Bool` | 检查 stdin/stdout/stderr 是否连接交互终端。 |
+
+四个二进制文件函数均有 try_ 版本，使用相同错误记录；失败读取 value 为零长度 Buffer。
+标准流写入保留 NUL，不执行编码转换；标准流接口不提供关闭操作，错误仍报错。
+
+<a id="package-time"></a>
 
 ### `time`：时间包
 
@@ -352,7 +690,119 @@ Result.status 为 Success、Unsupported 或 Failed。回调在所有状态下都
 
 时间戳和时间偏移必须落在宿主平台的`time_t`范围以及 Tapas `Int`范围内。
 格式化模式及受支持的转换符由宿主 C 库决定。
-当前版本没有保存时区信息，也没有提供 UTC 格式化或日期解析。
+Time 本身不保存时区信息；UTC 和严格日期解析接口见下表。
+
+| 新增签名 | 返回 | 行为 |
+|---|---|---|
+| `monotonic()` | `Float` | 单调秒数，用于耗时差值，不是 Unix 时间。 |
+| `monotonic_ns()` | `Int` | 单调纳秒数，检查范围。 |
+| `unix_ns()` | `Int` | 当前 Unix 纳秒时间戳，检查范围。 |
+| `format_utc(value: Time, pattern: String)` | `String` | 使用 UTC 和宿主 strftime 模式。 |
+| `parse_utc(text: String)` | `Time` | 严格解析 YYYY-MM-DDTHH:MM:SSZ，年份 0001..9999；拒绝非法日期、闰秒、偏移和小数秒。 |
+| `try_parse_utc(text: AnyType)` | `Dictionary` | 返回 ok/value/code/error/errno，失败 value 为 epoch Time；code 为 invalid_type、invalid_time 或 out_of_range。 |
+
+Time 仍为秒精度；纳秒接口查询调用时刻或单调时钟，不扩大 Time 表示。
+两个格式化接口均拒绝模式中的 NUL，格式符仍遵循平台 C 库。完整合同见 [`time` README](../src/stdlib/time/README.md)。
+
+## 数学与概率包
+
+这些包提供标量数学、稠密数组计算、可复现随机数和有限概率分布。
+
+<a id="package-math"></a>
+
+### `math`：标量数学包
+
+下表中的数字参数均为`Int | Float`，除特别说明外返回`Float`。
+定义域、溢出、无穷和 NaN 行为遵循宿主 C 数学库。
+以下名称都通过`math::`访问。
+
+| 分组 | 签名 |
+|---|---|
+| 绝对值与根 | `abs(Int \| Float) -> Int \| Float`, `fabs`, `sqrt`, `rsqrt`, `cbrt`: `(Int \| Float) -> Float` |
+| 整数平方根 | `isqrt(value: Int) -> Int`：非负 Int 的平方根向下取整，整个 Int 范围内精确；负数报错。 |
+| 幂与几何 | `pow(Int \| Float, Int \| Float)`, `hypot(Int \| Float, Int \| Float) -> Float` |
+| 三角函数 | `sin`, `cos`, `tan`, `asin`, `acos`, `atan`: `(Int \| Float) -> Float`; `atan2(Int \| Float, Int \| Float)` |
+| 双曲函数 | `sinh`, `cosh`, `tanh`, `asinh`, `acosh`, `atanh`: `(Int \| Float) -> Float` |
+| 指数 | `exp`, `exp2`, `expm1`: `(Int \| Float) -> Float` |
+| 对数 | `log`, `log2`, `log10`, `log1p`, `logb`: `(Int \| Float) -> Float`; `ilogb(Int \| Float) -> Int` |
+| 分解 | `frexp(Int \| Float) -> Pair[Float, Int]`, `modf(Int \| Float) -> Pair[Float, Float]` |
+| 缩放 | `ldexp`, `scalbn`, `scalbln`: `(Int \| Float, Int) -> Float` |
+| 误差与伽马 | `erf`, `erfc`, `lgamma`, `tgamma`: `(Int \| Float) -> Float` |
+| 浮点舍入 | `ceil`, `floor`, `nearbyint`, `rint`, `round`, `trunc`: `(Int \| Float) -> Float` |
+| 整数舍入 | `lrint`, `llrint`, `lround`, `llround`: `(Int \| Float) -> Int` |
+| 余数 | `fmod`, `remainder`: `(Int \| Float, Int \| Float) -> Float`; `remquo -> Pair[Float, Int]` |
+| 浮点操作 | `copysign`, `nextafter`, `fdim`, `fmax`, `fmin`: `(Int \| Float, Int \| Float) -> Float`; `fma(Int \| Float, Int \| Float, Int \| Float)` |
+| 倒数与 NaN | `eleinv(Int \| Float) -> Float`, `make_nan() -> Float` |
+| 分类 | `isfinite`, `isinf`, `isnan`, `isnormal`, `signbit`: `(Int \| Float) -> Bool`; `fpclassify(Int \| Float) -> Int` |
+| 有序谓词 | `isgreater`, `isgreaterequal`, `isless`, `islessequal`, `islessgreater`, `isunordered`: `(Int \| Float, Int \| Float) -> Bool` |
+
+缩放函数的整数参数会将浮点数向零截断。
+
+<a id="package-dense"></a>
+
+### `dense`：稠密数组包
+
+#### 类型
+
+| 名称 | 含义 |
+|---|---|
+| `FlatView` | RealArray 或 BoolArray 的一维行优先可变视图。 |
+
+#### 函数
+
+| 签名 | 返回 | 行为 |
+|---|---|---|
+| `flat(value: RealArray \| BoolArray)` | `FlatView` | 建立共享存储的一维视图，不复制元素。 |
+| `rows(value: RealArray \| BoolArray)` | `Int` | 行数。 |
+| `cols(value: RealArray \| BoolArray)` | `Int` | 列数。 |
+| `transpose(value: RealArray \| BoolArray)` | `RealArray \| BoolArray` | 新的转置数组。 |
+| `identity(size: Int)` | `RealArray` | 建立指定阶数的单位矩阵。 |
+| `trace(value: RealArray)` | `Float` | 主对角线之和；允许矩形数组。 |
+| `inner(left: RealArray, right: RealArray)` | `Float` | 两个同形数组的 Frobenius 内积。 |
+| `outer(RealArray, RealArray)` | `RealArray` | 两个行向量或列向量的外积。 |
+| `norm(value: RealArray)` | `Float` | 向量的二范数或矩阵的 Frobenius 范数。 |
+| `normalize(RealArray)` | `RealArray` | 返回同形的单位范数副本。 |
+| `copy_into(source: RealArray, target: RealArray)` | `Nil` | 将数据复制到同形的既有数组，不分配结果。 |
+| `scale_inplace(value: RealArray, factor: Int \| Float)` | `Nil` | 原地执行 `value *= factor`。 |
+| `add_scaled_inplace(target: RealArray, source: RealArray, factor: Int \| Float)` | `Nil` | 原地执行 `target += factor * source`。 |
+| `gemm(alpha: Int \| Float, left: RealArray, right: RealArray, beta: Int \| Float, output: RealArray)` | `Nil` | 原地执行 `output = alpha * left @ right + beta * output`。 |
+
+
+`flat` 的视图使用单个 Int 索引并支持负索引、迭代、`fill` 和 `count`。
+视图保留源数组的引用，任一侧写入立即对另一侧可见；它不能扩容。
+BoolArray 视图读写 Bool；RealArray 视图读取 Float，写入接受 Int 或 Float。
+`count` 按读取后的类型匹配，因此 RealArray 视图中的 2.0 不匹配 Int 2。
+`copy(view)` 保持 FlatView 类型，但创建独立存储；原二维数组的索引和迭代能力不变。
+
+```tapas
+let builtin_dense_matrix = array(2, 3, [1, 2, 3, 4, 5, 6])
+print(dense::rows(builtin_dense_matrix), ' x ', dense::cols(builtin_dense_matrix))
+pprint(dense::transpose(builtin_dense_matrix))
+print(dense::norm(array(1, 2, [3, 4])))
+```
+
+<pre class='Tapas-Return'>
+2 x 3
+[[1, 4],
+ [2, 5],
+ [3, 6]]
+5
+</pre>
+
+`inner`要求两侧行数和列数分别相同。
+`outer`只接受某一维为 1 的二维数组，但不区分行向量和列向量的方向；结果形状由两侧的元素数量决定。
+`normalize`拒绝零范数数组。
+`copy_into`、`scale_inplace`、`add_scaled_inplace`和`gemm`都复用调用方提供的存储；`gemm`的输出不能与任一输入是同一数组。
+
+运算符负责方便且无副作用的表达，每次产生新结果，并使用单遍融合循环避免`dcopy`后再计算的额外内存流量；矩阵乘法`@`仍直接使用`dgemm`。
+`dense`则提供可复用输出缓冲区的性能接口：`copy_into`、`scale_inplace`、`add_scaled_inplace`、`gemm`分别直接映射到`dcopy`、`dscal`、`daxpy`、`dgemm`。
+`inner`和`norm`使用`ddot`与`dnrm2`，`outer`使用`beta = 0`的`dgemm`，避免先清零再累加。
+`identity`、`trace`与`transpose`不依赖 BLAS。
+
+线性方程求解、逆矩阵、行列式、秩和特征分解不属于 BLAS 原语。
+若将来引入这些接口，应在`dense`中保持同样的高层命名，但通过独立、可选的 LAPACK 后端实现，不能用低效或数值不稳定的手写算法冒充完整线性代数支持。
+
+<a id="package-random"></a>
 
 ### `random`：伪随机数与状态包
 
@@ -393,116 +843,7 @@ let stdlib_random_value = random::next_int(stdlib_random_rng, 10)
 
 完整接口约束见 [`random` README](../src/stdlib/random/README.md)。
 
-### `heap`：二叉堆包
-
-`heap` 在普通 List 上原地维护二叉堆，不需要额外的堆对象。
-
-| 函数 | 说明 | 时间复杂度 |
-|---|---|---|
-| `heapify(items[, less])` | 原地建堆，返回 Nil | O(n) |
-| `push(items, value[, less])` | 插入元素，返回 Nil | 均摊 O(log n) |
-| `pop(items[, less])` | 移除并返回堆顶 | O(log n) |
-| `peek(items)` | 查看堆顶 | O(1) |
-
-默认按 Int、非 NaN Float 的数值大小构建最小堆；混合比较保留整数精度。
-可选的 `less(a, b)` 必须返回 Bool 并满足严格弱序。同一个堆的修改操作
-必须使用一致的比较规则；比较函数不得修改当前堆或元素的排序依据。
-相同优先级不保证顺序，空堆的 `pop`、`peek` 报错。
-
-```tapas
-let stdlib_heap_items = [4, 1, 3]
-heap::heapify(stdlib_heap_items)
-heap::push(stdlib_heap_items, 2)
-print(heap::pop(stdlib_heap_items))
-print(heap::peek(stdlib_heap_items))
-```
-
-<pre class='Tapas-Return'>
-1
-2
-</pre>
-
-记录可使用 `(a, b) { return a[0] < b[0] }` 比较优先级，最大堆可使用
-`(a, b) { return a > b }`。空堆直接使用 `[]`，长度使用 `len`。
-直接修改列表或优先级后，需要重新建堆；接口不做 O(n) 的有效性检查。
-完整语义见 [heap 包说明](../src/stdlib/heap/README.md)。
-
-### `math`：标量数学包
-
-下表中的数字参数均为`Int | Float`，除特别说明外返回`Float`。
-定义域、溢出、无穷和 NaN 行为遵循宿主 C 数学库。
-以下名称都通过`math::`访问。
-
-| 分组 | 签名 |
-|---|---|
-| 绝对值与根 | `abs(Int \| Float) -> Int \| Float`, `fabs`, `sqrt`, `rsqrt`, `cbrt`: `(Int \| Float) -> Float` |
-| 幂与几何 | `pow(Int \| Float, Int \| Float)`, `hypot(Int \| Float, Int \| Float) -> Float` |
-| 三角函数 | `sin`, `cos`, `tan`, `asin`, `acos`, `atan`: `(Int \| Float) -> Float`; `atan2(Int \| Float, Int \| Float)` |
-| 双曲函数 | `sinh`, `cosh`, `tanh`, `asinh`, `acosh`, `atanh`: `(Int \| Float) -> Float` |
-| 指数 | `exp`, `exp2`, `expm1`: `(Int \| Float) -> Float` |
-| 对数 | `log`, `log2`, `log10`, `log1p`, `logb`: `(Int \| Float) -> Float`; `ilogb(Int \| Float) -> Int` |
-| 分解 | `frexp(Int \| Float) -> Pair[Float, Int]`, `modf(Int \| Float) -> Pair[Float, Float]` |
-| 缩放 | `ldexp`, `scalbn`, `scalbln`: `(Int \| Float, Int) -> Float` |
-| 误差与伽马 | `erf`, `erfc`, `lgamma`, `tgamma`: `(Int \| Float) -> Float` |
-| 浮点舍入 | `ceil`, `floor`, `nearbyint`, `rint`, `round`, `trunc`: `(Int \| Float) -> Float` |
-| 整数舍入 | `lrint`, `llrint`, `lround`, `llround`: `(Int \| Float) -> Int` |
-| 余数 | `fmod`, `remainder`: `(Int \| Float, Int \| Float) -> Float`; `remquo -> Pair[Float, Int]` |
-| 浮点操作 | `copysign`, `nextafter`, `fdim`, `fmax`, `fmin`: `(Int \| Float, Int \| Float) -> Float`; `fma(Int \| Float, Int \| Float, Int \| Float)` |
-| 倒数与 NaN | `eleinv(Int \| Float) -> Float`, `make_nan() -> Float` |
-| 分类 | `isfinite`, `isinf`, `isnan`, `isnormal`, `signbit`: `(Int \| Float) -> Bool`; `fpclassify(Int \| Float) -> Int` |
-| 有序谓词 | `isgreater`, `isgreaterequal`, `isless`, `islessequal`, `islessgreater`, `isunordered`: `(Int \| Float, Int \| Float) -> Bool` |
-
-缩放函数的整数参数会将浮点数向零截断。
-
-### `dense`：稠密数组包
-
-| 签名 | 返回 | 行为 |
-|---|---|---|
-| `rows(value: RealArray \| BoolArray)` | `Int` | 行数。 |
-| `cols(value: RealArray \| BoolArray)` | `Int` | 列数。 |
-| `transpose(value: RealArray \| BoolArray)` | `RealArray \| BoolArray` | 新的转置数组。 |
-| `identity(size: Int)` | `RealArray` | 建立指定阶数的单位矩阵。 |
-| `trace(value: RealArray)` | `Float` | 主对角线之和；允许矩形数组。 |
-| `inner(left: RealArray, right: RealArray)` | `Float` | 两个同形数组的 Frobenius 内积。 |
-| `outer(RealArray, RealArray)` | `RealArray` | 两个行向量或列向量的外积。 |
-| `norm(value: RealArray)` | `Float` | 向量的二范数或矩阵的 Frobenius 范数。 |
-| `normalize(RealArray)` | `RealArray` | 返回同形的单位范数副本。 |
-| `copy_into(source: RealArray, target: RealArray)` | `Nil` | 将数据复制到同形的既有数组，不分配结果。 |
-| `scale_inplace(value: RealArray, factor: Int \| Float)` | `Nil` | 原地执行 `value *= factor`。 |
-| `add_scaled_inplace(target: RealArray, source: RealArray, factor: Int \| Float)` | `Nil` | 原地执行 `target += factor * source`。 |
-| `gemm(alpha: Int \| Float, left: RealArray, right: RealArray, beta: Int \| Float, output: RealArray)` | `Nil` | 原地执行 `output = alpha * left @ right + beta * output`。 |
-
-```tapas
-let builtin_dense_matrix = array(2, 3, [1, 2, 3, 4, 5, 6])
-print(dense::rows(builtin_dense_matrix), ' x ', dense::cols(builtin_dense_matrix))
-pprint(dense::transpose(builtin_dense_matrix))
-print(dense::norm(array(1, 2, [3, 4])))
-```
-
-<pre class='Tapas-Return'>
-2 x 3
-[[1, 4],
- [2, 5],
- [3, 6]]
-5
-</pre>
-
-`inner`要求两侧行数和列数分别相同。
-`outer`只接受某一维为 1 的二维数组，但不区分行向量和列向量的方向；结果形状由两侧的元素数量决定。
-`normalize`拒绝零范数数组。
-`copy_into`、`scale_inplace`、`add_scaled_inplace`和`gemm`都复用调用方提供的存储；`gemm`的输出不能与任一输入是同一数组。
-
-运算符负责方便且无副作用的表达，每次产生新结果，并使用单遍融合循环避免`dcopy`后再计算的额外内存流量；矩阵乘法`@`仍直接使用`dgemm`。
-`dense`则提供可复用输出缓冲区的性能接口：`copy_into`、`scale_inplace`、`add_scaled_inplace`、`gemm`分别直接映射到`dcopy`、`dscal`、`daxpy`、`dgemm`。
-`inner`和`norm`使用`ddot`与`dnrm2`，`outer`使用`beta = 0`的`dgemm`，避免先清零再累加。
-`identity`、`trace`与`transpose`不依赖 BLAS。
-
-线性方程求解、逆矩阵、行列式、秩和特征分解不属于 BLAS 原语。
-若将来引入这些接口，应在`dense`中保持同样的高层命名，但通过独立、可选的 LAPACK 后端实现，不能用低效或数值不稳定的手写算法冒充完整线性代数支持。
-
-## 应用包
-
-这些包面向有限概率建模、规则求解与采样、源码格式化等具体用途。
+<a id="package-finite"></a>
 
 ### `finite`：有限概率分布包
 
@@ -539,6 +880,12 @@ print(dense::norm(array(1, 2, [3, 4])))
 各维长度必须为正，坐标必须在形状范围内。权重必须有限、非负且总和为正；概率参数和分布参数按各构造函数的定义校验。Distribution 通过这些构造函数创建，不是无限分布的隐式截断。
 
 完整接口约束见 [`finite` README](../src/stdlib/finite/README.md)。
+
+## 应用包
+
+这些包面向规则求解与采样、源码格式化等具体用途。
+
+<a id="package-solve"></a>
 
 ### `solve`：规则求解与采样包
 
@@ -584,6 +931,8 @@ cache_regions、trace、elapsed。样本允许重复；达到预算上限时可�
 后端依赖 Python 和 OR-Tools，依赖版本见 [requirements.txt](../src/stdlib/solve/requirements.txt)。
 默认使用 python3，可用 TAPAS_SOLVE_PYTHON 指定解释器路径。
 完整结果字段、支持范围和策略选项见 [solve 包说明](../src/stdlib/solve/README.md)。
+
+<a id="package-format"></a>
 
 ### `format`：源码格式化包
 

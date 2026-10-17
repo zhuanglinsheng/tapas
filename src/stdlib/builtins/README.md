@@ -21,7 +21,7 @@ sort(values: List) -> Nil
 
 `replicate` 将整个 List 浅复制 count 次，count 必须是非负 Int，零次返回空 List；复合元素保留引用。
 
-`list()` 创建空 List，`list(iterable)` 消费 Iterable 创建新 List；`pair` 使用两个传入值创建 Pair。`keys` 返回 Dictionary 的键，或 Type 可迭代的字段名；`values` 返回 Dictionary 的值。`concat` 按两个 Iterable 的迭代顺序创建新 List，不修改输入。对 Dictionary，`keys` 与 `values` 采用当前哈希表遍历顺序，不承诺插入顺序或排序。`sort` 原地排列 List；数值之间按数值大小比较，其他值只提供运行时类型顺序，不承诺业务语义上的全序；Int/Float 混合比较转为 double，大整数可能丢失精度，不保证 NaN 顺序或稳定排序。
+`list()` 创建空 List，`list(iterable)` 消费 Iterable 创建新 List；`pair` 使用两个传入值创建 Pair。`keys` 返回 Dictionary 的键，或 Type 可迭代的字段名；`values` 返回 Dictionary 的值。`concat` 按两个 Iterable 的迭代顺序创建新 List，不修改输入。对 Dictionary，`keys` 与 `values` 采用当前哈希表遍历顺序，不承诺插入顺序或排序。`sort` 原地排列 List；数值按大小、String 按完整字节内容、List 按递归字典序比较，与 heap 默认顺序一致。Int/Float 混合比较保留整数精度。不同类别不可相互排序，NaN、不支持的元素及过深或循环嵌套报错；不保证稳定性，不接受比较函数。排序报错可能改变排列，但保留全部元素及其引用。
 
 ### 可变集合操作
 
@@ -30,6 +30,8 @@ idx(target: Indexable, ...indices: AnyType) -> AnyType
 idx_or(target: Indexable, ...indices: AnyType, default: AnyType) -> AnyType
 append(target: Appendable, value: AnyType) -> Nil
 delete(target: Deletable, key: AnyType) -> Nil
+fill(target: IndexSettable, value: AnyType, indices: Iterable) -> Nil
+count(values: Iterable, value: AnyType) -> Int
 push_front(list: List, value: AnyType) -> Nil
 push_back(list: List, value: AnyType) -> Nil
 pop_front(list: List) -> AnyType
@@ -44,15 +46,22 @@ insert(list: List, value: AnyType, index: Int) -> Nil
 
 `push_front`、`push_back` 和 `insert` 原地修改 List；负的插入位置从列表末尾换算，最终位置可以等于列表长度。`pop_front` 与 `pop_back` 移除并返回首尾元素，空列表返回错误。
 
-### 文本拼接
+### 批量操作
 
-```tap
-join(values: Iterable, separator: String) -> String
-```
+`fill` 按显式 Iterable 索引逐次写入同一值；iter 可表达步长。每个元素作为一个完整索引或键，
+不展开 Pair/List 为多个坐标；当前 Array 的双索引写入不适用。List 负索引按普通写入处理，
+不自动扩容；重复索引保留，复合填充值共享引用，错误不回滚已完成写入。
+即使索引为空，也会校验 IndexSettable 和 Iterable 能力。
 
-`join` 要求迭代产生的每个元素都是 String；空 Iterable 返回空串。String 自身
-按字节迭代，因此 `join('abc', '-')` 为 `a-b-c`。保留 List 的直接存储路径，
-其他对象通过 Iterable 能力读取。
+`count` 消费 Iterable，以 identical 规则计数，不转换 Int/Float，不调用 == 重载。
+String 按字节计数而非子串；Dictionary 应显式传入 keys/values，Array 当前不是 Iterable。
+List/Iterator 的填充、List 和 String 的计数使用直接存储路径；扩展对象保留能力分派。
+
+### 历史兼容入口
+
+字符串专用拼接接口为 `strings::join(values: Iterable, separator: String) -> String`，
+合同见 [`strings` 包](../strings/README.md)。根作用域的 `join` 仅保留为兼容入口，
+与包函数共用实现并保持原有绑定槽位，避免破坏已有源码和字节码。新代码使用 `strings::join`。
 
 ### 对象与类型转换
 
@@ -71,7 +80,16 @@ str(value: AnyType) -> String
 
 `int` 接受 Int、Float、Bool 或 String（通过宿主 C strtol 按十进制解析）。`float` 接受 Int、Float、Bool 或 String（通过宿主 C strtod 解析）。`bool` 对 Nil、数值、String 和其他复合对象执行布尔转换；String `true` 与 `false` 被特别识别，其他复合对象按长度判断。`str` 返回值的完整字符串表示。
 
-字符串数值解析允许前导空白；尾部未消费字符或 errno 非零时报错，首个 NUL 视为文本结尾。当前 float('') 返回 0。Float 转 Int 向零截断，未单独校验非有限值或越界。
+字符串数值解析保留宿主 C strtol/strtod 的语法和 locale 行为，允许前导空白，但必须实际消费数字并覆盖完整字节串。
+空串、纯空白、内嵌 NUL、尾部未消费字符（包括空白）、非有限值或 errno 非零均报错；errno 范围错误包含上溢和下溢。
+Float 转 Int 先向零截断，再检查 Int 范围；拒绝 NaN、无穷和越界转换，避免 C 浮点转整数的未定义行为。
+Int 转 Float 仍按浮点精度舍入；不提供任意精度十进制。bool 只特殊识别完整的 true/false 文本，str 保留内嵌 NUL。
+
+`try_int(value: AnyType)` 和 `try_float(value: AnyType)` 返回 Dictionary，使用同样的转换合同。
+记录包含 `ok`、`value`、`code`、`error`、`errno`；成功时 code/error 为空，errno 始终为 0。
+失败时 value 分别为 Int 0 或 Float 0.0，读取前必须检查 ok，不能把回退值当作转换成功。
+code 为 `invalid_type`、`invalid_number`、`out_of_range` 或 `non_finite`，error 为非稳定诊断文本。
+这些函数只恢复预期的输入错误；内存耗尽等运行时资源错误仍报错。
 
 ### 迭代与反射
 
@@ -107,3 +125,9 @@ now() -> Time
 名称以双下划线开头的 session 操作属于编译与运行时内部协议，不是应用程序公共接口，因此不列入支持范围。
 
 公共接口的能力范围及专用限制见 [标准库文档](../../../docs/Stdlib_zh.md#集合操作)。
+
+排序实现：数值域使用内联比较、三路分区、插入排序及深度受限的堆排序兜底；复杂值先探测已有顺序，普通无序输入保留平台 qsort。比较期间不执行用户回调，错误延迟到待移动值归位后报告。
+
+List 标量 count 对 Bool、Int、Float 分别内联 identical 比较，不跨类型转换。fill 的标量 List+Iterator 路径先证明整个范围有效再使用简化循环；不能证明时仍逐项检查，保留部分成功语义。包对象可通过 vtable.bulk_operations 提供同语义批量路径；返回 0 时不得有副作用，随后由通用 Iterable 路径接管。
+
+数值 sort 的大分区采用分层扰动取样，避免固定步长与周期输入对齐。同构 Int/Float 在样本无重复时使用双向二路分区，并在递归前跳过分界处相等值；重复样本保留三路分区；Float 只有在枢轴占样本多数时优先判断相等，Int 保留常规分支顺序。混合数值保留三路分区。深度预算和 heapsort 保底不变。

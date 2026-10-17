@@ -231,7 +231,8 @@ textension_descriptor
 `textension_symbol`统一描述函数、值和 Type，主要字段为：
 
 - `name`：Tapas 中可见的名称；
-- `type`：前端解析的 Tapas Type，是静态类型信息的唯一来源；
+- `type`：前端解析的 Tapas Type 签名；
+- `instance_capabilities`：Type 实例共享的运行时能力表，供静态分析读取；
 - `detail`：面向人的完整声明，例如`sample::add(left: Int, right: Int) -> Int`；
 - `kind`：`textension_function`、`textension_value`或`textension_type`；
 - `function`、`session_function`、`value_factory`：与 `kind` 对应的唯一入口；
@@ -323,6 +324,8 @@ src/stdlib/
   tstdlib.c
   modules.h
   arguments.h
+  result.h / result.c
+  system.h / system.c
   builtins/
     console.c
     conversion.c
@@ -340,6 +343,13 @@ src/stdlib/
   dense/dense.c
   evaluators/evaluators.c
   io/io.c
+  bytes/bytes.c
+  strings/strings.c
+  json/json.c
+  path/path.c
+  fs/fs.c
+  os/os.c
+  os/run.c
   math/math.c
   rules/rules.c
   syntax/syntax.c
@@ -528,3 +538,30 @@ typedef struct {
 创建 C 类型后，应公开一个构造实例并通过`tobj_set_compo`返回它的 C 函数，再把构造器作为`textension_symbol`安装。
 这样 Tapas 代码可以创建自定义值，前端也从同一个扩展描述符读取调用签名。
 `tcfn_descriptor`与`tlib_add_cfn`只用于兼容旧的直接注册代码，新扩展不应再用它们建立独立签名来源。
+
+当前 `TAPAS_EXTENSION_ABI` 为 6。扩展必须使用当前头文件重新编译，旧 ABI 会被拒绝。vtable 的可选 `bulk_operations` 提供 fill/count 快速路径：钩子返回 0 表示未处理且不得产生副作用；已处理的操作必须保持逐项操作的错误、所有权与 identical 语义。这不增加公开能力类型。
+
+Type 符号的 `instance_capabilities` 应指向其实例 vtable 使用的同一份不可变 `tcompo_capabilities` 表。例如：
+
+```c
+static const tcompo_capabilities buffer_capabilities = {
+    .indexable = buffer_index,
+    .index_settable = buffer_set,
+    .iterable = buffer_next,
+};
+
+/* 在实例 vtable 中设置 .capabilities = &buffer_capabilities。 */
+static const textension_symbol buffer_type = {
+    .name = "Buffer",
+    .type = "Type",
+    .kind = textension_type,
+    .value_factory = create_buffer_type,
+    .instance_capabilities = &buffer_capabilities,
+};
+```
+
+运行时的 `types::matches(value, Type)` 与静态分析共用能力判断规则，依据能力槽是否存在判断 `Indexable`、`IndexSettable`、`Appendable`、`Deletable`、`MemberTestable`、`Iterable`。编译器和语言服务器只读取表，不执行能力回调、`value_factory` 或用户程序；构造函数等符号的签名需引用对应的命名 Type。内建对象也从运行时能力表取得静态能力。
+
+同时提供 `instance_capabilities` 与 `nominal_template` 时，两者的能力位必须一致，否则注册失败。`textension_symbol_capabilities(symbol, &mask)` 读取有效声明；缺少元数据时返回零，且不改写 `mask`。
+
+`instance_capabilities` 为空时，有 `nominal_template` 的 Type 仍使用模板的 `capabilities` 声明；两者都缺失时，静态分析保留不确定性，由运行时检查能力，不直接报不匹配。要明确声明不支持任何能力，提供一份所有槽均为空的表。扩展描述符及其引用的表必须在注册期间保持有效；自定义包需注册到编译器或语言服务器所使用的扩展注册表，才能提供其 Type 与函数签名。

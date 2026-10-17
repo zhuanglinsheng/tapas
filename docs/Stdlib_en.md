@@ -17,13 +17,14 @@ syntactic definitions.
 > A `Nil` procedure result cannot be stored. Package signatures omit the current package prefix; calls still use `dense::rows(...)`.
 > Cross-package Type references retain their prefix. The tunnel call `items.append(value)` equals `append(items, value)`.
 
-Tapas ships 12 native packages and one source package, `format`, grouped by their relationship to the language core and their purpose:
+Tapas ships 18 native packages and one source package, `format`, grouped by their relationship to the language core and their purpose:
 
 | Category | Packages |
 |---|---|
-| Language-support packages | [`types`](../src/stdlib/types/README.md), [`syntax`](../src/stdlib/syntax/README.md), [`rules`](../src/stdlib/rules/README.md), [`evaluators`](../src/stdlib/evaluators/README.md) |
-| Basic utility packages | [`io`](../src/stdlib/io/README.md), [`time`](../src/stdlib/time/README.md), [`random`](../src/stdlib/random/README.md), [`heap`](../src/stdlib/heap/README.md), [`math`](../src/stdlib/math/README.md), [`dense`](../src/stdlib/dense/README.md) |
-| Application packages | [`finite`](../src/stdlib/finite/README.md), [`solve`](../src/stdlib/solve/README.md), [`format`](../src/stdlib/format/README.md) |
+| Language-support packages | [`types`](#package-types), [`syntax`](#package-syntax), [`rules`](#package-rules), [`evaluators`](#package-evaluators) |
+| Basic utility packages | [`bytes`](#package-bytes), [`strings`](#package-strings), [`json`](#package-json), [`heap`](#package-heap), [`os`](#package-os), [`path`](#package-path), [`fs`](#package-fs), [`io`](#package-io), [`time`](#package-time) |
+| Mathematics and probability packages | [`math`](#package-math), [`dense`](#package-dense), [`random`](#package-random), [`finite`](#package-finite) |
+| Application packages | [`solve`](#package-solve), [`format`](#package-format) |
 
 `optimize` currently has only a [design draft](../src/stdlib/optimize/README.md) and is not shipped as an available package.
 
@@ -61,6 +62,8 @@ conventional string-formatting name `sprint` is no longer used for output.
 |---|---|---|
 | `int(value: AnyType)` | `Int` | Accepts Bool, Int, Float, or String; truncates Float toward zero and parses decimal String input through the host C library. |
 | `float(value: AnyType)` | `Float` | Accepts Bool, Int, Float, or String; parses String input through the host C library. |
+| `try_int(value: AnyType)` | `Dictionary` | Attempts the int conversion and returns an error record on failure. |
+| `try_float(value: AnyType)` | `Dictionary` | Attempts the float conversion and returns an error record on failure. |
 | `bool(value: AnyType)` | `Bool` | nil, zero numbers, and zero-length composites are false; the strings true and false are recognized specially. |
 | `str(value: AnyType)` | `String` | Full textual representation. |
 | `list()` / `list(iterable: Iterable)` | `List` | Create an empty list, or consume any iterable into a new list. |
@@ -71,10 +74,19 @@ conventional string-formatting name `sprint` is no longer used for output.
 | `array(rows: Int, cols: Int, value: AnyType)` | `RealArray \| BoolArray` | Bool fills BoolArray; numbers fill RealArray; List input fills in row-major order. |
 
 The exported int and float signatures accept AnyType, but their implementations only handle Bool, Int, Float, and String; other values fail.
-String conversion uses the host C strtol (base 10) and strtod. Leading whitespace is accepted;
-unconsumed trailing characters, including whitespace, or nonzero errno cause an error.
-Parsing stops at the first NUL rather than validating the String's full byte length; currently float('') returns 0.
-Float-to-Int conversion uses the host C cast without a separate non-finite or range check.
+String conversion retains host C strtol (base 10) and strtod syntax and locale behavior.
+Leading whitespace is accepted, but at least one numeric token must be consumed and the entire
+byte string must be validated. Empty/whitespace-only strings, embedded NUL, trailing unconsumed
+characters (including whitespace), non-finite values, and nonzero errno are errors, including underflow.
+Float-to-Int truncates toward zero and checks bounds before casting, rejecting NaN, infinity and
+out-of-range values. Int-to-Float still rounds to floating-point precision. str preserves embedded NUL.
+
+try_int and try_float share the strict implementation and return ok, value, code, error, and errno.
+On success code/error are empty. On failure code is invalid_type, invalid_number, out_of_range, or
+non_finite; value is Int 0 or Float 0.0 respectively. Always check ok before consuming value.
+errno is always 0; diagnostic text is not a stable error code. Resource exhaustion still raises errors.
+These records do not depend on json: they follow the ok-checking pattern of json::try_parse,
+with operation-specific fallback values and additional fields.
 Bool converts to 0 or 1. For bool, the strings true and false are special; other Strings and
 composites are tested by length, so bool('0') is true.
 
@@ -104,8 +116,7 @@ false, true
 |---|---|---|
 | `push_front(list: List, value: AnyType)` | `Nil` | Inserts `value` at the front. |
 | `push_back(list: List, value: AnyType)` | `Nil` | Inserts `value` at the back. |
-| `join(values: Iterable, separator: String)` | `String` | Joins String elements yielded by an iterable; the separator may be empty. |
-| `append(target: Appendable, value: AnyType)` | `Nil` | Appends an item or a pair to a container such as a List or Dictionary. Strings are immutable; use `join` for composition. |
+| `append(target: Appendable, value: AnyType)` | `Nil` | Appends an item or a pair to a container such as a List or Dictionary. Strings are immutable; use `strings::join` for composition. |
 | `insert(list: List, value: AnyType, index: Int)` | `Nil` | Inserts before index; negative indices count from the end, and the final index may equal the length. |
 | `pop_front(list: List)` | `AnyType` | Removes and returns the first item. |
 | `pop_back(list: List)` | `AnyType` | Removes and returns the last item. |
@@ -115,7 +126,9 @@ false, true
 | `keys(value: Dictionary \| Type)` | `List` | Dictionary keys or enumerable field names of a Type. |
 | `values(dictionary: Dictionary)` | `List` | Values in corresponding order. |
 | `concat(left: Iterable, right: Iterable)` | `List` | Consumes both inputs in order into a new shallow List. |
-| `sort(values: List)` | `Nil` | Sorts in place; numeric values compare by magnitude, other values only by runtime storage category. |
+| `fill(target: IndexSettable, value: AnyType, indices: Iterable)` | `Nil` | Writes the same value at each supplied index; each item is one complete index or key. |
+| `count(values: Iterable, value: AnyType)` | `Int` | Counts elements matching by identical rules. |
+| `sort(values: List)` | `Nil` | Sorts in place by numeric, bytewise String, or recursive lexicographic List order; not stable. |
 
 `append(dictionary, value)` requires a `Pair`. `pop_front` and `pop_back`
 transfer ownership of the removed item and reject empty lists. `delete` remains
@@ -134,15 +147,15 @@ index domain, or array shape.
 | Category | Current contract |
 |---|---|
 | General value operations | `len`, `type`, `copy`, `identical`, and `str` use value or object protocols; numeric conversions still validate input Types. |
-| Iterable inputs | `list`, `join`, and `concat` accept Iterable. `join` requires String elements and returns an empty string for empty input; `concat` always returns a List. |
-| Indexing and mutation | `idx` and `idx_or` forward index arguments; `append` and `delete` require Appendable and Deletable. Capability Types do not specify key Types. |
+| Iterable inputs | `list`, `concat`, and `count` accept Iterable; `concat` always returns a List. String composition uses `strings::join`, whose elements must be String. |
+| Indexing and mutation | `idx` and `idx_or` forward index arguments; `append` and `delete` require Appendable and Deletable. `fill` requires IndexSettable and explicit indices. Capability Types do not specify key Types. |
 | List operations | `replicate`, `insert`, front/back push/pop, and `sort` require an ordered List; indexing capabilities alone do not define insertion, removal, or sorting. |
 | Key/value enumeration | Dictionary does not implicitly choose key or value iteration. Use `keys` or `values`; Indexable alone cannot enumerate valid keys. |
 | Specialized construction and reflection | `array`, `iter`, `pair`, Rule reflection, and assertion retain their domain-specific contracts. |
 
-`join` and `concat` follow input iteration order without modifying inputs.
+`strings::join` and `concat` follow input iteration order without modifying inputs.
 Shallow concatenation retains composite element references. String iteration
-uses bytes: `join('abc', '-')` returns `a-b-c`, without implying Unicode
+uses bytes: `strings::join('abc', '-')` returns `a-b-c`, without implying Unicode
 code-point iteration. Array currently is not Iterable; `idx` and `idx_or`
 require both row and column indices for it.
 
@@ -155,17 +168,65 @@ Single-key Dictionary lookup retains its one-probe implementation.
 `copy` follows the object's copy protocol: List and Dictionary shallow-copy
 elements, Array copies independent data storage, and extensions define their
 own behavior. `identical` is not merely address identity: same-Type Lists and
-other objects can match structurally; `identical(1, 1.0)` is false. `sort` is not
-a generic comparator interface and guarantees neither lexicographic string
-order, content ordering for composites, NaN ordering, nor stability. Mixed Int/Float
-comparisons convert to double and may lose large-integer precision. Use heap
-comparators when priorities need a defined ordering.
+other objects can match structurally; `identical(1, 1.0)` is false. `sort` and default heap operations share ordering for numbers, Strings and nested Lists.
+Mixed Int/Float comparisons preserve integer precision.
+Large numeric partitions use jittered stratified sampling. Homogeneous Int/Float uses a two-way partition when samples have no duplicates and a three-way partition otherwise; mixed Number retains the three-way partition. Strings compare their complete
+byte contents, including embedded NULs. Lists compare successive elements until the
+first difference; if the common prefix is equal, the shorter List comes first.
+There is no ordering across numeric, String and List categories. NaN, unsupported
+values, and excessive or cyclic nesting cause errors. Sort and default `heapify` validate all input values; default `push` validates
+the new value. List operators visit only positions needed to decide the result.
+`sort` is not stable and takes no comparator; heap accepts custom priority comparators.
+Numeric Lists use inline three-way introsort, insertion sort for small partitions,
+and heapsort when the depth budget expires, giving worst-case O(n log n) time and
+O(log n) stack space. Monotone or bounded-shift inputs can finish in linear time.
+String and nested-List comparisons cost more: large inputs first probe existing
+order, while other inputs retain the platform qsort. Selection depends on value
+types, size and existing order without changing the sorting contract.
+
+Errors may leave a different permutation but retain every element and its references.
+
+#### Bulk filling and counting
+
+fill takes explicit indices; use iter(start, step, end) for a half-open strided range.
+Any Iterable of keys is accepted, such as fill(dictionary, 0, ['a', 'b']).
+It performs target[index] = value in order, including duplicate indices, without
+snapshotting the index sequence. Composite replacements share the same object;
+they are not deep-copied per position. List indices may be negative; filling never grows a List.
+An index or write error stops the call without rolling back earlier writes.
+Even an empty index sequence requires an IndexSettable target.
+
+Each index item is passed unchanged as one write argument. Pair and List keys are
+not expanded into coordinates. Array currently requires separate row and column
+indices and cannot directly be filled through this interface; String is immutable.
+IndexSettable does not imply an enumerable sequence of indices, and composite
+Dictionary keys must not be mistaken for coordinate tuples.
+
+count uses the same matching rules as identical and List membership. It does not
+invoke overloaded == or convert between Int and Float. Empty inputs return 0.
+String iteration uses bytes: count('ababa', 'a') is 3, while count('ababa', 'aba')
+is 0; this is not substring counting. Pass keys or values explicitly for a
+Dictionary. Array currently does not implement Iterable; use `dense::flat(array)` for an explicit iterable one-dimensional view.
+
+```tapas
+let stdlib_bulk_mask = replicate([true], 10)
+fill(stdlib_bulk_mask, false, iter(2, 2, 10))
+print(count(stdlib_bulk_mask, false))
+let stdlib_bulk_dictionary = {'a': 1, 'b': 2}
+fill(stdlib_bulk_dictionary, 7, ['a', 'b'])
+print(count(values(stdlib_bulk_dictionary), 7))
+```
+
+<pre class='Tapas-Return'>
+4
+2
+</pre>
 
 ```tapas
 let stdlib_access_matrix = array(2, 3, [1, 2, 3, 4, 5, 6])
 print(idx(stdlib_access_matrix, 1, 2))
 print(idx_or(stdlib_access_matrix, 9, 0, -1))
-print(join('abc', '-'))
+print(strings::join('abc', '-'))
 print(len(concat(iter(1, 4), 'xy')))
 ```
 
@@ -199,6 +260,8 @@ environment. A Function passed to `__binary__` must be a Tapas bytecode function
 ## Language-support packages
 
 These packages expose or extend the type system, compiler lexical facilities, and Rule representation and evaluation protocols.
+
+<a id="package-types"></a>
 
 ### `types`: Type construction and reflection package
 
@@ -244,6 +307,8 @@ These construction forms participate in compiler-recognized Type definitions and
 
 See the full API constraints in [`types` README](../src/stdlib/types/README.md).
 
+<a id="package-syntax"></a>
+
 ### `syntax`: Lexical package
 
 Exposes the compiler's lexical view for formatters and other source tools.
@@ -266,6 +331,8 @@ Exposes the compiler's lexical view for formatters and other source tools.
 | Signature | Returns | Behavior |
 |---|---|---|
 | `tokens(source: String)` | `List[Token]` | Ordered token records including trivia and EOF. Positions are half-open byte ranges in the source. |
+
+<a id="package-rules"></a>
 
 ### `rules`: Rule checking, transformations, and IR package
 
@@ -324,6 +391,8 @@ A target is a zero-based direct Item index, a unique description string, or a di
 
 See the full API constraints in [`rules` README](../src/stdlib/rules/README.md).
 
+<a id="package-evaluators"></a>
+
 ### `evaluators`: Custom Rule evaluators package
 
 #### Types
@@ -353,9 +422,272 @@ See the full API constraints in [`evaluators` README](../src/stdlib/evaluators/R
 
 ## Basic utility packages
 
-These packages provide general operations, system access, data structures, and array computation.
+Ordered by data processing, data structures, and system access, matching the overview table:
 
-### `io`: Text-file package
+- Data processing: `bytes`, `strings`, `json`.
+- Data structures: `heap`.
+- System access: `os` (environment/programs), `path` (lexical paths), `fs` (filesystem), `io` (contents/streams), `time`.
+
+<a id="package-bytes"></a>
+
+### `bytes`: Byte-buffer package
+
+#### Types
+
+| Name | Meaning |
+|---|---|
+| `Buffer` | Fixed-length mutable byte sequence; one byte per item, read as Int. |
+
+#### Functions
+
+| Signature | Returns | Behavior |
+|---|---|---|
+| `buffer(length: Int, value: Int)` | `Buffer` | Allocate length items filled with value; length is nonnegative and value is in 0..255. |
+| `from_string(value: String)` | `Buffer` | Copies all String bytes, including NUL and invalid UTF-8. |
+| `to_string(value: Buffer)` | `String` | Copies all Buffer bytes without encoding conversion. |
+
+Buffer supports Int and negative indices, `idx_or`, Iterable, MemberTestable, `len`, `copy`, `fill`, and `count`.
+Writes require Int values in 0..255, without truncation or Bool/Float conversion. Append, deletion, and resizing are unsupported.
+`copy` creates independent storage. Counting uses identical semantics on yielded Int values: 1, 1.0, and true are distinct.
+`fill` accepts arbitrary Iterable indices; valid Iterator ranges use native bulk writes, with memset for contiguous bytes.
+String/Buffer conversion uses direct memory copying without per-byte boxing and returns independent storage.
+Mutating a Buffer cannot alter existing Strings. No encoding conversion or UTF-8 validation occurs;
+use strings::is_utf8 explicitly when text is required. File operations remain the responsibility of io.
+
+```tapas
+let stdlib_byte_buffer = bytes::buffer(6, 1)
+fill(stdlib_byte_buffer, 255, iter(1, 2, 6))
+print(count(stdlib_byte_buffer, 255))
+let stdlib_view_array = array(1, 3, true)
+let stdlib_flat_view = dense::flat(stdlib_view_array)
+fill(stdlib_flat_view, false, iter(1, 3))
+print(count(stdlib_flat_view, true))
+```
+
+<pre class='Tapas-Return'>
+3
+1
+</pre>
+
+<a id="package-strings"></a>
+
+### `strings`: Basic string operations
+
+String composition uses `strings::join`. The root `join` remains a legacy compatibility
+alias sharing the same implementation and retaining existing bytecode slots. New code should use the package API.
+
+| Signature | Returns | Behavior |
+|---|---|---|
+| `join(values: Iterable, separator: String)` | `String` | Joins String elements in iteration order; the separator may be empty, and empty input returns empty String. |
+| `split(text: String, separator: String)` | `List` | Splits on a nonempty separator, retaining empty fields; empty input returns a one-item List containing an empty String. |
+| `lines(text: String)` | `List` | Splits LF, CRLF, and CR and removes line endings; empty input returns an empty List, and a terminal line ending adds no extra item. |
+| `trim(text: String)` | `String` | Trims ASCII space, HT, LF, VT, FF, and CR from both ends. |
+| `find(text: String, needle: String, [start: Int])` | `Int` | Finds the first absolute byte offset, or -1; start defaults to 0. |
+| `replace(text: String, old: String, replacement: String)` | `String` | Replaces all non-overlapping matches left to right; old must be nonempty. |
+| `starts_with(text: String, prefix: String)` | `Bool` | Tests a prefix; empty prefixes match. |
+| `ends_with(text: String, suffix: String)` | `Bool` | Tests a suffix; empty suffixes match. |
+| `is_utf8(text: String)` | `Bool` | Validates strict UTF-8; empty input and embedded NUL are valid. |
+
+Operations preserve complete byte lengths without modifying inputs or normalizing Unicode.
+join accepts any Iterable but requires every element to be String; String iteration yields bytes, not Unicode code points.
+Negative find start offsets count from the end, clamping below zero; offsets beyond length return -1.
+Empty needles match at valid start positions. split/replace reject empty patterns. lines retains actual empty lines.
+See the [`strings` README](../src/stdlib/strings/README.md) for complete contracts.
+
+```tapas
+print(strings::join(strings::split('a::b::', '::'), '|'))
+print(strings::find('ababa', 'aba', 1))
+print(strings::replace('你好你好', '你好', '好'))
+print(try_int('')::ok)
+```
+
+<pre class='Tapas-Return'>
+a|b|
+2
+好好
+false
+</pre>
+
+<a id="package-json"></a>
+
+### `json`: JSON encoding and decoding
+
+| Signature | Returns | Behavior |
+|---|---|---|
+| `parse(text: String)` | `AnyType` | Parses one complete strict JSON document; raises a runtime error on failure. |
+| `try_parse(text: String)` | `Dictionary` | Returns `ok`, `value`, `error`, and `position` for handling invalid data. |
+| `stringify(value: AnyType, [pretty: Bool])` | `String` | Writes compact JSON, or indented JSON when pretty is true. |
+
+The exported `Null` Type and storable `json::null` value are distinct from `Nil`.
+Objects become Dictionaries and arrays become Lists. Integer tokens must fit Int;
+large integers never silently become Float. Strings require valid UTF-8 and preserve embedded NUL.
+Duplicate keys, nesting beyond 256 containers, non-finite numbers, non-String dictionary keys,
+and cyclic containers are rejected. Object output order is unspecified.
+On successful `try_parse`, error is empty and position is -1. On failure, value is json::null;
+position is a zero-based byte offset for syntax errors, or -1 for mapping errors.
+Argument type and resource errors still raise runtime errors.
+See the [`json` README](../src/stdlib/json/README.md) for mappings and limits.
+
+<a id="package-heap"></a>
+
+### `heap`: Binary heap package
+
+`heap` maintains binary heaps in ordinary Lists, modifying them in place.
+
+| Function | Behavior | Time complexity |
+|---|---|---|
+| `heapify(items[, less])` | Build a heap in place; return Nil | O(n) |
+| `push(items, value[, less])` | Insert an element; return Nil | Amortized O(log n) |
+| `pop(items[, less])` | Remove and return the root | O(log n) |
+| `peek(items)` | Read the root | O(1) |
+
+Default min-heaps accept Int, non-NaN Float, String, and Lists recursively
+containing these values. Lists compare lexicographically, with shorter prefixes first;
+`[1, 3]` precedes `[1, 9]`. Mixed Int/Float comparisons preserve integer precision.
+Large numeric partitions use jittered stratified sampling. Homogeneous Int/Float uses a two-way partition when samples have no duplicates and a three-way partition otherwise; mixed Number retains the three-way partition.
+Numeric, String and List categories cannot be ordered against each other. NaN,
+unsupported payloads, and excessive or cyclic nesting cause errors during input
+validation in default `heapify`/`push`; such records need an explicit comparator.
+Input validation takes O(v), where v is
+the number of recursively contained input values; comparison cost depends on the
+common prefix length. An optional `less(a, b)`
+comparator must return Bool and define a strict weak ordering. All modifying
+operations on a heap must use the same ordering. Comparators must not modify
+the heap or the ordering keys. Equal priorities have no guaranteed order.
+Both `pop` and `peek` raise an error on an empty heap.
+
+```tapas
+let stdlib_heap_items = [4, 1, 3]
+heap::heapify(stdlib_heap_items)
+heap::push(stdlib_heap_items, 2)
+print(heap::pop(stdlib_heap_items))
+print(heap::peek(stdlib_heap_items))
+```
+
+<pre class='Tapas-Return'>
+1
+2
+</pre>
+
+Use `(a, b) { return a[0] < b[0] }` for priority records and
+`(a, b) { return a > b }` for a max-heap. Create an empty heap with `[]`
+and query its size with `len`. Rebuild after directly modifying the list
+or priorities; operations do not perform O(n) validity checks.
+See the [heap package reference](../src/stdlib/heap/README.md) for details.
+
+<a id="package-os"></a>
+
+### `os`: Environment and program execution
+
+| Signature | Returns | Behavior |
+|---|---|---|
+| `getenv(name: String)` | `Dictionary` | found/value distinguishes an unset variable from an empty value. |
+| `cwd()` | `String` | Current working directory. |
+| `home()` | `String` | Nonempty HOME, otherwise the current user's account directory. |
+| `temp_dir()` | `String` | Nonempty TMPDIR, otherwise `/tmp`; queries without creating anything. |
+| `platform()` | `String` | Currently linux or macos. |
+| `run(arguments: List[String], *, ...)` | `Dictionary` | Runs a program synchronously with captured streams, without an implicit shell. |
+
+Named options: stdin (String or bytes::Buffer, empty by default), cwd (inherited by default),
+env (String keys/values, empty by default), inherit_env (true), timeout (30 seconds; finite, positive, at most 1e9),
+and output_limit (1048576 bytes per stream; nonnegative Int). Programs without `/` use the child PATH;
+an unset PATH defaults to `/usr/bin:/bin`. Arguments/environment cannot contain NUL; stdin can.
+Invalid types and unknown/duplicate options raise before launch.
+
+Result status is exited, signaled, timeout, cancelled, spawn_error, or io_error. exit_code is valid only
+for exited and is otherwise -1. signal reports an observed terminating signal; cancel_signal reports
+the cancellation request; both use 0 when absent. stdout/stderr preserve raw bytes, elapsed is monotonic
+duration, errno/error contain system diagnostics. output_truncated, stdout_truncated, stderr_truncated
+indicate incomplete capture. Nonzero exit codes remain ordinary program results.
+Output beyond the limit is drained and discarded. Timeout/cancellation terminates the process group
+and reaps the direct child. SIGINT/SIGTERM are handled in the waiting thread; its mask is restored on return.
+Global cwd, environment and signal handlers are unchanged; multithreaded hosts must coordinate signal routing.
+See the [`os` README](../src/stdlib/os/README.md) for lifecycle details and limits.
+
+```tapas
+let stdlib_os_run = os::run(['/bin/sh', '-c', 'printf hello; printf log >&2; exit 7'])
+print(stdlib_os_run::status)
+print(stdlib_os_run::exit_code)
+print(stdlib_os_run::stdout)
+print(stdlib_os_run::stderr)
+```
+
+<pre class='Tapas-Return'>
+exited
+7
+hello
+log
+</pre>
+
+<a id="package-path"></a>
+
+### `path`: Lexical paths
+
+| Signature | Returns | Behavior |
+|---|---|---|
+| `join(...parts: String)` | `String` | Accepts at least one part, skips empty parts, inserts `/` as needed; later absolute parts discard preceding parts. |
+| `normalize(value: String)` | `String` | Collapses `/`, removes `.`, and lexically reduces `..`; empty input becomes `.`. |
+| `basename(value: String)` | `String` | Last component after ignoring trailing `/`; root returns `/`, empty input returns empty String. |
+| `dirname(value: String)` | `String` | Parent after ignoring trailing `/`; returns `.` if none, and `/` for root. |
+| `extension(value: String)` | `String` | Last extension including its dot; leading-only dots do not form an extension. |
+| `is_absolute(value: String)` | `Bool` | Tests for a leading `/`. |
+
+Uses Linux/macOS POSIX path text conventions and rejects embedded NUL. No filesystem access,
+symlink resolution, tilde/variable/glob expansion, or Windows drive handling occurs.
+join retains `.` and `..`; normalize explicitly reduces them. Lexical reduction may change the actual
+file target when symlinks are involved. See the [`path` README](../src/stdlib/path/README.md).
+
+```tapas
+print(path::join('fixtures', 'orders.json'))
+print(path::normalize('/a/../../b//'))
+print(path::extension('/a/.env.local'))
+```
+
+<pre class='Tapas-Return'>
+fixtures/orders.json
+/b
+.local
+</pre>
+
+<a id="package-fs"></a>
+
+### `fs`: Filesystem operations
+
+| Signature | Returns | Behavior |
+|---|---|---|
+| `stat(path: String)` / `lstat(path: String)` | `Dictionary` | Follows links / inspects the final link itself; fields kind, size, permissions, modified. |
+| `exists(path: String)` | `Bool` | Missing paths return false; permission and other query errors still raise. |
+| `list_dir(path: String)` | `List` | Byte-sorted entry names excluding `.` and `..`. |
+| `mkdir(path: String, [parents: Bool])` | `Nil` | Creates a directory; parents defaults to false, or creates ancestors and accepts existing directories when true. |
+| `copy(source: String, target: String)` | `Nil` | Copies regular-file data; rejects source links, special files and existing targets. |
+| `rename(source: String, target: String)` | `Nil` | POSIX rename, including target replacement; cross-device moves fail. |
+| `remove(path: String)` | `Nil` | Removes a file, final link or empty directory, without recursion. |
+| `temp_dir([parent: String])` / `temp_file([parent: String])` | `String` | Creates a unique temporary item under TMPDIR or `/tmp` by default; caller owns cleanup. |
+
+kind is file, directory, symlink or other; size is bytes, modified is a second-resolution Time.
+Every function has a try_ counterpart with the same argument positions, returning ok/value/code/error/errno.
+Failure values are empty Dictionary for metadata, empty List for enumeration, empty String for temporary paths,
+false for exists and mutations; successful mutations return true. Check ok first. Resource exhaustion can still raise.
+See the [`fs` README](../src/stdlib/fs/README.md) for stable error codes and side effects.
+
+```tapas
+let stdlib_fs_root = fs::temp_dir()
+let stdlib_fs_path = path::join(stdlib_fs_root, 'fixture.json')
+io::write_text(stdlib_fs_path, '{}')
+print(fs::stat(stdlib_fs_path)::kind)
+print(len(fs::list_dir(stdlib_fs_root)))
+fs::remove(stdlib_fs_path)
+fs::remove(stdlib_fs_root)
+```
+
+<pre class='Tapas-Return'>
+file
+1
+</pre>
+
+<a id="package-io"></a>
+
+### `io`: File contents and standard streams
 
 | Signature | Returns | Behavior |
 |---|---|---|
@@ -364,9 +696,39 @@ These packages provide general operations, system access, data structures, and a
 | `append_text(path: String, text: String)` | `Nil` | Creates the file or appends at its end. |
 | `replace_text(path: String, text: String)` | `Nil` | Writes a temporary file in the same directory and atomically replaces the target. |
 
-These functions preserve the exact string byte length. File handles, mode
-strings, and binary values are deliberately left to separate lifecycle and
-type designs.
+These functions preserve the exact string byte length. File APIs use String or
+bytes::Buffer. They do not expose file handles or mode strings requiring callers
+to manage an open-file lifecycle.
+
+
+Recoverable counterparts try_read_text(path), try_write_text(path, text), try_append_text(path, text),
+and try_replace_text(path, text) return Dictionary records. Their parameters accept AnyType to
+report argument errors. Fields are ok, value, code, error, errno: successful reads return String,
+failed reads return an empty String; writes return true on success or false on failure. Check ok first.
+On success code/error are empty and errno is 0. Failure codes are invalid_type, invalid_path,
+not_found, permission_denied, is_directory, not_directory, no_space, already_exists, not_empty,
+symlink_loop, cross_device, or io_error. io/fs share the system-error mapping.
+errno is platform-specific and 0 for argument errors. Both interfaces reject empty/NUL-containing paths
+and validate content types before opening files. Ordinary writes can partially succeed before failure;
+failed atomic replacement cleans up its temporary file. Resource exhaustion may still raise errors.
+See the [`io` README](../src/stdlib/io/README.md) for complete constraints.
+
+#### Binary files and standard streams
+
+| Signature | Returns | Behavior |
+|---|---|---|
+| `read_bytes(path: String)` | `bytes::Buffer` | Reads directly into byte storage, without a String intermediate. |
+| `write_bytes(path: String, buffer: bytes::Buffer)` | `Nil` | Creates or overwrites a binary file. |
+| `append_bytes(path: String, buffer: bytes::Buffer)` | `Nil` | Appends bytes. |
+| `replace_bytes(path: String, buffer: bytes::Buffer)` | `Nil` | Writes a temporary file and atomically replaces the target. |
+| `write(text: String)` / `write_error(text: String)` | `Nil` | Writes complete bytes to stdout/stderr without an automatic newline. |
+| `flush([stream: String])` | `Nil` | Flushes stdout (default) or stderr. |
+| `is_terminal(stream: String)` | `Bool` | Tests stdin/stdout/stderr for an interactive terminal. |
+
+All four binary-file functions have try_ variants with the same result record; failed reads return an empty Buffer.
+Standard-stream writes preserve NUL and do not transcode; streams cannot be closed through these APIs, and errors raise.
+
+<a id="package-time"></a>
 
 ### `time`: Time package
 
@@ -378,8 +740,131 @@ type designs.
 
 Timestamps and offsets must fit both the host `time_t` range and the Tapas
 `Int` range. Supported formatting conversions are defined by the host C
-library. This version stores no time-zone information and provides neither UTC
-formatting nor date parsing.
+library. Time stores no time-zone information; UTC formatting and strict parsing are described below.
+
+| Added signature | Returns | Behavior |
+|---|---|---|
+| `monotonic()` | `Float` | Monotonic seconds for elapsed differences, not Unix time. |
+| `monotonic_ns()` | `Int` | Monotonic nanoseconds, with range checks. |
+| `unix_ns()` | `Int` | Current Unix nanosecond timestamp, with range checks. |
+| `format_utc(value: Time, pattern: String)` | `String` | Uses UTC and the host strftime pattern. |
+| `parse_utc(text: String)` | `Time` | Strict YYYY-MM-DDTHH:MM:SSZ, years 0001..9999; rejects invalid dates, leap seconds, offsets and fractions. |
+| `try_parse_utc(text: AnyType)` | `Dictionary` | ok/value/code/error/errno; failure value is epoch Time, with invalid_type, invalid_time or out_of_range code. |
+
+Time retains second resolution. Nanosecond queries expose the current instant or monotonic clock without expanding Time.
+Both formatting APIs reject NUL in patterns; format directives remain platform C-library behavior.
+See the [`time` README](../src/stdlib/time/README.md) for complete contracts.
+
+## Mathematics and probability packages
+
+These packages provide scalar mathematics, dense-array computation, reproducible random numbers, and finite probability distributions.
+
+<a id="package-math"></a>
+
+### `math`: Scalar mathematics package
+
+Numeric parameters in this table have Type `Int | Float`; unless stated
+otherwise, functions return `Float`. Domain, overflow, infinity, and NaN behavior
+follows the host C math library.
+
+| Group | Signatures |
+|---|---|
+| Absolute and roots | `abs(Int \| Float) -> Int \| Float`, `fabs(Int \| Float) -> Float`, `sqrt(Int \| Float) -> Float`, `rsqrt(Int \| Float) -> Float`, `cbrt(Int \| Float) -> Float` |
+| Power and geometry | `pow(Int \| Float, Int \| Float) -> Float`, `hypot(Int \| Float, Int \| Float) -> Float` |
+| Trigonometric | `sin`, `cos`, `tan`, `asin`, `acos`, `atan`: `(Int \| Float) -> Float`; `atan2(Int \| Float, Int \| Float) -> Float` |
+| Hyperbolic | `sinh`, `cosh`, `tanh`, `asinh`, `acosh`, `atanh`: `(Int \| Float) -> Float` |
+| Exponential | `exp`, `exp2`, `expm1`: `(Int \| Float) -> Float` |
+| Logarithmic | `log`, `log2`, `log10`, `log1p`, `logb`: `(Int \| Float) -> Float`; `ilogb(Int \| Float) -> Int` |
+| Decomposition | `frexp(Int \| Float) -> Pair[Float, Int]`, `modf(Int \| Float) -> Pair[Float, Float]` |
+| Scaling | `ldexp(Int \| Float, Int) -> Float`, `scalbn(Int \| Float, Int) -> Float`, `scalbln(Int \| Float, Int) -> Float` |
+| Error and gamma | `erf`, `erfc`, `lgamma`, `tgamma`: `(Int \| Float) -> Float` |
+| Rounding to Float | `ceil`, `floor`, `nearbyint`, `rint`, `round`, `trunc`: `(Int \| Float) -> Float` |
+| Rounding to Int | `lrint`, `llrint`, `lround`, `llround`: `(Int \| Float) -> Int` |
+| Remainder | `fmod(Int \| Float, Int \| Float) -> Float`, `remainder(Int \| Float, Int \| Float) -> Float`, `remquo(Int \| Float, Int \| Float) -> Pair[Float, Int]` |
+| Floating manipulation | `copysign`, `nextafter`, `fdim`, `fmax`, `fmin`: `(Int \| Float, Int \| Float) -> Float`; `fma(Int \| Float, Int \| Float, Int \| Float) -> Float` |
+| Reciprocal and NaN | `eleinv(Int \| Float) -> Float`, `make_nan() -> Float` |
+| Classification | `isfinite`, `isinf`, `isnan`, `isnormal`, `signbit`: `(Int \| Float) -> Bool`; `fpclassify(Int \| Float) -> Int` |
+| Ordered predicates | `isgreater`, `isgreaterequal`, `isless`, `islessequal`, `islessgreater`, `isunordered`: `(Int \| Float, Int \| Float) -> Bool` |
+
+Every name in this table is accessed through `math::`, for example
+`math::sqrt(2)`. Scaling-function integer arguments convert floats toward
+zero.
+
+`isqrt(value: Int) -> Int` returns the exact floor square root of a nonnegative Int across the full Int range; negative values raise an error.
+
+<a id="package-dense"></a>
+
+### `dense`: Dense-array package
+
+#### Types
+
+| Name | Meaning |
+|---|---|
+| `FlatView` | Mutable one-dimensional row-major view of a RealArray or BoolArray. |
+
+#### Functions
+
+| Signature | Returns | Behavior |
+|---|---|---|
+| `flat(value: RealArray \| BoolArray)` | `FlatView` | Create a shared-storage one-dimensional view without copying elements. |
+| `rows(value: RealArray \| BoolArray)` | `Int` | Row count. |
+| `cols(value: RealArray \| BoolArray)` | `Int` | Column count. |
+| `transpose(value: RealArray \| BoolArray)` | `RealArray \| BoolArray` | New transposed array. |
+| `identity(size: Int)` | `RealArray` | Identity matrix of the requested order. |
+| `trace(value: RealArray)` | `Float` | Main-diagonal sum; rectangular arrays are accepted. |
+| `inner(left: RealArray, right: RealArray)` | `Float` | Frobenius inner product of equal-shaped arrays. |
+| `outer(left: RealArray, right: RealArray)` | `RealArray` | Outer product of two row or column vectors. |
+| `norm(value: RealArray)` | `Float` | Vector 2-norm or matrix Frobenius norm. |
+| `normalize(value: RealArray)` | `RealArray` | Equal-shaped unit-norm copy. |
+| `copy_into(source: RealArray, target: RealArray)` | `Nil` | Copies into an existing equal-shaped array without allocating a result. |
+| `scale_inplace(value: RealArray, factor: Int \| Float)` | `Nil` | Performs `value *= factor` in place. |
+| `add_scaled_inplace(target: RealArray, source: RealArray, factor: Int \| Float)` | `Nil` | Performs `target += factor * source` in place. |
+| `gemm(alpha: Int \| Float, left: RealArray, right: RealArray, beta: Int \| Float, output: RealArray)` | `Nil` | Performs `output = alpha * left @ right + beta * output` in place. |
+
+
+`flat` views use a single Int index, support negative indices, iteration, `fill`, and `count`, and cannot resize.
+The view retains its source array; writes through either object are immediately visible through the other.
+BoolArray views read and write Bool. RealArray views read Float and accept Int or Float writes.
+Counting matches yielded types, so Float 2.0 in a RealArray view does not match Int 2.
+`copy(view)` retains the FlatView Type but creates independent storage. The source array's two-index and iteration rules remain unchanged.
+
+```tapas
+let builtin_dense_matrix = array(2, 3, [1, 2, 3, 4, 5, 6])
+print(dense::rows(builtin_dense_matrix), ' x ', dense::cols(builtin_dense_matrix))
+pprint(dense::transpose(builtin_dense_matrix))
+print(dense::norm(array(1, 2, [3, 4])))
+```
+
+<pre class='Tapas-Return'>
+2 x 3
+[[1, 4],
+ [2, 5],
+ [3, 6]]
+5
+</pre>
+
+`inner` requires equal row and column counts. `outer` accepts only a
+two-dimensional array with one dimension equal to 1; row and column vector
+orientation is ignored, and the result shape follows the two element counts.
+`normalize` rejects an array with zero norm. `copy_into`, `scale_inplace`,
+`add_scaled_inplace`, and `gemm` reuse caller-owned storage. A `gemm` output
+must not be the same array as either input.
+
+Operators provide convenient, non-mutating expressions and allocate their
+results. Their element-wise paths use one fused pass instead of copying and
+then computing; matrix multiplication `@` still maps directly to `dgemm`.
+The performance-oriented `dense` paths reuse output buffers: `copy_into`,
+`scale_inplace`, `add_scaled_inplace`, and `gemm` map directly to `dcopy`,
+`dscal`, `daxpy`, and `dgemm`. `inner` and `norm` use `ddot` and `dnrm2`;
+`outer` uses `dgemm` with `beta = 0`, avoiding a separate zero-fill pass.
+`identity`, `trace`, and `transpose` do not require BLAS.
+
+Linear solves, inverses, determinants, rank, and eigenvalue decompositions are
+not BLAS primitives. Future APIs for them should keep high-level names in
+`dense` while using a separate optional LAPACK backend, rather than embedding
+slow or numerically unstable substitutes.
+
+<a id="package-random"></a>
 
 ### `random`: Pseudorandom numbers and state package
 
@@ -421,129 +906,7 @@ The same source, seed, and call sequence produce the same results. Drawing and a
 
 See the full API constraints in [`random` README](../src/stdlib/random/README.md).
 
-### `heap`: Binary heap package
-
-`heap` maintains binary heaps in ordinary Lists, modifying them in place.
-
-| Function | Behavior | Time complexity |
-|---|---|---|
-| `heapify(items[, less])` | Build a heap in place; return Nil | O(n) |
-| `push(items, value[, less])` | Insert an element; return Nil | Amortized O(log n) |
-| `pop(items[, less])` | Remove and return the root | O(log n) |
-| `peek(items)` | Read the root | O(1) |
-
-The default is a numeric min-heap accepting Int and non-NaN Float values.
-Mixed comparisons preserve integer precision. An optional `less(a, b)`
-comparator must return Bool and define a strict weak ordering. All modifying
-operations on a heap must use the same ordering. Comparators must not modify
-the heap or the ordering keys. Equal priorities have no guaranteed order.
-Both `pop` and `peek` raise an error on an empty heap.
-
-```tapas
-let stdlib_heap_items = [4, 1, 3]
-heap::heapify(stdlib_heap_items)
-heap::push(stdlib_heap_items, 2)
-print(heap::pop(stdlib_heap_items))
-print(heap::peek(stdlib_heap_items))
-```
-
-<pre class='Tapas-Return'>
-1
-2
-</pre>
-
-Use `(a, b) { return a[0] < b[0] }` for priority records and
-`(a, b) { return a > b }` for a max-heap. Create an empty heap with `[]`
-and query its size with `len`. Rebuild after directly modifying the list
-or priorities; operations do not perform O(n) validity checks.
-See the [heap package reference](../src/stdlib/heap/README.md) for details.
-
-### `math`: Scalar mathematics package
-
-Numeric parameters in this table have Type `Int | Float`; unless stated
-otherwise, functions return `Float`. Domain, overflow, infinity, and NaN behavior
-follows the host C math library.
-
-| Group | Signatures |
-|---|---|
-| Absolute and roots | `abs(Int \| Float) -> Int \| Float`, `fabs(Int \| Float) -> Float`, `sqrt(Int \| Float) -> Float`, `rsqrt(Int \| Float) -> Float`, `cbrt(Int \| Float) -> Float` |
-| Power and geometry | `pow(Int \| Float, Int \| Float) -> Float`, `hypot(Int \| Float, Int \| Float) -> Float` |
-| Trigonometric | `sin`, `cos`, `tan`, `asin`, `acos`, `atan`: `(Int \| Float) -> Float`; `atan2(Int \| Float, Int \| Float) -> Float` |
-| Hyperbolic | `sinh`, `cosh`, `tanh`, `asinh`, `acosh`, `atanh`: `(Int \| Float) -> Float` |
-| Exponential | `exp`, `exp2`, `expm1`: `(Int \| Float) -> Float` |
-| Logarithmic | `log`, `log2`, `log10`, `log1p`, `logb`: `(Int \| Float) -> Float`; `ilogb(Int \| Float) -> Int` |
-| Decomposition | `frexp(Int \| Float) -> Pair[Float, Int]`, `modf(Int \| Float) -> Pair[Float, Float]` |
-| Scaling | `ldexp(Int \| Float, Int) -> Float`, `scalbn(Int \| Float, Int) -> Float`, `scalbln(Int \| Float, Int) -> Float` |
-| Error and gamma | `erf`, `erfc`, `lgamma`, `tgamma`: `(Int \| Float) -> Float` |
-| Rounding to Float | `ceil`, `floor`, `nearbyint`, `rint`, `round`, `trunc`: `(Int \| Float) -> Float` |
-| Rounding to Int | `lrint`, `llrint`, `lround`, `llround`: `(Int \| Float) -> Int` |
-| Remainder | `fmod(Int \| Float, Int \| Float) -> Float`, `remainder(Int \| Float, Int \| Float) -> Float`, `remquo(Int \| Float, Int \| Float) -> Pair[Float, Int]` |
-| Floating manipulation | `copysign`, `nextafter`, `fdim`, `fmax`, `fmin`: `(Int \| Float, Int \| Float) -> Float`; `fma(Int \| Float, Int \| Float, Int \| Float) -> Float` |
-| Reciprocal and NaN | `eleinv(Int \| Float) -> Float`, `make_nan() -> Float` |
-| Classification | `isfinite`, `isinf`, `isnan`, `isnormal`, `signbit`: `(Int \| Float) -> Bool`; `fpclassify(Int \| Float) -> Int` |
-| Ordered predicates | `isgreater`, `isgreaterequal`, `isless`, `islessequal`, `islessgreater`, `isunordered`: `(Int \| Float, Int \| Float) -> Bool` |
-
-Every name in this table is accessed through `math::`, for example
-`math::sqrt(2)`. Scaling-function integer arguments convert floats toward
-zero.
-
-### `dense`: Dense-array package
-
-| Signature | Returns | Behavior |
-|---|---|---|
-| `rows(value: RealArray \| BoolArray)` | `Int` | Row count. |
-| `cols(value: RealArray \| BoolArray)` | `Int` | Column count. |
-| `transpose(value: RealArray \| BoolArray)` | `RealArray \| BoolArray` | New transposed array. |
-| `identity(size: Int)` | `RealArray` | Identity matrix of the requested order. |
-| `trace(value: RealArray)` | `Float` | Main-diagonal sum; rectangular arrays are accepted. |
-| `inner(left: RealArray, right: RealArray)` | `Float` | Frobenius inner product of equal-shaped arrays. |
-| `outer(left: RealArray, right: RealArray)` | `RealArray` | Outer product of two row or column vectors. |
-| `norm(value: RealArray)` | `Float` | Vector 2-norm or matrix Frobenius norm. |
-| `normalize(value: RealArray)` | `RealArray` | Equal-shaped unit-norm copy. |
-| `copy_into(source: RealArray, target: RealArray)` | `Nil` | Copies into an existing equal-shaped array without allocating a result. |
-| `scale_inplace(value: RealArray, factor: Int \| Float)` | `Nil` | Performs `value *= factor` in place. |
-| `add_scaled_inplace(target: RealArray, source: RealArray, factor: Int \| Float)` | `Nil` | Performs `target += factor * source` in place. |
-| `gemm(alpha: Int \| Float, left: RealArray, right: RealArray, beta: Int \| Float, output: RealArray)` | `Nil` | Performs `output = alpha * left @ right + beta * output` in place. |
-
-```tapas
-let builtin_dense_matrix = array(2, 3, [1, 2, 3, 4, 5, 6])
-print(dense::rows(builtin_dense_matrix), ' x ', dense::cols(builtin_dense_matrix))
-pprint(dense::transpose(builtin_dense_matrix))
-print(dense::norm(array(1, 2, [3, 4])))
-```
-
-<pre class='Tapas-Return'>
-2 x 3
-[[1, 4],
- [2, 5],
- [3, 6]]
-5
-</pre>
-
-`inner` requires equal row and column counts. `outer` accepts only a
-two-dimensional array with one dimension equal to 1; row and column vector
-orientation is ignored, and the result shape follows the two element counts.
-`normalize` rejects an array with zero norm. `copy_into`, `scale_inplace`,
-`add_scaled_inplace`, and `gemm` reuse caller-owned storage. A `gemm` output
-must not be the same array as either input.
-
-Operators provide convenient, non-mutating expressions and allocate their
-results. Their element-wise paths use one fused pass instead of copying and
-then computing; matrix multiplication `@` still maps directly to `dgemm`.
-The performance-oriented `dense` paths reuse output buffers: `copy_into`,
-`scale_inplace`, `add_scaled_inplace`, and `gemm` map directly to `dcopy`,
-`dscal`, `daxpy`, and `dgemm`. `inner` and `norm` use `ddot` and `dnrm2`;
-`outer` uses `dgemm` with `beta = 0`, avoiding a separate zero-fill pass.
-`identity`, `trace`, and `transpose` do not require BLAS.
-
-Linear solves, inverses, determinants, rank, and eigenvalue decompositions are
-not BLAS primitives. Future APIs for them should keep high-level names in
-`dense` while using a separate optional LAPACK backend, rather than embedding
-slow or numerically unstable substitutes.
-
-## Application packages
-
-These packages support finite probability modeling, Rule solving and sampling, and source formatting.
+<a id="package-finite"></a>
 
 ### `finite`: Finite probability distributions package
 
@@ -580,6 +943,12 @@ These packages support finite probability modeling, Rule solving and sampling, a
 Dimension lengths must be positive and coordinates must fit the shape. Weights must be finite, nonnegative, and have a positive total. Probability and distribution parameters are validated by each constructor. Distribution values are created through these constructors; infinite distributions are not implicitly truncated.
 
 See the full API constraints in [`finite` README](../src/stdlib/finite/README.md).
+
+## Application packages
+
+These packages serve specific applications such as Rule solving and sampling, and source formatting.
+
+<a id="package-solve"></a>
 
 ### `solve`: Rule solving and sampling package
 
@@ -631,6 +1000,8 @@ The backend requires Python and OR-Tools; versions are in
 TAPAS_SOLVE_PYTHON selects another interpreter path. See the
 [solve package documentation](../src/stdlib/solve/README.md) for full result
 fields, supported inputs, and strategy options.
+
+<a id="package-format"></a>
 
 ### `format`: Source-formatting package
 

@@ -244,7 +244,9 @@ across C files by implementation responsibility.
 `textension_symbol` describes functions, values, and Types. Its main fields are:
 
 - `name`: the Tapas-visible name;
-- `type`: the Tapas Type parsed by the front end and the only static Type source;
+- `type`: the Tapas Type signature parsed by the front end;
+- `instance_capabilities`: the instances' shared runtime capability table,
+  also read by static analysis;
 - `detail`: the complete human-readable declaration, such as
   `sample::add(left: Int, right: Int) -> Int`;
 - `kind`: `textension_function`, `textension_value`, or `textension_type`;
@@ -355,6 +357,8 @@ src/stdlib/
   tstdlib.c
   modules.h
   arguments.h
+  result.h / result.c
+  system.h / system.c
   builtins/
     console.c
     conversion.c
@@ -372,6 +376,13 @@ src/stdlib/
   dense/dense.c
   evaluators/evaluators.c
   io/io.c
+  bytes/bytes.c
+  strings/strings.c
+  json/json.c
+  path/path.c
+  fs/fs.c
+  os/os.c
+  os/run.c
   math/math.c
   rules/rules.c
   syntax/syntax.c
@@ -585,3 +596,30 @@ returns it with `tobj_set_compo`, then install the constructor as a
 the call signature from the same extension descriptor. `tcfn_descriptor` and
 `tlib_add_cfn` remain compatibility APIs for old direct-registration code; new
 extensions should not use them to create a separate signature source.
+
+The current `TAPAS_EXTENSION_ABI` is 6. Extensions must be rebuilt against current headers; older ABIs are rejected. The optional vtable `bulk_operations` supplies fill/count fast paths: a hook returning zero must have no observable effects, while handled operations preserve per-item error, ownership, and identical semantics. These hooks do not add public capability Types.
+
+A Type symbol's `instance_capabilities` should point to the same immutable `tcompo_capabilities` table as its instances' vtable. For example:
+
+```c
+static const tcompo_capabilities buffer_capabilities = {
+    .indexable = buffer_index,
+    .index_settable = buffer_set,
+    .iterable = buffer_next,
+};
+
+/* Set .capabilities = &buffer_capabilities in the instance vtable. */
+static const textension_symbol buffer_type = {
+    .name = "Buffer",
+    .type = "Type",
+    .kind = textension_type,
+    .value_factory = create_buffer_type,
+    .instance_capabilities = &buffer_capabilities,
+};
+```
+
+Runtime `types::matches(value, Type)` and static analysis share the rules that check capability slots for `Indexable`, `IndexSettable`, `Appendable`, `Deletable`, `MemberTestable`, and `Iterable`. The compiler and language server only read the table: they never execute capability callbacks, `value_factory`, or the user's program. Constructor and other function signatures must reference the corresponding named Type. Static capabilities for core objects also come from their runtime tables.
+
+If both `instance_capabilities` and `nominal_template` are provided, their capability masks must agree; registration rejects conflicting declarations. `textension_symbol_capabilities(symbol, &mask)` reads the effective declaration and returns zero when metadata is absent, leaving `mask` unchanged.
+
+When `instance_capabilities` is null, a Type with `nominal_template` still uses that template's `capabilities` declaration. If both are absent, static analysis retains uncertainty and leaves capability validation to runtime rather than reporting a mismatch. To explicitly declare no capabilities, provide a table whose slots are all null. Descriptors and referenced tables must remain valid while registered. Custom packages must register with the extension registry used by the compiler or language server to supply their Types and function signatures.
