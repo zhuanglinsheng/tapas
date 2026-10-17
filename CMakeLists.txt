@@ -375,10 +375,20 @@ if(BUILD_TESTING)
     tapas_enable_test_assertions(test_builtin_capabilities)
     add_test(NAME builtin_capabilities COMMAND test_builtin_capabilities)
 
+    add_executable(test_value_order test/unit/test_value_order.c)
+    target_link_libraries(test_value_order PRIVATE tapas_stdlib)
+    tapas_enable_test_assertions(test_value_order)
+    add_test(NAME value_order COMMAND test_value_order)
+
     add_executable(test_compact test/unit/test_compact.c)
     target_link_libraries(test_compact PRIVATE tapas_stdlib)
     tapas_enable_test_assertions(test_compact)
     add_test(NAME compact COMMAND test_compact)
+
+    add_executable(test_sort test/unit/test_sort.c)
+    target_link_libraries(test_sort PRIVATE tapas_stdlib)
+    tapas_enable_test_assertions(test_sort)
+    add_test(NAME sort COMMAND test_sort)
 
 	add_executable(test_finite test/unit/test_finite.c)
 	target_link_libraries(test_finite PRIVATE tapas_stdlib)

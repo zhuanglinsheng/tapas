@@ -1,5 +1,11 @@
 #include "tapas/tval.h"
 #include "tapas/dsa/tstring.h"
+#include "tapas/objects/tlist.h"
+#include "tapas/objects/tstr.h"
+
+#include "value_order.h"
+
+#include <string.h>
 
 /*----------------------- Value Lifetime and Assignment --------------------*/
 
@@ -135,6 +141,91 @@ int tobj_identical(const tobj *a, const tobj *b)
 	}
 	}
 	return 0;
+}
+
+/*-------------------------- Default Value Ordering ------------------------*/
+
+/* Internal category order is only an error fallback for sort. Its inputs
+ * were validated, so finishing qsort with this total order is safe even when
+ * two positions have incompatible categories. It is not a language order. */
+static int order_category(const tobj *value)
+{
+	if (value->type == tint || value->type == tfloat)
+		return 0;
+	return tobj_compo_type(value) == compo_tstr ? 1 : 2;
+}
+
+static int compare_values(const tobj *a, const tobj *b, int *order,
+			  unsigned depth);
+
+static int compare_composites(const tobj *a, const tobj *b, int *order,
+			      unsigned depth)
+{
+	if (tobj_compo_type(a) == compo_tstr &&
+	    tobj_compo_type(b) == compo_tstr) {
+		const tstring *left = ((tstr *)a->val.v_tcompo)->data;
+		const tstring *right = ((tstr *)b->val.v_tcompo)->data;
+		size_t common = left->len < right->len ? left->len : right->len;
+		int bytes = memcmp(left->data, right->data, common);
+		*order = (bytes > 0) - (bytes < 0);
+		if (!*order)
+			*order = (left->len > right->len) - (left->len < right->len);
+		return 1;
+	}
+	if (tobj_compo_type(a) != compo_tlist ||
+	    tobj_compo_type(b) != compo_tlist) {
+		*order = order_category(a) - order_category(b);
+		return 0;
+	}
+	if (depth >= TOBJ_RECURSE_LIMIT)
+		return 0;
+	const tobj_vec *left = &((tlist *)a->val.v_tcompo)->items;
+	const tobj_vec *right = &((tlist *)b->val.v_tcompo)->items;
+	uint_count common = left->len < right->len ? left->len : right->len;
+	for (uint_count i = 0; i < common; i++) {
+		if (!compare_values(&left->data[i], &right->data[i], order, depth + 1))
+			return 0;
+		if (*order)
+			return 1;
+	}
+	*order = (left->len > right->len) - (left->len < right->len);
+	return 1;
+}
+
+static int compare_values(const tobj *a, const tobj *b, int *order,
+			  unsigned depth)
+{
+	if ((a->type == tint || a->type == tfloat) &&
+	    (b->type == tint || b->type == tfloat))
+		return tobj_compare_numbers(a, b, order);
+	return compare_composites(a, b, order, depth);
+}
+
+int tobj_compare(const tobj *a, const tobj *b, int *order)
+{
+	return compare_values(a, b, order, 0);
+}
+
+static int is_orderable(const tobj *value, unsigned depth)
+{
+	if (value->type == tint)
+		return 1;
+	if (value->type == tfloat)
+		return !isnan(value->val.v_tfloat);
+	if (tobj_compo_type(value) == compo_tstr)
+		return 1;
+	if (tobj_compo_type(value) != compo_tlist || depth >= TOBJ_RECURSE_LIMIT)
+		return 0;
+	const tobj_vec *items = &((tlist *)value->val.v_tcompo)->items;
+	for (uint_count i = 0; i < items->len; i++)
+		if (!is_orderable(&items->data[i], depth + 1))
+			return 0;
+	return 1;
+}
+
+int tobj_is_orderable(const tobj *value)
+{
+	return is_orderable(value, 0);
 }
 
 /*---------------------------- String Conversion ---------------------------*/

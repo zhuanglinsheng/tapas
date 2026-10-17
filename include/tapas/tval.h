@@ -254,6 +254,25 @@ void tobj_copy(tobj *dst, const tobj *src);
 int tobj_identical(const tobj *a, const tobj *b);
 
 /**
+ * @brief 比较数值、String 或递归 List 的默认顺序。
+ *
+ * @details List 使用字典序；混合 Int/Float 比较保留整数精度。
+ * 不支持的类型、NaN 或过深的嵌套返回零，不抛出异常。
+ * @param a 左值。
+ * @param b 右值。
+ * @param order 成功时接收负数、零或正数。
+ * @return 比较成功返回非零，否则返回零。
+ */
+int tobj_compare(const tobj *a, const tobj *b, int *order);
+
+/**
+ * @brief 检查默认排序值；List 的全部元素也必须可排序。
+ * @param value 待检查的值。
+ * @return 数值（非 NaN）、String 或有限深度可排序 List 返回非零。
+ */
+int tobj_is_orderable(const tobj *value);
+
+/**
  * @brief 通过对象能力执行索引读取。
  *
  * @param self 目标对象。

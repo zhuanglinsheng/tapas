@@ -3,10 +3,11 @@
 #include "../arguments.h"
 
 #include "tapas/objects/tlist.h"
+#include "runtime/value_order.h"
 #include "tapas/vm_service.h"
 
-#include <limits.h>
 #include <math.h>
+
 
 typedef struct {
 	tlist *list;
@@ -22,26 +23,11 @@ static tlist *require_list(const tobj *value, const char *where)
 	return (tlist *)value->val.v_tcompo;
 }
 
-static void require_number(const tobj *value, const char *where)
+static void require_orderable(const tobj *value, const char *where)
 {
-	if ((value->type != tint && value->type != tfloat) ||
-	    (value->type == tfloat && isnan(value->val.v_tfloat)))
+	if (!tobj_is_orderable(value))
 		twarn(ErrRuntime_ParamsType, where,
-		      "Int or non-NaN Float required without a comparator");
-}
-
-/* Compare mixed numbers without rounding a large Int to double. The upper
- * bound is exclusive, including on platforms where LONG_MAX rounds upward. */
-static int compare_int_float(long integer, double real)
-{
-	if (real < (double)LONG_MIN)
-		return 1;
-	if (real >= -(double)LONG_MIN)
-		return -1;
-	long integral = (long)real;
-	if (integer != integral)
-		return (integer > integral) - (integer < integral);
-	return ((double)integral > real) - ((double)integral < real);
+		      "non-NaN number, String or recursively orderable List required");
 }
 
 static heap_order make_order(tobj *params, uint_regs len,
@@ -76,15 +62,22 @@ static int less_at(const heap_order *order, uint_count left, uint_count right)
 	const tobj *a = &items->data[left];
 	const tobj *b = &items->data[right];
 	if (order->less.type == tnil) {
-		require_number(a, order->where);
-		require_number(b, order->where);
+		/* Keep homogeneous numeric heaps on their direct scalar paths. */
 		if (a->type == tint && b->type == tint)
 			return a->val.v_tint < b->val.v_tint;
-		if (a->type == tint)
-			return compare_int_float(a->val.v_tint, b->val.v_tfloat) < 0;
-		if (b->type == tint)
-			return compare_int_float(b->val.v_tint, a->val.v_tfloat) > 0;
-		return a->val.v_tfloat < b->val.v_tfloat;
+		if (a->type == tfloat && b->type == tfloat) {
+			if (isnan(a->val.v_tfloat) || isnan(b->val.v_tfloat))
+				twarn(ErrRuntime_ParamsType, order->where, "NaN is not orderable");
+			return a->val.v_tfloat < b->val.v_tfloat;
+		}
+		int comparison;
+		int valid = a->type != tcompo && b->type != tcompo ?
+			tobj_compare_numbers(a, b, &comparison) :
+			tobj_compare(a, b, &comparison);
+		if (!valid)
+			twarn(ErrRuntime_ParamsType, order->where,
+			      "incomparable elements, NaN or excessive nesting");
+		return comparison < 0;
 	}
 
 	/* The list owns these borrowed values; VM function frames retain their
@@ -130,6 +123,40 @@ static void sift_down(const heap_order *order, uint_count parent, uint_count siz
 	}
 }
 
+/* Pop replaces the root with a leaf value, which usually travels downward.
+ * Compare siblings on the descent, then settle the replacement upward.
+ * Swaps keep every payload rooted in the List across fallible callbacks. */
+static void sift_pop(const heap_order *order, uint_count parent, uint_count size)
+{
+	if (parent >= size / 2)
+		return;
+	uint_count child = parent * 2 + 1;
+	if (child + 1 < size && less_at(order, child + 1, child))
+		child++;
+	/* Equal priorities and replacements already in order need no movement.
+	 * Otherwise the first comparison proves the replacement cannot rise
+	 * above this child again, so exclude the settled root on the ascent. */
+	if (!less_at(order, child, parent))
+		return;
+	swap_items(order->list, parent, child);
+	parent = child;
+	uint_count start = parent;
+	while (parent < size / 2) {
+		child = parent * 2 + 1;
+		if (child + 1 < size && less_at(order, child + 1, child))
+			child++;
+		swap_items(order->list, parent, child);
+		parent = child;
+	}
+	while (parent > start) {
+		uint_count previous = (parent - 1) / 2;
+		if (!less_at(order, parent, previous))
+			break;
+		swap_items(order->list, parent, previous);
+		parent = previous;
+	}
+}
+
 static void heap_heapify(tobj *params, uint_regs len, tobj *result,
 			 tcompo_env *environment)
 {
@@ -137,7 +164,7 @@ static void heap_heapify(tobj *params, uint_regs len, tobj *result,
 	uint_count size = tlist_size(order.list);
 	if (order.less.type == tnil)
 		for (uint_count i = 0; i < size; i++)
-			require_number(tlist_at(order.list, i), order.where);
+			require_orderable(tlist_at(order.list, i), order.where);
 	for (uint_count i = size / 2; i > 0; i--)
 		sift_down(&order, i - 1, size);
 	tobj_set_nil(result);
@@ -148,7 +175,7 @@ static void heap_push(tobj *params, uint_regs len, tobj *result,
 {
 	heap_order order = make_order(params, len, 2, "heap::push", environment);
 	if (order.less.type == tnil)
-		require_number(&params[1], order.where);
+		require_orderable(&params[1], order.where);
 	uint_count child = tlist_size(order.list);
 	tobj_vec_push(&order.list->items, &params[1]);
 	while (child > 0) {
@@ -171,7 +198,7 @@ static void heap_pop(tobj *params, uint_regs len, tobj *result,
 	/* Keep the removed value in the list during comparisons, so an error
 	 * cannot strand an owned payload in a C local. Exclude it while sifting. */
 	swap_items(order.list, 0, size - 1);
-	sift_down(&order, 0, size - 1);
+	sift_pop(&order, 0, size - 1);
 	tobj_vec_take(&order.list->items, size - 1, result);
 }
 

@@ -424,7 +424,7 @@ types. Booleans compare only with booleans. Strings, lists, pairs, iterators,
 boolean arrays, and time values compare by contents. Dictionaries, functions,
 and libraries compare by object identity. Every comparison between a real array
 and a number or equal-shaped real array is element-wise and returns a boolean
-array. Ordering comparisons otherwise require numbers. `!=` is the logical
+array. Ordering comparisons also support numbers, Time, and lexicographic Lists. `!=` is the logical
 complement of `==` for scalar results and element-wise complement for real
 arrays.
 
@@ -1143,9 +1143,17 @@ follow the host C math library.
 | `==`, `!=` | two `Dictionary`, `Function`, or `Library` values | Object-identity comparison producing `Bool`. |
 | `==`, `!=` | other values of different types | Produces `false` or `true`, respectively. |
 | `>`, `<`, `>=`, `<=` | two `Int \| Float` values | Numeric comparison producing `Bool`. |
+| `>`, `<`, `>=`, `<=` | two `List` values | Recursive lexicographic comparison producing `Bool`; the first differing position decides, with shorter equal prefixes first. |
 | `>`, `<`, `>=`, `<=` | two `Time` values | Chronological comparison producing `Bool`. |
 | `>`, `<`, `>=`, `<=` | `RealArray` and `Int \| Float`, in either order | Element-wise comparison producing an equal-shaped `BoolArray`. |
 | `>`, `<`, `>=`, `<=` | two equal-shaped `RealArray` values | Element-wise comparison producing an equal-shaped `BoolArray`. |
+
+List ordering supports numbers, bytewise Strings and nested Lists. Each visited
+position must contain two numbers, two Strings, or two Lists. Incompatible values,
+NaN, and excessive or cyclic nesting cause an error when visited. Positions after
+the deciding difference are not inspected. Mixed Int/Float elements compare by
+exact numeric order. Existing structural `==`/`!=` semantics remain unchanged:
+`[1] <= [1.0]` and `[1] >= [1.0]` are true, but `[1] == [1.0]` is false.
 
 Boolean arrays do not support ordering comparisons. Use `==` or `!=`, which
 returns a scalar result, to test whether two boolean arrays have equal contents.

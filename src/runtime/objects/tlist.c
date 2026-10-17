@@ -177,6 +177,68 @@ static int tlist_identical(void *self, void *other)
 	return 1;
 }
 
+/* Native List ordering is shared with sort/heap. Other objects retain
+ * reflected operator dispatch; rhs preserves the original operand order. */
+static void list_compare(void *self, const tobj *other, int rhs, tobj *out,
+			 int operation)
+{
+	tobj value = { 0 };
+	tobj_set_compo(&value, (tcompo_v *)self);
+	if (tobj_compo_type(other) != compo_tlist) {
+		/* Preserve the other object's reflected operator, including symbolic
+		 * RuleTerm construction, which worked before List defined ordering. */
+		compo_op_bin_fn reflected = nullptr;
+		if (other->type == tcompo && other->val.v_tcompo) {
+			const tcompo_vtable *table = other->val.v_tcompo->vtable;
+			switch (operation) {
+			case 0: reflected = table->op_sl; break;
+			case 1: reflected = table->op_sg; break;
+			case 2: reflected = table->op_le; break;
+			default: reflected = table->op_ge; break;
+			}
+		}
+		if (reflected) {
+			reflected(other->val.v_tcompo, &value, !rhs, out);
+			return;
+		}
+		twarn(ErrRuntime_ParamsType, "List comparison", "List required");
+	}
+	int order;
+	if (!tobj_compare(&value, other, &order))
+		twarn(ErrRuntime_ParamsType, "List comparison",
+		      "incomparable elements, NaN or excessive nesting");
+	if (rhs)
+		order = -order;
+	int result;
+	switch (operation) {
+	case 0: result = order < 0; break;
+	case 1: result = order > 0; break;
+	case 2: result = order <= 0; break;
+	default: result = order >= 0; break;
+	}
+	tobj_set_bool(out, result);
+}
+
+static void list_lt(void *s, const tobj *v, int rhs, tobj *out)
+{
+	list_compare(s, v, rhs, out, 0);
+}
+
+static void list_gt(void *s, const tobj *v, int rhs, tobj *out)
+{
+	list_compare(s, v, rhs, out, 1);
+}
+
+static void list_le(void *s, const tobj *v, int rhs, tobj *out)
+{
+	list_compare(s, v, rhs, out, 2);
+}
+
+static void list_ge(void *s, const tobj *v, int rhs, tobj *out)
+{
+	list_compare(s, v, rhs, out, 3);
+}
+
 static tstring *tlist_tostring_abbr(void *self)
 {
 	return tobj_tostring_pointer("List", self);
@@ -377,5 +439,9 @@ tcompo_vtable tlist_vtable = {
 	.identical = tlist_identical,
 	.tostring_abbr = tlist_tostring_abbr,
 	.tostring_full = tlist_tostring_full,
+	.op_sl = list_lt,
+	.op_sg = list_gt,
+	.op_le = list_le,
+	.op_ge = list_ge,
 	.capabilities = &list_capabilities
 };
