@@ -35,7 +35,9 @@ static const textension_module *const modules[] = {
 	&tstdlib_json_module,
 	&tstdlib_conversion_try_functions,
 	&tstdlib_strings_module,
-	&tstdlib_path_module
+	&tstdlib_path_module,
+	&tstdlib_os_module,
+	&tstdlib_fs_module
 };
 
 const textension_descriptor *tstdlib_descriptor(void)

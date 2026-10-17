@@ -16,6 +16,16 @@ build/bin/tapas examples/general/fibonacci.tap
 
 `general` 示例只需要 Tapas。`solve` 和 `retail` 还需要 Python 与 OR-Tools，请先按 [solve 包的依赖说明](../src/stdlib/solve/README.md#依赖)准备运行环境。
 
+## 文件、程序与 JSON 联动
+
+[系统交互示例](system/roundtrip.tap)在临时目录保存 JSON 请求，调用外部程序，捕获输出并用 Rule 检查解析后的结果，最后删除自己创建的文件和目录。
+
+```sh
+build/bin/tapas examples/system/roundtrip.tap
+```
+
+示例使用 Linux/macOS 的 `/bin/cat`。`os::run` 直接执行参数列表；需要 shell 语法时，应显式调用 shell。接口约定见[标准库文档](../docs/Stdlib_zh.md#package-os)。
+
 ## 从一条规则开始求解
 
 [solve 示例](solve)用两个独立程序介绍求解与冲突诊断。

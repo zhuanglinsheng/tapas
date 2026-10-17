@@ -17,7 +17,8 @@ for name in ('bin/tapas', 'bin/tapas-language-server',
              'share/tapas/stdlib/format/format.tapc',
              'share/tapas/stdlib/format/edit.tap',
              'share/tapas/solve/requirements.txt',
-             'share/licenses/tapas/pcg-c/LICENSE-MIT.txt'):
+             'share/licenses/tapas/pcg-c/LICENSE-MIT.txt',
+             'share/licenses/tapas/yyjson/LICENSE'):
     if not (prefix / name).is_file():
         raise SystemExit(f'Missing archive file: {name}')
 env = os.environ.copy()
@@ -51,6 +52,16 @@ let rng = random::generator(random::pcg32_xsh_rr, 42)
 let samples = solve::sample(Positive, 2, {'x': rules::range(1, 4)},
     rng=rng, candidate_limit=20, time_limit=10.0)
 assert(rule { samples::status == 'complete'; len(samples::samples) == 2 })
+let system_root = fs::temp_dir()
+let system_path = path::join(system_root, 'bytes')
+let system_bytes = bytes::buffer(2, 255)
+io::write_bytes(system_path, system_bytes)
+assert(rule { identical(io::read_bytes(system_path), system_bytes) })
+let system_run = os::run(['/bin/cat'], stdin='installed')
+assert(rule { system_run::status == 'exited' and system_run::stdout == 'installed' })
+assert(rule { time::unix(time::parse_utc('1970-01-01T00:00:00Z')) == 0 })
+fs::remove(system_path)
+fs::remove(system_root)
 print('installed solve and sample: ok')
 ''')
     expected = 'installed solve and sample: ok\n'

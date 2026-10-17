@@ -16,6 +16,16 @@ build/bin/tapas examples/general/fibonacci.tap
 
 The `general` examples only need Tapas. The `solve` and `retail` examples also require Python and OR-Tools. Follow the [solve dependency instructions](../src/stdlib/solve/README.md#依赖) (Chinese) to prepare the environment.
 
+## Files, programs, and JSON together
+
+The [system example](system/roundtrip.tap) saves a JSON request in a temporary directory, runs an external program, captures its output, checks the parsed result with a Rule, and removes its own files and directory.
+
+```sh
+build/bin/tapas examples/system/roundtrip.tap
+```
+
+The example uses `/bin/cat` on Linux/macOS. `os::run` executes an argument list directly. Invoke a shell explicitly when shell syntax is needed. See the [standard library contract](../docs/Stdlib_en.md#package-os).
+
 ## Solving a Rule
 
 The [solve examples](solve) contain two standalone programs covering feasibility and conflict diagnostics.

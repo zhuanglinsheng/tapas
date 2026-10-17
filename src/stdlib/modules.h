@@ -26,6 +26,8 @@ extern const textension_module tstdlib_json_module;
 extern const textension_module tstdlib_conversion_try_functions;
 extern const textension_module tstdlib_strings_module;
 extern const textension_module tstdlib_path_module;
+extern const textension_module tstdlib_os_module;
+extern const textension_module tstdlib_fs_module;
 extern const textension_module tstdlib_syntax_module;
 extern const textension_module tstdlib_time_module;
 extern const textension_module tstdlib_random_module;

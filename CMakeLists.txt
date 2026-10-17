@@ -60,6 +60,7 @@ include_directories(
 find_path(READLINE_INCLUDE_DIR readline/readline.h)
 find_library(READLINE_LIBRARY readline)
 find_library(MATH_LIBRARY m)
+find_package(Threads REQUIRED)
 find_program(NODE_EXECUTABLE node)
 
 if(NOT READLINE_INCLUDE_DIR OR NOT READLINE_LIBRARY)
@@ -102,6 +103,9 @@ set(TAPAS_STDLIB_SOURCES
     src/stdlib/tstdlib.c
     src/stdlib/result.c
     src/stdlib/system.c
+    src/stdlib/os/os.c
+    src/stdlib/os/run.c
+    src/stdlib/fs/fs.c
     src/stdlib/strings/strings.c
     src/stdlib/path/path.c
     src/stdlib/compact.c
@@ -230,7 +234,7 @@ add_library(tapas_stdlib STATIC ${TAPAS_STDLIB_SOURCES})
 target_include_directories(tapas_stdlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include
     PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/generated)
 target_link_libraries(tapas_stdlib PUBLIC tapas_runtime tapas_syntax
-    PRIVATE tapas_pcg tapas_yyjson)
+    PRIVATE tapas_pcg tapas_yyjson Threads::Threads)
 
 add_library(tapas_frontend STATIC ${TAPAS_FRONTEND_SOURCES})
 target_include_directories(tapas_frontend PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
@@ -390,6 +394,13 @@ if(BUILD_TESTING)
     tapas_enable_test_assertions(test_compact)
     add_test(NAME compact COMMAND test_compact)
 
+    add_executable(test_system_child test/unit/system_child.c)
+    add_executable(test_system test/unit/test_system.c)
+    target_link_libraries(test_system PRIVATE tapas_stdlib)
+    tapas_enable_test_assertions(test_system)
+    add_test(NAME system COMMAND test_system $<TARGET_FILE:test_system_child>)
+    set_tests_properties(system PROPERTIES TIMEOUT 30)
+
     add_executable(test_text_foundations test/unit/test_text_foundations.c)
     target_link_libraries(test_text_foundations PRIVATE tapas_stdlib)
     tapas_enable_test_assertions(test_text_foundations)
@@ -462,6 +473,7 @@ if(BUILD_TESTING)
     # their own end-to-end test harnesses.
     file(GLOB TAPAS_EXAMPLES CONFIGURE_DEPENDS
         "${CMAKE_CURRENT_SOURCE_DIR}/examples/general/*.tap"
+        "${CMAKE_CURRENT_SOURCE_DIR}/examples/system/*.tap"
     )
     foreach(EXAMPLE IN LISTS TAPAS_EXAMPLES)
         get_filename_component(EXAMPLE_NAME "${EXAMPLE}" NAME_WE)
