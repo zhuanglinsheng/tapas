@@ -20,6 +20,7 @@ static void dictionary_set(tdict *dictionary, const char *name, const tobj *valu
 static void dictionary_set_int(tdict *dictionary, const char *name, long value)
 {
 	tobj object;
+	tobj_set_nil(&object);
 	tobj_set_int(&object, value);
 	dictionary_set(dictionary, name, &object);
 }

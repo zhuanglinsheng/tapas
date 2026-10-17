@@ -1,0 +1,21 @@
+// Token dictionaries mix String and Int values; repeat allocation and release
+// so a stale stack value cannot masquerade as an initialized integer temporary.
+let source = 'let value = 42\n'
+var valid = true
+for (let repetition in 0 to 100) {
+    let tokens = syntax::tokens(source)
+    for (let token in tokens) {
+        if (token['kind'].len() == 0 or token['start'] < 0 or
+            token['end'] < token['start'] or token['end'] > source.len()) {
+            valid = false
+        }
+    }
+    let first = tokens[0]
+    let last = tokens[tokens.len() - 1]
+    if (first['start'] != 0 or first['end'] != 3 or
+        last['start'] != source.len() or last['end'] != source.len()) {
+        valid = false
+    }
+}
+assert(rule { valid })
+print('ok')
