@@ -17,28 +17,35 @@ static tcompo_v *target(tobj *params, const char *operation)
 
 static void builtin_idx(tobj *params, uint_regs count, tobj *result)
 {
-	tstdlib_require_arguments("idx", count, 2);
-	tcompo_index(target(params, "idx"), &params[1], 1, result);
+	if (count < 2)
+		twarn(ErrRuntime_ParamsCtr, "idx", "at least one index required");
+	tcompo_index(target(params, "idx"), &params[1], count - 1, result);
 }
 
 static void builtin_idx_or(tobj *params, uint_regs count, tobj *result)
 {
-	tstdlib_require_arguments("idx_or", count, 3);
-	tcompo_v *obj = target(params, "idx_or");
-	/* Dictionaries dominate idx_or traffic; probe them directly and skip
-	 * the capability dispatch chain. */
-	if (obj->vtable == &tdict_vtable) {
-		const tobj *value = thashtbl_get(((tdict *)obj)->items,
-						 &params[1]);
-		if (value) {
-			tobj_copy(result, value);
+	/* Keep the common single-index path independent of variadic handling. */
+	if (count == 3) {
+		tcompo_v *obj = target(params, "idx_or");
+		if (obj->vtable == &tdict_vtable) {
+			const tobj *value = thashtbl_get(((tdict *)obj)->items,
+							 &params[1]);
+			if (value) {
+				tobj_copy(result, value);
+				return;
+			}
+			tobj_copy(result, &params[2]);
 			return;
 		}
-		tobj_copy(result, &params[2]);
+		if (!tcompo_try_index(obj, &params[1], 1, result))
+			tobj_copy(result, &params[2]);
 		return;
 	}
-	if (!tcompo_try_index(obj, &params[1], 1, result))
-		tobj_copy(result, &params[2]);
+	if (count < 3)
+		twarn(ErrRuntime_ParamsCtr, "idx_or", "indices and default required");
+	if (!tcompo_try_index(target(params, "idx_or"), &params[1],
+			     count - 2, result))
+		tobj_copy(result, &params[count - 1]);
 }
 
 static void builtin_append(tobj *params, uint_regs count, tobj *result)
@@ -72,21 +79,21 @@ static void builtin_delete(tobj *params, uint_regs count, tobj *result)
 static const textension_symbol symbols[] = {
 	{
 		.name = "idx",
-		.type = "Function[Indexable, AnyType] -> AnyType",
-		.detail = "idx(target: Indexable, key: AnyType) -> AnyType",
+		.type = "Function[...] -> AnyType",
+		.detail = "idx(target: Indexable, ...indices: AnyType) -> AnyType",
 		.kind = textension_function,
 		.function = builtin_idx,
 		.minimum_arguments = 2,
-		.maximum_arguments = 2
+		.maximum_arguments = UINT8_MAX
 	},
 	{
 		.name = "idx_or",
-		.type = "Function[Indexable, AnyType, AnyType] -> AnyType",
-		.detail = "idx_or(target: Indexable, key: AnyType, default: AnyType) -> AnyType",
+		.type = "Function[...] -> AnyType",
+		.detail = "idx_or(target: Indexable, ...indices: AnyType, default: AnyType) -> AnyType",
 		.kind = textension_function,
 		.function = builtin_idx_or,
 		.minimum_arguments = 3,
-		.maximum_arguments = 3
+		.maximum_arguments = UINT8_MAX
 	},
 	{
 		.name = "append",

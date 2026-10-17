@@ -358,6 +358,11 @@ if(BUILD_TESTING)
             $<TARGET_FILE:test_data_structures>
     )
 
+    add_executable(test_builtin_capabilities test/unit/test_builtin_capabilities.c)
+    target_link_libraries(test_builtin_capabilities PRIVATE tapas_stdlib)
+    tapas_enable_test_assertions(test_builtin_capabilities)
+    add_test(NAME builtin_capabilities COMMAND test_builtin_capabilities)
+
 	add_executable(test_finite test/unit/test_finite.c)
 	target_link_libraries(test_finite PRIVATE tapas_stdlib)
 	tapas_enable_test_assertions(test_finite)

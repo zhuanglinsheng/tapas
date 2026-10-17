@@ -27,6 +27,7 @@ set(ENVIRONMENT_INVALID_DIR "${FIXTURE_DIR}/invalid/environment")
 # Cover guarded VM fast paths in both compiler entry modes.
 foreach(fast_path_fixture IN ITEMS
         "${REGRESSION_DIR}/member_testable.tap"
+        "${REGRESSION_DIR}/builtin_capabilities.tap"
         "${REGRESSION_DIR}/heap.tap"
         "${REGRESSION_DIR}/vm_value_fast_paths.tap"
         "${REGRESSION_DIR}/syntax_token_fields.tap")
@@ -1095,6 +1096,7 @@ if(NOT ast_import_output STREQUAL "42\ntrue\n2.5\nDelivered\nPending\n")
 endif()
 
 set(invalid_fixtures
+    builtin_join_not_iterable.tap builtin_concat_not_iterable.tap
     chained_comparison.tap
     chained_range.tap
     chained_membership.tap
@@ -1185,6 +1187,8 @@ foreach(fixture IN LISTS invalid_fixtures)
 endforeach()
 
 set(runtime_error_fixtures
+    builtin_idx_type.tap builtin_idx_arity.tap builtin_idx_or_arity.tap
+    builtin_idx_or_array_type.tap builtin_join_element.tap
     heap_empty_pop.tap heap_empty_peek.tap heap_invalid_list.tap
     heap_invalid_number.tap heap_nan.tap heap_invalid_comparator.tap
     heap_comparator_result.tap heap_comparator_mutation.tap

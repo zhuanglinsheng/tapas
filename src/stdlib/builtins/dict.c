@@ -67,7 +67,7 @@ static void builtin_values(tobj *params, uint_regs len, tobj *result)
 static const textension_symbol symbols[] = {
 	{
 		.name = "keys",
-		.type = "Function[AnyType] -> List",
+		.type = "Function[Dictionary | Type] -> List",
 		.detail = "keys(value: Dictionary | Type) -> List",
 		.kind = textension_function,
 		.function = builtin_keys,

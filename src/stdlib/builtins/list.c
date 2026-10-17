@@ -1,11 +1,29 @@
 #include "tapas/textension.h"
 
 #include "../arguments.h"
+#include "../iterables.h"
 
 #include "tapas/objects/titer.h"
 #include "tapas/objects/tlist.h"
 
 static tlist *require_list(tobj *value, const char *function);
+
+static void extend_list(tlist *list, tcompo_v *iterable)
+{
+	if (iterable->vtable == &tlist_vtable) {
+		tlist *source = (tlist *)iterable;
+		for (uint_count i = 0; i < tlist_size(source); i++)
+			tobj_vec_push(&list->items, tlist_at(source, i));
+		return;
+	}
+	long position = 0;
+	tobj item;
+	tobj_set_nil(&item);
+	while (tcompo_next(iterable, &position, &item)) {
+		tobj_vec_push(&list->items, &item);
+		tobj_ddc_ref_clear(&item);
+	}
+}
 
 static void builtin_list(tobj *params, uint_regs len, tobj *result)
 {
@@ -15,12 +33,7 @@ static void builtin_list(tobj *params, uint_regs len, tobj *result)
 		tobj_set_compo(result, (tcompo_v *)tlist_new());
 		return;
 	}
-	if (params[0].type != tcompo || !params[0].val.v_tcompo ||
-	    !params[0].val.v_tcompo->vtable ||
-	    !params[0].val.v_tcompo->vtable->capabilities ||
-	    !params[0].val.v_tcompo->vtable->capabilities->iterable)
-		twarn(ErrRuntime_ParamsType, "list", "Iterable required");
-	tcompo_v *iterable = params[0].val.v_tcompo;
+	tcompo_v *iterable = tstdlib_require_iterable(&params[0], "list");
 	long length_hint = iterable->vtable->len(iterable);
 	if (length_hint < 0 || (uint64_t)length_hint > UINT32_MAX)
 		twarn(ErrRuntime_Other, "list", "invalid iterable length");
@@ -37,13 +50,7 @@ static void builtin_list(tobj *params, uint_regs len, tobj *result)
 		tobj_set_compo(result, (tcompo_v *)list);
 		return;
 	}
-	long position = 0;
-	tobj item;
-	tobj_set_nil(&item);
-	while (tcompo_next(iterable, &position, &item)) {
-		tobj_vec_push(&list->items, &item);
-		tobj_ddc_ref_clear(&item);
-	}
+	extend_list(list, iterable);
 	tobj_set_compo(result, (tcompo_v *)list);
 }
 
@@ -120,13 +127,11 @@ static void builtin_insert(tobj *params, uint_regs len, tobj *result)
 static void builtin_concat(tobj *params, uint_regs len, tobj *result)
 {
 	tstdlib_require_arguments("concat", len, 2);
-	tlist *left = require_list(&params[0], "concat");
-	tlist *right = require_list(&params[1], "concat");
+	tcompo_v *left = tstdlib_require_iterable(&params[0], "concat");
+	tcompo_v *right = tstdlib_require_iterable(&params[1], "concat");
 	tlist *combined = tlist_new();
-	for (uint_objs i = 0; i < tlist_size(left); i++)
-		tobj_vec_push(&combined->items, tlist_at(left, i));
-	for (uint_objs i = 0; i < tlist_size(right); i++)
-		tobj_vec_push(&combined->items, tlist_at(right, i));
+	extend_list(combined, left);
+	extend_list(combined, right);
 	tobj_set_compo(result, (tcompo_v *)combined);
 }
 
@@ -196,8 +201,8 @@ static const textension_symbol symbols[] = {
 	},
 	{
 		.name = "concat",
-		.type = "Function[List, List] -> List",
-		.detail = "concat(left: List, right: List) -> List",
+		.type = "Function[Iterable, Iterable] -> List",
+		.detail = "concat(left: Iterable, right: Iterable) -> List",
 		.kind = textension_function,
 		.function = builtin_concat,
 		.minimum_arguments = 2,

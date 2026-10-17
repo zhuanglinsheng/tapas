@@ -1,0 +1,61 @@
+function require(condition)
+{
+    assert(rule { condition })
+}
+
+let builtin_matrix = array(2, 3, [1, 2, 3, 4, 5, 6])
+require(idx(builtin_matrix, 1, 2) == 6)
+require(idx(builtin_matrix, -1, -1) == 6)
+require(idx_or(builtin_matrix, 1, 2, 99) == 6)
+require(idx_or(builtin_matrix, 9, 2, 99) == 99)
+require(idx_or(builtin_matrix, 1, -9, 99) == 99)
+let builtin_submatrix = idx(builtin_matrix, 0 : 2, 1 : 3)
+require(builtin_submatrix[1, 1] == 6)
+let builtin_empty_matrix = array(0, 3, true)
+require(idx_or(builtin_empty_matrix, 0, 0, false) == false)
+let builtin_flags = array(1, 2, true)
+require(idx(builtin_flags, 0, 1))
+
+require(idx([7, 8], -1) == 8)
+require(idx_or([], 0, 42) == 42)
+require(idx('ab', 1) == 'b')
+require(idx_or('ab', 7, 'missing') == 'missing')
+require(idx_or({'present': 7}, 'present', 0) == 7)
+require(idx_or({}, 'missing', 9) == 9)
+// Composite defaults must remain alive after the temporary target is released.
+let builtin_default = idx_or({}, 'missing', ['retained'])
+require(builtin_default[0] == 'retained')
+
+require(join([], ',') == '')
+require(join(['ab', 'cd'], ':') == 'ab:cd')
+require(join('abc', '-') == 'a-b-c')
+require(join('', ',') == '')
+require(join(iter(0, 0), ',') == '')
+require(join('abc', '') == 'abc')
+
+let builtin_combined = concat(iter(1, 4), 'xy')
+require(len(builtin_combined) == 5)
+require(builtin_combined[0] == 1)
+require(builtin_combined[2] == 3)
+require(builtin_combined[3] == 'x')
+require(builtin_combined[4] == 'y')
+require(len(concat(iter(0, 0), [])) == 0)
+let builtin_shared = [1]
+let builtin_shallow = concat([builtin_shared], [])
+builtin_shared[0] = 8
+require(builtin_shallow[0][0] == 8)
+require(len(builtin_shared) == 1)
+let builtin_same_source = ['a', 'b']
+require(len(concat(builtin_same_source, builtin_same_source)) == 4)
+require(join(builtin_same_source, '') == 'ab')
+
+// Iterable does not imply Indexable, and a range can be traversed repeatedly.
+let builtin_range = iter(0, 3)
+require(len(list(builtin_range)) == 3)
+require(len(concat(builtin_range, builtin_range)) == 6)
+require(len(list(iter(0, 0, 5))) == 0)
+require(len(list(iter(0, -1, 5))) == 0)
+require(not identical(1, 1.0))
+require(identical([1, 'a'], [1, 'a']))
+
+print('ok')

@@ -1,6 +1,7 @@
 #include "tapas/textension.h"
 
 #include "../arguments.h"
+#include "../iterables.h"
 
 #include "tapas/objects/tlist.h"
 #include "tapas/objects/tstr.h"
@@ -72,26 +73,53 @@ static void builtin_identical(tobj *params, uint_regs len, tobj *vre)
 static void builtin_join(tobj *params, uint_regs len, tobj *vre)
 {
 	tstdlib_require_arguments("join", len, 2);
-	if (params[0].type != tcompo ||
-	    tobj_compo_type(&params[0]) != compo_tlist)
-		twarn(ErrRuntime_ParamsType, "join", "List required");
+	tcompo_v *iterable;
+	if (params[0].type == tcompo && params[0].val.v_tcompo &&
+	    params[0].val.v_tcompo->vtable == &tlist_vtable)
+		iterable = params[0].val.v_tcompo;
+	else
+		iterable = tstdlib_require_iterable(&params[0], "join");
 	if (params[1].type != tcompo ||
 	    tobj_compo_type(&params[1]) != compo_tstr)
 		twarn(ErrRuntime_ParamsType, "join", "String separator required");
-	tlist *values = (tlist *)params[0].val.v_tcompo;
 	tstring *separator = ((tstr *)params[1].val.v_tcompo)->data;
 	tstring *out = tstring_new("");
 	if (!out)
 		twarn(ErrRuntime_Other, "join", "out of memory");
-	for (uint_count i = 0; i < values->items.len; i++) {
-		const tobj *element = &values->items.data[i];
-		if (element->type != tcompo ||
-		    tobj_compo_type(element) != compo_tstr)
-			twarn(ErrRuntime_ParamsType, "join",
-			      "String elements required");
-		if (i > 0)
-			tstring_append_ts(out, separator);
-		tstring_append_ts(out, ((tstr *)element->val.v_tcompo)->data);
+	/* Select the storage path once, outside the element loop. */
+	if (iterable->vtable == &tlist_vtable) {
+		tlist *list = (tlist *)iterable;
+		for (uint_count i = 0; i < list->items.len; i++) {
+			const tobj *element = &list->items.data[i];
+			if (element->type != tcompo ||
+			    tobj_compo_type(element) != compo_tstr) {
+				tstring_free(out);
+				twarn(ErrRuntime_ParamsType, "join",
+				      "String elements required");
+			}
+			if (i > 0)
+				tstring_append_ts(out, separator);
+			tstring_append_ts(out,
+				((tstr *)element->val.v_tcompo)->data);
+		}
+	} else {
+		long position = 0;
+		int first = 1;
+		tobj item;
+		tobj_set_nil(&item);
+		while (tcompo_next(iterable, &position, &item)) {
+			if (tobj_compo_type(&item) != compo_tstr) {
+				tobj_ddc_ref_clear(&item);
+				tstring_free(out);
+				twarn(ErrRuntime_ParamsType, "join",
+				      "String elements required");
+			}
+			if (!first)
+				tstring_append_ts(out, separator);
+			tstring_append_ts(out, ((tstr *)item.val.v_tcompo)->data);
+			tobj_ddc_ref_clear(&item);
+			first = 0;
+		}
 	}
 	tobj_set_compo(vre, (tcompo_v *)tstr_new_len(
 		tstring_cstr(out), tstring_len(out)));
@@ -131,8 +159,8 @@ static const textension_symbol symbols[] = {
 	},
 	{
 		.name = "join",
-		.type = "Function[List, String] -> String",
-		.detail = "join(values: List[String], separator: String) -> String",
+		.type = "Function[Iterable, String] -> String",
+		.detail = "join(values: Iterable, separator: String) -> String",
 		.kind = textension_function,
 		.function = builtin_join,
 		.minimum_arguments = 2,
