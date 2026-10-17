@@ -1800,7 +1800,7 @@ static int tbuiltintype_matches(const tobj *value, tbuiltintype_id builtin)
 	case tbuiltintype_deletable:
 		return value->val.v_tcompo->vtable->capabilities &&
 		       value->val.v_tcompo->vtable->capabilities->deletable;
-	case tbuiltintype_contains:
+	case tbuiltintype_member_testable:
 		return value->val.v_tcompo->vtable->capabilities &&
 		       value->val.v_tcompo->vtable->capabilities->contains;
 	case tbuiltintype_iterable:

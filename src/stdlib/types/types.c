@@ -534,7 +534,7 @@ DEFINE_TYPE_VALUE(indexable)
 DEFINE_TYPE_VALUE(index_settable)
 DEFINE_TYPE_VALUE(appendable)
 DEFINE_TYPE_VALUE(deletable)
-DEFINE_TYPE_VALUE(contains)
+DEFINE_TYPE_VALUE(member_testable)
 DEFINE_TYPE_VALUE(iterable)
 DEFINE_TYPE_VALUE(rule)
 DEFINE_TYPE_VALUE(rule_instance)
@@ -686,11 +686,11 @@ static const textension_symbol symbols[] = {
 		.value_factory = create_deletable
 	},
 	{
-		.name = "Contains",
+		.name = "MemberTestable",
 		.type = "Type",
-		.detail = "types::Contains: Type",
+		.detail = "types::MemberTestable: Type",
 		.kind = textension_type,
-		.value_factory = create_contains
+		.value_factory = create_member_testable
 	},
 	{
 		.name = "Iterable",

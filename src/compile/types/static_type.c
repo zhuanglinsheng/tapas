@@ -1077,13 +1077,13 @@ static int static_type_assignable_graph(const tstatic_type_arena *arena,
 	     b->builtin == tbuiltintype_index_settable ||
 	     b->builtin == tbuiltintype_appendable ||
 	     b->builtin == tbuiltintype_deletable ||
-	     b->builtin == tbuiltintype_contains ||
+	     b->builtin == tbuiltintype_member_testable ||
 	     b->builtin == tbuiltintype_iterable)) {
 		if (a->kind == tstatic_type_named) {
 			if (b->builtin == tbuiltintype_indexable)
 				return (a->capabilities &
 					textension_type_indexable) != 0;
-			if (b->builtin == tbuiltintype_contains)
+			if (b->builtin == tbuiltintype_member_testable)
 				return (a->capabilities &
 					textension_type_contains) != 0;
 			if (b->builtin == tbuiltintype_iterable)
@@ -1121,7 +1121,7 @@ static int static_type_assignable_graph(const tstatic_type_arena *arena,
 		if (b->builtin == tbuiltintype_deletable)
 			return builtin == tbuiltintype_list ||
 			       builtin == tbuiltintype_dictionary;
-		if (b->builtin == tbuiltintype_contains)
+		if (b->builtin == tbuiltintype_member_testable)
 			return builtin == tbuiltintype_list || builtin == tbuiltintype_dictionary ||
 			       builtin == tbuiltintype_iterator;
 		return builtin == tbuiltintype_string ||

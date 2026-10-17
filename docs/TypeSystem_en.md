@@ -60,14 +60,14 @@ The `types` package exports the following Type values:
 | `types::BoolArray` | Boolean arrays |
 | `types::Time` | Instants in time |
 | `types::Type` | Type values |
+| `types::Rule` | Any Rule |
+| `types::RuleInstance` | Any Rule instance |
 | `types::Indexable` | Objects that support index reads |
 | `types::IndexSettable` | Objects that support index writes |
 | `types::Appendable` | Objects that support appending |
 | `types::Deletable` | Objects that support deletion |
-| `types::Contains` | Objects that support `in` membership tests |
+| `types::MemberTestable` | Objects that support `in` membership tests |
 | `types::Iterable` | Objects that support `for` iteration |
-| `types::Rule` | Any Rule |
-| `types::RuleInstance` | Any Rule instance |
 
 Type names in documentation and source use the capitalization shown above;
 without the `types::` qualifier they remain `Nil`, `Bool`, `Int`, and `Float`.
@@ -78,8 +78,10 @@ and `Int | Float`, respectively.
 
 `types::List`, `types::Pair`, `types::Dictionary`, and `types::Iterator` describe
 only a value's basic category; this document calls them raw container Types.
-Capability Types such as `Indexable` and `Appendable` require the corresponding
-operation without constraining its parameter or result Types. See the
+The six general capability Types appear last in the table: `Indexable`,
+`IndexSettable`, `Appendable`, `Deletable`, `MemberTestable`, and `Iterable`. They
+require the corresponding operation without constraining its parameter or
+result Types. See the
 [Standard Library](Stdlib_en.md) for the operations supported by each value
 category and the [Rule documentation](Rules_en.md) for exact Rule and
 RuleInstance Types.

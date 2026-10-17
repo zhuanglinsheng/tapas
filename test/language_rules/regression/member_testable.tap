@@ -1,0 +1,23 @@
+function has_member(target: MemberTestable, item) -> Bool
+{
+    return item in target
+}
+
+let member_list: MemberTestable = [1, 3]
+let member_dictionary: MemberTestable = {'key': 7}
+let member_range: MemberTestable = iter(0, 2, 10)
+
+assert(rule {
+    has_member(member_list, 3)
+    not has_member(member_list, 2)
+    has_member(member_dictionary, 'key')
+    not has_member(member_dictionary, 'missing')
+    has_member(member_range, 4)
+    not has_member(member_range, 5)
+    types::matches(member_list, types::MemberTestable)
+    types::matches(member_dictionary, types::MemberTestable)
+    types::matches(member_range, types::MemberTestable)
+    not types::matches(7, types::MemberTestable)
+})
+
+print('ok')

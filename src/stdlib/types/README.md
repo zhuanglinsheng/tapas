@@ -39,14 +39,14 @@ List、Pair、Dictionary、Iterator、Rule 与 RuleInstance Type 通过下列构
 
 ```tap
 types::Indexable: Type
-types::Appendable: Type
 types::IndexSettable: Type
+types::Appendable: Type
 types::Deletable: Type
-types::Contains: Type
+types::MemberTestable: Type
 types::Iterable: Type
 ```
 
-能力 Type 按对象支持的运行时操作匹配，而不是按单一具体对象种类匹配。它们分别表示索引读取、追加、索引写入、删除、成员判断与迭代能力。
+这六种能力 Type 按对象支持的运行时操作匹配，而不是按单一具体对象种类匹配。它们分别表示索引读取、索引写入、追加、删除、成员判断与迭代能力。
 
 ### 结构与组合 Type
 

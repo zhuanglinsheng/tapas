@@ -45,21 +45,22 @@ Type 值是程序可以保存和传递的值，例如`types::Int`；运行时 Ty
 | `types::BoolArray` | 布尔数组 |
 | `types::Time` | 时间点 |
 | `types::Type` | Type 值 |
+| `types::Rule` | 任意 Rule |
+| `types::RuleInstance` | 任意 Rule 实例 |
 | `types::Indexable` | 支持索引读取的对象 |
 | `types::IndexSettable` | 支持索引写入的对象 |
 | `types::Appendable` | 支持追加的对象 |
 | `types::Deletable` | 支持删除的对象 |
-| `types::Contains` | 支持 `in` 成员测试的对象 |
+| `types::MemberTestable` | 支持 `in` 成员测试的对象 |
 | `types::Iterable` | 支持 `for` 遍历的对象 |
-| `types::Rule` | 任意 Rule |
-| `types::RuleInstance` | 任意 Rule 实例 |
 
 文档和源码中的 Type 名称使用上表所示的大小写；省略`types::`后仍写作`Nil`、`Bool`、`Int`、`Float`等。
 小写`nil`专指内部空值，小写`int()`、`float()`、`bool()`等专指转换函数。
 `Any`、`Array`和`number`不是标准 Type 名称；应分别使用`AnyType`、`RealArray | BoolArray`和`Int | Float`。
 
 `types::List`、`types::Pair`、`types::Dictionary`和`types::Iterator`只描述值的基本类别，本文称为原始容器 Type。
-`Indexable`、`Appendable`等能力 Type 只要求值支持相应操作，不约束操作参数和返回值的 Type。
+表格末尾的六种通用能力 Type 为 `Indexable`、`IndexSettable`、`Appendable`、`Deletable`、`MemberTestable`、`Iterable`。
+它们只要求值支持相应操作，不约束操作参数和返回值的 Type。
 各值类别支持的具体操作详见[标准库](Stdlib_zh.md)；Rule 及 RuleInstance 的精确 Type 详见[Rule 文档](Rules_zh.md)。
 
 RuleInstance 不是 Bool，也不存在通用隐式转换。在 Rule 体中，独立规则项、`implies` 前件以及 `not`、`and`、`or` 的操作数可以是 Bool 或 RuleInstance；实例按规则检查的成立性解释。`implies` 后件仍必须是 Bool，裸 Rule 必须先绑定为实例。普通函数和 Rule 外的逻辑运算仍只接受 Bool，`if` 条件也不接受 RuleInstance。

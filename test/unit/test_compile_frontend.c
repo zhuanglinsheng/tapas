@@ -764,7 +764,7 @@ static void test_capability_types(void)
 		"let writable: IndexSettable = [1]\n"
 		"let appended: Appendable = {}\n"
 		"let deleted: Deletable = ['value']\n"
-		"let searchable: Contains = 0 to 3\n"
+		"let searchable: MemberTestable = 0 to 3\n"
 		"let iterable: Iterable = [1, 2]\n"
 		"let text_iterable: Iterable = 'ab'\n"
 		"let value = idx(indexed, 0)\n"
@@ -780,6 +780,14 @@ static void test_capability_types(void)
 
 	tfrontend_init(&frontend, "invalid-capability.tap",
 		"let value: Deletable = 'text'\n",
+		tfrontend_module);
+	assert(frontend.diagnostics.count == 1);
+	assert(strcmp(tstring_cstr(frontend.diagnostics.items[0].message),
+		"initializer Type mismatch") == 0);
+	tfrontend_free(&frontend);
+
+	tfrontend_init(&frontend, "invalid-member-testable.tap",
+		"let value: MemberTestable = 1\n",
 		tfrontend_module);
 	assert(frontend.diagnostics.count == 1);
 	assert(strcmp(tstring_cstr(frontend.diagnostics.items[0].message),

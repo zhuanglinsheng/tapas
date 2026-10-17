@@ -44,7 +44,7 @@ typedef enum {
 	tbuiltintype_index_settable, /**< 支持索引写入。 */
 	tbuiltintype_appendable,     /**< 支持追加元素。 */
 	tbuiltintype_deletable,      /**< 支持删除元素。 */
-	tbuiltintype_contains,       /**< 支持成员包含判断。 */
+	tbuiltintype_member_testable,       /**< 支持成员包含判断。 */
 	tbuiltintype_iterable,       /**< 支持迭代访问。 */
 
 	/* Rule 语言模型使用的核心 Type。 */

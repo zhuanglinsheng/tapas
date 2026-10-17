@@ -286,6 +286,12 @@ static void test_extension_descriptor(void) {
   library->compo_base.vtable->free(library);
 
   const textension_descriptor *stdlib = tstdlib_descriptor();
+  assert(textension_find(stdlib, "types", "MemberTestable", &found));
+  assert(found.symbol->kind == textension_type);
+  assert(strcmp(found.symbol->detail, "types::MemberTestable: Type") == 0);
+  assert(!textension_find(stdlib, "types", "Contains", &found));
+  assert(strcmp(tbuiltintype_name(tbuiltintype_member_testable),
+                "MemberTestable") == 0);
   assert(textension_find(stdlib, nullptr, "print", &found));
   assert(found.module->scope == textension_root);
   assert(!textension_find(stdlib, "io", "print", &found));
@@ -970,7 +976,8 @@ static void test_capability_dispatch(void) {
   assert(ttypeval_matches(&list_value, ttypeval_builtin(tbuiltintype_deletable)));
   assert(
       ttypeval_matches(&list_value, ttypeval_builtin(tbuiltintype_index_settable)));
-  assert(ttypeval_matches(&list_value, ttypeval_builtin(tbuiltintype_contains)));
+  assert(ttypeval_matches(&list_value, ttypeval_builtin(tbuiltintype_member_testable)));
+  assert(!ttypeval_matches(&first, ttypeval_builtin(tbuiltintype_member_testable)));
   assert(ttypeval_matches(&list_value, ttypeval_builtin(tbuiltintype_iterable)));
   assert(tcompo_contains((tcompo_v *)list, &first));
   long position = 0;

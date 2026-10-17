@@ -26,6 +26,7 @@ set(ENVIRONMENT_INVALID_DIR "${FIXTURE_DIR}/invalid/environment")
 
 # Cover guarded VM fast paths in both compiler entry modes.
 foreach(fast_path_fixture IN ITEMS
+        "${REGRESSION_DIR}/member_testable.tap"
         "${REGRESSION_DIR}/heap.tap"
         "${REGRESSION_DIR}/vm_value_fast_paths.tap"
         "${REGRESSION_DIR}/syntax_token_fields.tap")
