@@ -20,13 +20,20 @@ extern "C" {
 /** 池化的最大块尺寸；超过它的块直接走 malloc/realloc/free。 */
 #define TBLOCKPOOL_MAX_BYTES ((size_t)1 << 17)
 
+/* Released blocks may be reused, but live allocations never overlap. */
+#if defined(__GNUC__) || defined(__clang__)
+#define TBLOCKPOOL_ALLOCATOR __attribute__((malloc, alloc_size(1)))
+#else
+#define TBLOCKPOOL_ALLOCATOR
+#endif
+
 /**
  * @brief 分配至少 `bytes` 字节的块，优先复用池中的同类别块。
  *
  * @param bytes 请求尺寸。
  * @return 块指针；内存未初始化。失败时返回 NULL（与 malloc 一致）。
  */
-void *tblockpool_alloc(size_t bytes);
+void *tblockpool_alloc(size_t bytes) TBLOCKPOOL_ALLOCATOR;
 
 /**
  * @brief 分配并清零至少 `bytes` 字节的块。
@@ -34,7 +41,7 @@ void *tblockpool_alloc(size_t bytes);
  * @param bytes 请求尺寸。
  * @return 已清零的块指针；失败时返回 NULL。
  */
-void *tblockpool_calloc(size_t bytes);
+void *tblockpool_calloc(size_t bytes) TBLOCKPOOL_ALLOCATOR;
 
 /**
  * @brief 归还块；`bytes` 为分配时的请求尺寸。
@@ -43,6 +50,8 @@ void *tblockpool_calloc(size_t bytes);
  * @param bytes 分配方所知的请求尺寸。
  */
 void tblockpool_free(void *ptr, size_t bytes);
+
+#undef TBLOCKPOOL_ALLOCATOR
 
 #ifdef __cplusplus
 }

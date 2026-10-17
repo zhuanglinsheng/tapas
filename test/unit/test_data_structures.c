@@ -131,6 +131,50 @@ static tobj integer(long value) {
   return out;
 }
 
+static unsigned copy_release_count;
+
+static void copy_probe_free(void *self) {
+  (void)self;
+  copy_release_count++;
+}
+
+static void test_value_copy_lifetime(void) {
+  tobj source = integer(42);
+  source.name_loc = 17;
+  tobj destination = integer(-1);
+  tobj_copy(&destination, &source);
+  assert(destination.type == tint && destination.val.v_tint == 42);
+  assert(destination.name_loc == 17);
+  tobj_copy(&destination, &destination);
+  assert(destination.val.v_tint == 42 && destination.name_loc == 17);
+
+  tobj_set_float(&source, NAN);
+  tobj_copy(&destination, &source);
+  assert(destination.type == tfloat && isnan(destination.val.v_tfloat));
+  tobj_set_bool(&source, 1);
+  tobj_copy(&destination, &source);
+  assert(destination.type == tbool && destination.val.v_tbool);
+  tobj_set_nil(&source);
+  tobj_copy(&destination, &source);
+  assert(destination.type == tnil);
+
+  tcompo_vtable vtable = {.compo_code = compo_extension,
+                         .free = copy_probe_free};
+  tcompo_v probe = {.vtable = &vtable, .refctr = 1};
+  tobj owner = {.type = tcompo, .val.v_tcompo = &probe};
+  copy_release_count = 0;
+  tobj_copy(&destination, &owner);
+  assert(probe.refctr == 2);
+  tobj_copy(&destination, &owner);
+  assert(probe.refctr == 2);
+  tobj_ddc_ref_clear(&owner);
+  assert(probe.refctr == 1 && copy_release_count == 0);
+  source = integer(7);
+  tobj_copy(&destination, &source);
+  assert(destination.type == tint && destination.val.v_tint == 7);
+  assert(probe.refctr == 0 && copy_release_count == 1);
+}
+
 static void test_type_template_canonical_roundtrip(void) {
   ttypeval *type_parameter = ttypeval_new_parameter("T");
   ttypeval *value_parameter = ttypeval_new_value_parameter("N");
@@ -588,6 +632,40 @@ static void test_short_string_storage(void) {
   prefix->base.vtable->free(prefix);
 }
 
+static void test_short_string_lifetime(void) {
+  for (unsigned first = 0; first < 256; first++) {
+    char bytes[] = {(char)first, (char)(255 - first)};
+    tobj source;
+    tobj held;
+    tobj_set_nil(&source);
+    tobj_set_nil(&held);
+    tobj_set_compo(&source, (tcompo_v *)tstr_new_len(bytes, 2));
+    tobj_copy(&held, &source);
+    tobj_ddc_ref_clear(&source);
+    tstr *text = (tstr *)held.val.v_tcompo;
+    assert(tstring_len(text->data) == 2);
+    assert(memcmp(tstring_cstr(text->data), bytes, 2) == 0);
+    tobj_ddc_ref_clear(&held);
+    text = tstr_new_len(bytes, 2);
+    assert(tstring_len(text->data) == 2);
+    assert(memcmp(tstring_cstr(text->data), bytes, 2) == 0);
+    text->base.vtable->free(text);
+  }
+  const char first_pair[] = {'\0', (char)255};
+  tstr *text = tstr_new_len(first_pair, 2);
+  assert(memcmp(tstring_cstr(text->data), first_pair, 2) == 0);
+  text->base.vtable->free(text);
+  const char last_pair[] = {(char)255, (char)255};
+  text = tstr_new_len(last_pair, 2);
+  assert(tstring_len(text->data) == 2);
+  assert(memcmp(tstring_cstr(text->data), last_pair, 2) == 0);
+  text->base.vtable->free(text);
+  text = tstr_new_len("a", 2);
+  assert(tstring_len(text->data) == 2);
+  assert(tstring_len(tstr_new("a")->data) == 1);
+  text->base.vtable->free(text);
+}
+
 static void test_object_vector_range_copy(void) {
   tobj_vec source;
   tobj_vec slice;
@@ -665,6 +743,112 @@ static void test_hash_table_bulk_delete_and_reuse(void) {
   thashtbl_set(table, &key, &value);
   const tobj *stored = thashtbl_get(table, &key);
   assert(stored && stored->type == tint && stored->val.v_tint == 21);
+  thashtbl_free(table);
+}
+
+static void test_hash_table_value_lifetime_and_tombstones(void) {
+  thashtbl *table = thashtbl_new();
+  tobj key = integer(1);
+  tobj collision = integer(17);
+  tobj value = integer(42);
+  thashtbl_set(table, &key, &value);
+  thashtbl_set(table, &collision, &value);
+  uint_count slot;
+  const tobj *stored = thashtbl_find(table, &key, &slot);
+  assert(stored && stored->val.v_tint == 42);
+  thashtbl_set(table, &key, stored);
+  assert(thashtbl_get(table, &key)->val.v_tint == 42);
+
+  tobj_set_bool(&value, 1);
+  assert(thashtbl_set_at(table, slot, &key, &value));
+  assert(thashtbl_get(table, &key)->type == tbool);
+  tobj_set_float(&value, 0.0);
+  thashtbl_set(table, &key, &value);
+  tobj_set_float(&value, -0.0);
+  thashtbl_set(table, &key, &value);
+  assert(signbit(thashtbl_get(table, &key)->val.v_tfloat));
+  tobj_set_float(&value, NAN);
+  thashtbl_set(table, &key, &value);
+  assert(isnan(thashtbl_get(table, &key)->val.v_tfloat));
+  tobj_set_nil(&value);
+  thashtbl_set(table, &key, &value);
+  assert(thashtbl_contains(table, &key));
+  assert(thashtbl_get(table, &key)->type == tnil);
+
+  tcompo_vtable vtable = {.compo_code = compo_extension,
+                         .free = copy_probe_free};
+  tcompo_v probe = {.vtable = &vtable, .refctr = 1};
+  tobj owner = {.type = tcompo, .val.v_tcompo = &probe};
+  copy_release_count = 0;
+  thashtbl_set(table, &key, &owner);
+  assert(probe.refctr == 2);
+  assert(thashtbl_set_at(table, slot, &key, &owner));
+  assert(probe.refctr == 2);
+  value = integer(7);
+  thashtbl_set(table, &key, &value);
+  assert(probe.refctr == 1);
+  thashtbl_set(table, &key, &owner);
+  assert(thashtbl_delete(table, &key));
+  assert(probe.refctr == 1 && copy_release_count == 0);
+  assert(!thashtbl_get(table, &key));
+  assert(thashtbl_get(table, &collision)->val.v_tint == 42);
+  thashtbl_set(table, &key, &value);
+  assert(thashtbl_get(table, &key)->val.v_tint == 7);
+  thashtbl_set(table, &owner, &owner);
+  assert(probe.refctr == 3);
+  assert(thashtbl_delete(table, &owner));
+  assert(probe.refctr == 1 && copy_release_count == 0);
+  thashtbl_free(table);
+  tobj_ddc_ref_clear(&owner);
+  assert(probe.refctr == 0 && copy_release_count == 1);
+}
+
+static void test_hash_table_key_protocol(void) {
+  thashtbl *table = thashtbl_new();
+  tobj keys[4];
+  for (size_t i = 0; i < 4; i++) tobj_set_nil(&keys[i]);
+  tobj_set_bool(&keys[1], 1);
+  tobj_set_int(&keys[2], 1);
+  tobj_set_float(&keys[3], 1.0);
+  for (long i = 0; i < 4; i++) {
+    tobj value = integer(i);
+    thashtbl_set(table, &keys[i], &value);
+  }
+  assert(thashtbl_len(table) == 4);
+  for (long i = 0; i < 4; i++) {
+    assert(thashtbl_get(table, &keys[i])->val.v_tint == i);
+  }
+
+  tobj key;
+  tobj_set_nil(&key);
+  tobj_set_float(&key, NAN);
+  tobj value = integer(9);
+  thashtbl_set(table, &key, &value);
+  uint64_t bits = UINT64_C(0x7ff8000000000001);
+  double another_nan;
+  memcpy(&another_nan, &bits, sizeof(another_nan));
+  tobj_set_float(&key, another_nan);
+  assert(thashtbl_get(table, &key)->val.v_tint == 9);
+  tobj_set_float(&key, -0.0);
+  thashtbl_set(table, &key, &value);
+  tobj_set_float(&key, 0.0);
+  assert(thashtbl_get(table, &key)->val.v_tint == 9);
+
+  const char text[] = {'a', '\0', 'b'};
+  tobj query;
+  tobj_set_nil(&query);
+  tobj_set_compo(&key, (tcompo_v *)tstr_new_len(text, sizeof(text)));
+  tobj_set_compo(&query, (tcompo_v *)tstr_new_len(text, sizeof(text)));
+  assert(key.val.v_tcompo != query.val.v_tcompo);
+  thashtbl_set(table, &key, &value);
+  tobj_set_nil(&key); /* The table now owns the stored String. */
+  uint_count slot;
+  assert(thashtbl_find(table, &query, &slot)->val.v_tint == 9);
+  assert(thashtbl_get_entry_at(table, slot, &query)->val.v_tint == 9);
+  assert(thashtbl_delete(table, &query));
+  assert(!thashtbl_get_entry_at(table, slot, &query));
+  assert(!thashtbl_get(table, &query));
+  tobj_try_clear(&query);
   thashtbl_free(table);
 }
 
@@ -971,6 +1155,7 @@ static void test_rule_representations(void) {
 }
 
 int main(void) {
+  test_value_copy_lifetime();
   test_compact_instruction_encodings();
   test_bytecode_source_map_roundtrip();
   test_type_template_canonical_roundtrip();
@@ -987,9 +1172,12 @@ int main(void) {
   test_boolean_array_and_time();
   test_random_generator();
   test_short_string_storage();
+  test_short_string_lifetime();
   test_object_vector_range_copy();
   test_object_vector_take();
   test_hash_table_bulk_delete_and_reuse();
+  test_hash_table_value_lifetime_and_tombstones();
+  test_hash_table_key_protocol();
   test_hash_table_sized_construction();
   test_hash_table_varied_integer_keys();
   test_list_replicate();

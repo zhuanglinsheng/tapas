@@ -24,6 +24,31 @@ set(COMPILE_INVALID_DIR "${FIXTURE_DIR}/invalid/compile")
 set(RUNTIME_INVALID_DIR "${FIXTURE_DIR}/invalid/runtime")
 set(ENVIRONMENT_INVALID_DIR "${FIXTURE_DIR}/invalid/environment")
 
+# Cover guarded VM fast paths in both compiler entry modes.
+foreach(fast_path_fixture IN ITEMS
+        "${REGRESSION_DIR}/vm_value_fast_paths.tap")
+    foreach(mode IN ITEMS source bytecode)
+        if(mode STREQUAL "source")
+            set(fast_path_command "${fast_path_fixture}")
+        else()
+            execute_process(COMMAND "${TAPAS}" -c "${fast_path_fixture}"
+                RESULT_VARIABLE fast_path_compile)
+            if(NOT fast_path_compile EQUAL 0)
+                message(FATAL_ERROR "VM fast-path bytecode compilation failed")
+            endif()
+            set(fast_path_command -e "${fast_path_fixture}c")
+        endif()
+        execute_process(COMMAND "${TAPAS}" ${fast_path_command}
+            RESULT_VARIABLE fast_path_result
+            OUTPUT_VARIABLE fast_path_output ERROR_VARIABLE fast_path_error)
+        if(NOT fast_path_result EQUAL 0 OR NOT fast_path_output STREQUAL "ok\n")
+            message(FATAL_ERROR
+                "VM fast-path ${mode} failed: ${fast_path_output}${fast_path_error}")
+        endif()
+    endforeach()
+    file(REMOVE "${fast_path_fixture}c")
+endforeach()
+
 set(CACHE_TEST_DIR "${BINARY_ROOT}/automatic_bytecode_cache")
 set(CACHE_BUILD_DIR "${CACHE_TEST_DIR}/__tapas_build__")
 file(REMOVE_RECURSE "${CACHE_TEST_DIR}")
@@ -1157,6 +1182,7 @@ foreach(fixture IN LISTS invalid_fixtures)
 endforeach()
 
 set(runtime_error_fixtures
+    vm_field_div_zero.tap
     arguments_unbound.tap parameters_unsupported.tap
     implies_instance_error.tap implies_instance_recursion.tap
     implies_instance_if.tap

@@ -1,0 +1,10 @@
+// INVALID EXAMPLE: expected Runtime Error after successful compilation.
+function divide(data)
+{
+    data['result'] = data::numerator / data::denominator
+}
+let data = {'numerator': 4, 'denominator': 2, 'result': 1}
+divide(data)
+divide(data)
+data['denominator'] = 0
+divide(data)

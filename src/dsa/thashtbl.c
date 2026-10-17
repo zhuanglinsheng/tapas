@@ -90,11 +90,21 @@ static int thash_tobj_key_eq(const tobj *a, const tobj *b)
 		return 0;
 	/* 键匹配协议不同于语言的 ==：-0.0 与 +0.0 已由哈希归一化，
 	 * NaN 键按规范位形互相视为相等。 */
-	if (a->type == tfloat)
+	switch (a->type) {
+	case tnil:
+		return 1;
+	case tbool:
+		return a->val.v_tbool == b->val.v_tbool;
+	case tint:
+		return a->val.v_tint == b->val.v_tint;
+	case tfloat:
 		return a->val.v_tfloat == b->val.v_tfloat ||
 		       (isnan(a->val.v_tfloat) && isnan(b->val.v_tfloat));
-	if (a->type != tcompo)
-		return tobj_identical(a, b);
+	case tcompo:
+		break;
+	default:
+		return 0;
+	}
 	if (a->val.v_tcompo == b->val.v_tcompo)
 		return 1;
 	if (!a->val.v_tcompo || !b->val.v_tcompo ||
@@ -102,7 +112,8 @@ static int thash_tobj_key_eq(const tobj *a, const tobj *b)
 		return 0;
 	if (a->val.v_tcompo->vtable->compo_code == compo_tstr &&
 	    b->val.v_tcompo->vtable->compo_code == compo_tstr)
-		return tobj_identical(a, b);
+		return tstring_eq(((tstr *)a->val.v_tcompo)->data,
+				  ((tstr *)b->val.v_tcompo)->data);
 	if (a->val.v_tcompo->vtable->compo_code == compo_ttypeval &&
 	    b->val.v_tcompo->vtable->compo_code == compo_ttypeval)
 		return ttypeval_equal((ttypeval *)a->val.v_tcompo,
@@ -223,6 +234,24 @@ static uint_count thashtbl_find_slot(const thashtbl *tbl,
 		idx = (idx + 1) & mask;
 	}
 }
+
+/* Read-only probes need neither an insertion tombstone nor a probe count.
+ * Capacity is outside the bucket range and represents a missing key. */
+static inline uint_count thashtbl_lookup_slot(const thashtbl *tbl,
+					    const tobj *key, uint64_t hash)
+{
+	uint_count mask = tbl->capacity - 1;
+	uint_count idx = (uint_count)(hash & mask);
+	for (;;) {
+		const thash_entry *entry = &tbl->entries[idx];
+		if (entry->hash == 0)
+			return tbl->capacity;
+		if (entry->hash == hash && thash_tobj_key_eq(&entry->key, key))
+			return idx;
+		idx = (idx + 1) & mask;
+	}
+}
+
 const tobj *thashtbl_find(const thashtbl *tbl, const tobj *key,
 			   uint_count *slot)
 {
@@ -231,10 +260,9 @@ const tobj *thashtbl_find(const thashtbl *tbl, const tobj *key,
 		return nullptr;
 	}
 	uint64_t hash = thash_key_hash(tbl, key);
-	int found = 0;
-	uint_count idx = thashtbl_find_slot(tbl, key, hash, &found, nullptr);
+	uint_count idx = thashtbl_lookup_slot(tbl, key, hash);
 	if (slot) *slot = idx;
-	return found ? &tbl->entries[idx].value : nullptr;
+	return idx < tbl->capacity ? &tbl->entries[idx].value : nullptr;
 }
 
 const tobj *thashtbl_get_entry_at(const thashtbl *tbl, uint_count slot,
@@ -358,6 +386,12 @@ uint_count thashtbl_set(thashtbl *tbl, const tobj *key, const tobj *value)
 	}
 	if (found) {
 		thash_entry *entry = &tbl->entries[idx];
+		/* Immediate values own no reference and can replace each other
+		 * directly, including when the source aliases the destination. */
+		if (entry->value.type != tcompo && v.type != tcompo) {
+			entry->value = v;
+			return idx;
+		}
 		if (!thash_same_stored_value(&entry->value, &v)) {
 			thash_retain(&v);
 			tobj_ddc_ref_clear(&entry->value);
@@ -396,6 +430,10 @@ int thashtbl_set_at(thashtbl *tbl, uint_count slot, const tobj *key,
 		/* pointer hit */
 	} else if (!thash_tobj_key_eq(&entry->key, key))
 		return 0;
+	if (entry->value.type != tcompo && value->type != tcompo) {
+		entry->value = *value;
+		return 1;
+	}
 	if (thash_same_stored_value(&entry->value, value))
 		return 1;
 	thash_retain(value);
@@ -408,10 +446,9 @@ const tobj *thashtbl_get(const thashtbl *tbl, const tobj *key)
 {
 	if (!tbl || tbl->capacity == 0)
 		return nullptr;
-	int found = 0;
 	uint64_t hash = thash_key_hash(tbl, key);
-	uint_count idx = thashtbl_find_slot(tbl, key, hash, &found, nullptr);
-	return found ? &tbl->entries[idx].value : nullptr;
+	uint_count idx = thashtbl_lookup_slot(tbl, key, hash);
+	return idx < tbl->capacity ? &tbl->entries[idx].value : nullptr;
 }
 
 int thashtbl_contains(const thashtbl *tbl, const tobj *key)
@@ -423,13 +460,16 @@ int thashtbl_delete(thashtbl *tbl, const tobj *key)
 {
 	if (!tbl || tbl->capacity == 0)
 		return 0;
-	int found = 0;
 	uint64_t hash = thash_key_hash(tbl, key);
-	uint_count idx = thashtbl_find_slot(tbl, key, hash, &found, nullptr);
-	if (!found)
+	uint_count idx = thashtbl_lookup_slot(tbl, key, hash);
+	if (idx == tbl->capacity)
 		return 0;
-	tobj_ddc_ref_clear(&tbl->entries[idx].key);
-	tobj_ddc_ref_clear(&tbl->entries[idx].value);
+	/* Tombstones are not live values. Release their owned references;
+	 * scalar payloads are overwritten if the bucket is reused. */
+	if (tbl->entries[idx].key.type == tcompo)
+		tobj_ddc_ref_clear(&tbl->entries[idx].key);
+	if (tbl->entries[idx].value.type == tcompo)
+		tobj_ddc_ref_clear(&tbl->entries[idx].value);
 	tbl->entries[idx].hash = 1;
 	tbl->len--;
 	/* Leave tombstone compaction to the insertion path. Rehashing after a

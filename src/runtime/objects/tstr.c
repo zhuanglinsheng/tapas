@@ -8,7 +8,7 @@
 
 /* Strings are immutable, so two mechanisms make the common short-lived
  * cases cheap: a freelist recycles fixed-size objects (as titer/tpair do),
- * and a canonical byte table makes every one-byte string a shared object,
+ * and canonical tables share one- and two-byte strings,
  * so dictionary keys built from reads and slices compare by pointer. */
 
 #define TSTR_POOL_MAX 256u
@@ -16,6 +16,15 @@ static _Thread_local tstr *tstr_pool;
 static _Thread_local unsigned tstr_pool_len;
 
 static tstr *tstr_byte_canonical[256];
+/* Two-byte values have a finite key space. Entries are created on demand
+ * and, like canonical bytes, stay immutable for the process lifetime. */
+static tstr *tstr_pair_canonical[65536];
+
+static unsigned tstr_pair_index(const char *text)
+{
+	return ((unsigned)(unsigned char)text[0] << 8) |
+		(unsigned char)text[1];
+}
 
 static tstr *tstr_alloc_raw(const char *text, size_t length)
 {
@@ -55,10 +64,27 @@ static tstr *tstr_byte_string(unsigned char byte)
 	return string;
 }
 
+static tstr *tstr_pair_string(const char *text)
+{
+	unsigned index = tstr_pair_index(text);
+	tstr *string = tstr_pair_canonical[index];
+	if (string)
+		return string;
+	string = tstr_alloc_raw(text, 2);
+	if (!string)
+		return nullptr;
+	string->hash = tstring_hash(string->data);
+	string->base.refctr = 1;
+	tstr_pair_canonical[index] = string;
+	return string;
+}
+
 tstr *tstr_new_len(const char *text, size_t length)
 {
 	if (length == 1)
 		return tstr_byte_string((unsigned char)text[0]);
+	if (length == 2)
+		return tstr_pair_string(text);
 	return tstr_alloc_raw(text, length);
 }
 
@@ -100,9 +126,13 @@ static void *tstr_copy(void *self)
 static void tstr_free(void *self)
 {
 	tstr *s = (tstr *)self;
-	/* Canonical byte strings are immortal. */
-	if (tstring_len(s->data) == 1 &&
+	/* Canonical short strings are immortal. */
+	size_t length = tstring_len(s->data);
+	if (length == 1 &&
 	    tstr_byte_canonical[(unsigned char)tstring_cstr(s->data)[0]] == s)
+		return;
+	if (length == 2 &&
+	    tstr_pair_canonical[tstr_pair_index(tstring_cstr(s->data))] == s)
 		return;
 	tstring_deinit(&s->storage);
 	if (tstr_pool_len < TSTR_POOL_MAX) {

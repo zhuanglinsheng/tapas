@@ -89,8 +89,10 @@ static inline void vm_set_bool_result(tobj *value, int result)
 
 #if defined(__GNUC__) || defined(__clang__)
 #define TVM_ALWAYS_INLINE __attribute__((always_inline))
+#define TVM_NOINLINE __attribute__((noinline))
 #else
 #define TVM_ALWAYS_INLINE
+#define TVM_NOINLINE
 #endif
 
 #define DEF_ALGO(fn_name, fll, fld, fdl, fdd)                                  \
@@ -629,9 +631,18 @@ typedef enum {
 	tins_cache_polymorphic
 } tins_cache_kind;
 
+typedef enum {
+	tins_field_unseen,
+	tins_field_plain,
+	tins_field_numeric
+} tins_field_fusion;
+
 typedef struct {
 	tcompo_vtable *guard;
-	uint_cmds state_slot;
+	union {
+		uint_cmds state_slot;  /* loop instructions */
+		uint8_t field_fusion;  /* constant-string IDXR instructions */
+	};
 	uint8_t kind;
 	const tcompo_v *key;   /* dict_str: the interned key object */
 	uint_count slot;       /* dict_str: learned entry slot */
@@ -641,9 +652,21 @@ struct tvm_code_cache {
 	const twrapper *wrapper;
 	tins_cache *entries;
 	uint_cmds entry_count;
+	const void **dispatch_targets;
 };
 
-static tvm_code_cache *tvm_get_code_cache(tvm *vm, const twrapper *wrapper)
+/* Plain-push entries are private dispatch forms; bytecode opcodes stay unchanged. */
+enum {
+	vm_dispatch_opcodes = 64,
+	vm_dispatch_pushx_plain_temporary = vm_dispatch_opcodes,
+	vm_dispatch_pushx_plain_local,
+	vm_dispatch_entries
+};
+
+static inline int vm_is_binop_instruction(tins instruction);
+
+static tvm_code_cache *tvm_get_code_cache(tvm *vm, const twrapper *wrapper,
+					const void *const *dispatch_table)
 {
 	for (uint32_t i = 0; i < vm->code_cache_len; i++) {
 		if (vm->code_caches[i].wrapper == wrapper)
@@ -664,6 +687,7 @@ static tvm_code_cache *tvm_get_code_cache(tvm *vm, const twrapper *wrapper)
 	cache->wrapper = wrapper;
 	cache->entry_count = wrapper->ncmds;
 	cache->entries = nullptr;
+	cache->dispatch_targets = nullptr;
 	if (wrapper->ncmds == 0)
 		return cache;
 
@@ -671,9 +695,34 @@ static tvm_code_cache *tvm_get_code_cache(tvm *vm, const twrapper *wrapper)
 		cache->entry_count, sizeof(tins_cache));
 	if (!cache->entries)
 		twarn(ErrRuntime_Other, "tvm_get_code_cache", "out of memory");
+	if (dispatch_table) {
+		cache->dispatch_targets = (const void **)malloc(
+			cache->entry_count * sizeof(*cache->dispatch_targets));
+		if (!cache->dispatch_targets)
+			twarn(ErrRuntime_Other, "tvm_get_code_cache", "out of memory");
+	}
 	uint_cmds loop_slot = 0;
 	for (uint_cmds i = 0; i < wrapper->ncmds; i++) {
 		tins instruction = tbycode_ins(wrapper->cmdarr[i]);
+		unsigned target = instruction;
+		if (instruction == OP_PUSHX) {
+			tins next = i + 1 < wrapper->ncmds ?
+				tbycode_ins(wrapper->cmdarr[i + 1]) : OP_PASS;
+			/* Only a static shape mismatch is permanent. A fusible
+			 * instruction keeps its dynamic type guards in the handler. */
+			if (next != OP_POPCOV && next != OP_VCRT &&
+			    next != OP_PUSHX && next != OP_IDXR && next != OP_IDXL &&
+			    next != OP_EVALCF && !vm_is_binop_instruction(next)) {
+				cache->entries[i].kind = tins_cache_pushx_plain;
+				uint16_t address = tbycode_get_R(wrapper->cmdarr[i]);
+				if (!tpushx_isenv(address))
+					target = vm_dispatch_pushx_plain_temporary;
+				else if (!tpushx_is_upval(address))
+					target = vm_dispatch_pushx_plain_local;
+			}
+		}
+		if (dispatch_table)
+			cache->dispatch_targets[i] = dispatch_table[target];
 		if (instruction == OP_LOOPAS || instruction == OP_LOOPRANGE)
 			cache->entries[i].state_slot = loop_slot++;
 	}
@@ -749,6 +798,7 @@ void tvm_reset(tvm *vm)
 	vm->loop_state_cap = 0;
 	for (uint32_t i = 0; i < vm->code_cache_len; i++) {
 		free(vm->code_caches[i].entries);
+		free(vm->code_caches[i].dispatch_targets);
 	}
 	free(vm->code_caches);
 	vm->code_caches = nullptr;
@@ -2160,6 +2210,10 @@ static inline TVM_ALWAYS_INLINE void vm_dict_set_int(thashtbl *items,
 		idx = (idx + 1) & mask;
 	}
 	if (hit) {
+		if (hit->value.type != tcompo && rv->type != tcompo) {
+			hit->value = *rv;
+			return;
+		}
 		if (!vm_same_stored_value(&hit->value, rv)) {
 			vm_retain(rv);
 			tobj_ddc_ref_clear(&hit->value);
@@ -3491,6 +3545,29 @@ static inline TVM_ALWAYS_INLINE void vm_consume_cjpop(
 }
 
 
+/* A comparison-only String index produces a private byte value. When the
+ * other operand is another indexed byte, compare before filling the stack
+ * and consume the Bool's branch without boxing either character. */
+static inline TVM_ALWAYS_INLINE int vm_consume_byte_comparison(
+	tvm *vm, const tbycode *commands, uint_cmds *pc, uint_cmds end,
+	const tobj *value)
+{
+	if (!vm_is_indexed_byte(value) || !vm->stklen ||
+	    !vm_is_indexed_byte(stk_top(vm)) || *pc + 1 >= end)
+		return 0;
+	tbycode comparison = commands[*pc + 1];
+	tins operation = tbycode_ins(comparison);
+	if ((operation != OP_EQ && operation != OP_NE) ||
+	    tbycode_binop_named(comparison) ||
+	    tbycode_get_L(comparison) != 0 || tbycode_get_R(comparison) != 1)
+		return 0;
+	int equal = value->val.v_tint == stk_top(vm)->val.v_tint;
+	vm_set_bool_result(stk_top(vm), equal != (operation == OP_NE));
+	*pc += 1;
+	vm_consume_cjpop(vm, commands, pc, end);
+	return 1;
+}
+
 /* Named-receiver indexed read with a slot key: store form
  * (`dst = recv[key]`) and expression form share one body; the shape is
  * learned per call site so later dispatches skip the pattern checks. */
@@ -3535,6 +3612,12 @@ static inline TVM_ALWAYS_INLINE int vm_pushx_idxr_named_fused(
 	if (!vm_idxr_fast(object->val.v_tcompo, src, 1,
 			  tbycode_idxr_compare(idxr), dest))
 		return 0;
+	uint_cmds indexed = *pc + 1;
+	if (tbycode_idxr_compare(idxr) &&
+	    vm_consume_byte_comparison(vm, cmdarr, &indexed, end, dest)) {
+		*pc = indexed;
+		return 1;
+	}
 	/* `f(recv[k])`：单实参调用直接以读出的值发起。 */
 	if (*pc + 2 < end) {
 		tbycode nxt = cmdarr[*pc + 2];
@@ -3697,6 +3780,13 @@ static inline TVM_ALWAYS_INLINE int vm_arith_named_fused(
 			tobj_set_nil(dest);
 			if (vm_idxr_fast(object->val.v_tcompo, &result, 1,
 					 tbycode_idxr_compare(idxr), dest)) {
+				uint_cmds indexed = *pc + 2;
+				if (tbycode_idxr_compare(idxr) &&
+				    vm_consume_byte_comparison(vm, cmdarr, &indexed,
+							 end, dest)) {
+					*pc = indexed;
+					return 1;
+				}
 				vm->stklen++;
 				*pc += 2;
 				vm_consume_cjpop(vm, cmdarr, pc, end);
@@ -3884,12 +3974,148 @@ static inline TVM_ALWAYS_INLINE int vm_native_call_fused(
 }
 
 
+/* Resolve an existing constant-string field. Cached slots are validated
+ * against the current table on every access, including after rehashing. */
+static tobj *vm_dict_field(thashtbl *items, tstr *key, tins_cache *cache)
+{
+	if (cache && cache->kind == tins_cache_idxr_dict_str &&
+	    cache->key == (tcompo_v *)key &&
+	    thashtbl_entry_value_at(items, cache->slot, (tcompo_v *)key))
+		return &items->entries[cache->slot].value;
+
+	tobj field = { .type = tcompo, .val.v_tcompo = (tcompo_v *)key };
+	uint_count slot;
+	if (!thashtbl_find(items, &field, &slot))
+		return nullptr;
+	if (cache && (cache->kind == tins_cache_empty ||
+	    (cache->kind == tins_cache_idxr_dict_str &&
+	     cache->key == (tcompo_v *)key))) {
+		cache->kind = tins_cache_idxr_dict_str;
+		cache->guard = &tdict_vtable;
+		cache->key = (tcompo_v *)key;
+		cache->slot = slot;
+	}
+	return &items->entries[slot].value;
+}
+
+/* Fuse two Dictionary field reads, numeric arithmetic, and an existing
+ * immediate field write. Guards preserve aliases, missing-field diagnostics,
+ * and composite operator hooks. Decode the pattern out of line so its
+ * temporary values do not compete with the main dispatch registers. */
+static TVM_NOINLINE int vm_field_arithmetic_fused(
+		tvm *vm, tcompo_env *env, const twrapper *wrapper,
+		tins_cache *entries, uint_cmds *pc, uint_cmds end)
+{
+	tvm_code_cache local_cache = {
+		.wrapper = wrapper, .entries = entries,
+		.entry_count = wrapper->ncmds
+	};
+	tvm_code_cache *cache = &local_cache;
+	tbycode *commands = wrapper->cmdarr;
+	tstr **strings = wrapper->consts.csobjs;
+	uint_cmds start = *pc;
+	if (start + 8 >= end)
+		return 0;
+	const tbycode *code = commands + start;
+	tins operation = tbycode_ins(code[6]);
+	tins_cache *shape = tvm_instruction_cache(cache, start + 2);
+	/* Bytecode is immutable; learn its shape once. Receiver, numeric,
+	 * and table-slot guards below still run on every execution. */
+	if (!shape || shape->field_fusion != tins_field_numeric) {
+		if ((operation != OP_ADD && operation != OP_SUB &&
+		     operation != OP_MUL && operation != OP_DIV) ||
+		    tbycode_binop_named(code[6]) ||
+		    tbycode_get_L(code[6]) != 0 || tbycode_get_R(code[6]) != 1)
+			goto plain_field;
+		if (tbycode_ins(code[8]) != OP_IDXL ||
+		    tbycode_get_b(code[8]) != 1 ||
+		    tbycode_ins(code[7]) != OP_PUSHS ||
+		    tbycode_ins(code[1]) != OP_PUSHX ||
+		    tbycode_ins(code[3]) != OP_PUSHS ||
+		    tbycode_ins(code[4]) != OP_PUSHX)
+			goto plain_field;
+		for (unsigned offset = 2; offset <= 5; offset += 3) {
+			tbycode read = code[offset];
+			if (tbycode_ins(read) != OP_IDXR ||
+			    tbycode_idxr_named(read) ||
+			    tbycode_idxr_count(read) != 1 || tbycode_idxr_slice(read))
+				goto plain_field;
+		}
+		if (shape)
+			shape->field_fusion = tins_field_numeric;
+	}
+
+	tobj operands[2];
+	for (unsigned operand = 0; operand < 2; operand++) {
+		unsigned offset = operand * 3;
+		tbycode load = code[offset + 1];
+		uint16_t address = tbycode_get_R(load);
+		tcompo_env_abstract *owner = &env->base;
+		if (tpushx_isenv(address) && tpushx_is_upval(address)) {
+			for (uint16_t depth = tpushx_depth(address); depth; depth--) {
+				if (!owner->father_env)
+					return 0;
+				owner = owner->father_env;
+			}
+		}
+		tobj_array *slots = tpushx_isenv(address) ? &owner->objs : &vm->tmps;
+		uint_objs slot = tbycode_get_L(load);
+		/* Speculation must not raise an error at an earlier instruction. */
+		if (slot >= slots->len)
+			return 0;
+		const tobj *receiver = &slots->data[slot];
+		if (receiver->type != tcompo || !receiver->val.v_tcompo ||
+		    receiver->val.v_tcompo->vtable != &tdict_vtable)
+			return 0;
+		tobj *value = vm_dict_field(
+			((tdict *)receiver->val.v_tcompo)->items,
+			strings[tbycode_get_U(code[offset])],
+			tvm_instruction_cache(cache, start + offset + 2));
+		if (!value || (value->type != tint && value->type != tfloat))
+			return 0;
+		operands[operand] = *value;
+	}
+	tobj_array *slots = tbycode_get_i(code[8]) ? &env->base.objs : &vm->tmps;
+	uint_objs slot = tbycode_get_L(code[8]);
+	/* Parent-environment destinations keep their normal lookup path. */
+	if (slot >= slots->len)
+		return 0;
+	tobj *receiver = &slots->data[slot];
+	if (receiver->type != tcompo || !receiver->val.v_tcompo ||
+	    receiver->val.v_tcompo->vtable != &tdict_vtable)
+		return 0;
+	tobj *destination = vm_dict_field(
+		((tdict *)receiver->val.v_tcompo)->items,
+		strings[tbycode_get_U(code[7])],
+		tvm_instruction_cache(cache, start + 8));
+	if (!destination || destination->type == tcompo)
+		return 0;
+	/* The top stack operand is the left operand in Tapas bytecode. Keep
+	 * integer division errors at their original diagnostic instruction. */
+	if (operation == OP_DIV && operands[1].type == tint &&
+	    operands[0].type == tint && operands[0].val.v_tint == 0)
+		return 0;
+	tobj result;
+	if (!vm_binop_fast(operation, &operands[1], &operands[0], &result))
+		return 0;
+	*destination = result;
+	*pc = vm_fused_next(commands, end, start + 9);
+	return 1;
+
+plain_field:
+	/* A static mismatch is permanent; ordinary field reads need not fetch
+	 * and decode the following instructions on every loop iteration. */
+	if (shape)
+		shape->field_fusion = tins_field_plain;
+	return 0;
+}
+
 void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 {
 	twrapper *wrapper = tfunc_get_wrapper_from_env(env);
 	/* Nested Rule/evaluator execution may grow vm->code_caches. Keep the
 	 * descriptor by value; its separately allocated entries remain stable. */
-	tvm_code_cache code_cache = *tvm_get_code_cache(vm, wrapper);
+	tvm_code_cache code_cache;
 	tbycode *cmdarr = wrapper->cmdarr;
 	long *cints = wrapper->consts.cints;
 	double *cflts = wrapper->consts.cflts;
@@ -3922,8 +4148,19 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 #define TAPAS_VM_THREADED 1
 #define VM_CASE(op) vm_lbl_##op
 #define VM_DEFAULT vm_lbl_invalid
-#define VM_NEXT() goto vm_advance
-#define VM_SWITCH_BEGIN goto *vm_dispatch_table[tbycode_ins(*iter)];
+/* Keep the indirect dispatch at each completed operation. The unique
+ * empty asm input prevents the compiler from folding all sites into one
+ * branch; it emits no machine instruction. Guarded paths within one
+ * opcode share its vm_done_* exit to limit duplicated dispatch code. */
+#define VM_NEXT() do {                                                       \
+		if (++i >= end)                                              \
+			goto dispatch;                                       \
+		iter = &cmdarr[i];                                           \
+		const void *next = code_cache.dispatch_targets[i];          \
+		__asm__ volatile("" : : "r"(next), "i"(__COUNTER__));        \
+		goto *next;                                                  \
+	} while (0)
+#define VM_SWITCH_BEGIN goto *code_cache.dispatch_targets[i];
 #define VM_SWITCH_END
 #else
 #define VM_CASE(op) case op
@@ -3934,8 +4171,10 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 #endif
 
 #ifdef TAPAS_VM_THREADED
-	static const void *const vm_dispatch_table[64] = {
-		[0 ... 63] = &&vm_lbl_invalid,
+	static const void *const vm_dispatch_table[vm_dispatch_entries] = {
+		[0 ... vm_dispatch_opcodes - 1] = &&vm_lbl_invalid,
+		[vm_dispatch_pushx_plain_temporary] = &&vm_lbl_pushx_plain_temporary,
+		[vm_dispatch_pushx_plain_local] = &&vm_lbl_pushx_plain_local,
 		[OP_PASS] = &&vm_lbl_OP_PASS,
 		[OP_VCRT] = &&vm_lbl_OP_VCRT,
 		[OP_TMPDEL] = &&vm_lbl_OP_TMPDEL,
@@ -3999,7 +4238,11 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 		[OP_NEG] = &&vm_lbl_OP_NEG,
 		[OP_NOT] = &&vm_lbl_OP_NOT
 	};
+#define VM_DISPATCH_TABLE vm_dispatch_table
+#else
+#define VM_DISPATCH_TABLE nullptr
 #endif
+	code_cache = *tvm_get_code_cache(vm, wrapper, VM_DISPATCH_TABLE);
 
 	for (;;) {
 	dispatch:
@@ -4088,7 +4331,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 							slots->data[dloc] = result;
 							i = vm_fused_next(cmdarr, end,
 									  i + 4);
-							VM_NEXT();
+							goto vm_done_vcrt;
 						}
 					}
 				}
@@ -4129,11 +4372,12 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 							      "OP_POPCOV", "");
 						i = vm_fused_next(cmdarr, end,
 								  i + 4);
-						VM_NEXT();
+						goto vm_done_vcrt;
 					}
 				}
 			}
 		}
+		vm_done_vcrt:
 		VM_NEXT();
 		VM_CASE(OP_TMPDEL):
 			vm_del_slots(&vm->tmps, (uint_objs)tbycode_get_U(*iter));
@@ -4353,12 +4597,12 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 					}
 					if (has_next) {
 						i++;
-						VM_NEXT();
+						goto vm_done_loopas;
 					}
 					state->pos = 0;
 					state->iterator_slot = nullptr;
 					i += 1u + tbycode_get_U(cmdarr[i + 1]);
-					VM_NEXT();
+					goto vm_done_loopas;
 				}
 			}
 			vm_loopas(vm,
@@ -4366,6 +4610,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 				  tbycode_get_L(*iter),
 				  tbycode_get_R(*iter),
 				  env);
+		vm_done_loopas:
 			VM_NEXT();
 		}
 		VM_CASE(OP_LOOPRANGE): {
@@ -4381,9 +4626,10 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 					i++;
 				else
 					i += 1u + tbycode_get_U(cmdarr[i + 1]);
-				VM_NEXT();
+				goto vm_done_looprange;
 			}
 			vm_loop_push_cond(vm, has_next);
+		vm_done_looprange:
 			VM_NEXT();
 		}
 		VM_CASE(OP_JPF):
@@ -4449,7 +4695,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 						vm_slot_move(dslot, src);
 					}
 					i = vm_fused_next(cmdarr, end, i + 2);
-					VM_NEXT();
+					goto vm_done_pushx;
 				}
 			} else if (store_kind == OP_VCRT &&
 				   (tbycode_get_R(cmdarr[i + 1]) &
@@ -4466,7 +4712,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 				vm_retain(src);
 				slots->data[slots->len - 1] = *src;
 				i = vm_fused_next(cmdarr, end, i + 2);
-				VM_NEXT();
+				goto vm_done_pushx;
 			}
 
 			} else if (f1 == OP_PUSHX) {
@@ -4506,7 +4752,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 							key, src);
 						i = vm_fused_next(cmdarr, end,
 								  i + 3);
-						VM_NEXT();
+						goto vm_done_pushx;
 					}
 					if (arr->vtable == &tlist_vtable) {
 						tlist *list = (tlist *)arr;
@@ -4532,7 +4778,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 								src);
 						i = vm_fused_next(cmdarr, end,
 								  i + 3);
-						VM_NEXT();
+						goto vm_done_pushx;
 					}
 				}
 			}
@@ -4577,7 +4823,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 						vm_consume_popcov(vm, env,
 								  cmdarr, &i,
 								  end);
-						VM_NEXT();
+						goto vm_done_pushx;
 					}
 				}
 			}
@@ -4649,7 +4895,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 							i + 5u + (uint_cmds)tbycode_get_U(jump));
 					else
 						i += 4;
-					VM_NEXT();
+					goto vm_done_pushx;
 				}
 			}
 
@@ -4668,7 +4914,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 				if (fused == 2)
 					goto make_call;
 				if (fused)
-					VM_NEXT();
+					goto vm_done_pushx;
 			}
 
 			} else if (f1 == OP_IDXR &&
@@ -4683,7 +4929,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 				if (fused == 2)
 					goto make_call;
 				if (fused)
-					VM_NEXT();
+					goto vm_done_pushx;
 			}
 			} else if (f1 == OP_IDXL) {
 			/* `recv[key] = value` with the value already on the
@@ -4710,7 +4956,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 						stk_popc(vm);
 						i = vm_fused_next(cmdarr, end,
 								  i + 2);
-						VM_NEXT();
+						goto vm_done_pushx;
 					}
 					if (arr->vtable == &tlist_vtable) {
 						tlist *list = (tlist *)arr;
@@ -4728,7 +4974,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 						stk_popc(vm);
 						i = vm_fused_next(cmdarr, end,
 								  i + 2);
-						VM_NEXT();
+						goto vm_done_pushx;
 					}
 				}
 			}
@@ -4738,7 +4984,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 			 * slot` accumulate-into-slot resolve without stack
 			 * traffic. */
 			if (vm_cmp_branch_fused(vm, env, cmdarr, &i, end, src)) {
-				VM_NEXT();
+				goto vm_done_pushx;
 			}
 			{
 				tobj call_params[VM_NATIVE_FUSED_MAX_PARAMS];
@@ -4748,7 +4994,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 				if (fused == 2)
 					goto make_call;
 				if (fused)
-					VM_NEXT();
+					goto vm_done_pushx;
 			}
 
 			if (i + 1 < end &&
@@ -4756,7 +5002,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 				i++;
 				vm_consume_cjpop(vm, cmdarr, &i, end);
 				vm_consume_popcov(vm, env, cmdarr, &i, end);
-				VM_NEXT();
+				goto vm_done_pushx;
 			}
 
 			} else if (f1 == OP_IDXR) {
@@ -4769,30 +5015,32 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 						vm, src, cmdarr[i],
 						tvm_instruction_cache(
 							&code_cache, i));
-				VM_NEXT();
+				goto vm_done_pushx;
 			}
 
-			} else {
-			if (pcache && pcache->kind == tins_cache_empty &&
-			    i + 1 < end) {
-				/* 下一条指令不构成任何融合前缀时才学习，
-				 * 以免把暂时类型不匹配的可融合槽位永久降级。 */
-				tins follower = tbycode_ins(cmdarr[i + 1]);
-				if (follower != OP_PUSHX && follower != OP_IDXR &&
-				    follower != OP_IDXL && follower != OP_EVALCF &&
-				    !vm_is_binop_instruction(follower))
-					pcache->kind = tins_cache_pushx_plain;
-			}
-		
 			}
 		pushx_plain:
-
-			vm->stk[vm->stklen] = *src;
-			if (src->type == tcompo && src->val.v_tcompo)
-				src->val.v_tcompo->refctr++;
-			vm->stklen++;
+			stk_push(vm, src);
 		}
+		vm_done_pushx:
 		VM_NEXT();
+#ifdef TAPAS_VM_THREADED
+		vm_lbl_pushx_plain_temporary: {
+			const tobj *src = vm_array_slot(
+				&vm->tmps, tbycode_get_L(*iter));
+			stk_push(vm, src);
+			goto vm_done_pushx_plain;
+		}
+		vm_lbl_pushx_plain_local: {
+			const tobj *src = vm_array_slot(
+				&env->base.objs, tbycode_get_L(*iter));
+			stk_push(vm, src);
+			goto vm_done_pushx_plain;
+		}
+		/* Plain pushes keep their own dispatch context. */
+		vm_done_pushx_plain:
+		VM_NEXT();
+#endif
 		VM_CASE(OP_PUSHI): {
 			long value = tbycode_pushi_is_immediate(*iter) ?
 				tbycode_pushi_immediate_value(*iter) :
@@ -4806,7 +5054,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 				 * <op> const` 累加落槽，均无栈往返。 */
 				if (vm_cmp_branch_fused(vm, env, cmdarr, &i,
 							end, &cst))
-					VM_NEXT();
+					goto vm_done_pushi;
 				{
 					tobj call_params[VM_NATIVE_FUSED_MAX_PARAMS];
 					int fused = vm_arith_named_fused(
@@ -4815,7 +5063,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 					if (fused == 2)
 						goto make_call;
 					if (fused)
-						VM_NEXT();
+						goto vm_done_pushi;
 				}
 			} else if (f1 == OP_IDXR &&
 			    tbycode_idxr_named(cmdarr[i + 1]) &&
@@ -4838,6 +5086,13 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 						    object->val.v_tcompo, &key,
 						    1, tbycode_idxr_compare(idxr),
 						    dest)) {
+						uint_cmds indexed = i + 1;
+						if (tbycode_idxr_compare(idxr) &&
+						    vm_consume_byte_comparison(vm, cmdarr,
+								 &indexed, end, dest)) {
+							i = indexed;
+							goto vm_done_pushi;
+						}
 						/* `f(recv[c])`：单实参调用直接以
 						 * 读出的值发起。 */
 						if (i + 2 < end) {
@@ -4890,7 +5145,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 						vm_consume_popcov(vm, env,
 								  cmdarr, &i,
 								  end);
-						VM_NEXT();
+						goto vm_done_pushi;
 					}
 				}
 			} else {
@@ -4901,13 +5156,14 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 				if (fused == 2)
 					goto make_call;
 				if (fused)
-					VM_NEXT();
+					goto vm_done_pushi;
 			}
 			tobj v;
 			tobj_set_nil(&v);
 			vm_set_int_result(&v, value);
 			stk_push(vm, &v);
 		}
+		vm_done_pushi:
 		VM_NEXT();
 		VM_CASE(OP_PUSHFLT): {
 			tobj v;
@@ -4955,6 +5211,11 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 							items, gcache->slot,
 							key.val.v_tcompo);
 					if (value) {
+						if (gcache->field_fusion != tins_field_plain &&
+						    vm_field_arithmetic_fused(
+							    vm, env, wrapper, code_cache.entries,
+							    &i, end))
+							goto vm_done_pushs;
 						/* 内弦键指针直中：内联返回。 */
 						tobj *dest = stk_free(vm);
 						*dest = *value;
@@ -4968,7 +5229,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 						vm_consume_popcov(vm, env,
 								  cmdarr, &i,
 								  end);
-						VM_NEXT();
+						goto vm_done_pushs;
 					}
 					vm_idxr_value(vm, recv->val.v_tcompo, &key, 1,
 						tbycode_idxr_compare(idxr), 0,
@@ -4983,7 +5244,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 					 * 紧随的条件跳与赋值一并消费。 */
 					vm_consume_cjpop(vm, cmdarr, &i, end);
 					vm_consume_popcov(vm, env, cmdarr, &i, end);
-					VM_NEXT();
+					goto vm_done_pushs;
 				}
 			}
 			tobj v;
@@ -4995,6 +5256,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 			stk_push(vm, &v);
 			tobj_set_nil(&v);
 		}
+		vm_done_pushs:
 		VM_NEXT();
 		VM_CASE(OP_PUSHDICT): {
 			uint_regs n = (uint_regs)tbycode_pushdict_count(*iter);
@@ -5108,10 +5370,11 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 				    vm, cmdarr, i, end,
 				    nparams + (direct ? 0 : 1))) {
 				i++;
-				VM_NEXT();
+				goto vm_done_evalsf;
 			}
 			vm_finish_eval(vm, nparams + (direct ? 0 : 1));
 		}
+		vm_done_evalsf:
 		VM_NEXT();
 		VM_CASE(OP_EVALCF): {
 			int direct = tbycode_get_i(*iter) != 0;
@@ -5133,10 +5396,11 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 				    vm, cmdarr, i, end,
 				    nparams + (direct ? 0 : 1))) {
 				i++;
-				VM_NEXT();
+				goto vm_done_evalcf;
 			}
 			vm_finish_eval(vm, nparams + (direct ? 0 : 1));
 		}
+		vm_done_evalcf:
 		VM_NEXT();
 		VM_CASE(OP_EVALTF): {
 			uint_regs nparams = (uint_regs)tbycode_get_U(*iter);
@@ -5217,7 +5481,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 							key, stk_at(vm, 1));
 					stk_popcn(vm, 2);
 					i = vm_fused_next(cmdarr, end, i + 1);
-					VM_NEXT();
+					goto vm_done_idxl;
 				}
 				if (key->type == tint &&
 				    arr->vtable == &tlist_vtable) {
@@ -5240,7 +5504,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 							     value);
 					stk_popcn(vm, 2);
 					i = vm_fused_next(cmdarr, end, i + 1);
-					VM_NEXT();
+					goto vm_done_idxl;
 				}
 				/* 结构成员写 `obj['field'] = ...`：内弦键配合
 				 * 每点槽位缓存，指针直中时内联写回。 */
@@ -5269,7 +5533,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 							stk_popcn(vm, 2);
 							i = vm_fused_next(cmdarr, end,
 									  i + 1);
-							VM_NEXT();
+							goto vm_done_idxl;
 						}
 					}
 				}
@@ -5280,6 +5544,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 				isenv,
 				env,
 				tvm_instruction_cache(&code_cache, i));
+		vm_done_idxl:
 			VM_NEXT();
 		}
 		VM_CASE(OP_PUSHF): {
@@ -5377,7 +5642,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 			    tobj_compo_type(condition) == compo_trule_instance) {
 				tobj_vec_push(&vm->rule.output->items, condition);
 				stk_popc(vm);
-				VM_NEXT();
+				goto vm_done_ruleimply;
 			}
 			if (tbycode_get_U(*iter) == TRULE_ANTECEDENT_RECORD) {
 				/* Keep the original Bool/RuleInstance available through source IR.
@@ -5396,7 +5661,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 				tobj_set_nil(&value);
 				tobj_set_bool(&value, truth);
 				stk_push(vm, &value);
-				VM_NEXT();
+				goto vm_done_ruleimply;
 			}
 			if (condition->type != tbool)
 				twarn(ErrRuntime_ParamsType, "Rule condition",
@@ -5414,6 +5679,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 			tobj_try_clear(&description);
 			stk_popc(vm);
 		}
+		vm_done_ruleimply:
 		VM_NEXT();
 		VM_CASE(OP_ADD): {
 			VM_PARSE_BINOP(vm, operator_add, *iter, env);
@@ -5515,9 +5781,6 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 			twarn(ErrRuntime_Other, "exec_tins",
 			      "invalid bytecode instruction");
 		VM_SWITCH_END
-#ifdef TAPAS_VM_THREADED
-		vm_advance:
-#endif
 		i++;
 		goto dispatch;
 
@@ -5568,7 +5831,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 		/* Same-wrapper calls (all recursion and intra-module calls)
 		 * keep the loaded code context; only crossings reload it. */
 		if (callee_wrapper != wrapper) {
-			code_cache = *tvm_get_code_cache(vm, callee_wrapper);
+			code_cache = *tvm_get_code_cache(vm, callee_wrapper, VM_DISPATCH_TABLE);
 			wrapper = callee_wrapper;
 			cmdarr = wrapper->cmdarr;
 			cints = wrapper->consts.cints;
@@ -5597,7 +5860,7 @@ resume_caller:
 
 		env = return_env;
 		if (return_wrapper != wrapper) {
-			code_cache = *tvm_get_code_cache(vm, return_wrapper);
+			code_cache = *tvm_get_code_cache(vm, return_wrapper, VM_DISPATCH_TABLE);
 			wrapper = return_wrapper;
 			cmdarr = wrapper->cmdarr;
 			cints = wrapper->consts.cints;
