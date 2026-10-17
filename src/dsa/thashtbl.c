@@ -15,15 +15,8 @@
 #define THASH_DEFAULT_CAP 16
 #define THASH_MAX_CAP (1u << 30)
 
-static inline __attribute__((always_inline)) uint64_t thash_mix(uint64_t x)
-{
-	x ^= x >> 30;
-	x *= 0xbf58476d1ce4e5b9ULL;
-	x ^= x >> 27;
-	x *= 0x94d049bb133111ebULL;
-	x ^= x >> 31;
-	return x;
-}
+/* thash_mix 与混合模式的整数键哈希位于 thashtbl_internal.h，供本文件与
+ * 运行时热路径共享。 */
 
 static inline __attribute__((always_inline)) uint64_t thash_tobj_hash(
 	const tobj *key)
@@ -81,6 +74,14 @@ static inline __attribute__((always_inline)) uint64_t thash_tobj_hash(
 		break;
 	}
 	return hash < 2 ? hash + 2 : hash;
+}
+
+static inline uint64_t thash_key_hash(const thashtbl *tbl, const tobj *key)
+{
+	uint64_t hash = thash_tobj_hash(key);
+	if (tbl->mixed && key->type == tint)
+		hash = thashtbl_hash_int_mixed((uint64_t)key->val.v_tint);
+	return hash;
 }
 
 static int thash_tobj_key_eq(const tobj *a, const tobj *b)
@@ -194,16 +195,20 @@ uint_count thashtbl_len(const thashtbl *tbl)
 static uint_count thashtbl_find_slot(const thashtbl *tbl,
 				    const tobj *key,
 				    uint64_t hash,
-				    int *found)
+				    int *found,
+				    uint_count *probes)
 {
 	uint_count mask = tbl->capacity - 1;
 	uint_count idx = (uint_count)(hash & mask);
 	uint_count first_deleted = tbl->capacity;
+	uint_count probe_count = 0;
 
 	for (;;) {
 		thash_entry *entry = &tbl->entries[idx];
+		probe_count++;
 		if (entry->hash == 0) {
 			*found = 0;
+			if (probes) *probes = probe_count;
 			return first_deleted != tbl->capacity ? first_deleted : idx;
 		}
 		if (entry->hash == 1) {
@@ -212,6 +217,7 @@ static uint_count thashtbl_find_slot(const thashtbl *tbl,
 		} else if (entry->hash == hash &&
 			   thash_tobj_key_eq(&entry->key, key)) {
 			*found = 1;
+			if (probes) *probes = probe_count;
 			return idx;
 		}
 		idx = (idx + 1) & mask;
@@ -224,9 +230,9 @@ const tobj *thashtbl_find(const thashtbl *tbl, const tobj *key,
 		if (slot) *slot = 0;
 		return nullptr;
 	}
-	uint64_t hash = thash_tobj_hash(key);
+	uint64_t hash = thash_key_hash(tbl, key);
 	int found = 0;
-	uint_count idx = thashtbl_find_slot(tbl, key, hash, &found);
+	uint_count idx = thashtbl_find_slot(tbl, key, hash, &found, nullptr);
 	if (slot) *slot = idx;
 	return found ? &tbl->entries[idx].value : nullptr;
 }
@@ -284,6 +290,36 @@ static void thashtbl_rehash(thashtbl *tbl, uint_count newcap)
 	tblockpool_free(old_entries, old_capacity * sizeof(thash_entry));
 }
 
+/* 恒等整数哈希下跨步键（如 i*1024 的扁平化下标）在低位聚集成超长探测
+ * 链。插入侧发现后把表一次性升级为混合模式：整数键重新混合、其余键
+ * 沿用已存哈希，同容量重排同时顺带清除墓碑。 */
+static void thashtbl_convert_to_mixed(thashtbl *tbl)
+{
+	thash_entry *old_entries = tbl->entries;
+	uint_count old_capacity = tbl->capacity;
+
+	thashtbl_alloc_entries(tbl, old_capacity);
+	tbl->mixed = 1;
+	for (uint_count i = 0; i < old_capacity; i++) {
+		thash_entry *src = &old_entries[i];
+		if (src->hash < 2)
+			continue;
+		uint64_t hash = src->key.type == tint ?
+			thashtbl_hash_int_mixed((uint64_t)src->key.val.v_tint) :
+			src->hash;
+		uint_count mask = tbl->capacity - 1;
+		uint_count idx = (uint_count)(hash & mask);
+		while (tbl->entries[idx].hash != 0)
+			idx = (idx + 1) & mask;
+		thash_entry *dst = &tbl->entries[idx];
+		*dst = *src;
+		dst->hash = hash;
+		tbl->used++;
+		tbl->len++;
+	}
+	tblockpool_free(old_entries, old_capacity * sizeof(thash_entry));
+}
+
 static void thashtbl_ensure_room(thashtbl *tbl)
 {
 	if (tbl->capacity == 0) {
@@ -308,9 +344,18 @@ uint_count thashtbl_set(thashtbl *tbl, const tobj *key, const tobj *value)
 	tobj v = *value;
 	if (tbl->capacity == 0)
 		thashtbl_alloc_entries(tbl, THASH_DEFAULT_CAP);
-	uint64_t hash = thash_tobj_hash(&k);
+	uint64_t hash = thash_key_hash(tbl, &k);
 	int found = 0;
-	uint_count idx = thashtbl_find_slot(tbl, &k, hash, &found);
+	uint_count probes = 0;
+	uint_count idx = thashtbl_find_slot(tbl, &k, hash, &found, &probes);
+	if (probes > THASH_PROBE_CHAIN_LIMIT && !tbl->mixed) {
+		/* 超长探测链几乎都是跨步整数键的低位聚集；升级混合模式后
+		 * 用新哈希重新定位。 */
+		thashtbl_convert_to_mixed(tbl);
+		hash = thash_key_hash(tbl, &k);
+		found = 0;
+		idx = thashtbl_find_slot(tbl, &k, hash, &found, nullptr);
+	}
 	if (found) {
 		thash_entry *entry = &tbl->entries[idx];
 		if (!thash_same_stored_value(&entry->value, &v)) {
@@ -324,7 +369,7 @@ uint_count thashtbl_set(thashtbl *tbl, const tobj *key, const tobj *value)
 	thashtbl_ensure_room(tbl);
 	if (tbl->entries != old_entries) {
 		found = 0;
-		idx = thashtbl_find_slot(tbl, &k, hash, &found);
+		idx = thashtbl_find_slot(tbl, &k, hash, &found, nullptr);
 	}
 	thash_entry *entry = &tbl->entries[idx];
 	if (entry->hash == 0)
@@ -364,8 +409,8 @@ const tobj *thashtbl_get(const thashtbl *tbl, const tobj *key)
 	if (!tbl || tbl->capacity == 0)
 		return nullptr;
 	int found = 0;
-	uint64_t hash = thash_tobj_hash(key);
-	uint_count idx = thashtbl_find_slot(tbl, key, hash, &found);
+	uint64_t hash = thash_key_hash(tbl, key);
+	uint_count idx = thashtbl_find_slot(tbl, key, hash, &found, nullptr);
 	return found ? &tbl->entries[idx].value : nullptr;
 }
 
@@ -379,8 +424,8 @@ int thashtbl_delete(thashtbl *tbl, const tobj *key)
 	if (!tbl || tbl->capacity == 0)
 		return 0;
 	int found = 0;
-	uint64_t hash = thash_tobj_hash(key);
-	uint_count idx = thashtbl_find_slot(tbl, key, hash, &found);
+	uint64_t hash = thash_key_hash(tbl, key);
+	uint_count idx = thashtbl_find_slot(tbl, key, hash, &found, nullptr);
 	if (!found)
 		return 0;
 	tobj_ddc_ref_clear(&tbl->entries[idx].key);
@@ -406,6 +451,7 @@ thashtbl *thashtbl_copy(const thashtbl *tbl)
 	if (!tbl || tbl->len == 0)
 		return copy;
 	thashtbl_alloc_entries(copy, tbl->capacity);
+	copy->mixed = tbl->mixed;
 	uint_count mask = copy->capacity - 1;
 	for (uint_count i = 0; i < tbl->capacity; i++) {
 		if (tbl->entries[i].hash < 2)

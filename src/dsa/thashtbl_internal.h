@@ -17,6 +17,10 @@
 #define THASH_LOAD_NUM 7
 #define THASH_LOAD_DEN 10
 
+/* 恒等哈希下随机键的最长探测链约为 log n 量级；超过此阈值几乎必然是
+ * 跨步整数键的低位聚集，插入侧据此把表升级为混合模式。 */
+#define THASH_PROBE_CHAIN_LIMIT 32
+
 /** @brief 单个桶：键值加规范化哈希；零表示空桶，一表示墓碑。 */
 typedef struct {
 	tobj key;
@@ -30,6 +34,7 @@ struct thashtbl {
 	uint_count len;        /**< 存活键值对数量。 */
 	uint_count used;       /**< 占用桶数（含墓碑）。 */
 	uint_count capacity;   /**< 桶数量，恒为 2 的幂。 */
+	uint8_t mixed;         /**< 非零时整数键改用混合哈希（跨步键去聚集）。 */
 };
 
 /**
@@ -38,8 +43,8 @@ struct thashtbl {
  * @details 与通用键哈希的 tint 分支完全一致。低位保持原样（等价于
  * CPython 的 int 恒等哈希），顺序整数键落在相邻桶中，探测对缓存友好；
  * 第 63 位的标记把结果抬到 2 以上，使其可以直接作为桶的占用标记，且
- * 不会像加偏移那样引入额外碰撞。跨步键（如 2 的幂间隔）在低位上全部
- * 碰撞，该取舍与 CPython 的 dict 相同。
+ * 不会像加偏移那样引入额外碰撞。跨步键（如 2 的幂间隔）在低位上聚集，
+ * 由插入侧的探测链长度检测升级为混合模式（见 thashtbl_int_key_hash）。
  *
  * @param key 整数键的位表示。
  * @return 规范化哈希。
@@ -47,6 +52,40 @@ struct thashtbl {
 static inline uint64_t thashtbl_hash_int(uint64_t key)
 {
 	return (key ^ 0x30ULL) | (1ULL << 63);
+}
+
+/**
+ * @brief 整数键的混合哈希（splitmix64 终置换）。
+ *
+ * @details 仅在表切换到混合模式后使用：恒等哈希下跨步整数键（如 2 的幂
+ * 间隔的扁平化矩阵下标）会在低位聚集成超长探测链，表在插入侧检测到后
+ * 升级为混合哈希并重排。异或折叠破坏 2-adic 结构，跨步键随之散开。
+ */
+static inline uint64_t thash_mix(uint64_t x)
+{
+	x ^= x >> 30;
+	x *= 0xbf58476d1ce4e5b9ULL;
+	x ^= x >> 27;
+	x *= 0x94d049bb133111ebULL;
+	x ^= x >> 31;
+	return x;
+}
+
+/** @brief 混合模式下整数键的规范化哈希。 */
+static inline uint64_t thashtbl_hash_int_mixed(uint64_t key)
+{
+	return thash_mix(key) | (1ULL << 63);
+}
+
+/**
+ * @brief 按表的当前模式计算整数键的规范化哈希。
+ *
+ * @details VM 的索引读写热路径直接内联整数键的探测，必须与表内存储
+ * 使用的哈希一致；非混合表保持恒等哈希的顺序键缓存局部性。
+ */
+static inline uint64_t thashtbl_int_key_hash(const thashtbl *tbl, uint64_t key)
+{
+	return tbl->mixed ? thashtbl_hash_int_mixed(key) : thashtbl_hash_int(key);
 }
 
 /**

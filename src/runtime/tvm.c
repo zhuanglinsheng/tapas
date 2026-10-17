@@ -1636,7 +1636,7 @@ static inline TVM_ALWAYS_INLINE int vm_idxr_fast(
 		thashtbl *items = ((tdict *)arr)->items;
 		if (items->capacity == 0)
 			twarn(ErrRuntime_ObjUnfound, "tdict_get", "");
-		uint64_t hash = thashtbl_hash_int((uint64_t)index);
+		uint64_t hash = thashtbl_int_key_hash(items, (uint64_t)index);
 		uint_count mask = items->capacity - 1;
 		uint_count idx = (uint_count)(hash & mask);
 		for (;;) {
@@ -2131,13 +2131,15 @@ static inline TVM_ALWAYS_INLINE void vm_dict_set_int(thashtbl *items,
 		thashtbl_set(items, key, rv);
 		return;
 	}
-	uint64_t hash = thashtbl_hash_int((uint64_t)key->val.v_tint);
+	uint64_t hash = thashtbl_int_key_hash(items, (uint64_t)key->val.v_tint);
 	uint_count mask = items->capacity - 1;
 	uint_count idx = (uint_count)(hash & mask);
 	uint_count first_deleted = items->capacity;
+	uint_count probes = 0;
 	thash_entry *hit = nullptr;
 	for (;;) {
 		thash_entry *candidate = &items->entries[idx];
+		probes++;
 		if (candidate->hash == 0)
 			break;
 		if (candidate->hash == 1) {
@@ -2148,6 +2150,12 @@ static inline TVM_ALWAYS_INLINE void vm_dict_set_int(thashtbl *items,
 			   candidate->key.val.v_tint == key->val.v_tint) {
 			hit = candidate;
 			break;
+		}
+		/* 超长探测链即跨步键聚集：回退到完整路径，由它把表升级为
+		 * 混合模式（顺带处理扩容）。 */
+		if (probes > THASH_PROBE_CHAIN_LIMIT && !items->mixed) {
+			thashtbl_set(items, key, rv);
+			return;
 		}
 		idx = (idx + 1) & mask;
 	}
@@ -4186,8 +4194,8 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
 				if (items->capacity == 0)
 					hit = 0;
 				else if (member->type == tint) {
-					uint64_t hash = thashtbl_hash_int(
-						(uint64_t)member->val.v_tint);
+					uint64_t hash = thashtbl_int_key_hash(
+						items, (uint64_t)member->val.v_tint);
 					thash_entry *entry = &items->entries
 						[hash & (items->capacity - 1)];
 					hit = entry->hash == hash &&
