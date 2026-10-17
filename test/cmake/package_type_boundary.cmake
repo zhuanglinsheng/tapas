@@ -36,8 +36,8 @@ foreach(LEGACY_DSA_PATH IN ITEMS
 			"legacy data-structure or dependency path remains: ${LEGACY_DSA_PATH}")
 	endif()
 endforeach()
-if(NOT EXISTS "${SOURCE_ROOT}/src/dsa/third_party/pcg-c")
-	message(FATAL_ERROR "dsa-local PCG dependency is missing")
+if(NOT EXISTS "${SOURCE_ROOT}/src/third_party/pcg-c")
+	message(FATAL_ERROR "vendored PCG dependency is missing")
 endif()
 foreach(REQUIRED_HEADER IN ITEMS
 		include/tapas/objects/ttype.h

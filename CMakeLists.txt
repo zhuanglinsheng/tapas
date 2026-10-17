@@ -44,8 +44,7 @@ set(STRICT_C_FLAGS
 )
 
 # Apply compiler flags
-string(REPLACE ";" " " STRICT_C_FLAGS_STRING "${STRICT_C_FLAGS}")
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${STRICT_C_FLAGS_STRING}")
+# Project warnings are applied to first-party targets below, excluding vendored code.
 
 # ============================================================================
 # 3. Include Directories
@@ -125,10 +124,6 @@ set(TAPAS_STDLIB_SOURCES
     src/stdlib/random/object.c
 	src/stdlib/finite/finite.c
 	src/stdlib/finite/object.c
-	src/dsa/third_party/pcg-c/src/pcg-advance-64.c
-	src/dsa/third_party/pcg-c/src/pcg-output-32.c
-	src/dsa/third_party/pcg-c/src/pcg-output-64.c
-	src/dsa/third_party/pcg-c/src/pcg-rngs-64.c
     src/stdlib/types/types.c
     src/stdlib/rules/rules.c
     src/stdlib/rules/domain.c
@@ -209,11 +204,25 @@ string(HEX "${SOLVE_BACKEND_SOURCE}" SOLVE_BACKEND_HEX)
 string(REGEX REPLACE "(..)" "0x\\1," SOLVE_BACKEND_BYTES "${SOLVE_BACKEND_HEX}")
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/generated/solve_backend.h"
     "static const unsigned char tapas_solve_backend[] = {${SOLVE_BACKEND_BYTES}0};\n")
+add_library(tapas_pcg STATIC
+    src/third_party/pcg-c/src/pcg-advance-64.c
+    src/third_party/pcg-c/src/pcg-output-32.c
+    src/third_party/pcg-c/src/pcg-output-64.c
+    src/third_party/pcg-c/src/pcg-rngs-64.c)
+target_include_directories(tapas_pcg SYSTEM PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/third_party/pcg-c/include)
+
+add_library(tapas_yyjson STATIC src/third_party/yyjson/yyjson.c)
+target_compile_definitions(tapas_yyjson PRIVATE
+    YYJSON_READER_DEPTH_LIMIT=256 YYJSON_WRITER_DEPTH_LIMIT=256)
+target_include_directories(tapas_yyjson SYSTEM PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/third_party/yyjson)
+
 add_library(tapas_stdlib STATIC ${TAPAS_STDLIB_SOURCES})
 target_include_directories(tapas_stdlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include
-    PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/generated
-        ${CMAKE_CURRENT_SOURCE_DIR}/src/dsa/third_party/pcg-c/include)
-target_link_libraries(tapas_stdlib PUBLIC tapas_runtime tapas_syntax)
+    PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/generated)
+target_link_libraries(tapas_stdlib PUBLIC tapas_runtime tapas_syntax
+    PRIVATE tapas_pcg tapas_yyjson)
 
 add_library(tapas_frontend STATIC ${TAPAS_FRONTEND_SOURCES})
 target_include_directories(tapas_frontend PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
@@ -579,6 +588,19 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/CHANGELOG.md")
     install(FILES CHANGELOG.md DESTINATION ${CMAKE_INSTALL_DOCDIR})
 endif()
 install(FILES
-    src/dsa/third_party/pcg-c/LICENSE-MIT.txt
-    src/dsa/third_party/pcg-c/LICENSE-APACHE.txt
+    src/third_party/pcg-c/LICENSE-MIT.txt
+    src/third_party/pcg-c/LICENSE-APACHE.txt
     DESTINATION ${CMAKE_INSTALL_DATADIR}/licenses/tapas/pcg-c)
+
+install(FILES src/third_party/yyjson/LICENSE
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/licenses/tapas/yyjson)
+
+# Third-party libraries keep their upstream warning policy.
+get_property(TAPAS_BUILD_TARGETS DIRECTORY PROPERTY BUILDSYSTEM_TARGETS)
+foreach(TAPAS_BUILD_TARGET IN LISTS TAPAS_BUILD_TARGETS)
+    get_target_property(TAPAS_BUILD_TARGET_TYPE ${TAPAS_BUILD_TARGET} TYPE)
+    if(TAPAS_BUILD_TARGET_TYPE MATCHES "^(EXECUTABLE|STATIC_LIBRARY|SHARED_LIBRARY|MODULE_LIBRARY|OBJECT_LIBRARY)$"
+       AND NOT TAPAS_BUILD_TARGET MATCHES "^tapas_(pcg|yyjson)$")
+        target_compile_options(${TAPAS_BUILD_TARGET} PRIVATE ${STRICT_C_FLAGS})
+    endif()
+endforeach()
