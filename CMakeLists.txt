@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(tapas VERSION 0.1.0 LANGUAGES C)
+project(tapas VERSION 0.2.1 LANGUAGES C)
 
 include(CTest)
 include(GNUInstallDirs)
