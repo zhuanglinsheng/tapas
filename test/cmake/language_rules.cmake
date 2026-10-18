@@ -1106,6 +1106,7 @@ if(NOT ast_import_output STREQUAL "42\ntrue\n2.5\nDelivered\nPending\n")
 endif()
 
 set(invalid_fixtures
+    math_isqrt_float.tap
     bulk_count_not_iterable.tap
     bulk_fill_not_writable.tap
     bulk_fill_indices_not_iterable.tap
@@ -1202,6 +1203,7 @@ foreach(fixture IN LISTS invalid_fixtures)
 endforeach()
 
 set(runtime_error_fixtures
+    bytes_constructor_arity.tap bytes_constructor_type.tap
     bulk_fill_bounds.tap
     bulk_fill_index_type.tap
     bulk_fill_array_indices.tap
