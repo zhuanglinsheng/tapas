@@ -72,6 +72,17 @@ source -> frontend/{document, syntax, ast, parser, semantic, control_flow}
 上下文参数。公共 `compiler.h` 只公开不透明 `tcp` 和编译入口；上下文布局及槽位
 操作保留在 `backend/` 私有头文件中。
 
+## 局部变量初始化与作用域
+
+未被捕获的局部变量可以在初始化表达式求值后，通过 `VCRT-init` 直接接收结果；
+这也适用于动态下标、调用返回值及对象，不要求静态证明为标量。函数构造、已有的未知类型
+算术和简单命名下标初始化保留 `VCRT` 融合路径，避免破坏直接写入目标槽位的收益。
+可变或被捕获的绑定仍先创建环境槽位；无初始化表达式的声明保留原有初始化检查。
+
+词法作用域和退出清理不变，对象引用仍按原有逆序立即释放。标量清零省略候选经过
+多轮对照后未保留；固定局部槽位仍需进一步设计，不把局部名称移到外层来代替。
+实验、失败候选和跨案例 A/B 见 [值路径优化](../../test/benchmarks/hotspots/VALUE_PATHS.md)。
+
 ## 本轮结构优化
 
 `tcontrol_flow` 在解析后建立 parent、first-child、sibling、child-role、

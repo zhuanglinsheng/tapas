@@ -508,8 +508,23 @@ static void emit_declaration(tast_emitter *emitter,
 		(ttypeval_equal(inferred, ttypeval_builtin(tbuiltintype_bool)) ||
 		 ttypeval_equal(inferred, ttypeval_builtin(tbuiltintype_int)) ||
 		 ttypeval_equal(inferred, ttypeval_builtin(tbuiltintype_float)));
+	int fused_arithmetic = initializer && initializer->kind == tast_binary &&
+		(initializer->binary.op == tsyntax_plus ||
+		 initializer->binary.op == tsyntax_minus ||
+		 initializer->binary.op == tsyntax_star ||
+		 initializer->binary.op == tsyntax_slash);
+	const tast_id *indices = initializer && initializer->kind == tast_index ?
+		tast_get_children(emitter->arena, initializer->aggregate.children,
+				  initializer->aggregate.count) : nullptr;
+	int fused_index = indices && initializer->aggregate.count == 1 &&
+		tast_get(emitter->arena, initializer->aggregate.receiver)->kind == tast_name &&
+		tast_get(emitter->arena, indices[0])->kind == tast_name;
+	/* Uncaptured locals can be initialized directly from dynamic values too.
+	 * Keep function constructors and existing VCRT arithmetic/index fusions
+	 * in their binding-first form; captured/mutable bindings need it too. */
 	int deferred_initialization = has_initializer && !environment_binding &&
-		scalar_initializer;
+		initializer->kind != tast_function &&
+		(scalar_initializer || (!fused_arithmetic && !fused_index));
 	if (!deferred_initialization)
 		tvmcmd_vect_append(emitter->instructions,
 			tbycode_make_lr(OP_VCRT, (uint16_t)name_location,
