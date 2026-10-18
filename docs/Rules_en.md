@@ -318,7 +318,7 @@ Conditions, or a result Type:
 | `Rule`, `RuleInstance` | Any Rule or instance |
 | `Rule[T, ...]` | Rule with the specified parameter Types |
 | `RuleInstance[T, ...]` | Bound instance with those parameter Types |
-| `InstanceOf[R]` | Instance bound by the same runtime Rule R; infers its parameters without asserting satisfaction |
+| `InstanceOf[R]` | Static annotation for an instance originating from R; infers its parameters without checking runtime identity or satisfaction |
 | `types::rule(Type...)` | Constructs an exact Rule Type value |
 | `types::rule_instance(Type...)` | Constructs an exact instance Type value |
 | `types::instance_of(rule)` | Explicitly constructs a Type matching that runtime Rule identity |
@@ -326,6 +326,10 @@ Conditions, or a result Type:
 Zero-parameter exact Types are `Rule[]` and `RuleInstance[]`. Parameters are
 invariant; names and descriptions do not affect Type equality. Every exact
 Rule Type is assignable to broad `Rule`, and likewise for instances.
+
+`InstanceOf[R]` follows the static and `Unknown` rules in the
+[Type System](TypeSystem_en.md). To enforce actual Rule object identity at a
+dynamic boundary, use `types::matches(value, types::instance_of(R))` explicitly.
 
 ```text
 let IntRule = types::rule(types::Int)

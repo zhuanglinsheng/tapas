@@ -294,7 +294,7 @@ Rule 的精确 Type 只记录有序参数 Type，不记录参数名称、Conditi
 | `Rule`、`RuleInstance` | 任意 Rule 或实例 |
 | `Rule[T, ...]` | 具有指定参数 Type 的 Rule |
 | `RuleInstance[T, ...]` | 已绑定指定参数 Type 的实例 |
-| `InstanceOf[R]` | 由同一个运行时规则 R 绑定产生的实例，自动推导参数签名；不保证约束成立 |
+| `InstanceOf[R]` | 表示实例来源于 R 的静态标注，自动推导参数签名；不隐式检查运行时身份或约束成立 |
 | `types::rule(Type...)` | 构造精确 Rule Type 值 |
 | `types::rule_instance(Type...)` | 构造精确实例 Type 值 |
 | `types::instance_of(rule)` | 显式构造只匹配该运行时 Rule 身份的 Type 值 |
@@ -302,6 +302,10 @@ Rule 的精确 Type 只记录有序参数 Type，不记录参数名称、Conditi
 零参数精确 Type 写成`Rule[]`和`RuleInstance[]`。
 参数 Type 按不变规则比较；名称和说明不参与 Type 相等。
 每个精确 Rule Type 都可赋给宽泛`Rule`，实例同理。
+
+`InstanceOf[R]` 遵守[类型系统](TypeSystem_zh.md)中的静态检查和 `Unknown` 规则。
+需要在动态边界保证实际 Rule 对象身份时，显式使用
+`types::matches(value, types::instance_of(R))`。
 
 ```text
 let IntRule = types::rule(types::Int)

@@ -224,6 +224,7 @@ static tstatic_type_id runtime_to_static(to_static_context *context,
 			type->kind == ttype_kind_rule ? tstatic_type_rule :
 				type->instance_reference ? tstatic_type_instance_of :
 				tstatic_type_rule_instance, children, count, 0);
+		/* Names in transported compiler metadata are not identity proofs. */
 		if (type->instance_reference)
 			context->arena->types[result].value_reference =
 				tstring_dup(type->instance_reference);
@@ -641,7 +642,8 @@ static tstatic_type_id resolve_annotation_name(void *data, const char *name)
 static tstatic_type_id resolve_annotation_value(void *data, const char *name)
 {
 	to_static_context *context = data;
-	/* Imported and nested members are checked against their runtime values. */
+	/* Imported/nested members may remain unknown; annotations never evaluate
+	 * their runtime values or introduce implicit identity checks. */
 	if (strstr(name, "::")) return TSTATIC_TYPE_UNKNOWN;
 	return external_binding_type(context->cp, context->arena, name, 0);
 }

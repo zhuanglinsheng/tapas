@@ -1,0 +1,7 @@
+let R = rule (value: Int) { true }
+function accept(action: InstanceOf[R]) { return action }
+function caller() {
+	let R = rule (value: Int) { true }
+	return accept(R(1))
+}
+caller()

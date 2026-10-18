@@ -487,6 +487,15 @@ not bind R and do not perform an implicit check derived from the annotation.
 Satisfaction is separate and still requires `assert(action)` or
 `rules::check(action)`.
 
+Within one source analysis, immutable aliases preserve a known Rule declaration's
+identity, and declarations with the same name in different scopes remain distinct.
+Names and equal parameter signatures alone do not establish identity. Mutable Rule
+bindings, mutable container reads, factory/copy results, and imported metadata
+without a proven identity are treated conservatively; a broad `RuleInstance` or
+unknown identity is accepted without an implicit check. Importing the same source twice does not prove that the
+two runtime Rule objects are identical. An annotation is therefore a static
+constraint, not a guarantee of runtime identity at dynamic boundaries.
+
 At a dynamic boundary, construct the runtime Type explicitly:
 
 ```tapas
@@ -815,7 +824,7 @@ not insert a runtime check.
 When the compiler cannot determine an expression's Type, static analysis uses
 the internal state `Unknown`. `Unknown` is not a program-visible Type value and
 cannot appear in an annotation. It may enter any target position without
-causing an implicit runtime check, except at `InstanceOf` boundaries:
+causing an implicit runtime check, including at `InstanceOf` boundaries:
 
 ```text
 var amount: Int = 1
@@ -826,10 +835,9 @@ amount = foreign_value()  // Unknown; accepted by the compiler
 
 Both `let` and `var` retain the assignment behavior of the current language.
 When a binding is annotated, every subsequent assignment that can be analyzed
-statically is checked against the original annotation. Bindings annotated with
-Types containing `InstanceOf` reject reassignment in this first version. An unannotated static
-Type binding ceases to be usable as a static Type name after reassignment, even
-if its new runtime value is also a Type. Errors involving name resolution,
+statically is checked against the original annotation, including `InstanceOf`.
+An unannotated static Type binding ceases to be usable as a static Type name after
+reassignment, even if its new runtime value is also a Type. Errors involving name resolution,
 argument counts, duplicate fields, or deletion of required fields are governed
 by their own rules and are not part of assignability.
 

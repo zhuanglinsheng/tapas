@@ -1126,6 +1126,44 @@ static void test_declaration_without_initializer(void)
 	parsed_free(&parsed);
 }
 
+static void test_static_rule_identity(void)
+{
+	const struct { const char *source; int valid; } cases[] = {
+		{"let R = rule (x: Int) { true }\n"
+		 "let Alias = R\n"
+		 "function f(x: InstanceOf[Alias]) -> InstanceOf[R] { return x }\n"
+		 "let values: List[InstanceOf[Alias]] = [R(1)]\n"
+		 "f(R(1))\n", 1},
+		{"let R = rule (x: Int) { true }\n"
+		 "function f(x: InstanceOf[R]) { return x }\n"
+		 "function g() { let R = rule (x: Int) { true }; return f(R(1)) }\n", 0},
+		{"let R = rule (x: Int) { true }\n"
+		 "let S = rule (x: Int) { true }\n"
+		 "var selected = R\n"
+		 "let Alias = selected\n"
+		 "function f(x: InstanceOf[Alias]) { return x }\n"
+		 "selected = S\n"
+		 "f(selected(1))\n", 1},
+		{"let R = rule (x: Int) { true }\n"
+		 "let S = rule (x: Int) { true }\n"
+		 "let Alias = R\n"
+		 "var x: InstanceOf[Alias] = R(1)\n"
+		 "x = S(1)\n", 0},
+		{"let R = rule (x: Int) { true }\n"
+		 "let S = rule (x: Int) { true }\n"
+		 "let values: List[InstanceOf[R]] = [S(1)]\n", 0},
+	};
+	for (size_t i = 0; i < sizeof(cases) / sizeof(*cases); i++) {
+		tfrontend frontend;
+		tfrontend_init(&frontend, "identity.tap", cases[i].source, tfrontend_module);
+		assert((frontend.diagnostics.count == 0) == cases[i].valid);
+		if (!cases[i].valid)
+			assert(strstr(tstring_cstr(frontend.diagnostics.items[0].message),
+				"Type mismatch"));
+		tfrontend_free(&frontend);
+	}
+}
+
 static void test_static_function_types(void)
 {
 	tstatic_type_arena arena;
@@ -1329,7 +1367,10 @@ static void test_workspace_import_resolution(void)
 	snprintf(main_path, sizeof(main_path), "%s/main.tap", directory);
 	FILE *file = fopen(module_path, "w");
 	assert(file);
-	fputs("let answer = 42\nreturn {'answer': answer}\n", file);
+	fputs("let answer = 42\n"
+		"let R = rule (x: Int) { true }\n"
+		"function accept(x: InstanceOf[R]) { return x }\n"
+		"return {'answer': answer, 'R': R, 'accept': accept}\n", file);
 	fclose(file);
 	file = fopen(bridge_path, "w");
 	assert(file);
@@ -1409,6 +1450,15 @@ static void test_workspace_import_resolution(void)
 	assert(member.standard && strcmp(member.standard->name, "copy") == 0);
 	assert(tworkspace_find_references(&workspace, answer_document,
 		answer_export, &references) == 0);
+	standard_document = tworkspace_update(&workspace, tstring_cstr(main_uri),
+		"import module.tap as first\n"
+		"import module.tap as second\n"
+		"let R = rule (x: Int) { true }\n"
+		"let Alias = first::R\n"
+		"let a: InstanceOf[Alias] = first::R(1)\n"
+		"let b: InstanceOf[first::R] = second::R(2)\n"
+		"first::accept(R(3))\n", 6);
+	assert(standard_document->frontend.diagnostics.count == 0);
 	tworkspace_free(&workspace);
 	tstring_free(main_uri);
 	unlink(module_path);
@@ -1515,6 +1565,7 @@ int main(void)
 	test_shared_type_diagnostics_and_narrowing();
 	test_external_type_information();
 	test_declaration_without_initializer();
+	test_static_rule_identity();
 	test_static_function_types();
 	test_union_type_syntax();
 	test_static_recursive_types();

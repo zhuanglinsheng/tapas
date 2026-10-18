@@ -436,6 +436,8 @@ static tstatic_type_id copy_type(tstatic_type_arena *target,
 	for (uint32_t i = 0; i < type->child_count; i++)
 		cloned[i] = copy_type(target, source, children[i], copies);
 	copies[id] = tstatic_type_make(target, type->kind, cloned, type->child_count, type->variadic);
+	/* Rule declaration identities are local to the source analysis. A module
+	 * interface cannot prove which runtime execution produced an object. */
 	if (type->value_reference) target->types[copies[id]].value_reference = tstring_dup(type->value_reference);
 	free(cloned);
 	return copies[id];

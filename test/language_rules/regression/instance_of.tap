@@ -9,6 +9,18 @@ function accept(action: InstanceOf[Positive])
 
 let PositiveAlias = Positive
 assert(rule { accept(PositiveAlias(5)) == 5 })
+let PositiveAliasAgain = PositiveAlias
+function accept_alias(action: InstanceOf[PositiveAliasAgain]) -> InstanceOf[Positive]
+{
+	return action
+}
+let aliased: InstanceOf[PositiveAlias] = Positive(6)
+let nested: List[InstanceOf[PositiveAlias]] = [Positive(7), PositiveAlias(8)]
+assert(rule {
+	arguments(accept_alias(Positive(6)))[0] == 6
+	arguments(aliased)[0] == 6
+	len(nested) == 2
+})
 
 let action: InstanceOf[Positive] = Positive(3)
 assert(rule { accept(action) == 3 })
@@ -27,9 +39,49 @@ assert(rule {
 // at runtime. A statically known direct call with Other is rejected instead.
 function invoke(callback, action) { return callback(action) }
 assert(rule { invoke(accept, Other(4)) == 4 })
+function unknown_action(rule_value) { return rule_value(9) }
+reassigned = unknown_action(Other)
+assert(rule { accept(reassigned) == 9 })
+
+// Mutable Rule bindings cannot establish a stable identity. Even an immutable
+// alias of such a binding retains an unknown identity in static analysis.
+var selected = Positive
+let selected_alias = selected
+function accept_selected(action: InstanceOf[selected_alias]) { return arguments(action)[0] }
+selected = Other
+assert(rule { accept_selected(selected(10)) == 10 })
+
+// A factory's broad return Type does not identify individual executions.
+function make_rule() -> Rule[Int] { return rule (value: Int) { value > 0 } }
+let First = make_rule()
+let Second = make_rule()
+function accept_factory(action: InstanceOf[First]) { return arguments(action)[0] }
+assert(rule {
+	accept_factory(Second(11)) == 11
+	types::matches(Second(11), types::instance_of(First)) == false
+})
+
+// Equal signatures in a mutable container do not prove a shared Rule identity.
+let choices = [Positive, Other]
+let choice = choices[1]
+function accept_choice(action: InstanceOf[choice]) { return arguments(action)[0] }
+assert(rule { accept_choice(Positive(12)) == 12 })
+let mutable_choices = [Positive]
+mutable_choices[0] = Other
+let changed: InstanceOf[Other] = mutable_choices[0](13)
+assert(rule { arguments(changed)[0] == 13 })
+
+let Copied = copy(Positive)
+function accept_copied(action: InstanceOf[Copied]) { return arguments(action)[0] }
+assert(rule {
+	accept_copied(Positive(14)) == 14
+	types::matches(Copied(14), types::instance_of(Positive)) == false
+})
 
 let Composed = rule (instance: InstanceOf[Positive]) { instance }
 assert(Composed(Positive(2)))
+let AliasComposed = rule (instance: InstanceOf[PositiveAlias]) { instance }
+assert(AliasComposed(Positive(2)))
 
 let Empty = rule () { true }
 let EmptyInstance = types::instance_of(Empty)

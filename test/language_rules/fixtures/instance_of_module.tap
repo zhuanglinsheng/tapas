@@ -1,2 +1,4 @@
 let Positive = rule (value: Int) { value > 0 }
-return { 'Positive': Positive }
+let R = Positive
+function accept(action: InstanceOf[R]) { return arguments(action)[0] }
+return {'Positive': Positive, 'R': R, 'Alias': R, 'accept': accept}

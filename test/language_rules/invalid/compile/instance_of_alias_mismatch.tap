@@ -1,0 +1,5 @@
+let First = rule (value: Int) { true }
+let Second = rule (value: Int) { true }
+let Alias = First
+function accept(action: InstanceOf[Alias]) { return action }
+accept(Second(1))

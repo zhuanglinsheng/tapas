@@ -57,6 +57,9 @@ typedef struct {
 	uint32_t capabilities;
 	uint32_t template_type_parameter_count;
 	tstring *value_reference;
+	/* Analysis-local Rule declaration identity; zero means unproven. Names
+	 * remain presentation/reference data and never establish object identity. */
+	uint32_t rule_identity;
 	/* Presentation provenance of this occurrence, never part of Type equality. */
 	tstring *display_name;
 	tstatic_type_id display_definition;
@@ -114,8 +117,9 @@ tstatic_type_id tstatic_type_make(tstatic_type_arena *arena,
 				  tstatic_type_kind kind,
 				  const tstatic_type_id *children,
 				  uint32_t child_count, int variadic);
-tstatic_type_id tstatic_type_with_value_reference(
-	tstatic_type_arena *arena, tstatic_type_id id, const char *reference);
+tstatic_type_id tstatic_type_with_rule_identity(
+	tstatic_type_arena *arena, tstatic_type_id id, const char *reference,
+	uint32_t identity);
 tstatic_type_id tstatic_type_make_instance_of(
 	tstatic_type_arena *arena, const tstatic_type_id *parameters,
 	uint32_t parameter_count, const char *reference);

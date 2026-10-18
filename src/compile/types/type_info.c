@@ -459,6 +459,15 @@ static tstatic_type_id union_of(type_analyzer *analyzer,
 	for (uint32_t i = 1; i < count; i++)
 		same = same && tstatic_type_equal(
 			&analyzer->model->arena, types[0], types[i]);
+	/* Lists are mutable. Equal Rule signatures do not prove that a later
+	 * element read still refers to the original Rule object. */
+	const tstatic_type *first = tstatic_type_get(
+		&analyzer->model->arena, types[0]);
+	if (same && first && first->kind == tstatic_type_rule && first->rule_identity) {
+		return tstatic_type_with_rule_identity(
+			&analyzer->model->arena, types[0],
+			tstring_cstr(first->value_reference), 0);
+	}
 	return same ? types[0] : tstatic_type_make(&analyzer->model->arena,
 		tstatic_type_union, types, count, 0);
 }
@@ -815,20 +824,25 @@ static tstatic_type_id infer(type_analyzer *analyzer, tast_id id)
 			} else if (argument < node->aggregate.count) {
 				result = infer(analyzer, arguments[argument]);
 			}
+			/* A result-Type relation (e.g. copying a value) does not promise
+			 * object identity. Keep the Rule signature but drop its provenance. */
+			const tstatic_type *result_type = tstatic_type_get(
+				&analyzer->model->arena, result);
+			if (result_type && result_type->kind == tstatic_type_rule &&
+			    result_type->rule_identity)
+				result = tstatic_type_with_rule_identity(
+					&analyzer->model->arena, result,
+					tstring_cstr(result_type->value_reference), 0);
 		}
-		tstring *rule_identity = nullptr;
+		tstring *rule_reference = nullptr;
+		uint32_t rule_identity = 0;
 		/* 上面的模板解析/应用与递归 infer 都可能向类型 arena 追加并
 		 * 重排存储，早先取得的类型指针已失效；按 id 重新取回。 */
 		function = tstatic_type_get(&analyzer->model->arena, callee);
 		if (function && function->kind == tstatic_type_rule) {
-			const tast_node *callee = tast_get(
-				analyzer->ast, node->aggregate.receiver);
-			if (callee && callee->kind == tast_member &&
-			    callee->member.op == tsyntax_scope)
-				rule_identity = tsource_document_slice(
-					analyzer->document, callee->span);
-			else if (function->value_reference)
-				rule_identity = tstring_dup(function->value_reference);
+			rule_identity = function->rule_identity;
+			if (function->value_reference)
+				rule_reference = tstring_dup(function->value_reference);
 			result = tstatic_type_make(&analyzer->model->arena,
 				tstatic_type_rule_instance,
 				tstatic_type_children(&analyzer->model->arena, function),
@@ -836,15 +850,16 @@ static tstatic_type_id infer(type_analyzer *analyzer, tast_id id)
 		} else if (function && function->kind == tstatic_type_builtin &&
 			 function->builtin == tbuiltintype_rule)
 			result = tbuiltintype_rule_instance;
-		if (rule_identity) {
+		if (rule_reference) {
 			const tstatic_type *instance = tstatic_type_get(
 				&analyzer->model->arena, result);
 			result = tstatic_type_make_instance_of(
 				&analyzer->model->arena,
 				tstatic_type_children(
 					&analyzer->model->arena, instance),
-				instance->child_count, tstring_cstr(rule_identity));
-			tstring_free(rule_identity);
+				instance->child_count, tstring_cstr(rule_reference));
+			analyzer->model->arena.types[result].rule_identity = rule_identity;
+			tstring_free(rule_reference);
 		}
 	} break;
 	case tast_member: {
@@ -957,30 +972,31 @@ static void analyze_declarations(type_analyzer *analyzer)
 				infer(analyzer, node->declaration_statement.initializer);
 		}
 		uint32_t sid = symbol_for_declaration(analyzer, id);
-		if (!node->declaration_statement.is_mutable &&
-		    node->declaration_statement.has_initializer) {
+		if (node->declaration_statement.has_initializer) {
 			const tstatic_type *inferred_type = tstatic_type_get(
 				&analyzer->model->arena, inferred);
 			const tast_node *initializer = tast_get(analyzer->ast,
 				node->declaration_statement.initializer);
 			tstring *identity = nullptr;
+			uint32_t declaration_identity = 0;
 			if (inferred_type && inferred_type->kind == tstatic_type_rule) {
-				if (initializer && initializer->kind == tast_rule &&
-				    sid < analyzer->semantic->symbol_count)
+				if (!node->declaration_statement.is_mutable &&
+				    initializer && initializer->kind == tast_rule &&
+				    sid < analyzer->semantic->symbol_count) {
 					identity = tstring_dup(
 						analyzer->semantic->symbols[sid].name);
-				else if (initializer && initializer->kind == tast_member &&
-					 initializer->member.op == tsyntax_scope)
-					identity = tsource_document_slice(
-						analyzer->document, initializer->span);
-				else if (inferred_type->value_reference)
+					declaration_identity = sid + 1;
+				} else if (inferred_type->value_reference) {
 					identity = tstring_dup(
 						inferred_type->value_reference);
+					if (!node->declaration_statement.is_mutable)
+						declaration_identity = inferred_type->rule_identity;
+				}
 			}
 			if (identity) {
-				inferred = tstatic_type_with_value_reference(
+				inferred = tstatic_type_with_rule_identity(
 					&analyzer->model->arena, inferred,
-					tstring_cstr(identity));
+					tstring_cstr(identity), declaration_identity);
 				tstring_free(identity);
 			}
 		}

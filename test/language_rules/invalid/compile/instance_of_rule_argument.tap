@@ -1,0 +1,4 @@
+let First = rule (value: Int) { true }
+let Second = rule (value: Int) { true }
+let Composed = rule (action: InstanceOf[First]) { action }
+Composed(Second(1))
