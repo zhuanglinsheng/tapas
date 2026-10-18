@@ -1,0 +1,2487 @@
+{
+  "date": "2026-10-17T12:28:55.580064+00:00",
+  "baseline": {
+    "path": "/private/tmp/tapas-before-list-order",
+    "sha256": "80d8465438372b58270f8201cdc5cd9cfc244cee0b5d50ba5ff1da75470072c4",
+    "version": "Tapas 0.1.0 Copyright (C) 2020-2026",
+    "build_config": null
+  },
+  "candidate": {
+    "path": "/Users/zhuanglinsheng/Documents/Github/tapas/build-release/bin/tapas",
+    "sha256": "7777c261957cc1780d2e9ad58b08e4f79fed29ae692ef55d68e9afea4ea7d41c",
+    "version": "Tapas 0.1.0 Copyright (C) 2020-2026",
+    "build_config": [
+      "CMAKE_BUILD_TYPE:STRING=Release",
+      "CMAKE_C_COMPILER:FILEPATH=/usr/bin/cc",
+      "CMAKE_C_FLAGS:STRING=",
+      "CMAKE_C_FLAGS_RELEASE:STRING=-O3 -DNDEBUG",
+      "CMAKE_EXE_LINKER_FLAGS:STRING=",
+      "TAPAS_ENABLE_IPO:BOOL=ON"
+    ]
+  },
+  "runs": 7,
+  "rounds": 3,
+  "warmups_per_round": 1,
+  "rows": [
+    {
+      "name": "numeric_random",
+      "source": "function run_heap(values)\n{\n    \n    var checksum = 0\n    for (let repetition in 0 to 16) {\n        let queue = copy(values)\n heap::heapify(queue)\n        for (let position in 0 to len(values)) {\n            let value = heap::pop(queue)\n            checksum = checksum + value * (position + 1)\n        }\n    }\n    return checksum + 0\n}\nlet values = []\nfor (let i in 0 to 512) { values.append((i * 73 + 19) % 1009 - 500) }\nlet started = clock_ns()\nlet result = run_heap(values)\nlet elapsed = clock_ns() - started\nprint(result)\nprint(elapsed)\n",
+      "checksum": 362608656,
+      "source_sha256": "ad59c1761c24cccd64b191f3a1c514e7babce8ed31e00e360c347cfb78d52040",
+      "samples_ns": {
+        "baseline": [
+          904000,
+          923000,
+          924000,
+          912000,
+          954000,
+          931000,
+          962000,
+          907000,
+          915000,
+          956000,
+          941000,
+          945000,
+          922000,
+          969000,
+          981000,
+          951000,
+          922000,
+          989000,
+          919000,
+          918000,
+          951000
+        ],
+        "candidate": [
+          842000,
+          817000,
+          816000,
+          826000,
+          849000,
+          810000,
+          813000,
+          822000,
+          858000,
+          834000,
+          829000,
+          837000,
+          834000,
+          813000,
+          814000,
+          823000,
+          812000,
+          812000,
+          834000,
+          816000,
+          848000
+        ]
+      },
+      "baseline_median_ns": 931000,
+      "candidate_median_ns": 823000,
+      "paired_ratio_median": 0.8851570964247021,
+      "paired_ratio_iqr": [
+        0.8677185302146759,
+        0.9051285344597937
+      ],
+      "round_ratio_medians": [
+        0.8851570964247021,
+        0.8857142857142857,
+        0.8806941431670282
+      ],
+      "rounds": [
+        {
+          "checksum": 362608656,
+          "source_sha256": "ad59c1761c24cccd64b191f3a1c514e7babce8ed31e00e360c347cfb78d52040",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              904000,
+              923000,
+              924000,
+              912000,
+              954000,
+              931000,
+              962000
+            ],
+            "candidate": [
+              842000,
+              817000,
+              816000,
+              826000,
+              849000,
+              810000,
+              813000
+            ]
+          },
+          "baseline_median_ns": 924000,
+          "candidate_median_ns": 817000,
+          "paired_ratio_median": 0.8851570964247021,
+          "paired_ratio_iqr": [
+            0.8700322234156821,
+            0.9057017543859649
+          ]
+        },
+        {
+          "checksum": 362608656,
+          "source_sha256": "ad59c1761c24cccd64b191f3a1c514e7babce8ed31e00e360c347cfb78d52040",
+          "first": "candidate",
+          "samples_ns": {
+            "baseline": [
+              907000,
+              915000,
+              956000,
+              941000,
+              945000,
+              922000,
+              969000
+            ],
+            "candidate": [
+              822000,
+              858000,
+              834000,
+              829000,
+              837000,
+              834000,
+              813000
+            ]
+          },
+          "baseline_median_ns": 941000,
+          "candidate_median_ns": 834000,
+          "paired_ratio_median": 0.8857142857142857,
+          "paired_ratio_iqr": [
+            0.8723849372384938,
+            0.906284454244763
+          ]
+        },
+        {
+          "checksum": 362608656,
+          "source_sha256": "ad59c1761c24cccd64b191f3a1c514e7babce8ed31e00e360c347cfb78d52040",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              981000,
+              951000,
+              922000,
+              989000,
+              919000,
+              918000,
+              951000
+            ],
+            "candidate": [
+              814000,
+              823000,
+              812000,
+              812000,
+              834000,
+              816000,
+              848000
+            ]
+          },
+          "baseline_median_ns": 951000,
+          "candidate_median_ns": 816000,
+          "paired_ratio_median": 0.8806941431670282,
+          "paired_ratio_iqr": [
+            0.8297655453618756,
+            0.8916929547844374
+          ]
+        }
+      ]
+    },
+    {
+      "name": "numeric_ascending",
+      "source": "function run_heap(values)\n{\n    \n    var checksum = 0\n    for (let repetition in 0 to 16) {\n        let queue = copy(values)\n heap::heapify(queue)\n        for (let position in 0 to len(values)) {\n            let value = heap::pop(queue)\n            checksum = checksum + value * (position + 1)\n        }\n    }\n    return checksum + 0\n}\nlet values = []\nfor (let i in 0 to 512) { values.append(i - 256) }\nlet started = clock_ns()\nlet result = run_heap(values)\nlet elapsed = clock_ns() - started\nprint(result)\nprint(elapsed)\n",
+      "checksum": 177905664,
+      "source_sha256": "6ef95fa31509e82cf80cf765f3b95377fa52545affaa929d2c0daded32e7bfde",
+      "samples_ns": {
+        "baseline": [
+          855000,
+          853000,
+          855000,
+          866000,
+          883000,
+          857000,
+          854000,
+          853000,
+          838000,
+          833000,
+          832000,
+          854000,
+          866000,
+          886000,
+          837000,
+          843000,
+          855000,
+          868000,
+          876000,
+          856000,
+          846000
+        ],
+        "candidate": [
+          832000,
+          821000,
+          805000,
+          829000,
+          814000,
+          783000,
+          790000,
+          802000,
+          784000,
+          781000,
+          805000,
+          781000,
+          799000,
+          797000,
+          791000,
+          804000,
+          788000,
+          801000,
+          782000,
+          793000,
+          781000
+        ]
+      },
+      "baseline_median_ns": 855000,
+      "candidate_median_ns": 797000,
+      "paired_ratio_median": 0.9264018691588785,
+      "paired_ratio_iqr": [
+        0.9217473657719233,
+        0.9493892354069142
+      ],
+      "round_ratio_medians": [
+        0.9415204678362573,
+        0.9355608591885441,
+        0.9231678486997635
+      ],
+      "rounds": [
+        {
+          "checksum": 177905664,
+          "source_sha256": "6ef95fa31509e82cf80cf765f3b95377fa52545affaa929d2c0daded32e7bfde",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              855000,
+              853000,
+              855000,
+              866000,
+              883000,
+              857000,
+              854000
+            ],
+            "candidate": [
+              832000,
+              821000,
+              805000,
+              829000,
+              814000,
+              783000,
+              790000
+            ]
+          },
+          "baseline_median_ns": 855000,
+          "candidate_median_ns": 814000,
+          "paired_ratio_median": 0.9415204678362573,
+          "paired_ratio_iqr": [
+            0.9218573046432617,
+            0.9624853458382181
+          ]
+        },
+        {
+          "checksum": 177905664,
+          "source_sha256": "6ef95fa31509e82cf80cf765f3b95377fa52545affaa929d2c0daded32e7bfde",
+          "first": "candidate",
+          "samples_ns": {
+            "baseline": [
+              853000,
+              838000,
+              833000,
+              832000,
+              854000,
+              866000,
+              886000
+            ],
+            "candidate": [
+              802000,
+              784000,
+              781000,
+              805000,
+              781000,
+              799000,
+              797000
+            ]
+          },
+          "baseline_median_ns": 853000,
+          "candidate_median_ns": 797000,
+          "paired_ratio_median": 0.9355608591885441,
+          "paired_ratio_iqr": [
+            0.914519906323185,
+            0.94021101992966
+          ]
+        },
+        {
+          "checksum": 177905664,
+          "source_sha256": "6ef95fa31509e82cf80cf765f3b95377fa52545affaa929d2c0daded32e7bfde",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              837000,
+              843000,
+              855000,
+              868000,
+              876000,
+              856000,
+              846000
+            ],
+            "candidate": [
+              791000,
+              804000,
+              788000,
+              801000,
+              782000,
+              793000,
+              781000
+            ]
+          },
+          "baseline_median_ns": 855000,
+          "candidate_median_ns": 791000,
+          "paired_ratio_median": 0.9231678486997635,
+          "paired_ratio_iqr": [
+            0.9216374269005848,
+            0.945041816009558
+          ]
+        }
+      ]
+    },
+    {
+      "name": "numeric_descending",
+      "source": "function run_heap(values)\n{\n    \n    var checksum = 0\n    for (let repetition in 0 to 16) {\n        let queue = copy(values)\n heap::heapify(queue)\n        for (let position in 0 to len(values)) {\n            let value = heap::pop(queue)\n            checksum = checksum + value * (position + 1)\n        }\n    }\n    return checksum + 0\n}\nlet values = []\nfor (let i in 0 to 512) { values.append(256 - i) }\nlet started = clock_ns()\nlet result = run_heap(values)\nlet elapsed = clock_ns() - started\nprint(result)\nprint(elapsed)\n",
+      "checksum": 180006912,
+      "source_sha256": "ae647c8755c4f84061b6134d6356f4ca881509877958373cbbfbecbafd1487b9",
+      "samples_ns": {
+        "baseline": [
+          880000,
+          861000,
+          863000,
+          869000,
+          908000,
+          876000,
+          872000,
+          915000,
+          913000,
+          918000,
+          876000,
+          898000,
+          905000,
+          873000,
+          870000,
+          881000,
+          916000,
+          886000,
+          894000,
+          859000,
+          860000
+        ],
+        "candidate": [
+          793000,
+          807000,
+          804000,
+          808000,
+          833000,
+          793000,
+          784000,
+          839000,
+          840000,
+          852000,
+          827000,
+          817000,
+          849000,
+          850000,
+          891000,
+          835000,
+          810000,
+          794000,
+          816000,
+          792000,
+          812000
+        ]
+      },
+      "baseline_median_ns": 880000,
+      "candidate_median_ns": 816000,
+      "paired_ratio_median": 0.9220023282887078,
+      "paired_ratio_iqr": [
+        0.9075253480591066,
+        0.9410927369509826
+      ],
+      "round_ratio_medians": [
+        0.9174008810572687,
+        0.9281045751633987,
+        0.9220023282887078
+      ],
+      "rounds": [
+        {
+          "checksum": 180006912,
+          "source_sha256": "ae647c8755c4f84061b6134d6356f4ca881509877958373cbbfbecbafd1487b9",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              880000,
+              861000,
+              863000,
+              869000,
+              908000,
+              876000,
+              872000
+            ],
+            "candidate": [
+              793000,
+              807000,
+              804000,
+              808000,
+              833000,
+              793000,
+              784000
+            ]
+          },
+          "baseline_median_ns": 872000,
+          "candidate_median_ns": 804000,
+          "paired_ratio_median": 0.9174008810572687,
+          "paired_ratio_iqr": [
+            0.9011363636363636,
+            0.9316338354577057
+          ]
+        },
+        {
+          "checksum": 180006912,
+          "source_sha256": "ae647c8755c4f84061b6134d6356f4ca881509877958373cbbfbecbafd1487b9",
+          "first": "candidate",
+          "samples_ns": {
+            "baseline": [
+              915000,
+              913000,
+              918000,
+              876000,
+              898000,
+              905000,
+              873000
+            ],
+            "candidate": [
+              839000,
+              840000,
+              852000,
+              827000,
+              817000,
+              849000,
+              850000
+            ]
+          },
+          "baseline_median_ns": 905000,
+          "candidate_median_ns": 840000,
+          "paired_ratio_median": 0.9281045751633987,
+          "paired_ratio_iqr": [
+            0.9169398907103825,
+            0.9440639269406392
+          ]
+        },
+        {
+          "checksum": 180006912,
+          "source_sha256": "ae647c8755c4f84061b6134d6356f4ca881509877958373cbbfbecbafd1487b9",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              870000,
+              881000,
+              916000,
+              886000,
+              894000,
+              859000,
+              860000
+            ],
+            "candidate": [
+              891000,
+              835000,
+              810000,
+              794000,
+              816000,
+              792000,
+              812000
+            ]
+          },
+          "baseline_median_ns": 881000,
+          "candidate_median_ns": 812000,
+          "paired_ratio_median": 0.9220023282887078,
+          "paired_ratio_iqr": [
+            0.8961625282167043,
+            0.9477866061293984
+          ]
+        }
+      ]
+    },
+    {
+      "name": "numeric_equal",
+      "source": "function run_heap(values)\n{\n    \n    var checksum = 0\n    for (let repetition in 0 to 16) {\n        let queue = copy(values)\n heap::heapify(queue)\n        for (let position in 0 to len(values)) {\n            let value = heap::pop(queue)\n            checksum = checksum + value * (position + 1)\n        }\n    }\n    return checksum + 0\n}\nlet values = []\nfor (let i in 0 to 512) { values.append(7) }\nlet started = clock_ns()\nlet result = run_heap(values)\nlet elapsed = clock_ns() - started\nprint(result)\nprint(elapsed)\n",
+      "checksum": 14708736,
+      "source_sha256": "9787971219ba5fc7ca4eaafa64c1932810585b68dd793f4d51c0122fe8d73390",
+      "samples_ns": {
+        "baseline": [
+          572000,
+          592000,
+          548000,
+          549000,
+          547000,
+          546000,
+          531000,
+          542000,
+          541000,
+          561000,
+          550000,
+          581000,
+          552000,
+          551000,
+          555000,
+          556000,
+          567000,
+          556000,
+          556000,
+          561000,
+          574000
+        ],
+        "candidate": [
+          540000,
+          536000,
+          557000,
+          549000,
+          537000,
+          533000,
+          540000,
+          539000,
+          542000,
+          534000,
+          571000,
+          566000,
+          571000,
+          570000,
+          547000,
+          565000,
+          561000,
+          553000,
+          555000,
+          549000,
+          549000
+        ]
+      },
+      "baseline_median_ns": 555000,
+      "candidate_median_ns": 549000,
+      "paired_ratio_median": 0.9944649446494465,
+      "paired_ratio_iqr": [
+        0.9751864601262191,
+        1.0163052040119729
+      ],
+      "round_ratio_medians": [
+        0.9817184643510055,
+        1.0018484288354899,
+        0.9894179894179894
+      ],
+      "rounds": [
+        {
+          "checksum": 14708736,
+          "source_sha256": "9787971219ba5fc7ca4eaafa64c1932810585b68dd793f4d51c0122fe8d73390",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              572000,
+              592000,
+              548000,
+              549000,
+              547000,
+              546000,
+              531000
+            ],
+            "candidate": [
+              540000,
+              536000,
+              557000,
+              549000,
+              537000,
+              533000,
+              540000
+            ]
+          },
+          "baseline_median_ns": 548000,
+          "candidate_median_ns": 540000,
+          "paired_ratio_median": 0.9817184643510055,
+          "paired_ratio_iqr": [
+            0.9440559440559441,
+            1.0164233576642336
+          ]
+        },
+        {
+          "checksum": 14708736,
+          "source_sha256": "9787971219ba5fc7ca4eaafa64c1932810585b68dd793f4d51c0122fe8d73390",
+          "first": "candidate",
+          "samples_ns": {
+            "baseline": [
+              542000,
+              541000,
+              561000,
+              550000,
+              581000,
+              552000,
+              551000
+            ],
+            "candidate": [
+              539000,
+              542000,
+              534000,
+              571000,
+              566000,
+              571000,
+              570000
+            ]
+          },
+          "baseline_median_ns": 551000,
+          "candidate_median_ns": 566000,
+          "paired_ratio_median": 1.0018484288354899,
+          "paired_ratio_iqr": [
+            0.9741824440619621,
+            1.0344827586206897
+          ]
+        },
+        {
+          "checksum": 14708736,
+          "source_sha256": "9787971219ba5fc7ca4eaafa64c1932810585b68dd793f4d51c0122fe8d73390",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              555000,
+              556000,
+              567000,
+              556000,
+              556000,
+              561000,
+              574000
+            ],
+            "candidate": [
+              547000,
+              565000,
+              561000,
+              553000,
+              555000,
+              549000,
+              549000
+            ]
+          },
+          "baseline_median_ns": 556000,
+          "candidate_median_ns": 553000,
+          "paired_ratio_median": 0.9894179894179894,
+          "paired_ratio_iqr": [
+            0.9786096256684492,
+            0.9982014388489209
+          ]
+        }
+      ]
+    },
+    {
+      "name": "callback_random",
+      "source": "function run_heap(values)\n{\n    let less = (a, b) { return a < b }\n\n    var checksum = 0\n    for (let repetition in 0 to 16) {\n        let queue = copy(values)\n heap::heapify(queue, less)\n        for (let position in 0 to len(values)) {\n            let value = heap::pop(queue, less)\n            checksum = checksum + value * (position + 1)\n        }\n    }\n    return checksum + 0\n}\nlet values = []\nfor (let i in 0 to 512) { values.append((i * 73 + 19) % 1009 - 500) }\nlet started = clock_ns()\nlet result = run_heap(values)\nlet elapsed = clock_ns() - started\nprint(result)\nprint(elapsed)\n",
+      "checksum": 362608656,
+      "source_sha256": "617674c414118f686b5be10a79adbdfec1eeb1a86f4db75de6d0d7441374beae",
+      "samples_ns": {
+        "baseline": [
+          4138000,
+          4244000,
+          4120000,
+          4220000,
+          4135000,
+          4181000,
+          4103000,
+          4347000,
+          4135000,
+          4191000,
+          4133000,
+          4205000,
+          4123000,
+          4200000,
+          4191000,
+          4197000,
+          4137000,
+          4151000,
+          4119000,
+          4189000,
+          4141000
+        ],
+        "candidate": [
+          4200000,
+          4104000,
+          4192000,
+          4075000,
+          4186000,
+          4079000,
+          4149000,
+          4128000,
+          4111000,
+          4096000,
+          4126000,
+          4060000,
+          4132000,
+          4045000,
+          4135000,
+          4072000,
+          4067000,
+          4062000,
+          4056000,
+          4076000,
+          4063000
+        ]
+      },
+      "baseline_median_ns": 4151000,
+      "candidate_median_ns": 4096000,
+      "paired_ratio_median": 0.9811639700555421,
+      "paired_ratio_iqr": [
+        0.9686145370655446,
+        1.0002445957858046
+      ],
+      "round_ratio_medians": [
+        1.0112113087984402,
+        0.977332378907182,
+        0.9811639700555421
+      ],
+      "rounds": [
+        {
+          "checksum": 362608656,
+          "source_sha256": "617674c414118f686b5be10a79adbdfec1eeb1a86f4db75de6d0d7441374beae",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              4138000,
+              4244000,
+              4120000,
+              4220000,
+              4135000,
+              4181000,
+              4103000
+            ],
+            "candidate": [
+              4200000,
+              4104000,
+              4192000,
+              4075000,
+              4186000,
+              4079000,
+              4149000
+            ]
+          },
+          "baseline_median_ns": 4138000,
+          "candidate_median_ns": 4149000,
+          "paired_ratio_median": 1.0112113087984402,
+          "paired_ratio_iqr": [
+            0.9670122525918945,
+            1.0149830836152731
+          ]
+        },
+        {
+          "checksum": 362608656,
+          "source_sha256": "617674c414118f686b5be10a79adbdfec1eeb1a86f4db75de6d0d7441374beae",
+          "first": "candidate",
+          "samples_ns": {
+            "baseline": [
+              4347000,
+              4135000,
+              4191000,
+              4133000,
+              4205000,
+              4123000,
+              4200000
+            ],
+            "candidate": [
+              4128000,
+              4111000,
+              4096000,
+              4126000,
+              4060000,
+              4132000,
+              4045000
+            ]
+          },
+          "baseline_median_ns": 4191000,
+          "candidate_median_ns": 4111000,
+          "paired_ratio_median": 0.977332378907182,
+          "paired_ratio_iqr": [
+            0.9630952380952381,
+            0.9983063150254052
+          ]
+        },
+        {
+          "checksum": 362608656,
+          "source_sha256": "617674c414118f686b5be10a79adbdfec1eeb1a86f4db75de6d0d7441374beae",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              4191000,
+              4197000,
+              4137000,
+              4151000,
+              4119000,
+              4189000,
+              4141000
+            ],
+            "candidate": [
+              4135000,
+              4072000,
+              4067000,
+              4062000,
+              4056000,
+              4076000,
+              4063000
+            ]
+          },
+          "baseline_median_ns": 4151000,
+          "candidate_median_ns": 4067000,
+          "paired_ratio_median": 0.9811639700555421,
+          "paired_ratio_iqr": [
+            0.9730245882072094,
+            0.9847050254916242
+          ]
+        }
+      ]
+    },
+    {
+      "name": "callback_equal",
+      "source": "function run_heap(values)\n{\n    let less = (a, b) { return a < b }\n\n    var checksum = 0\n    for (let repetition in 0 to 16) {\n        let queue = copy(values)\n heap::heapify(queue, less)\n        for (let position in 0 to len(values)) {\n            let value = heap::pop(queue, less)\n            checksum = checksum + value * (position + 1)\n        }\n    }\n    return checksum + 0\n}\nlet values = []\nfor (let i in 0 to 512) { values.append(7) }\nlet started = clock_ns()\nlet result = run_heap(values)\nlet elapsed = clock_ns() - started\nprint(result)\nprint(elapsed)\n",
+      "checksum": 14708736,
+      "source_sha256": "b9c8741addcebf4cb04dd3af7c2bb5ae7bb05133bcd27160d3707abab0b2ea9d",
+      "samples_ns": {
+        "baseline": [
+          1556000,
+          1576000,
+          1541000,
+          1525000,
+          1601000,
+          1552000,
+          1629000,
+          1565000,
+          1559000,
+          1557000,
+          1604000,
+          1613000,
+          2129000,
+          1526000,
+          1534000,
+          1554000,
+          1602000,
+          1549000,
+          1585000,
+          1590000,
+          1524000
+        ],
+        "candidate": [
+          1509000,
+          1552000,
+          1509000,
+          1499000,
+          1538000,
+          1528000,
+          1529000,
+          1543000,
+          1540000,
+          1580000,
+          1555000,
+          1594000,
+          1549000,
+          1567000,
+          1538000,
+          1576000,
+          1630000,
+          1535000,
+          1504000,
+          1499000,
+          1541000
+        ]
+      },
+      "baseline_median_ns": 1559000,
+      "candidate_median_ns": 1540000,
+      "paired_ratio_median": 0.9847715736040609,
+      "paired_ratio_iqr": [
+        0.96505048278741,
+        1.0068812087863201
+      ],
+      "round_ratio_medians": [
+        0.9792342634652823,
+        0.9878127004490058,
+        1.0026075619295958
+      ],
+      "rounds": [
+        {
+          "checksum": 14708736,
+          "source_sha256": "b9c8741addcebf4cb04dd3af7c2bb5ae7bb05133bcd27160d3707abab0b2ea9d",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              1556000,
+              1576000,
+              1541000,
+              1525000,
+              1601000,
+              1552000,
+              1629000
+            ],
+            "candidate": [
+              1509000,
+              1552000,
+              1509000,
+              1499000,
+              1538000,
+              1528000,
+              1529000
+            ]
+          },
+          "baseline_median_ns": 1556000,
+          "candidate_median_ns": 1528000,
+          "paired_ratio_median": 0.9792342634652823,
+          "paired_ratio_iqr": [
+            0.9606495940037476,
+            0.9845360824742269
+          ]
+        },
+        {
+          "checksum": 14708736,
+          "source_sha256": "b9c8741addcebf4cb04dd3af7c2bb5ae7bb05133bcd27160d3707abab0b2ea9d",
+          "first": "candidate",
+          "samples_ns": {
+            "baseline": [
+              1565000,
+              1559000,
+              1557000,
+              1604000,
+              1613000,
+              2129000,
+              1526000
+            ],
+            "candidate": [
+              1543000,
+              1540000,
+              1580000,
+              1555000,
+              1594000,
+              1549000,
+              1567000
+            ]
+          },
+          "baseline_median_ns": 1565000,
+          "candidate_median_ns": 1555000,
+          "paired_ratio_median": 0.9878127004490058,
+          "paired_ratio_iqr": [
+            0.9694513715710723,
+            1.014771997430957
+          ]
+        },
+        {
+          "checksum": 14708736,
+          "source_sha256": "b9c8741addcebf4cb04dd3af7c2bb5ae7bb05133bcd27160d3707abab0b2ea9d",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              1534000,
+              1554000,
+              1602000,
+              1549000,
+              1585000,
+              1590000,
+              1524000
+            ],
+            "candidate": [
+              1538000,
+              1576000,
+              1630000,
+              1535000,
+              1504000,
+              1499000,
+              1541000
+            ]
+          },
+          "baseline_median_ns": 1554000,
+          "candidate_median_ns": 1538000,
+          "paired_ratio_median": 1.0026075619295958,
+          "paired_ratio_iqr": [
+            0.9488958990536278,
+            1.0141570141570142
+          ]
+        }
+      ]
+    },
+    {
+      "name": "callback_duplicates",
+      "source": "function run_heap(values)\n{\n    let less = (a, b) { return a < b }\n\n    var checksum = 0\n    for (let repetition in 0 to 16) {\n        let queue = copy(values)\n heap::heapify(queue, less)\n        for (let position in 0 to len(values)) {\n            let value = heap::pop(queue, less)\n            checksum = checksum + value * (position + 1)\n        }\n    }\n    return checksum + 0\n}\nlet values = []\nfor (let i in 0 to 512) { values.append(i % 8) }\nlet started = clock_ns()\nlet result = run_heap(values)\nlet elapsed = clock_ns() - started\nprint(result)\nprint(elapsed)\n",
+      "checksum": 10106880,
+      "source_sha256": "3ab02b61cd12966fff0029a3eed8f16284bf5bee14601103c660af121d363c5f",
+      "samples_ns": {
+        "baseline": [
+          4058000,
+          3941000,
+          4103000,
+          4062000,
+          4025000,
+          3967000,
+          4073000,
+          4252000,
+          3907000,
+          4003000,
+          3991000,
+          3989000,
+          3926000,
+          3975000,
+          3980000,
+          3938000,
+          3981000,
+          3964000,
+          3909000,
+          3981000,
+          3963000
+        ],
+        "candidate": [
+          3903000,
+          3898000,
+          3921000,
+          4042000,
+          3913000,
+          4075000,
+          3958000,
+          4049000,
+          3855000,
+          3886000,
+          3858000,
+          3903000,
+          3843000,
+          3910000,
+          3879000,
+          3887000,
+          3896000,
+          3896000,
+          3847000,
+          3952000,
+          3930000
+        ]
+      },
+      "baseline_median_ns": 3981000,
+      "candidate_median_ns": 3903000,
+      "paired_ratio_median": 0.978858889454916,
+      "paired_ratio_iqr": [
+        0.9712686023169832,
+        0.9880691636374976
+      ],
+      "round_ratio_medians": [
+        0.9721739130434782,
+        0.9784407119578842,
+        0.9841391660271169
+      ],
+      "rounds": [
+        {
+          "checksum": 10106880,
+          "source_sha256": "3ab02b61cd12966fff0029a3eed8f16284bf5bee14601103c660af121d363c5f",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              4058000,
+              3941000,
+              4103000,
+              4062000,
+              4025000,
+              3967000,
+              4073000
+            ],
+            "candidate": [
+              3903000,
+              3898000,
+              3921000,
+              4042000,
+              3913000,
+              4075000,
+              3958000
+            ]
+          },
+          "baseline_median_ns": 4058000,
+          "candidate_median_ns": 3921000,
+          "paired_ratio_median": 0.9721739130434782,
+          "paired_ratio_iqr": [
+            0.9618038442582553,
+            0.9950763170851797
+          ]
+        },
+        {
+          "checksum": 10106880,
+          "source_sha256": "3ab02b61cd12966fff0029a3eed8f16284bf5bee14601103c660af121d363c5f",
+          "first": "candidate",
+          "samples_ns": {
+            "baseline": [
+              4252000,
+              3907000,
+              4003000,
+              3991000,
+              3989000,
+              3926000,
+              3975000
+            ],
+            "candidate": [
+              4049000,
+              3855000,
+              3886000,
+              3858000,
+              3903000,
+              3843000,
+              3910000
+            ]
+          },
+          "baseline_median_ns": 3989000,
+          "candidate_median_ns": 3886000,
+          "paired_ratio_median": 0.9784407119578842,
+          "paired_ratio_iqr": [
+            0.9666750187922827,
+            0.9836477987421384
+          ]
+        },
+        {
+          "checksum": 10106880,
+          "source_sha256": "3ab02b61cd12966fff0029a3eed8f16284bf5bee14601103c660af121d363c5f",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              3980000,
+              3938000,
+              3981000,
+              3964000,
+              3909000,
+              3981000,
+              3963000
+            ],
+            "candidate": [
+              3879000,
+              3887000,
+              3896000,
+              3896000,
+              3847000,
+              3952000,
+              3930000
+            ]
+          },
+          "baseline_median_ns": 3964000,
+          "candidate_median_ns": 3896000,
+          "paired_ratio_median": 0.9841391660271169,
+          "paired_ratio_iqr": [
+            0.9786485807586034,
+            0.991672975018925
+          ]
+        }
+      ]
+    },
+    {
+      "name": "callback_maximum",
+      "source": "function run_heap(values)\n{\n    let less = (a, b) { return a > b }\n\n    var checksum = 0\n    for (let repetition in 0 to 16) {\n        let queue = copy(values)\n heap::heapify(queue, less)\n        for (let position in 0 to len(values)) {\n            let value = heap::pop(queue, less)\n            checksum = checksum + value * (position + 1)\n        }\n    }\n    return checksum + 0\n}\nlet values = []\nfor (let i in 0 to 512) { values.append((i * 73 + 19) % 1009 - 500) }\nlet started = clock_ns()\nlet result = run_heap(values)\nlet elapsed = clock_ns() - started\nprint(result)\nprint(elapsed)\n",
+      "checksum": -343451184,
+      "source_sha256": "b7b1015c35d61a7f962e442b5b0be0fd44ab6d493bc9c9a2bc0b39059d3b6890",
+      "samples_ns": {
+        "baseline": [
+          4452000,
+          4305000,
+          4230000,
+          4230000,
+          4207000,
+          4367000,
+          4238000,
+          4189000,
+          4126000,
+          4152000,
+          4106000,
+          4132000,
+          4205000,
+          4140000,
+          4231000,
+          4201000,
+          4282000,
+          4369000,
+          4157000,
+          4211000,
+          4300000
+        ],
+        "candidate": [
+          4165000,
+          4246000,
+          4136000,
+          4202000,
+          4207000,
+          4151000,
+          4167000,
+          4315000,
+          4197000,
+          4136000,
+          4304000,
+          4082000,
+          4070000,
+          4137000,
+          4093000,
+          4081000,
+          4075000,
+          4142000,
+          4243000,
+          4168000,
+          4128000
+        ]
+      },
+      "baseline_median_ns": 4211000,
+      "candidate_median_ns": 4151000,
+      "paired_ratio_median": 0.986295005807201,
+      "paired_ratio_iqr": [
+        0.9636917986291657,
+        0.9996376811594203
+      ],
+      "round_ratio_medians": [
+        0.983246814535158,
+        0.9992753623188406,
+        0.9673835972583313
+      ],
+      "rounds": [
+        {
+          "checksum": -343451184,
+          "source_sha256": "b7b1015c35d61a7f962e442b5b0be0fd44ab6d493bc9c9a2bc0b39059d3b6890",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              4452000,
+              4305000,
+              4230000,
+              4230000,
+              4207000,
+              4367000,
+              4238000
+            ],
+            "candidate": [
+              4165000,
+              4246000,
+              4136000,
+              4202000,
+              4207000,
+              4151000,
+              4167000
+            ]
+          },
+          "baseline_median_ns": 4238000,
+          "candidate_median_ns": 4167000,
+          "paired_ratio_median": 0.983246814535158,
+          "paired_ratio_iqr": [
+            0.950538126860545,
+            0.9933806146572104
+          ]
+        },
+        {
+          "checksum": -343451184,
+          "source_sha256": "b7b1015c35d61a7f962e442b5b0be0fd44ab6d493bc9c9a2bc0b39059d3b6890",
+          "first": "candidate",
+          "samples_ns": {
+            "baseline": [
+              4189000,
+              4126000,
+              4152000,
+              4106000,
+              4132000,
+              4205000,
+              4140000
+            ],
+            "candidate": [
+              4315000,
+              4197000,
+              4136000,
+              4304000,
+              4082000,
+              4070000,
+              4137000
+            ]
+          },
+          "baseline_median_ns": 4140000,
+          "candidate_median_ns": 4137000,
+          "paired_ratio_median": 0.9992753623188406,
+          "paired_ratio_iqr": [
+            0.9878993223620522,
+            1.0300787777512532
+          ]
+        },
+        {
+          "checksum": -343451184,
+          "source_sha256": "b7b1015c35d61a7f962e442b5b0be0fd44ab6d493bc9c9a2bc0b39059d3b6890",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              4231000,
+              4201000,
+              4282000,
+              4369000,
+              4157000,
+              4211000,
+              4300000
+            ],
+            "candidate": [
+              4093000,
+              4081000,
+              4075000,
+              4142000,
+              4243000,
+              4168000,
+              4128000
+            ]
+          },
+          "baseline_median_ns": 4231000,
+          "candidate_median_ns": 4128000,
+          "paired_ratio_median": 0.9673835972583313,
+          "paired_ratio_iqr": [
+            0.9516581036898646,
+            0.9897886487770126
+          ]
+        }
+      ]
+    },
+    {
+      "name": "callback_records",
+      "source": "function run_heap(values)\n{\n    let less = (a, b) { return a[0] < b[0] }\n\n    var checksum = 0\n    for (let repetition in 0 to 16) {\n        let queue = copy(values)\n heap::heapify(queue, less)\n        for (let position in 0 to len(values)) {\n            let value = heap::pop(queue, less)\n            checksum = checksum + value[0] * (position + 1)\n        }\n    }\n    return checksum + 0\n}\nlet values = []\nfor (let i in 0 to 512) { values.append([(i * 73 + 19) % 1009 - 500, i]) }\nlet started = clock_ns()\nlet result = run_heap(values)\nlet elapsed = clock_ns() - started\nprint(result)\nprint(elapsed)\n",
+      "checksum": 362608656,
+      "source_sha256": "93f27b38a5bfd468969d80c01e6af5d2d3302915aed66f59a5e2b623085cc728",
+      "samples_ns": {
+        "baseline": [
+          5052000,
+          4986000,
+          4953000,
+          5156000,
+          5110000,
+          5098000,
+          5337000,
+          4945000,
+          4880000,
+          4856000,
+          4830000,
+          4875000,
+          4908000,
+          4871000,
+          4992000,
+          5099000,
+          4976000,
+          5334000,
+          4937000,
+          4991000,
+          4996000
+        ],
+        "candidate": [
+          4868000,
+          4896000,
+          4972000,
+          5014000,
+          4903000,
+          5269000,
+          5085000,
+          4809000,
+          4920000,
+          4958000,
+          4802000,
+          4776000,
+          4844000,
+          4945000,
+          4877000,
+          4886000,
+          4924000,
+          4876000,
+          4942000,
+          5127000,
+          5061000
+        ]
+      },
+      "baseline_median_ns": 4986000,
+      "candidate_median_ns": 4920000,
+      "paired_ratio_median": 0.986960065199674,
+      "paired_ratio_iqr": [
+        0.9680190257167198,
+        1.0106035648190683
+      ],
+      "round_ratio_medians": [
+        0.9724592707525214,
+        0.9942028985507246,
+        0.9895498392282959
+      ],
+      "rounds": [
+        {
+          "checksum": 362608656,
+          "source_sha256": "93f27b38a5bfd468969d80c01e6af5d2d3302915aed66f59a5e2b623085cc728",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              5052000,
+              4986000,
+              4953000,
+              5156000,
+              5110000,
+              5098000,
+              5337000
+            ],
+            "candidate": [
+              4868000,
+              4896000,
+              4972000,
+              5014000,
+              4903000,
+              5269000,
+              5085000
+            ]
+          },
+          "baseline_median_ns": 5098000,
+          "candidate_median_ns": 4972000,
+          "paired_ratio_median": 0.9724592707525214,
+          "paired_ratio_iqr": [
+            0.959491193737769,
+            1.0038360589541693
+          ]
+        },
+        {
+          "checksum": 362608656,
+          "source_sha256": "93f27b38a5bfd468969d80c01e6af5d2d3302915aed66f59a5e2b623085cc728",
+          "first": "candidate",
+          "samples_ns": {
+            "baseline": [
+              4945000,
+              4880000,
+              4856000,
+              4830000,
+              4875000,
+              4908000,
+              4871000
+            ],
+            "candidate": [
+              4809000,
+              4920000,
+              4958000,
+              4802000,
+              4776000,
+              4844000,
+              4945000
+            ]
+          },
+          "baseline_median_ns": 4875000,
+          "candidate_median_ns": 4844000,
+          "paired_ratio_median": 0.9942028985507246,
+          "paired_ratio_iqr": [
+            0.9796923076923076,
+            1.0151919523711763
+          ]
+        },
+        {
+          "checksum": 362608656,
+          "source_sha256": "93f27b38a5bfd468969d80c01e6af5d2d3302915aed66f59a5e2b623085cc728",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              4992000,
+              5099000,
+              4976000,
+              5334000,
+              4937000,
+              4991000,
+              4996000
+            ],
+            "candidate": [
+              4877000,
+              4886000,
+              4924000,
+              4876000,
+              4942000,
+              5127000,
+              5061000
+            ]
+          },
+          "baseline_median_ns": 4992000,
+          "candidate_median_ns": 4924000,
+          "paired_ratio_median": 0.9895498392282959,
+          "paired_ratio_iqr": [
+            0.9582271033535987,
+            1.0130104083266613
+          ]
+        }
+      ]
+    },
+    {
+      "name": "callback_captured",
+      "source": "function run_heap(values)\n{\n    var offset = 7\nlet less = (a, b) { return a + offset < b + offset }\n\n    var checksum = 0\n    for (let repetition in 0 to 16) {\n        let queue = copy(values)\n heap::heapify(queue, less)\n        for (let position in 0 to len(values)) {\n            let value = heap::pop(queue, less)\n            checksum = checksum + value * (position + 1)\n        }\n    }\n    return checksum + 0\n}\nlet values = []\nfor (let i in 0 to 512) { values.append((i * 73 + 19) % 1009 - 500) }\nlet started = clock_ns()\nlet result = run_heap(values)\nlet elapsed = clock_ns() - started\nprint(result)\nprint(elapsed)\n",
+      "checksum": 362608656,
+      "source_sha256": "e86d0cb5536fdf00612341614954f4576d916e3a7aed17587d08ac53c392af8b",
+      "samples_ns": {
+        "baseline": [
+          5587000,
+          5336000,
+          5336000,
+          5305000,
+          5383000,
+          5460000,
+          5350000,
+          5342000,
+          5381000,
+          5310000,
+          5310000,
+          5432000,
+          5401000,
+          5306000,
+          5530000,
+          5530000,
+          5467000,
+          5428000,
+          5603000,
+          5430000,
+          5483000
+        ],
+        "candidate": [
+          5339000,
+          5493000,
+          5352000,
+          5287000,
+          5364000,
+          5270000,
+          5449000,
+          5367000,
+          5365000,
+          5268000,
+          5257000,
+          5265000,
+          5315000,
+          5259000,
+          5338000,
+          5632000,
+          5468000,
+          5395000,
+          5379000,
+          5384000,
+          5514000
+        ]
+      },
+      "baseline_median_ns": 5401000,
+      "candidate_median_ns": 5364000,
+      "paired_ratio_median": 0.9939204126750184,
+      "paired_ratio_iqr": [
+        0.9766666409891367,
+        1.0038391979599868
+      ],
+      "round_ratio_medians": [
+        0.9966069745523092,
+        0.9911421032793064,
+        0.9939204126750184
+      ],
+      "rounds": [
+        {
+          "checksum": 362608656,
+          "source_sha256": "e86d0cb5536fdf00612341614954f4576d916e3a7aed17587d08ac53c392af8b",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              5587000,
+              5336000,
+              5336000,
+              5305000,
+              5383000,
+              5460000,
+              5350000
+            ],
+            "candidate": [
+              5339000,
+              5493000,
+              5352000,
+              5287000,
+              5364000,
+              5270000,
+              5449000
+            ]
+          },
+          "baseline_median_ns": 5350000,
+          "candidate_median_ns": 5352000,
+          "paired_ratio_median": 0.9966069745523092,
+          "paired_ratio_iqr": [
+            0.9652014652014652,
+            1.0185046728971963
+          ]
+        },
+        {
+          "checksum": 362608656,
+          "source_sha256": "e86d0cb5536fdf00612341614954f4576d916e3a7aed17587d08ac53c392af8b",
+          "first": "candidate",
+          "samples_ns": {
+            "baseline": [
+              5342000,
+              5381000,
+              5310000,
+              5310000,
+              5432000,
+              5401000,
+              5306000
+            ],
+            "candidate": [
+              5367000,
+              5365000,
+              5268000,
+              5257000,
+              5265000,
+              5315000,
+              5259000
+            ]
+          },
+          "baseline_median_ns": 5342000,
+          "candidate_median_ns": 5268000,
+          "paired_ratio_median": 0.9911421032793064,
+          "paired_ratio_iqr": [
+            0.9840770227735605,
+            0.9970265749860621
+          ]
+        },
+        {
+          "checksum": 362608656,
+          "source_sha256": "e86d0cb5536fdf00612341614954f4576d916e3a7aed17587d08ac53c392af8b",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              5530000,
+              5530000,
+              5467000,
+              5428000,
+              5603000,
+              5430000,
+              5483000
+            ],
+            "candidate": [
+              5338000,
+              5632000,
+              5468000,
+              5395000,
+              5379000,
+              5384000,
+              5514000
+            ]
+          },
+          "baseline_median_ns": 5483000,
+          "candidate_median_ns": 5395000,
+          "paired_ratio_median": 0.9939204126750184,
+          "paired_ratio_iqr": [
+            0.9652802893309222,
+            1.0056538391391574
+          ]
+        }
+      ]
+    },
+    {
+      "name": "callback_expensive",
+      "source": "function run_heap(values)\n{\n    let less = (a, b) { var total = 0\n for (let k in 0 to 8) { total = total + a + k }\n return a + total < b + total }\n\n    var checksum = 0\n    for (let repetition in 0 to 16) {\n        let queue = copy(values)\n heap::heapify(queue, less)\n        for (let position in 0 to len(values)) {\n            let value = heap::pop(queue, less)\n            checksum = checksum + value * (position + 1)\n        }\n    }\n    return checksum + 0\n}\nlet values = []\nfor (let i in 0 to 512) { values.append((i * 73 + 19) % 1009 - 500) }\nlet started = clock_ns()\nlet result = run_heap(values)\nlet elapsed = clock_ns() - started\nprint(result)\nprint(elapsed)\n",
+      "checksum": 362608656,
+      "source_sha256": "2be7448bbfd1b6895e2ad7ad6dcc5d38d6217a8fd97c7f8ff1b60d63e2bfaa3e",
+      "samples_ns": {
+        "baseline": [
+          22170000,
+          22572000,
+          22342000,
+          22146000,
+          22247000,
+          24019000,
+          23141000,
+          22219000,
+          22481000,
+          22259000,
+          22326000,
+          22123000,
+          22174000,
+          22641000,
+          22261000,
+          22595000,
+          22780000,
+          22641000,
+          22722000,
+          22632000,
+          22873000
+        ],
+        "candidate": [
+          22142000,
+          22225000,
+          22741000,
+          22480000,
+          22142000,
+          22728000,
+          23305000,
+          23069000,
+          22436000,
+          22320000,
+          22244000,
+          22178000,
+          22195000,
+          22212000,
+          22636000,
+          22859000,
+          22527000,
+          22218000,
+          23210000,
+          24853000,
+          22541000
+        ]
+      },
+      "baseline_median_ns": 22481000,
+      "candidate_median_ns": 22480000,
+      "paired_ratio_median": 1.0009470551095878,
+      "paired_ratio_iqr": [
+        0.9871894180973407,
+        1.015963667377668
+      ],
+      "round_ratio_medians": [
+        0.9987370320252593,
+        1.0009470551095878,
+        1.0116840008851515
+      ],
+      "rounds": [
+        {
+          "checksum": 362608656,
+          "source_sha256": "2be7448bbfd1b6895e2ad7ad6dcc5d38d6217a8fd97c7f8ff1b60d63e2bfaa3e",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              22170000,
+              22572000,
+              22342000,
+              22146000,
+              22247000,
+              24019000,
+              23141000
+            ],
+            "candidate": [
+              22142000,
+              22225000,
+              22741000,
+              22480000,
+              22142000,
+              22728000,
+              23305000
+            ]
+          },
+          "baseline_median_ns": 22342000,
+          "candidate_median_ns": 22480000,
+          "paired_ratio_median": 0.9987370320252593,
+          "paired_ratio_iqr": [
+            0.9846269714690767,
+            1.0150817303350492
+          ]
+        },
+        {
+          "checksum": 362608656,
+          "source_sha256": "2be7448bbfd1b6895e2ad7ad6dcc5d38d6217a8fd97c7f8ff1b60d63e2bfaa3e",
+          "first": "candidate",
+          "samples_ns": {
+            "baseline": [
+              22219000,
+              22481000,
+              22259000,
+              22326000,
+              22123000,
+              22174000,
+              22641000
+            ],
+            "candidate": [
+              23069000,
+              22436000,
+              22320000,
+              22244000,
+              22178000,
+              22195000,
+              22212000
+            ]
+          },
+          "baseline_median_ns": 22259000,
+          "candidate_median_ns": 22244000,
+          "paired_ratio_median": 1.0009470551095878,
+          "paired_ratio_iqr": [
+            0.9963271521992296,
+            1.0027404645312008
+          ]
+        },
+        {
+          "checksum": 362608656,
+          "source_sha256": "2be7448bbfd1b6895e2ad7ad6dcc5d38d6217a8fd97c7f8ff1b60d63e2bfaa3e",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              22261000,
+              22595000,
+              22780000,
+              22641000,
+              22722000,
+              22632000,
+              22873000
+            ],
+            "candidate": [
+              22636000,
+              22859000,
+              22527000,
+              22218000,
+              23210000,
+              24853000,
+              22541000
+            ]
+          },
+          "baseline_median_ns": 22641000,
+          "candidate_median_ns": 22636000,
+          "paired_ratio_median": 1.0116840008851515,
+          "paired_ratio_iqr": [
+            0.9854850697328729,
+            1.0214769826599772
+          ]
+        }
+      ]
+    },
+    {
+      "name": "native_comparator",
+      "source": "function run_heap(values)\n{\n    let less = math::isless\n\n    var checksum = 0\n    for (let repetition in 0 to 16) {\n        let queue = copy(values)\n heap::heapify(queue, less)\n        for (let position in 0 to len(values)) {\n            let value = heap::pop(queue, less)\n            checksum = checksum + value * (position + 1)\n        }\n    }\n    return checksum + 0\n}\nlet values = []\nfor (let i in 0 to 512) { values.append((i * 73 + 19) % 1009 - 500) }\nlet started = clock_ns()\nlet result = run_heap(values)\nlet elapsed = clock_ns() - started\nprint(result)\nprint(elapsed)\n",
+      "checksum": 362608656,
+      "source_sha256": "8866637123403b2536c3afee15435876d1f88047b3c6888ebe722302c9369b82",
+      "samples_ns": {
+        "baseline": [
+          1549000,
+          1588000,
+          1533000,
+          1555000,
+          1572000,
+          1532000,
+          1528000,
+          1581000,
+          1535000,
+          1534000,
+          1602000,
+          1553000,
+          1510000,
+          1546000,
+          1552000,
+          1610000,
+          1554000,
+          1579000,
+          1537000,
+          1555000,
+          1550000
+        ],
+        "candidate": [
+          1564000,
+          1498000,
+          1531000,
+          1528000,
+          1572000,
+          1571000,
+          1549000,
+          1586000,
+          1638000,
+          1621000,
+          1587000,
+          1549000,
+          1625000,
+          1625000,
+          1630000,
+          1523000,
+          1579000,
+          1678000,
+          1667000,
+          1611000,
+          1571000
+        ]
+      },
+      "baseline_median_ns": 1552000,
+      "candidate_median_ns": 1579000,
+      "paired_ratio_median": 1.013743455497382,
+      "paired_ratio_iqr": [
+        0.9980598542727519,
+        1.0539070419351955
+      ],
+      "round_ratio_medians": [
+        1.0,
+        1.0510996119016818,
+        1.0360128617363344
+      ],
+      "rounds": [
+        {
+          "checksum": 362608656,
+          "source_sha256": "8866637123403b2536c3afee15435876d1f88047b3c6888ebe722302c9369b82",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              1549000,
+              1588000,
+              1533000,
+              1555000,
+              1572000,
+              1532000,
+              1528000
+            ],
+            "candidate": [
+              1564000,
+              1498000,
+              1531000,
+              1528000,
+              1572000,
+              1571000,
+              1549000
+            ]
+          },
+          "baseline_median_ns": 1549000,
+          "candidate_median_ns": 1549000,
+          "paired_ratio_median": 1.0,
+          "paired_ratio_iqr": [
+            0.9826366559485531,
+            1.013743455497382
+          ]
+        },
+        {
+          "checksum": 362608656,
+          "source_sha256": "8866637123403b2536c3afee15435876d1f88047b3c6888ebe722302c9369b82",
+          "first": "candidate",
+          "samples_ns": {
+            "baseline": [
+              1581000,
+              1535000,
+              1534000,
+              1602000,
+              1553000,
+              1510000,
+              1546000
+            ],
+            "candidate": [
+              1586000,
+              1638000,
+              1621000,
+              1587000,
+              1549000,
+              1625000,
+              1625000
+            ]
+          },
+          "baseline_median_ns": 1546000,
+          "candidate_median_ns": 1621000,
+          "paired_ratio_median": 1.0510996119016818,
+          "paired_ratio_iqr": [
+            0.9974243399871217,
+            1.067100977198697
+          ]
+        },
+        {
+          "checksum": 362608656,
+          "source_sha256": "8866637123403b2536c3afee15435876d1f88047b3c6888ebe722302c9369b82",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              1552000,
+              1610000,
+              1554000,
+              1579000,
+              1537000,
+              1555000,
+              1550000
+            ],
+            "candidate": [
+              1630000,
+              1523000,
+              1579000,
+              1678000,
+              1667000,
+              1611000,
+              1571000
+            ]
+          },
+          "baseline_median_ns": 1554000,
+          "candidate_median_ns": 1611000,
+          "paired_ratio_median": 1.0360128617363344,
+          "paired_ratio_iqr": [
+            1.013548387096774,
+            1.0626979100696643
+          ]
+        }
+      ]
+    },
+    {
+      "name": "incremental_build",
+      "source": "function run_heap(values)\n{\n    let less = (a, b) { return a < b }\n\n    var checksum = 0\n    for (let repetition in 0 to 16) {\n        let queue = []\n for (let value in values) { heap::push(queue, value, less) }\n        for (let position in 0 to len(values)) {\n            let value = heap::pop(queue, less)\n            checksum = checksum + value * (position + 1)\n        }\n    }\n    return checksum + 0\n}\nlet values = []\nfor (let i in 0 to 512) { values.append((i * 73 + 19) % 1009 - 500) }\nlet started = clock_ns()\nlet result = run_heap(values)\nlet elapsed = clock_ns() - started\nprint(result)\nprint(elapsed)\n",
+      "checksum": 362608656,
+      "source_sha256": "251dc2bd2340ebfe76229698cef53a95aa67cb311ba67354e36326d7d75bbbe5",
+      "samples_ns": {
+        "baseline": [
+          4770000,
+          4853000,
+          5003000,
+          4921000,
+          4833000,
+          4773000,
+          6005000,
+          4722000,
+          4984000,
+          4759000,
+          4851000,
+          4651000,
+          4913000,
+          4773000,
+          4896000,
+          4723000,
+          4709000,
+          4763000,
+          4980000,
+          4610000,
+          4706000
+        ],
+        "candidate": [
+          4707000,
+          4927000,
+          4793000,
+          4666000,
+          4847000,
+          5219000,
+          5202000,
+          4626000,
+          4820000,
+          4701000,
+          4598000,
+          4702000,
+          5065000,
+          4634000,
+          4706000,
+          4707000,
+          4620000,
+          4775000,
+          4835000,
+          4562000,
+          4778000
+        ]
+      },
+      "baseline_median_ns": 4773000,
+      "candidate_median_ns": 4707000,
+      "paired_ratio_median": 0.9867924528301887,
+      "paired_ratio_iqr": [
+        0.9641437567536377,
+        1.0069310676442682
+      ],
+      "round_ratio_medians": [
+        0.9867924528301887,
+        0.9796696315120712,
+        0.989587852494577
+      ],
+      "rounds": [
+        {
+          "checksum": 362608656,
+          "source_sha256": "251dc2bd2340ebfe76229698cef53a95aa67cb311ba67354e36326d7d75bbbe5",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              4770000,
+              4853000,
+              5003000,
+              4921000,
+              4833000,
+              4773000,
+              6005000
+            ],
+            "candidate": [
+              4707000,
+              4927000,
+              4793000,
+              4666000,
+              4847000,
+              5219000,
+              5202000
+            ]
+          },
+          "baseline_median_ns": 4853000,
+          "candidate_median_ns": 4847000,
+          "paired_ratio_median": 0.9867924528301887,
+          "paired_ratio_iqr": [
+            0.9481812639707377,
+            1.0152483000206058
+          ]
+        },
+        {
+          "checksum": 362608656,
+          "source_sha256": "251dc2bd2340ebfe76229698cef53a95aa67cb311ba67354e36326d7d75bbbe5",
+          "first": "candidate",
+          "samples_ns": {
+            "baseline": [
+              4722000,
+              4984000,
+              4759000,
+              4851000,
+              4651000,
+              4913000,
+              4773000
+            ],
+            "candidate": [
+              4626000,
+              4820000,
+              4701000,
+              4598000,
+              4702000,
+              5065000,
+              4634000
+            ]
+          },
+          "baseline_median_ns": 4773000,
+          "candidate_median_ns": 4701000,
+          "paired_ratio_median": 0.9796696315120712,
+          "paired_ratio_iqr": [
+            0.9670947030497592,
+            1.0109653837884327
+          ]
+        },
+        {
+          "checksum": 362608656,
+          "source_sha256": "251dc2bd2340ebfe76229698cef53a95aa67cb311ba67354e36326d7d75bbbe5",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              4896000,
+              4723000,
+              4709000,
+              4763000,
+              4980000,
+              4610000,
+              4706000
+            ],
+            "candidate": [
+              4706000,
+              4707000,
+              4620000,
+              4775000,
+              4835000,
+              4562000,
+              4778000
+            ]
+          },
+          "baseline_median_ns": 4723000,
+          "candidate_median_ns": 4707000,
+          "paired_ratio_median": 0.989587852494577,
+          "paired_ratio_iqr": [
+            0.9708835341365462,
+            1.0025194205332773
+          ]
+        }
+      ]
+    },
+    {
+      "name": "interleaved",
+      "source": "function run_heap(values)\n{\n    let less = (a, b) { return a < b }\n\n    var checksum = 0\n    for (let repetition in 0 to 16) {\n        let queue = copy(values)\n heap::heapify(queue, less)\n        for (let position in 0 to (len(values) * 2)) {\n                checksum = checksum + heap::pop(queue, less) * (position + 1)\n                heap::push(queue, (position * 91 + 17) % 1009 - 500, less)\n            }\n    }\n    return checksum + 0\n}\nlet values = []\nfor (let i in 0 to 512) { values.append((i * 73 + 19) % 1009 - 500) }\nlet started = clock_ns()\nlet result = run_heap(values)\nlet elapsed = clock_ns() - started\nprint(result)\nprint(elapsed)\n",
+      "checksum": -892519152,
+      "source_sha256": "c030c308790708301b3018aa855d61625efab482580458af6a5a58188eba6f92",
+      "samples_ns": {
+        "baseline": [
+          13918000,
+          14093000,
+          14406000,
+          13488000,
+          14553000,
+          13447000,
+          13195000,
+          13438000,
+          13849000,
+          13652000,
+          13742000,
+          14227000,
+          13622000,
+          13626000,
+          13716000,
+          13597000,
+          13526000,
+          13592000,
+          13806000,
+          13454000,
+          13774000
+        ],
+        "candidate": [
+          13806000,
+          15117000,
+          16197000,
+          15155000,
+          13614000,
+          13340000,
+          13114000,
+          13515000,
+          13365000,
+          13491000,
+          13573000,
+          14359000,
+          13352000,
+          13703000,
+          13471000,
+          15132000,
+          13458000,
+          13362000,
+          13823000,
+          14315000,
+          13541000
+        ]
+      },
+      "baseline_median_ns": 13652000,
+      "candidate_median_ns": 13573000,
+      "paired_ratio_median": 0.9938613111026904,
+      "paired_ratio_iqr": [
+        0.9830811763904543,
+        1.0366369853981237
+      ],
+      "round_ratio_medians": [
+        0.9938613111026904,
+        0.9882068561382947,
+        0.9949726452757652
+      ],
+      "rounds": [
+        {
+          "checksum": -892519152,
+          "source_sha256": "c030c308790708301b3018aa855d61625efab482580458af6a5a58188eba6f92",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              13918000,
+              14093000,
+              14406000,
+              13488000,
+              14553000,
+              13447000,
+              13195000
+            ],
+            "candidate": [
+              13806000,
+              15117000,
+              16197000,
+              15155000,
+              13614000,
+              13340000,
+              13114000
+            ]
+          },
+          "baseline_median_ns": 13918000,
+          "candidate_median_ns": 13806000,
+          "paired_ratio_median": 0.9938613111026904,
+          "paired_ratio_iqr": [
+            0.9919528667912056,
+            1.1235913404507711
+          ]
+        },
+        {
+          "checksum": -892519152,
+          "source_sha256": "c030c308790708301b3018aa855d61625efab482580458af6a5a58188eba6f92",
+          "first": "candidate",
+          "samples_ns": {
+            "baseline": [
+              13438000,
+              13849000,
+              13652000,
+              13742000,
+              14227000,
+              13622000,
+              13626000
+            ],
+            "candidate": [
+              13515000,
+              13365000,
+              13491000,
+              13573000,
+              14359000,
+              13352000,
+              13703000
+            ]
+          },
+          "baseline_median_ns": 13652000,
+          "candidate_median_ns": 13515000,
+          "paired_ratio_median": 0.9882068561382947,
+          "paired_ratio_iqr": [
+            0.9801791220085156,
+            1.0057300193481173
+          ]
+        },
+        {
+          "checksum": -892519152,
+          "source_sha256": "c030c308790708301b3018aa855d61625efab482580458af6a5a58188eba6f92",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              13716000,
+              13597000,
+              13526000,
+              13592000,
+              13806000,
+              13454000,
+              13774000
+            ],
+            "candidate": [
+              13471000,
+              15132000,
+              13458000,
+              13362000,
+              13823000,
+              14315000,
+              13541000
+            ]
+          },
+          "baseline_median_ns": 13597000,
+          "candidate_median_ns": 13541000,
+          "paired_ratio_median": 0.9949726452757652,
+          "paired_ratio_iqr": [
+            0.9830782813419658,
+            1.0639958376690948
+          ]
+        }
+      ]
+    },
+    {
+      "name": "heapify_ordered",
+      "source": "function run_heap(values)\n{\n    let less = (a, b) { return a < b }\n\n    var checksum = 0\n    for (let repetition in 0 to 16) {\n        let queue = copy(values)\n heap::heapify(queue, less)\n        checksum = checksum + heap::peek(queue) + queue[len(queue) - 1]\n    }\n    return checksum + 0\n}\nlet values = []\nfor (let i in 0 to 512) { values.append(i - 256) }\nlet started = clock_ns()\nlet result = run_heap(values)\nlet elapsed = clock_ns() - started\nprint(result)\nprint(elapsed)\n",
+      "checksum": -16,
+      "source_sha256": "cbb1f380714239ce1d1caaf27b82125d379c0532fac6596df482f7c868551cc6",
+      "samples_ns": {
+        "baseline": [
+          345000,
+          347000,
+          354000,
+          345000,
+          346000,
+          339000,
+          340000,
+          345000,
+          344000,
+          349000,
+          360000,
+          348000,
+          342000,
+          346000,
+          344000,
+          349000,
+          345000,
+          337000,
+          344000,
+          358000,
+          347000
+        ],
+        "candidate": [
+          402000,
+          342000,
+          346000,
+          366000,
+          347000,
+          338000,
+          338000,
+          344000,
+          343000,
+          343000,
+          457000,
+          347000,
+          347000,
+          338000,
+          344000,
+          338000,
+          339000,
+          342000,
+          342000,
+          349000,
+          350000
+        ]
+      },
+      "baseline_median_ns": 345000,
+      "candidate_median_ns": 344000,
+      "paired_ratio_median": 0.997093023255814,
+      "paired_ratio_iqr": [
+        0.9827083592874051,
+        1.011632708091073
+      ],
+      "round_ratio_medians": [
+        0.9970501474926253,
+        0.9971014492753624,
+        0.9941860465116279
+      ],
+      "rounds": [
+        {
+          "checksum": -16,
+          "source_sha256": "cbb1f380714239ce1d1caaf27b82125d379c0532fac6596df482f7c868551cc6",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              345000,
+              347000,
+              354000,
+              345000,
+              346000,
+              339000,
+              340000
+            ],
+            "candidate": [
+              402000,
+              342000,
+              346000,
+              366000,
+              347000,
+              338000,
+              338000
+            ]
+          },
+          "baseline_median_ns": 345000,
+          "candidate_median_ns": 346000,
+          "paired_ratio_median": 0.9970501474926253,
+          "paired_ratio_iqr": [
+            0.9855907780979827,
+            1.0608695652173914
+          ]
+        },
+        {
+          "checksum": -16,
+          "source_sha256": "cbb1f380714239ce1d1caaf27b82125d379c0532fac6596df482f7c868551cc6",
+          "first": "candidate",
+          "samples_ns": {
+            "baseline": [
+              345000,
+              344000,
+              349000,
+              360000,
+              348000,
+              342000,
+              346000
+            ],
+            "candidate": [
+              344000,
+              343000,
+              343000,
+              457000,
+              347000,
+              347000,
+              338000
+            ]
+          },
+          "baseline_median_ns": 346000,
+          "candidate_median_ns": 344000,
+          "paired_ratio_median": 0.9971014492753624,
+          "paired_ratio_iqr": [
+            0.9828080229226361,
+            1.0146198830409356
+          ]
+        },
+        {
+          "checksum": -16,
+          "source_sha256": "cbb1f380714239ce1d1caaf27b82125d379c0532fac6596df482f7c868551cc6",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              344000,
+              349000,
+              345000,
+              337000,
+              344000,
+              358000,
+              347000
+            ],
+            "candidate": [
+              344000,
+              338000,
+              339000,
+              342000,
+              342000,
+              349000,
+              350000
+            ]
+          },
+          "baseline_median_ns": 345000,
+          "candidate_median_ns": 342000,
+          "paired_ratio_median": 0.9941860465116279,
+          "paired_ratio_iqr": [
+            0.9748603351955307,
+            1.0086455331412103
+          ]
+        }
+      ]
+    }
+  ]
+}

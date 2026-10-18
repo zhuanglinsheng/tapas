@@ -1,0 +1,77 @@
+--- a/src/runtime/tvm.c
++++ b/src/runtime/tvm.c
+@@ -450,11 +450,33 @@
+ DEF_CMP(ge, >=)
+ DEF_CMP(le, <=)
+ 
++/* Keep the comparison-only byte representation private. Ordinary Strings
++ * can participate without materializing the byte as a String; other Types
++ * still use operator hooks with the original operand order. */
++static TVM_NOINLINE int vm_indexed_byte_equal(
++	const tobj *left, const tobj *right, int *equal)
++{
++	if (vm_is_indexed_byte(left) && vm_is_indexed_byte(right)) {
++		*equal = left->val.v_tint == right->val.v_tint;
++		return 1;
++	}
++	const tobj *byte = vm_is_indexed_byte(left) ? left : right;
++	const tobj *other = byte == left ? right : left;
++	if (!vm_is_indexed_byte(byte) || other->type != tcompo ||
++	    !other->val.v_tcompo || other->val.v_tcompo->vtable != &tstr_vtable)
++		return 0;
++	const tstr *string = (const tstr *)other->val.v_tcompo;
++	*equal = tstring_len(string->data) == 1 &&
++		(unsigned char)tstring_cstr(string->data)[0] == byte->val.v_tint;
++	return 1;
++}
++
+ static void operator_eq_slow(const tobj *v1, const tobj *v2, tobj *vre)
+ {
+ 	if (vm_is_indexed_byte(v1) || vm_is_indexed_byte(v2)) {
+-		if (vm_is_indexed_byte(v1) && vm_is_indexed_byte(v2)) {
+-			vm_set_bool_result(vre, v1->val.v_tint == v2->val.v_tint);
++		int equal;
++		if (vm_indexed_byte_equal(v1, v2, &equal)) {
++			vm_set_bool_result(vre, equal);
+ 			return;
+ 		}
+ 		const tobj *byte_value = vm_is_indexed_byte(v1) ? v1 : v2;
+@@ -505,8 +527,9 @@
+ static void operator_ne_slow(const tobj *v1, const tobj *v2, tobj *vre)
+ {
+ 	if (vm_is_indexed_byte(v1) || vm_is_indexed_byte(v2)) {
+-		if (vm_is_indexed_byte(v1) && vm_is_indexed_byte(v2)) {
+-			vm_set_bool_result(vre, v1->val.v_tint != v2->val.v_tint);
++		int equal;
++		if (vm_indexed_byte_equal(v1, v2, &equal)) {
++			vm_set_bool_result(vre, !equal);
+ 			return;
+ 		}
+ 		const tobj *byte_value = vm_is_indexed_byte(v1) ? v1 : v2;
+--- a/src/compile/backend/statement_ast_emit.c
++++ b/src/compile/backend/statement_ast_emit.c
+@@ -508,8 +508,23 @@
+ 		(ttypeval_equal(inferred, ttypeval_builtin(tbuiltintype_bool)) ||
+ 		 ttypeval_equal(inferred, ttypeval_builtin(tbuiltintype_int)) ||
+ 		 ttypeval_equal(inferred, ttypeval_builtin(tbuiltintype_float)));
++	int fused_arithmetic = initializer && initializer->kind == tast_binary &&
++		(initializer->binary.op == tsyntax_plus ||
++		 initializer->binary.op == tsyntax_minus ||
++		 initializer->binary.op == tsyntax_star ||
++		 initializer->binary.op == tsyntax_slash);
++	const tast_id *indices = initializer && initializer->kind == tast_index ?
++		tast_get_children(emitter->arena, initializer->aggregate.children,
++				  initializer->aggregate.count) : nullptr;
++	int fused_index = indices && initializer->aggregate.count == 1 &&
++		tast_get(emitter->arena, initializer->aggregate.receiver)->kind == tast_name &&
++		tast_get(emitter->arena, indices[0])->kind == tast_name;
++	/* Uncaptured locals can be initialized directly from dynamic values too.
++	 * Keep function constructors and existing VCRT arithmetic/index fusions
++	 * in their binding-first form; captured/mutable bindings need it too. */
+ 	int deferred_initialization = has_initializer && !environment_binding &&
+-		scalar_initializer;
++		initializer->kind != tast_function &&
++		(scalar_initializer || (!fused_arithmetic && !fused_index));
+ 	if (!deferred_initialization)
+ 		tvmcmd_vect_append(emitter->instructions,
+ 			tbycode_make_lr(OP_VCRT, (uint16_t)name_location,

@@ -1,0 +1,79 @@
+{
+  "baseline": {
+    "path": "/tmp/tapas-before-generic-heap",
+    "sha256": "2c543424a5884d5a647a99e8cf7b3134d170920aa714813705e4ae0d1e00dc1a",
+    "version": "Tapas 0.1.0 Copyright (C) 2020-2026",
+    "build_config": null
+  },
+  "candidate": {
+    "path": "/Users/zhuanglinsheng/Documents/Github/tapas/build-release/bin/tapas",
+    "sha256": "80d8465438372b58270f8201cdc5cd9cfc244cee0b5d50ba5ff1da75470072c4",
+    "version": "Tapas 0.1.0 Copyright (C) 2020-2026",
+    "build_config": [
+      "CMAKE_BUILD_TYPE:STRING=Release",
+      "CMAKE_C_COMPILER:FILEPATH=/usr/bin/cc",
+      "CMAKE_C_FLAGS:STRING=",
+      "CMAKE_C_FLAGS_RELEASE:STRING=-O3 -DNDEBUG",
+      "CMAKE_EXE_LINKER_FLAGS:STRING=",
+      "TAPAS_ENABLE_IPO:BOOL=ON"
+    ]
+  },
+  "note": "Instrumented runs count work only; elapsed times discarded.",
+  "rows": [
+    {
+      "name": "dijkstra_distance",
+      "source": "var stats = {'comparisons': 0, 'pops': 0, 'pushes': 0, 'expansions': 0, 'edges': 0}\nfunction distance_less(a, b)\n{\n    stats['comparisons'] = stats['comparisons'] + 1\n    return a[0] < b[0]\n}\n\nfunction dijkstra(graph, source, size)\n{\n    let dist = replicate([1000000000000], size)\n    dist[source] = 0\n    let queue = [[0, source]]\n    while (len(queue) > 0) {\n        stats['pops'] = stats['pops'] + 1\n        let current = heap::pop(queue, distance_less)\n        let distance = current[0]\n        let vertex = current[1]\n        if (distance == dist[vertex] and vertex in graph) {\n            stats['expansions'] = stats['expansions'] + 1\n            for (let edge in graph[vertex]) {\n                stats['edges'] = stats['edges'] + 1\n                let target = edge[0]\n                let alt = distance + edge[1]\n                if (alt < dist[target]) {\n                    dist[target] = alt\n                    stats['pushes'] = stats['pushes'] + 1\n                    heap::push(queue, [alt, target], distance_less)\n                }\n            }\n        }\n    }\n    return copy(dist)\n}\n\nlet size = 250\nlet degree = 6\nlet graph = {}\nfor (let i in 0 to size) {\n    let edges = []\n    edges.append([(i + 1) % size, 1])\n    for (let k in 0 to degree) {\n        let j = (i * 7 + k * 13 + 3) % size\n        let w = (i * 5 + k * 11 + 7) % 19 + 1\n        edges.append([j, w])\n    }\n    graph[i] = edges\n}\nlet sources = [0, size / 4, size / 2, size * 3 / 4]\nlet rounds = 4\n\nlet started = clock_ns()\nvar checksum = 0\nfor (let round in 0 to rounds) {\n    for (let s in 0 to len(sources)) {\n        let dist = dijkstra(graph, sources[s], size)\n        for (let i in 0 to size) {\n            checksum = checksum + dist[i]\n        }\n    }\n}\nlet elapsed = clock_ns() - started\n\nprint(checksum)\nprint(elapsed)\n\nfor (let key in ['comparisons', 'pops', 'pushes', 'expansions', 'edges']) { print(stats[key]) }\n",
+      "source_sha256": "b01f956d0ff5458a3ca300b6cca53296a47c4a56bf022a91db70ecdc11236b30",
+      "baseline": {
+        "checksum": 40796,
+        "comparisons": 100624,
+        "pops": 7436,
+        "pushes": 7420,
+        "expansions": 4000,
+        "edges": 28000
+      },
+      "candidate": {
+        "checksum": 40796,
+        "comparisons": 75676,
+        "pops": 7428,
+        "pushes": 7412,
+        "expansions": 4000,
+        "edges": 28000
+      }
+    },
+    {
+      "name": "dijkstra_lex",
+      "source": "var stats = {'comparisons': 0, 'pops': 0, 'pushes': 0, 'expansions': 0, 'edges': 0}\nfunction distance_less(a, b)\n{\n    stats['comparisons'] = stats['comparisons'] + 1\n    return a[0] < b[0] or (a[0] == b[0] and a[1] < b[1])\n}\n\nfunction dijkstra(graph, source, size)\n{\n    let dist = replicate([1000000000000], size)\n    dist[source] = 0\n    let queue = [[0, source]]\n    while (len(queue) > 0) {\n        stats['pops'] = stats['pops'] + 1\n        let current = heap::pop(queue, distance_less)\n        let distance = current[0]\n        let vertex = current[1]\n        if (distance == dist[vertex] and vertex in graph) {\n            stats['expansions'] = stats['expansions'] + 1\n            for (let edge in graph[vertex]) {\n                stats['edges'] = stats['edges'] + 1\n                let target = edge[0]\n                let alt = distance + edge[1]\n                if (alt < dist[target]) {\n                    dist[target] = alt\n                    stats['pushes'] = stats['pushes'] + 1\n                    heap::push(queue, [alt, target], distance_less)\n                }\n            }\n        }\n    }\n    return copy(dist)\n}\n\nlet size = 250\nlet degree = 6\nlet graph = {}\nfor (let i in 0 to size) {\n    let edges = []\n    edges.append([(i + 1) % size, 1])\n    for (let k in 0 to degree) {\n        let j = (i * 7 + k * 13 + 3) % size\n        let w = (i * 5 + k * 11 + 7) % 19 + 1\n        edges.append([j, w])\n    }\n    graph[i] = edges\n}\nlet sources = [0, size / 4, size / 2, size * 3 / 4]\nlet rounds = 4\n\nlet started = clock_ns()\nvar checksum = 0\nfor (let round in 0 to rounds) {\n    for (let s in 0 to len(sources)) {\n        let dist = dijkstra(graph, sources[s], size)\n        for (let i in 0 to size) {\n            checksum = checksum + dist[i]\n        }\n    }\n}\nlet elapsed = clock_ns() - started\n\nprint(checksum)\nprint(elapsed)\n\nfor (let key in ['comparisons', 'pops', 'pushes', 'expansions', 'edges']) { print(stats[key]) }\n",
+      "source_sha256": "d89133d8bf8542ec4b3e8e788de97e48105e3f461295f620d4cc874abda2858a",
+      "baseline": {
+        "checksum": 40796,
+        "comparisons": 103388,
+        "pops": 7452,
+        "pushes": 7436,
+        "expansions": 4000,
+        "edges": 28000
+      },
+      "candidate": {
+        "checksum": 40796,
+        "comparisons": 77584,
+        "pops": 7452,
+        "pushes": 7436,
+        "expansions": 4000,
+        "edges": 28000
+      }
+    },
+    {
+      "name": "huffman",
+      "source": "var comparisons = 0\nfunction frequency_less(a, b)\n{\n    comparisons = comparisons + 1\n    return a[0] < b[0]\n}\n\nfunction total_length(node, depth)\n{\n    if (types::matches(node[1], types::String)) {\n        return node[0] * depth\n    }\n    let children = node[1]\n    return this(children[0], depth + 1) + this(children[1], depth + 1)\n}\n\nfunction huffman_total(text)\n{\n    let freq = {}\n    for (let ch in text) {\n        freq[ch] = idx_or(freq, ch, 0) + 1\n    }\n\n    // Fixed symbol order keeps initial heap entries reproducible.\n    let nodes = []\n    for (let i in 0 to 8) {\n        let ch = 'abcdefgh'[i]\n        if (ch in freq) {\n            nodes.append(freq[ch] : ch)\n        }\n    }\n\n    heap::heapify(nodes, frequency_less)\n    while (nodes.len() > 1) {\n        let left = heap::pop(nodes, frequency_less)\n        let right = heap::pop(nodes, frequency_less)\n        heap::push(nodes, (left[0] + right[0]) : (left : right), frequency_less)\n    }\n\n    return total_length(nodes[0], 0) + 0\n}\n\nlet chars = []\nlet seed = 42\nfor (let index in 0 to 40000) {\n    seed = (seed * 1103515245 + 12345) % 2147483648\n    chars.append('abcdefgh'[seed % 8])\n}\nlet text = join(chars, '')\n\nlet started = clock_ns()\nlet result = huffman_total(text)\nlet elapsed = clock_ns() - started\n\nprint(result)\nprint(elapsed)\n\nprint(comparisons)\n",
+      "source_sha256": "38978c30b48755f70016694aea85c70f2be71e6d521676b50a2260e6eb84245f",
+      "baseline": {
+        "checksum": 120000,
+        "comparisons": 38
+      },
+      "candidate": {
+        "checksum": 120000,
+        "comparisons": 38
+      }
+    }
+  ]
+}

@@ -1,0 +1,105 @@
+{
+  "date": "2026-10-17T16:56:10.745939+00:00",
+  "runs": 7,
+  "rounds": 3,
+  "seed": 83,
+  "samples_ns": {
+    "tuple": [
+      [
+        10212000,
+        10020000,
+        10303000,
+        10642000,
+        10373000,
+        10462000,
+        10112000
+      ],
+      [
+        10162000,
+        10129000,
+        10173000,
+        10661000,
+        10167000,
+        10221000,
+        10075000
+      ],
+      [
+        10287000,
+        10410000,
+        9996000,
+        10004000,
+        10105000,
+        10222000,
+        10110000
+      ]
+    ],
+    "list": [
+      [
+        10166000,
+        10122000,
+        10110000,
+        10053000,
+        9955000,
+        10234000,
+        10169000
+      ],
+      [
+        9980000,
+        10063000,
+        10305000,
+        10166000,
+        10006000,
+        10288000,
+        10172000
+      ],
+      [
+        10548000,
+        10094000,
+        10171000,
+        10127000,
+        10147000,
+        9919000,
+        10098000
+      ]
+    ],
+    "slots": [
+      [
+        8119000,
+        8190000,
+        8220000,
+        8533000,
+        8126000,
+        8528000,
+        8352000
+      ],
+      [
+        8130000,
+        8234000,
+        8135000,
+        8265000,
+        8161000,
+        8299000,
+        8238000
+      ],
+      [
+        8141000,
+        8303000,
+        8159000,
+        8279000,
+        8205000,
+        8229000,
+        8340000
+      ]
+    ]
+  },
+  "medians_ns": {
+    "tuple": 10173000,
+    "list": 10127000,
+    "slots": 8229000
+  },
+  "sources": {
+    "tuple": "import heapq\nimport sys\nimport time\n\n\nclass Comparable(tuple):\n    __slots__ = ()\n    def __lt__(self, other):\n        return self[0] < other[0]\n\n\ndef bench(repetitions, values):\n    # Construct comparison wrappers outside the timed task, just as input values.\n    values = list(map(Comparable, values))\n    started = time.process_time_ns()\n    checksum = 0\n    for _ in range(repetitions):\n        queue = values.copy()\n        heapq.heapify(queue)\n        for position in range(1, len(values) + 1):\n            checksum += heapq.heappop(queue)[0] * position\n    elapsed = time.process_time_ns() - started\n    print(checksum)\n    print(elapsed)\n\n\nif __name__ == '__main__':\n    bench(64, [((i * 73 + 19) % 1009 - 500, i) for i in range(256)])\n",
+    "list": "import heapq\nimport sys\nimport time\n\n\nclass Comparable(list):\n    __slots__ = ()\n    def __lt__(self, other):\n        return self[0] < other[0]\n\n\ndef bench(repetitions, values):\n    # Construct comparison wrappers outside the timed task, just as input values.\n    values = list(map(Comparable, values))\n    started = time.process_time_ns()\n    checksum = 0\n    for _ in range(repetitions):\n        queue = values.copy()\n        heapq.heapify(queue)\n        for position in range(1, len(values) + 1):\n            checksum += heapq.heappop(queue)[0] * position\n    elapsed = time.process_time_ns() - started\n    print(checksum)\n    print(elapsed)\n\n\nif __name__ == '__main__':\n    bench(64, [((i * 73 + 19) % 1009 - 500, i) for i in range(256)])\n",
+    "slots": "import heapq\nimport sys\nimport time\n\n\nclass Comparable:\n    __slots__ = ('priority', 'payload')\n\n    def __init__(self, record):\n        self.priority, self.payload = record\n\n    def __lt__(self, other):\n        return self.priority < other.priority\n\n\ndef bench(repetitions, values):\n    # Construct comparison wrappers outside the timed task, just as input values.\n    values = list(map(Comparable, values))\n    started = time.process_time_ns()\n    checksum = 0\n    for _ in range(repetitions):\n        queue = values.copy()\n        heapq.heapify(queue)\n        for position in range(1, len(values) + 1):\n            checksum += heapq.heappop(queue).priority * position\n    elapsed = time.process_time_ns() - started\n    print(checksum)\n    print(elapsed)\n\n\nif __name__ == '__main__':\n    bench(64, [((i * 73 + 19) % 1009 - 500, i) for i in range(256)])\n"
+  }
+}

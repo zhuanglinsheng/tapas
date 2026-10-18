@@ -1,0 +1,107 @@
+{
+  "python": "3.14.2 (main, Oct  9 2026, 23:40:19) [Clang 21.0.0 (clang-2100.3.34.2)]",
+  "system": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+  "limit": 20000,
+  "checksum": 2262,
+  "repetitions_per_sample": 100,
+  "runs_per_round": 9,
+  "warmups_per_round": 1,
+  "rounds": [
+    {
+      "samples_ns_per_call": {
+        "baseline": [
+          95450.0,
+          92560.0,
+          93990.0,
+          90790.0,
+          90170.0,
+          94460.0,
+          94150.0,
+          89200.0,
+          91810.0
+        ],
+        "candidate": [
+          40460.0,
+          28830.0,
+          29130.0,
+          32380.0,
+          30390.0,
+          29140.0,
+          30130.0,
+          31680.0,
+          30590.0
+        ]
+      },
+      "paired_ratio_median": 0.33318810587082015
+    },
+    {
+      "samples_ns_per_call": {
+        "baseline": [
+          94580.0,
+          94020.0,
+          90550.0,
+          92250.0,
+          90600.0,
+          90660.0,
+          92570.0,
+          93390.0,
+          89880.0
+        ],
+        "candidate": [
+          29600.0,
+          29200.0,
+          29110.0,
+          29590.0,
+          29310.0,
+          29900.0,
+          28930.0,
+          30000.0,
+          29750.0
+        ]
+      },
+      "paired_ratio_median": 0.32123353678123995
+    },
+    {
+      "samples_ns_per_call": {
+        "baseline": [
+          90760.0,
+          91470.0,
+          91630.0,
+          91000.0,
+          92150.0,
+          89190.0,
+          91570.0,
+          90630.0,
+          91540.0
+        ],
+        "candidate": [
+          29980.0,
+          30700.0,
+          29530.0,
+          29620.0,
+          31270.0,
+          28930.0,
+          30650.0,
+          31810.0,
+          30110.0
+        ]
+      },
+      "paired_ratio_median": 0.33032172763331863
+    }
+  ],
+  "paired_ratio_median": 0.3254945054945055,
+  "median_ns": {
+    "baseline": 91570.0,
+    "candidate": 29900.0
+  },
+  "sources": {
+    "baseline": {
+      "source": "import math\nimport time\n\n\ndef primes_up_to(limit):\n    is_prime = bytearray(b\"\\x01\") * (limit + 1)\n    is_prime[:2] = b\"\\x00\\x00\"\n    for candidate in range(2, math.isqrt(limit) + 1):\n        if is_prime[candidate]:\n            start = candidate * candidate\n            is_prime[start::candidate] = bytes((limit - start) // candidate + 1)\n    return sum(is_prime)\n\n\ndef bench():\n    started = time.process_time_ns()\n    result = primes_up_to(20_000)\n\n    elapsed = time.process_time_ns() - started\n    print(result)\n    print(elapsed)\n\n\nif __name__ == \"__main__\":\n    bench()\n",
+      "sha256": "2f183356c628b5c430c5ac741f06c338e3dfd94d552e8863e7614383b75740ca"
+    },
+    "candidate": {
+      "source": "import math\nimport time\n\n\ndef primes_up_to(limit):\n    is_prime = bytearray(b\"\\x01\") * (limit + 1)\n    is_prime[:2] = b\"\\x00\\x00\"\n    for candidate in range(2, math.isqrt(limit) + 1):\n        if is_prime[candidate]:\n            start = candidate * candidate\n            is_prime[start::candidate] = bytes((limit - start) // candidate + 1)\n    return is_prime.count(1)\n\n\ndef bench():\n    started = time.process_time_ns()\n    result = primes_up_to(20_000)\n\n    elapsed = time.process_time_ns() - started\n    print(result)\n    print(elapsed)\n\n\nif __name__ == \"__main__\":\n    bench()\n",
+      "sha256": "eac1d7280c8777a54ec204f7673bcd55f7fe2cc2c461e3aa4a76796f82a902d0"
+    }
+  }
+}

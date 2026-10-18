@@ -1,0 +1,54 @@
+diff --git a/src/stdlib/heap/heap.c b/src/stdlib/heap/heap.c
+index 0067104..4928686 100644
+--- a/src/stdlib/heap/heap.c
++++ b/src/stdlib/heap/heap.c
+@@ -130,6 +130,40 @@ static void sift_down(const heap_order *order, uint_count parent, uint_count siz
+ 	}
+ }
+ 
++/* Pop replaces the root with a leaf value, which usually travels downward.
++ * Compare siblings on the descent, then settle the replacement upward.
++ * Swaps keep every payload rooted in the List across fallible callbacks. */
++static void sift_pop(const heap_order *order, uint_count parent, uint_count size)
++{
++	if (parent >= size / 2)
++		return;
++	uint_count child = parent * 2 + 1;
++	if (child + 1 < size && less_at(order, child + 1, child))
++		child++;
++	/* Equal priorities and replacements already in order need no movement.
++	 * Otherwise the first comparison proves the replacement cannot rise
++	 * above this child again, so exclude the settled root on the ascent. */
++	if (!less_at(order, child, parent))
++		return;
++	swap_items(order->list, parent, child);
++	parent = child;
++	uint_count start = parent;
++	while (parent < size / 2) {
++		child = parent * 2 + 1;
++		if (child + 1 < size && less_at(order, child + 1, child))
++			child++;
++		swap_items(order->list, parent, child);
++		parent = child;
++	}
++	while (parent > start) {
++		uint_count previous = (parent - 1) / 2;
++		if (!less_at(order, parent, previous))
++			break;
++		swap_items(order->list, parent, previous);
++		parent = previous;
++	}
++}
++
+ static void heap_heapify(tobj *params, uint_regs len, tobj *result,
+ 			 tcompo_env *environment)
+ {
+@@ -171,7 +205,7 @@ static void heap_pop(tobj *params, uint_regs len, tobj *result,
+ 	/* Keep the removed value in the list during comparisons, so an error
+ 	 * cannot strand an owned payload in a C local. Exclude it while sifting. */
+ 	swap_items(order.list, 0, size - 1);
+-	sift_down(&order, 0, size - 1);
++	sift_pop(&order, 0, size - 1);
+ 	tobj_vec_take(&order.list->items, size - 1, result);
+ }
+ 

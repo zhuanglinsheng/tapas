@@ -1,0 +1,99 @@
+{
+  "note": "Diagnostic stage timers inside each invocation; 300 calls per process, warmup process then 3 processes. Instrumentation perturbs short phases; phases exclude function return/destruction. Not a replacement for uninstrumented full benchmark. Python List variant preserves bytearray algorithm with List bool storage.",
+  "phases": [
+    "initialize",
+    "mark_including_outer_loop",
+    "count"
+  ],
+  "runtime": {
+    "path": "/Users/zhuanglinsheng/Documents/Github/tapas/build-release/bin/tapas",
+    "sha256": "b026c1defa442d43c39564627a4bb2ada8d2ca1f420da0e1919b962adf0d5d47",
+    "version": "Tapas 0.1.0 Copyright (C) 2020-2026",
+    "build_config": [
+      "CMAKE_BUILD_TYPE:STRING=Release",
+      "CMAKE_C_COMPILER:FILEPATH=/usr/bin/cc",
+      "CMAKE_C_FLAGS:STRING=",
+      "CMAKE_C_FLAGS_RELEASE:STRING=-O3 -DNDEBUG",
+      "CMAKE_EXE_LINKER_FLAGS:STRING=",
+      "TAPAS_ENABLE_IPO:BOOL=ON"
+    ]
+  },
+  "python": "3.14.2 (main, Oct  9 2026, 23:40:19) [Clang 21.0.0 (clang-2100.3.34.2)]",
+  "rows": {
+    "tapas_list": {
+      "source": "function primes_up_to(limit)\n{\n    let t0 = clock_ns()\n    let is_prime = replicate([true], limit + 1)\n    is_prime[0] = false\n    is_prime[1] = false\n\n    let t1 = clock_ns()\n    let candidate = 2\n    while (candidate * candidate <= limit) {\n        if (is_prime[candidate]) {\n            fill(is_prime, false, iter(candidate * candidate, candidate, limit + 1))\n        }\n        candidate = candidate + 1\n    }\n\n    let t2 = clock_ns()\n    let result = count(is_prime, true)\n    let t3 = clock_ns()\n    return [t1 - t0, t2 - t1, t3 - t2, result]\n}\n\nlet totals = [0, 0, 0]\nvar result = 0\nfor (let repetition in 0 to 300) {\n let phases = primes_up_to(20000)\n for (let i in 0 to 3) { totals[i] = totals[i] + phases[i] }\n result = result + phases[3]\n}\nprint(result)\nprint(totals[0])\nprint(totals[1])\nprint(totals[2])\n",
+      "samples_ns": [
+        [
+          5416.666666666667,
+          40316.666666666664,
+          9216.666666666666
+        ],
+        [
+          5413.333333333333,
+          36496.666666666664,
+          9273.333333333334
+        ],
+        [
+          5506.666666666667,
+          40196.666666666664,
+          9146.666666666666
+        ]
+      ],
+      "median_ns": [
+        5416.666666666667,
+        40196.666666666664,
+        9216.666666666666
+      ]
+    },
+    "python_bytearray": {
+      "source": "import math\nimport time\n\n\ndef primes_up_to(limit):\n    t0 = time.process_time_ns()\n    is_prime = bytearray(b\"\\x01\") * (limit + 1)\n    is_prime[:2] = b\"\\x00\\x00\"\n    t1 = time.process_time_ns()\n    for candidate in range(2, math.isqrt(limit) + 1):\n        if is_prime[candidate]:\n            start = candidate * candidate\n            is_prime[start::candidate] = bytes((limit - start) // candidate + 1)\n    t2 = time.process_time_ns()\n    result = is_prime.count(1)\n    t3 = time.process_time_ns()\n    return t1-t0, t2-t1, t3-t2, result\n\n\ntotals = [0,0,0]\nresult = 0\nfor repetition in range(300):\n    phases = primes_up_to(20000)\n    for i in range(3):\n        totals[i] += phases[i]\n    result += phases[3]\nprint(result)\nprint(*totals, sep='\\n')\n",
+      "samples_ns": [
+        [
+          893.3333333333334,
+          26453.333333333332,
+          3526.6666666666665
+        ],
+        [
+          863.3333333333334,
+          27046.666666666668,
+          3633.3333333333335
+        ],
+        [
+          880.0,
+          26133.333333333332,
+          3486.6666666666665
+        ]
+      ],
+      "median_ns": [
+        880.0,
+        26453.333333333332,
+        3526.6666666666665
+      ]
+    },
+    "python_list": {
+      "source": "import math\nimport time\n\n\ndef primes_up_to(limit):\n    t0 = time.process_time_ns()\n    is_prime = [True] * (limit + 1)\n    is_prime[:2] = [False, False]\n    t1 = time.process_time_ns()\n    for candidate in range(2, math.isqrt(limit) + 1):\n        if is_prime[candidate]:\n            start = candidate * candidate\n            is_prime[start::candidate] = [False] * ((limit - start) // candidate + 1)\n    t2 = time.process_time_ns()\n    result = is_prime.count(True)\n    t3 = time.process_time_ns()\n    return t1-t0, t2-t1, t3-t2, result\n\n\ntotals = [0,0,0]\nresult = 0\nfor repetition in range(300):\n    phases = primes_up_to(20000)\n    for i in range(3):\n        totals[i] += phases[i]\n    result += phases[3]\nprint(result)\nprint(*totals, sep='\\n')\n",
+      "samples_ns": [
+        [
+          2690.0,
+          77790.0,
+          182240.0
+        ],
+        [
+          3110.0,
+          79676.66666666667,
+          186386.66666666666
+        ],
+        [
+          2716.6666666666665,
+          78236.66666666667,
+          182583.33333333334
+        ]
+      ],
+      "median_ns": [
+        2716.6666666666665,
+        78236.66666666667,
+        182583.33333333334
+      ]
+    }
+  }
+}

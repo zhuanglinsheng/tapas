@@ -1,0 +1,204 @@
+{
+  "date": "2026-10-17T12:06:09.808283+00:00",
+  "runtime": {
+    "path": "/Users/zhuanglinsheng/Documents/Github/tapas/build-release/bin/tapas",
+    "sha256": "79e92d7c65095fac554aa2d2749bbb4fc6223d01b1efee784c3f9732cadea6cd",
+    "version": "Tapas 0.1.0 Copyright (C) 2020-2026",
+    "build_config": [
+      "CMAKE_BUILD_TYPE:STRING=Release",
+      "CMAKE_C_COMPILER:FILEPATH=/usr/bin/cc",
+      "CMAKE_C_FLAGS:STRING=",
+      "CMAKE_C_FLAGS_RELEASE:STRING=-O3 -DNDEBUG",
+      "CMAKE_EXE_LINKER_FLAGS:STRING=",
+      "TAPAS_ENABLE_IPO:BOOL=ON"
+    ]
+  },
+  "sources": {
+    "baseline": {
+      "path": "/private/tmp/tapas-dijkstra-lex.tap",
+      "sha256": "468f22fa1d566aa4bd824c57ef1b0c480a403f364c7552eb295683b5bf24fd3a",
+      "source": "function distance_less(a, b)\n{\n    return a[0] < b[0] or (a[0] == b[0] and a[1] < b[1])\n}\n\nfunction dijkstra(graph, source, size)\n{\n    let dist = replicate([1000000000000], size)\n    dist[source] = 0\n    let queue = [[0, source]]\n    while (len(queue) > 0) {\n        let current = heap::pop(queue, distance_less)\n        let distance = current[0]\n        let vertex = current[1]\n        if (distance == dist[vertex] and vertex in graph) {\n            for (let edge in graph[vertex]) {\n                let target = edge[0]\n                let alt = distance + edge[1]\n                if (alt < dist[target]) {\n                    dist[target] = alt\n                    heap::push(queue, [alt, target], distance_less)\n                }\n            }\n        }\n    }\n    return copy(dist)\n}\n\nlet size = 250\nlet degree = 6\nlet graph = {}\nfor (let i in 0 to size) {\n    let edges = []\n    edges.append([(i + 1) % size, 1])\n    for (let k in 0 to degree) {\n        let j = (i * 7 + k * 13 + 3) % size\n        let w = (i * 5 + k * 11 + 7) % 19 + 1\n        edges.append([j, w])\n    }\n    graph[i] = edges\n}\nlet sources = [0, size / 4, size / 2, size * 3 / 4]\nlet rounds = 4\n\nlet started = clock_ns()\nvar checksum = 0\nfor (let round in 0 to rounds) {\n    for (let s in 0 to len(sources)) {\n        let dist = dijkstra(graph, sources[s], size)\n        for (let i in 0 to size) {\n            checksum = checksum + dist[i]\n        }\n    }\n}\nlet elapsed = clock_ns() - started\n\nprint(checksum)\nprint(elapsed)\n"
+    },
+    "candidate": {
+      "path": "/Users/zhuanglinsheng/Documents/Github/tapas/test/benchmarks/dijkstra.tap",
+      "sha256": "f74ca71cb953785298a33e91d8ce2824d68cce9577bcd047b4c500be72f7641a",
+      "source": "function dijkstra(graph, source, size)\n{\n    let dist = replicate([1000000000000], size)\n    dist[source] = 0\n    let queue = [[0, source]]\n    while (len(queue) > 0) {\n        let current = heap::pop(queue)\n        let distance = current[0]\n        let vertex = current[1]\n        if (distance == dist[vertex] and vertex in graph) {\n            for (let edge in graph[vertex]) {\n                let target = edge[0]\n                let alt = distance + edge[1]\n                if (alt < dist[target]) {\n                    dist[target] = alt\n                    heap::push(queue, [alt, target])\n                }\n            }\n        }\n    }\n    return copy(dist)\n}\n\nlet size = 250\nlet degree = 6\nlet graph = {}\nfor (let i in 0 to size) {\n    let edges = []\n    edges.append([(i + 1) % size, 1])\n    for (let k in 0 to degree) {\n        let j = (i * 7 + k * 13 + 3) % size\n        let w = (i * 5 + k * 11 + 7) % 19 + 1\n        edges.append([j, w])\n    }\n    graph[i] = edges\n}\nlet sources = [0, size / 4, size / 2, size * 3 / 4]\nlet rounds = 4\n\nlet started = clock_ns()\nvar checksum = 0\nfor (let round in 0 to rounds) {\n    for (let s in 0 to len(sources)) {\n        let dist = dijkstra(graph, sources[s], size)\n        for (let i in 0 to size) {\n            checksum = checksum + dist[i]\n        }\n    }\n}\nlet elapsed = clock_ns() - started\n\nprint(checksum)\nprint(elapsed)\n"
+    }
+  },
+  "checksum": 40796,
+  "runs": 9,
+  "rounds": [
+    {
+      "samples_ns": {
+        "baseline": [
+          8981000,
+          8895000,
+          9241000,
+          9164000,
+          9017000,
+          8877000,
+          8993000,
+          8755000,
+          9037000
+        ],
+        "candidate": [
+          4081000,
+          4282000,
+          3871000,
+          4112000,
+          3876000,
+          3994000,
+          4453000,
+          3962000,
+          4098000
+        ]
+      },
+      "baseline_median_ns": 8993000,
+      "candidate_median_ns": 4081000,
+      "paired_ratio_median": 0.45254140491147915,
+      "paired_ratio_iqr": [
+        0.4392835357743923,
+        0.4678988914139456
+      ]
+    },
+    {
+      "samples_ns": {
+        "baseline": [
+          9003000,
+          8889000,
+          8825000,
+          9078000,
+          9329000,
+          9283000,
+          9471000,
+          9496000,
+          9481000
+        ],
+        "candidate": [
+          3878000,
+          3855000,
+          3959000,
+          3882000,
+          4057000,
+          4124000,
+          4183000,
+          4295000,
+          4013000
+        ]
+      },
+      "baseline_median_ns": 9283000,
+      "candidate_median_ns": 4013000,
+      "paired_ratio_median": 0.43488048022296066,
+      "paired_ratio_iqr": [
+        0.42918626889369843,
+        0.4464324167452216
+      ]
+    },
+    {
+      "samples_ns": {
+        "baseline": [
+          9380000,
+          9297000,
+          9550000,
+          9796000,
+          9163000,
+          9093000,
+          10219000,
+          9420000,
+          9302000
+        ],
+        "candidate": [
+          4044000,
+          3984000,
+          4087000,
+          4131000,
+          4177000,
+          4291000,
+          4127000,
+          4263000,
+          4041000
+        ]
+      },
+      "baseline_median_ns": 9380000,
+      "candidate_median_ns": 4127000,
+      "paired_ratio_median": 0.4311300639658849,
+      "paired_ratio_iqr": [
+        0.4248304254968905,
+        0.4542014200005422
+      ]
+    }
+  ],
+  "warmups_per_round": 1,
+  "round_ratio_medians": [
+    0.45254140491147915,
+    0.43488048022296066,
+    0.4311300639658849
+  ],
+  "samples_ns": {
+    "baseline": [
+      8981000,
+      8895000,
+      9241000,
+      9164000,
+      9017000,
+      8877000,
+      8993000,
+      8755000,
+      9037000,
+      9003000,
+      8889000,
+      8825000,
+      9078000,
+      9329000,
+      9283000,
+      9471000,
+      9496000,
+      9481000,
+      9380000,
+      9297000,
+      9550000,
+      9796000,
+      9163000,
+      9093000,
+      10219000,
+      9420000,
+      9302000
+    ],
+    "candidate": [
+      4081000,
+      4282000,
+      3871000,
+      4112000,
+      3876000,
+      3994000,
+      4453000,
+      3962000,
+      4098000,
+      3878000,
+      3855000,
+      3959000,
+      3882000,
+      4057000,
+      4124000,
+      4183000,
+      4295000,
+      4013000,
+      4044000,
+      3984000,
+      4087000,
+      4131000,
+      4177000,
+      4291000,
+      4127000,
+      4263000,
+      4041000
+    ]
+  },
+  "baseline_median_ns": 9164000,
+  "candidate_median_ns": 4081000,
+  "paired_ratio_median": 0.44166402702988067,
+  "paired_ratio_iqr": [
+    0.42852533075185545,
+    0.45254777070063695
+  ]
+}

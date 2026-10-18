@@ -1,0 +1,204 @@
+{
+  "date": "2026-10-17T10:40:21.869814+00:00",
+  "runtime": {
+    "path": "/Users/zhuanglinsheng/Documents/Github/tapas/build-release/bin/tapas",
+    "sha256": "2c543424a5884d5a647a99e8cf7b3134d170920aa714813705e4ae0d1e00dc1a",
+    "version": "Tapas 0.1.0 Copyright (C) 2020-2026",
+    "build_config": [
+      "CMAKE_BUILD_TYPE:STRING=Release",
+      "CMAKE_C_COMPILER:FILEPATH=/usr/bin/cc",
+      "CMAKE_C_FLAGS:STRING=",
+      "CMAKE_C_FLAGS_RELEASE:STRING=-O3 -DNDEBUG",
+      "CMAKE_EXE_LINKER_FLAGS:STRING=",
+      "TAPAS_ENABLE_IPO:BOOL=ON"
+    ]
+  },
+  "sources": {
+    "baseline": {
+      "path": "/private/var/folders/7g/nxmw_wbs1nsfwhdcb7s3zrtc0000gn/T/tapas-sieve-final-86rbnmsb/baseline.tap",
+      "sha256": "fd56cc7e91592e862e1a7b3a039414336d76655b0b77f119cc9c86c84801ac47",
+      "source": "function primes_up_to(limit)\n{\n    let is_prime = replicate([true], limit + 1)\n    is_prime[0] = false\n    is_prime[1] = false\n\n    let candidate = 2\n    while (candidate * candidate <= limit) {\n        if (is_prime[candidate]) {\n            let multiple = candidate * candidate\n            while (multiple <= limit) {\n                is_prime[multiple] = false\n                multiple = multiple + candidate\n            }\n        }\n        candidate = candidate + 1\n    }\n\n    let count = 0\n    for (let value in 2 to (limit + 1)) {\n        if (is_prime[value]) {\n            count = count + 1\n        }\n    }\n    return count + 0\n}\n\nlet started = clock_ns()\nlet result = primes_up_to(20000)\n\nlet elapsed = clock_ns() - started\nprint(result)\nprint(elapsed)\n"
+    },
+    "candidate": {
+      "path": "/private/var/folders/7g/nxmw_wbs1nsfwhdcb7s3zrtc0000gn/T/tapas-sieve-final-86rbnmsb/fill.tap",
+      "sha256": "f0847f2ad8b66307c9d15c1266d53a3265fb17e54b38afa45b03f6c23b77fd76",
+      "source": "function primes_up_to(limit)\n{\n    let is_prime = replicate([true], limit + 1)\n    is_prime[0] = false\n    is_prime[1] = false\n\n    let candidate = 2\n    while (candidate * candidate <= limit) {\n        if (is_prime[candidate]) {\n            fill(is_prime, false, iter(candidate * candidate, candidate, limit + 1))\n        }\n        candidate = candidate + 1\n    }\n\n    let count = 0\n    for (let value in 2 to (limit + 1)) {\n        if (is_prime[value]) {\n            count = count + 1\n        }\n    }\n    return count + 0\n}\n\nlet started = clock_ns()\nlet result = primes_up_to(20000)\n\nlet elapsed = clock_ns() - started\nprint(result)\nprint(elapsed)\n"
+    }
+  },
+  "checksum": 2262,
+  "runs": 9,
+  "rounds": [
+    {
+      "samples_ns": {
+        "baseline": [
+          1076000,
+          1075000,
+          1020000,
+          1048000,
+          1047000,
+          1043000,
+          1033000,
+          1005000,
+          1044000
+        ],
+        "candidate": [
+          390000,
+          370000,
+          379000,
+          360000,
+          371000,
+          356000,
+          363000,
+          366000,
+          352000
+        ]
+      },
+      "baseline_median_ns": 1044000,
+      "candidate_median_ns": 366000,
+      "paired_ratio_median": 0.3514036786060019,
+      "paired_ratio_iqr": [
+        0.3424172784027285,
+        0.36331631803806247
+      ]
+    },
+    {
+      "samples_ns": {
+        "baseline": [
+          1111000,
+          1131000,
+          1046000,
+          1067000,
+          1001000,
+          1012000,
+          1022000,
+          1005000,
+          1008000
+        ],
+        "candidate": [
+          396000,
+          390000,
+          376000,
+          371000,
+          368000,
+          368000,
+          360000,
+          372000,
+          356000
+        ]
+      },
+      "baseline_median_ns": 1022000,
+      "candidate_median_ns": 371000,
+      "paired_ratio_median": 0.3564356435643564,
+      "paired_ratio_iqr": [
+        0.349977165892997,
+        0.36563436563436563
+      ]
+    },
+    {
+      "samples_ns": {
+        "baseline": [
+          1034000,
+          1011000,
+          1019000,
+          1008000,
+          1009000,
+          998000,
+          1005000,
+          1001000,
+          1001000
+        ],
+        "candidate": [
+          354000,
+          363000,
+          380000,
+          379000,
+          377000,
+          353000,
+          378000,
+          372000,
+          366000
+        ]
+      },
+      "baseline_median_ns": 1008000,
+      "candidate_median_ns": 372000,
+      "paired_ratio_median": 0.37162837162837165,
+      "paired_ratio_iqr": [
+        0.35637892996675846,
+        0.37481466405524877
+      ]
+    }
+  ],
+  "warmups_per_round": 1,
+  "round_ratio_medians": [
+    0.3514036786060019,
+    0.3564356435643564,
+    0.37162837162837165
+  ],
+  "samples_ns": {
+    "baseline": [
+      1076000,
+      1075000,
+      1020000,
+      1048000,
+      1047000,
+      1043000,
+      1033000,
+      1005000,
+      1044000,
+      1111000,
+      1131000,
+      1046000,
+      1067000,
+      1001000,
+      1012000,
+      1022000,
+      1005000,
+      1008000,
+      1034000,
+      1011000,
+      1019000,
+      1008000,
+      1009000,
+      998000,
+      1005000,
+      1001000,
+      1001000
+    ],
+    "candidate": [
+      390000,
+      370000,
+      379000,
+      360000,
+      371000,
+      356000,
+      363000,
+      366000,
+      352000,
+      396000,
+      390000,
+      376000,
+      371000,
+      368000,
+      368000,
+      360000,
+      372000,
+      356000,
+      354000,
+      363000,
+      380000,
+      379000,
+      377000,
+      353000,
+      378000,
+      372000,
+      366000
+    ]
+  },
+  "baseline_median_ns": 1020000,
+  "candidate_median_ns": 370000,
+  "paired_ratio_median": 0.3590504451038576,
+  "paired_ratio_iqr": [
+    0.3477038425492034,
+    0.3701492537313433
+  ]
+}

@@ -1,0 +1,1150 @@
+{
+  "date": "2026-10-17T11:12:18.952262+00:00",
+  "python": "3.14.2 (main, Oct  9 2026, 23:40:19) [Clang 21.0.0 (clang-2100.3.34.2)]",
+  "runtimes": {
+    "py": {
+      "path": "/Users/zhuanglinsheng/.pyenv/versions/3.14.2/bin/python3.14",
+      "sha256": "949f8c2df0cc762cbdaa66889b2bf70d5234c2e7ed902db1eebca50f2ba94e2d"
+    },
+    "tap": {
+      "path": "/Users/zhuanglinsheng/Documents/Github/tapas/build-release/bin/tapas",
+      "sha256": "80d8465438372b58270f8201cdc5cd9cfc244cee0b5d50ba5ff1da75470072c4"
+    }
+  },
+  "runs": 7,
+  "rounds": 3,
+  "warmups_per_round": 1,
+  "note": "Diagnostic source variations only. Baselines remain unchanged; sieve CPU samples normalized per invocation. Ratios are candidate/baseline in the same language, not Tapas/Python.",
+  "rows": [
+    {
+      "name": "huffman_python_explicit_frequency",
+      "algorithm": "huffman",
+      "language": "py",
+      "repetitions_per_sample": 1,
+      "checksum": 120000,
+      "sources": {
+        "baseline": "import time\nfrom collections import Counter\n\nSYMBOLS = \"abcdefgh\"\n\n\ndef huffman_total(text):\n    freq = Counter(text)\n    # Fixed symbol order makes ties in the minimum scan deterministic.\n    nodes = [(freq[ch], ch) for ch in SYMBOLS if ch in freq]\n\n    def find_min():\n        best = -1\n        for i, node in enumerate(nodes):\n            if best < 0 or node[0] < nodes[best][0]:\n                best = i\n        return best\n\n    while len(nodes) > 1:\n        first = find_min()\n        left = nodes.pop(first)\n        second = find_min()\n        right = nodes.pop(second)\n        nodes.append((left[0] + right[0], (left, right)))\n\n    def total_length(node, depth):\n        if isinstance(node[1], str):\n            return node[0] * depth\n        return (total_length(node[1][0], depth + 1) +\n                total_length(node[1][1], depth + 1))\n\n    return total_length(nodes[0], 0)\n\n\nseed = 42\nchars = []\nfor _ in range(40000):\n    seed = (seed * 1103515245 + 12345) % 2147483648\n    chars.append(SYMBOLS[seed % 8])\ntext = \"\".join(chars)\n\ndef bench():\n    started = time.process_time_ns()\n    result = huffman_total(text)\n    elapsed = time.process_time_ns() - started\n\n    print(result)\n    print(elapsed)\n\n\nif __name__ == \"__main__\":\n    bench()\n",
+        "candidate": "import time\nfrom collections import Counter\n\nSYMBOLS = \"abcdefgh\"\n\n\ndef huffman_total(text):\n    freq = {}\n    for ch in text:\n        freq[ch] = freq.get(ch, 0) + 1\n    # Fixed symbol order makes ties in the minimum scan deterministic.\n    nodes = [(freq[ch], ch) for ch in SYMBOLS if ch in freq]\n\n    def find_min():\n        best = -1\n        for i, node in enumerate(nodes):\n            if best < 0 or node[0] < nodes[best][0]:\n                best = i\n        return best\n\n    while len(nodes) > 1:\n        first = find_min()\n        left = nodes.pop(first)\n        second = find_min()\n        right = nodes.pop(second)\n        nodes.append((left[0] + right[0], (left, right)))\n\n    def total_length(node, depth):\n        if isinstance(node[1], str):\n            return node[0] * depth\n        return (total_length(node[1][0], depth + 1) +\n                total_length(node[1][1], depth + 1))\n\n    return total_length(nodes[0], 0)\n\n\nseed = 42\nchars = []\nfor _ in range(40000):\n    seed = (seed * 1103515245 + 12345) % 2147483648\n    chars.append(SYMBOLS[seed % 8])\ntext = \"\".join(chars)\n\ndef bench():\n    started = time.process_time_ns()\n    result = huffman_total(text)\n    elapsed = time.process_time_ns() - started\n\n    print(result)\n    print(elapsed)\n\n\nif __name__ == \"__main__\":\n    bench()\n"
+      },
+      "rounds": [
+        {
+          "samples_ns": {
+            "baseline": [
+              1279000.0,
+              1195000.0,
+              1036000.0,
+              1231000.0,
+              1124000.0,
+              1103000.0,
+              1020000.0
+            ],
+            "candidate": [
+              1970000.0,
+              1916000.0,
+              1890000.0,
+              2081000.0,
+              2021000.0,
+              1904000.0,
+              1907000.0
+            ]
+          },
+          "baseline_median_ns": 1124000,
+          "candidate_median_ns": 1916000,
+          "paired_ratio_median": 1.7262012692656392,
+          "paired_ratio_iqr": [
+            1.603347280334728,
+            1.8243243243243243
+          ]
+        },
+        {
+          "samples_ns": {
+            "baseline": [
+              1163000.0,
+              1248000.0,
+              1094000.0,
+              1153000.0,
+              1264000.0,
+              1072000.0,
+              1232000.0
+            ],
+            "candidate": [
+              1903000.0,
+              2292000.0,
+              1810000.0,
+              1945000.0,
+              2071000.0,
+              2056000.0,
+              2036000.0
+            ]
+          },
+          "baseline_median_ns": 1163000,
+          "candidate_median_ns": 2036000,
+          "paired_ratio_median": 1.6544789762340038,
+          "paired_ratio_iqr": [
+            1.6384493670886076,
+            1.8365384615384615
+          ]
+        },
+        {
+          "samples_ns": {
+            "baseline": [
+              1280000.0,
+              1023000.0,
+              1105000.0,
+              1282000.0,
+              1229000.0,
+              1155000.0,
+              1119000.0
+            ],
+            "candidate": [
+              2027000.0,
+              1958000.0,
+              1916000.0,
+              1933000.0,
+              1892000.0,
+              2147000.0,
+              1813000.0
+            ]
+          },
+          "baseline_median_ns": 1155000,
+          "candidate_median_ns": 1933000,
+          "paired_ratio_median": 1.6201966041108131,
+          "paired_ratio_iqr": [
+            1.5394629780309195,
+            1.8588744588744588
+          ]
+        }
+      ],
+      "round_ratio_medians": [
+        1.7262012692656392,
+        1.6544789762340038,
+        1.6201966041108131
+      ],
+      "samples_ns": {
+        "baseline": [
+          1279000.0,
+          1195000.0,
+          1036000.0,
+          1231000.0,
+          1124000.0,
+          1103000.0,
+          1020000.0,
+          1163000.0,
+          1248000.0,
+          1094000.0,
+          1153000.0,
+          1264000.0,
+          1072000.0,
+          1232000.0,
+          1280000.0,
+          1023000.0,
+          1105000.0,
+          1282000.0,
+          1229000.0,
+          1155000.0,
+          1119000.0
+        ],
+        "candidate": [
+          1970000.0,
+          1916000.0,
+          1890000.0,
+          2081000.0,
+          2021000.0,
+          1904000.0,
+          1907000.0,
+          1903000.0,
+          2292000.0,
+          1810000.0,
+          1945000.0,
+          2071000.0,
+          2056000.0,
+          2036000.0,
+          2027000.0,
+          1958000.0,
+          1916000.0,
+          1933000.0,
+          1892000.0,
+          2147000.0,
+          1813000.0
+        ]
+      },
+      "baseline_median_ns": 1155000,
+      "candidate_median_ns": 1945000,
+      "paired_ratio_median": 1.6869037294015612,
+      "paired_ratio_iqr": [
+        1.6117719422227705,
+        1.830431392931393
+      ]
+    },
+    {
+      "name": "sieve_python_list_storage",
+      "algorithm": "sieve",
+      "language": "py",
+      "repetitions_per_sample": 100,
+      "checksum": 2262,
+      "sources": {
+        "baseline": "import math\nimport time\n\n\ndef primes_up_to(limit):\n    is_prime = bytearray(b\"\\x01\") * (limit + 1)\n    is_prime[:2] = b\"\\x00\\x00\"\n    for candidate in range(2, math.isqrt(limit) + 1):\n        if is_prime[candidate]:\n            start = candidate * candidate\n            is_prime[start::candidate] = bytes((limit - start) // candidate + 1)\n    return is_prime.count(1)\n\n\ndef bench():\n    started = time.process_time_ns()\n    for _ in range(100):\n        result = primes_up_to(20_000)\n\n    elapsed = time.process_time_ns() - started\n    print(result)\n    print(elapsed)\n\n\nif __name__ == \"__main__\":\n    bench()\n",
+        "candidate": "import math\nimport time\n\n\ndef primes_up_to(limit):\n    is_prime = [True] * (limit + 1)\n    is_prime[:2] = [False, False]\n    for candidate in range(2, math.isqrt(limit) + 1):\n        if is_prime[candidate]:\n            start = candidate * candidate\n            is_prime[start::candidate] = [False] * ((limit - start) // candidate + 1)\n    return is_prime.count(True)\n\n\ndef bench():\n    started = time.process_time_ns()\n    for _ in range(100):\n        result = primes_up_to(20_000)\n\n    elapsed = time.process_time_ns() - started\n    print(result)\n    print(elapsed)\n\n\nif __name__ == \"__main__\":\n    bench()\n"
+      },
+      "rounds": [
+        {
+          "samples_ns": {
+            "baseline": [
+              29180.0,
+              29930.0,
+              29230.0,
+              29530.0,
+              30590.0,
+              29340.0,
+              30530.0
+            ],
+            "candidate": [
+              262810.0,
+              264400.0,
+              268700.0,
+              270970.0,
+              265610.0,
+              258810.0,
+              265120.0
+            ]
+          },
+          "baseline_median_ns": 29530,
+          "candidate_median_ns": 265120,
+          "paired_ratio_median": 8.833945873705312,
+          "paired_ratio_iqr": [
+            8.683917458237799,
+            9.17609210971893
+          ]
+        },
+        {
+          "samples_ns": {
+            "baseline": [
+              29130.0,
+              30230.0,
+              29680.0,
+              30700.0,
+              29170.0,
+              29380.0,
+              29090.0
+            ],
+            "candidate": [
+              264400.0,
+              266230.0,
+              265580.0,
+              266670.0,
+              266080.0,
+              266630.0,
+              256340.0
+            ]
+          },
+          "baseline_median_ns": 29380,
+          "candidate_median_ns": 266080,
+          "paired_ratio_median": 8.94811320754717,
+          "paired_ratio_iqr": [
+            8.80681442275885,
+            9.076553381393753
+          ]
+        },
+        {
+          "samples_ns": {
+            "baseline": [
+              29330.0,
+              28910.0,
+              29510.0,
+              30240.0,
+              30860.0,
+              29380.0,
+              29240.0
+            ],
+            "candidate": [
+              265130.0,
+              266610.0,
+              266700.0,
+              276360.0,
+              264780.0,
+              265470.0,
+              264170.0
+            ]
+          },
+          "baseline_median_ns": 29380,
+          "candidate_median_ns": 265470,
+          "paired_ratio_median": 9.037614368010845,
+          "paired_ratio_iqr": [
+            9.03454172366621,
+            9.13888888888889
+          ]
+        }
+      ],
+      "round_ratio_medians": [
+        8.833945873705312,
+        8.94811320754717,
+        9.037614368010845
+      ],
+      "samples_ns": {
+        "baseline": [
+          29180.0,
+          29930.0,
+          29230.0,
+          29530.0,
+          30590.0,
+          29340.0,
+          30530.0,
+          29130.0,
+          30230.0,
+          29680.0,
+          30700.0,
+          29170.0,
+          29380.0,
+          29090.0,
+          29330.0,
+          28910.0,
+          29510.0,
+          30240.0,
+          30860.0,
+          29380.0,
+          29240.0
+        ],
+        "candidate": [
+          262810.0,
+          264400.0,
+          268700.0,
+          270970.0,
+          265610.0,
+          258810.0,
+          265120.0,
+          264400.0,
+          266230.0,
+          265580.0,
+          266670.0,
+          266080.0,
+          266630.0,
+          256340.0,
+          265130.0,
+          266610.0,
+          266700.0,
+          276360.0,
+          264780.0,
+          265470.0,
+          264170.0
+        ]
+      },
+      "baseline_median_ns": 29380,
+      "candidate_median_ns": 265580,
+      "paired_ratio_median": 9.03454172366621,
+      "paired_ratio_iqr": [
+        8.809388648299329,
+        9.099126879246757
+      ]
+    },
+    {
+      "name": "lcs_python_inner_indexing",
+      "algorithm": "longest_common_subsequence",
+      "language": "py",
+      "repetitions_per_sample": 1,
+      "checksum": 1480,
+      "sources": {
+        "baseline": "import time\n\n\ndef lcs_length(left, right):\n    previous = [0] * (len(right) + 1)\n    current = [0] * (len(right) + 1)\n\n    for ch in left:\n        current[0] = 0\n        for j, other in enumerate(right, 1):\n            if ch == other:\n                current[j] = previous[j - 1] + 1\n            elif previous[j] >= current[j - 1]:\n                current[j] = previous[j]\n            else:\n                current[j] = current[j - 1]\n        previous, current = current, previous\n    return previous[len(right)]\n\n\nleft = \"DYNAMICPROGRAMMINGALGORITHMSANDDATASTRUCTURESARECENTRALTOVIRTUALMACHINEBENCHMARKS\"\nright = \"ALGORITHMSFORDYNAMICLANGUAGESUSEPROGRAMSTRUCTUREANDRUNTIMEDATATOMEASUREPERFORMANCE\"\n\ndef bench():\n    started = time.process_time_ns()\n    result = 0\n    for _ in range(40):\n        result += lcs_length(left, right)\n    elapsed = time.process_time_ns() - started\n\n    print(result)\n    print(elapsed)\n\n\nif __name__ == \"__main__\":\n    bench()\n",
+        "candidate": "import time\n\n\ndef lcs_length(left, right):\n    previous = [0] * (len(right) + 1)\n    current = [0] * (len(right) + 1)\n\n    for ch in left:\n        current[0] = 0\n        for j in range(1, len(right) + 1):\n            if ch == right[j - 1]:\n                current[j] = previous[j - 1] + 1\n            elif previous[j] >= current[j - 1]:\n                current[j] = previous[j]\n            else:\n                current[j] = current[j - 1]\n        previous, current = current, previous\n    return previous[len(right)]\n\n\nleft = \"DYNAMICPROGRAMMINGALGORITHMSANDDATASTRUCTURESARECENTRALTOVIRTUALMACHINEBENCHMARKS\"\nright = \"ALGORITHMSFORDYNAMICLANGUAGESUSEPROGRAMSTRUCTUREANDRUNTIMEDATATOMEASUREPERFORMANCE\"\n\ndef bench():\n    started = time.process_time_ns()\n    result = 0\n    for _ in range(40):\n        result += lcs_length(left, right)\n    elapsed = time.process_time_ns() - started\n\n    print(result)\n    print(elapsed)\n\n\nif __name__ == \"__main__\":\n    bench()\n"
+      },
+      "rounds": [
+        {
+          "samples_ns": {
+            "baseline": [
+              10211000.0,
+              10437000.0,
+              10298000.0,
+              10367000.0,
+              10397000.0,
+              10358000.0,
+              10447000.0
+            ],
+            "candidate": [
+              11280000.0,
+              11212000.0,
+              11167000.0,
+              11194000.0,
+              11318000.0,
+              11365000.0,
+              11222000.0
+            ]
+          },
+          "baseline_median_ns": 10367000,
+          "candidate_median_ns": 11222000,
+          "paired_ratio_median": 1.0843853175373859,
+          "paired_ratio_iqr": [
+            1.0742550541343299,
+            1.0972195404518246
+          ]
+        },
+        {
+          "samples_ns": {
+            "baseline": [
+              10363000.0,
+              10257000.0,
+              10392000.0,
+              10250000.0,
+              10318000.0,
+              10495000.0,
+              10570000.0
+            ],
+            "candidate": [
+              11206000.0,
+              11260000.0,
+              11118000.0,
+              11204000.0,
+              11205000.0,
+              11194000.0,
+              11737000.0
+            ]
+          },
+          "baseline_median_ns": 10363000,
+          "candidate_median_ns": 11205000,
+          "paired_ratio_median": 1.0859662725334367,
+          "paired_ratio_iqr": [
+            1.0698614318706698,
+            1.0977868772545578
+          ]
+        },
+        {
+          "samples_ns": {
+            "baseline": [
+              10494000.0,
+              10477000.0,
+              10426000.0,
+              10420000.0,
+              10499000.0,
+              10391000.0,
+              10412000.0
+            ],
+            "candidate": [
+              11397000.0,
+              11327000.0,
+              11224000.0,
+              11301000.0,
+              11247000.0,
+              11551000.0,
+              11309000.0
+            ]
+          },
+          "baseline_median_ns": 10426000,
+          "candidate_median_ns": 11309000,
+          "paired_ratio_median": 1.0845489443378118,
+          "paired_ratio_iqr": [
+            1.0765394206790715,
+            1.0861505954667692
+          ]
+        }
+      ],
+      "round_ratio_medians": [
+        1.0843853175373859,
+        1.0859662725334367,
+        1.0845489443378118
+      ],
+      "samples_ns": {
+        "baseline": [
+          10211000.0,
+          10437000.0,
+          10298000.0,
+          10367000.0,
+          10397000.0,
+          10358000.0,
+          10447000.0,
+          10363000.0,
+          10257000.0,
+          10392000.0,
+          10250000.0,
+          10318000.0,
+          10495000.0,
+          10570000.0,
+          10494000.0,
+          10477000.0,
+          10426000.0,
+          10420000.0,
+          10499000.0,
+          10391000.0,
+          10412000.0
+        ],
+        "candidate": [
+          11280000.0,
+          11212000.0,
+          11167000.0,
+          11194000.0,
+          11318000.0,
+          11365000.0,
+          11222000.0,
+          11206000.0,
+          11260000.0,
+          11118000.0,
+          11204000.0,
+          11205000.0,
+          11194000.0,
+          11737000.0,
+          11397000.0,
+          11327000.0,
+          11224000.0,
+          11301000.0,
+          11247000.0,
+          11551000.0,
+          11309000.0
+        ]
+      },
+      "baseline_median_ns": 10397000,
+      "candidate_median_ns": 11247000,
+      "paired_ratio_median": 1.0845489443378118,
+      "paired_ratio_iqr": [
+        1.0753972374067007,
+        1.095146355591766
+      ]
+    },
+    {
+      "name": "lcs_tapas_hoist_left_character",
+      "algorithm": "longest_common_subsequence",
+      "language": "tap",
+      "repetitions_per_sample": 1,
+      "checksum": 1480,
+      "sources": {
+        "baseline": "function lcs_length(left, right)\n{\n    let previous = replicate([0], right.len() + 1)\n    let current = replicate([0], right.len() + 1)\n\n    for (let i in 1 to (left.len() + 1)) {\n        current[0] = 0\n        for (let j in 1 to (right.len() + 1)) {\n            if (left[i - 1] == right[j - 1]) {\n                current[j] = previous[j - 1] + 1\n            } elif (previous[j] >= current[j - 1]) {\n                current[j] = previous[j]\n            } else {\n                current[j] = current[j - 1]\n            }\n        }\n        let temporary = previous\n        previous = current\n        current = temporary\n    }\n    return previous[right.len()] + 0\n}\n\nlet left = 'DYNAMICPROGRAMMINGALGORITHMSANDDATASTRUCTURESARECENTRALTOVIRTUALMACHINEBENCHMARKS'\nlet right = 'ALGORITHMSFORDYNAMICLANGUAGESUSEPROGRAMSTRUCTUREANDRUNTIMEDATATOMEASUREPERFORMANCE'\n\nlet started = clock_ns()\nlet result = 0\nfor (let repetition in 0 to 40) {\n    result = result + lcs_length(left, right)\n}\nlet elapsed = clock_ns() - started\n\nprint(result)\nprint(elapsed)\n",
+        "candidate": "function lcs_length(left, right)\n{\n    let previous = replicate([0], right.len() + 1)\n    let current = replicate([0], right.len() + 1)\n\n    for (let i in 1 to (left.len() + 1)) {\n        let ch = left[i - 1]\n        current[0] = 0\n        for (let j in 1 to (right.len() + 1)) {\n            if (ch == right[j - 1]) {\n                current[j] = previous[j - 1] + 1\n            } elif (previous[j] >= current[j - 1]) {\n                current[j] = previous[j]\n            } else {\n                current[j] = current[j - 1]\n            }\n        }\n        let temporary = previous\n        previous = current\n        current = temporary\n    }\n    return previous[right.len()] + 0\n}\n\nlet left = 'DYNAMICPROGRAMMINGALGORITHMSANDDATASTRUCTURESARECENTRALTOVIRTUALMACHINEBENCHMARKS'\nlet right = 'ALGORITHMSFORDYNAMICLANGUAGESUSEPROGRAMSTRUCTUREANDRUNTIMEDATATOMEASUREPERFORMANCE'\n\nlet started = clock_ns()\nlet result = 0\nfor (let repetition in 0 to 40) {\n    result = result + lcs_length(left, right)\n}\nlet elapsed = clock_ns() - started\n\nprint(result)\nprint(elapsed)\n"
+      },
+      "rounds": [
+        {
+          "samples_ns": {
+            "baseline": [
+              14427000.0,
+              14435000.0,
+              14843000.0,
+              14595000.0,
+              14468000.0,
+              14307000.0,
+              14476000.0
+            ],
+            "candidate": [
+              15734000.0,
+              15968000.0,
+              17432000.0,
+              15971000.0,
+              15747000.0,
+              15552000.0,
+              15591000.0
+            ]
+          },
+          "baseline_median_ns": 14468000,
+          "candidate_median_ns": 15747000,
+          "paired_ratio_median": 1.0905940250918418,
+          "paired_ratio_iqr": [
+            1.0870203396938563,
+            1.1062002078281954
+          ]
+        },
+        {
+          "samples_ns": {
+            "baseline": [
+              14579000.0,
+              14490000.0,
+              14331000.0,
+              14569000.0,
+              15669000.0,
+              15413000.0,
+              15314000.0
+            ],
+            "candidate": [
+              15865000.0,
+              15761000.0,
+              15774000.0,
+              16493000.0,
+              16533000.0,
+              16165000.0,
+              16340000.0
+            ]
+          },
+          "baseline_median_ns": 14579000,
+          "candidate_median_ns": 16165000,
+          "paired_ratio_median": 1.0877156659765355,
+          "paired_ratio_iqr": [
+            1.0551407237219987,
+            1.100690810131882
+          ]
+        },
+        {
+          "samples_ns": {
+            "baseline": [
+              15275000.0,
+              14373000.0,
+              14304000.0,
+              14491000.0,
+              14675000.0,
+              14337000.0,
+              14727000.0
+            ],
+            "candidate": [
+              16058000.0,
+              15738000.0,
+              15746000.0,
+              15610000.0,
+              15632000.0,
+              15784000.0,
+              15724000.0
+            ]
+          },
+          "baseline_median_ns": 14491000,
+          "candidate_median_ns": 15738000,
+          "paired_ratio_median": 1.077220343661583,
+          "paired_ratio_iqr": [
+            1.0652129471890972,
+            1.1008109619686801
+          ]
+        }
+      ],
+      "round_ratio_medians": [
+        1.0905940250918418,
+        1.0877156659765355,
+        1.077220343661583
+      ],
+      "samples_ns": {
+        "baseline": [
+          14427000.0,
+          14435000.0,
+          14843000.0,
+          14595000.0,
+          14468000.0,
+          14307000.0,
+          14476000.0,
+          14579000.0,
+          14490000.0,
+          14331000.0,
+          14569000.0,
+          15669000.0,
+          15413000.0,
+          15314000.0,
+          15275000.0,
+          14373000.0,
+          14304000.0,
+          14491000.0,
+          14675000.0,
+          14337000.0,
+          14727000.0
+        ],
+        "candidate": [
+          15734000.0,
+          15968000.0,
+          17432000.0,
+          15971000.0,
+          15747000.0,
+          15552000.0,
+          15591000.0,
+          15865000.0,
+          15761000.0,
+          15774000.0,
+          16493000.0,
+          16533000.0,
+          16165000.0,
+          16340000.0,
+          16058000.0,
+          15738000.0,
+          15746000.0,
+          15610000.0,
+          15632000.0,
+          15784000.0,
+          15724000.0
+        ]
+      },
+      "baseline_median_ns": 14491000,
+      "candidate_median_ns": 15774000,
+      "paired_ratio_median": 1.0882090678373002,
+      "paired_ratio_iqr": [
+        1.0673481515779075,
+        1.100750886050281
+      ]
+    },
+    {
+      "name": "binary_python_fresh_lists",
+      "algorithm": "binary_trees",
+      "language": "py",
+      "repetitions_per_sample": 1,
+      "checksum": 6782980,
+      "sources": {
+        "baseline": "import time\n\n\ndef make_tree(depth):\n    if depth == 0:\n        return ()\n    return (make_tree(depth - 1), make_tree(depth - 1))\n\n\ndef checksum(node):\n    if not node:\n        return 1\n    return 1 + checksum(node[0]) + checksum(node[1])\n\n\nmax_depth = 16\n\ndef bench():\n    started = time.process_time_ns()\n    result = 0\n    for depth in range(4, max_depth + 1):\n        iterations = 2 ** (max_depth - depth + 2)\n        for _ in range(iterations):\n            tree = make_tree(depth)\n            result += checksum(tree)\n    elapsed = time.process_time_ns() - started\n\n    print(result)\n    print(elapsed)\n\n\nif __name__ == \"__main__\":\n    bench()\n",
+        "candidate": "import time\n\n\ndef make_tree(depth):\n    if depth == 0:\n        return []\n    return [make_tree(depth - 1), make_tree(depth - 1)]\n\n\ndef checksum(node):\n    if not node:\n        return 1\n    return 1 + checksum(node[0]) + checksum(node[1])\n\n\nmax_depth = 16\n\ndef bench():\n    started = time.process_time_ns()\n    result = 0\n    for depth in range(4, max_depth + 1):\n        iterations = 2 ** (max_depth - depth + 2)\n        for _ in range(iterations):\n            tree = make_tree(depth)\n            result += checksum(tree)\n    elapsed = time.process_time_ns() - started\n\n    print(result)\n    print(elapsed)\n\n\nif __name__ == \"__main__\":\n    bench()\n"
+      },
+      "rounds": [
+        {
+          "samples_ns": {
+            "baseline": [
+              553098000.0,
+              555306000.0,
+              550266000.0,
+              551404000.0,
+              555680000.0,
+              554407000.0,
+              551327000.0
+            ],
+            "candidate": [
+              696065000.0,
+              700423000.0,
+              694927000.0,
+              696621000.0,
+              698374000.0,
+              692879000.0,
+              697699000.0
+            ]
+          },
+          "baseline_median_ns": 553098000,
+          "candidate_median_ns": 696621000,
+          "paired_ratio_median": 1.2613279885324489,
+          "paired_ratio_iqr": [
+            1.2567916786639792,
+            1.2633586263429355
+          ]
+        },
+        {
+          "samples_ns": {
+            "baseline": [
+              552289000.0,
+              555264000.0,
+              554174000.0,
+              554717000.0,
+              552963000.0,
+              551798000.0,
+              550884000.0
+            ],
+            "candidate": [
+              708846000.0,
+              697378000.0,
+              697264000.0,
+              698527000.0,
+              694993000.0,
+              702696000.0,
+              696560000.0
+            ]
+          },
+          "baseline_median_ns": 552963000,
+          "candidate_median_ns": 697378000,
+          "paired_ratio_median": 1.2592493109098875,
+          "paired_ratio_iqr": [
+            1.2568526284760464,
+            1.273466014737277
+          ]
+        },
+        {
+          "samples_ns": {
+            "baseline": [
+              552581000.0,
+              555995000.0,
+              556125000.0,
+              556980000.0,
+              553672000.0,
+              553411000.0,
+              555999000.0
+            ],
+            "candidate": [
+              699405000.0,
+              699064000.0,
+              697885000.0,
+              693606000.0,
+              699381000.0,
+              693383000.0,
+              700761000.0
+            ]
+          },
+          "baseline_median_ns": 555995000,
+          "candidate_median_ns": 699064000,
+          "paired_ratio_median": 1.2573206593584474,
+          "paired_ratio_iqr": [
+            1.252925944731854,
+            1.2631684463003368
+          ]
+        }
+      ],
+      "round_ratio_medians": [
+        1.2613279885324489,
+        1.2592493109098875,
+        1.2573206593584474
+      ],
+      "samples_ns": {
+        "baseline": [
+          553098000.0,
+          555306000.0,
+          550266000.0,
+          551404000.0,
+          555680000.0,
+          554407000.0,
+          551327000.0,
+          552289000.0,
+          555264000.0,
+          554174000.0,
+          554717000.0,
+          552963000.0,
+          551798000.0,
+          550884000.0,
+          552581000.0,
+          555995000.0,
+          556125000.0,
+          556980000.0,
+          553672000.0,
+          553411000.0,
+          555999000.0
+        ],
+        "candidate": [
+          696065000.0,
+          700423000.0,
+          694927000.0,
+          696621000.0,
+          698374000.0,
+          692879000.0,
+          697699000.0,
+          708846000.0,
+          697378000.0,
+          697264000.0,
+          698527000.0,
+          694993000.0,
+          702696000.0,
+          696560000.0,
+          699405000.0,
+          699064000.0,
+          697885000.0,
+          693606000.0,
+          699381000.0,
+          693383000.0,
+          700761000.0
+        ]
+      },
+      "baseline_median_ns": 553672000,
+      "candidate_median_ns": 697699000,
+      "paired_ratio_median": 1.2592493109098875,
+      "paired_ratio_iqr": [
+        1.2563655978612658,
+        1.2638995265013158
+      ]
+    },
+    {
+      "name": "sudoku_python_explicit_search",
+      "algorithm": "sudoku",
+      "language": "py",
+      "repetitions_per_sample": 1,
+      "checksum": 16605,
+      "sources": {
+        "baseline": "import time\n\n\ndef solve_board(grid):\n    try:\n        index = grid.index(0)\n    except ValueError:\n        return True\n    row = (index // 9) * 9\n    column = index % 9\n    box = (index // 27) * 27 + (column // 3) * 3\n    for digit in range(1, 10):\n        for k in range(9):\n            if (grid[row + k] == digit or grid[column + k * 9] == digit or\n                    grid[box + (k // 3) * 9 + k % 3] == digit):\n                break\n        else:\n            grid[index] = digit\n            if solve_board(grid):\n                return True\n    grid[index] = 0\n    return False\n\n\npuzzle = [\n    1, 0, 0, 0, 0, 7, 0, 9, 0,\n    0, 3, 0, 0, 2, 0, 0, 0, 8,\n    0, 0, 9, 6, 0, 0, 5, 0, 0,\n    0, 0, 5, 3, 0, 0, 9, 0, 0,\n    0, 1, 0, 0, 8, 0, 0, 0, 2,\n    6, 0, 0, 0, 0, 4, 0, 0, 0,\n    3, 0, 0, 0, 0, 0, 0, 1, 0,\n    0, 4, 0, 0, 0, 0, 0, 0, 7,\n    0, 0, 7, 0, 0, 0, 3, 0, 0,\n]\nrepetitions = 10\n\ndef bench():\n    started = time.process_time_ns()\n    checksum = -1\n    for round in range(repetitions):\n        board = puzzle.copy()\n        solved = solve_board(board)\n        if not solved:\n            checksum = -1\n            break\n        checksum = sum(value * index for index, value in enumerate(board, 1))\n    elapsed = time.process_time_ns() - started\n\n    print(checksum)\n    print(elapsed)\n\n\nif __name__ == \"__main__\":\n    bench()\n",
+        "candidate": "import time\n\n\ndef solve_board(grid):\n    index = 0\n    while index < 81 and grid[index] != 0:\n        index += 1\n    if index == 81:\n        return True\n    row = (index // 9) * 9\n    column = index % 9\n    box = (index // 27) * 27 + (column // 3) * 3\n    for digit in range(1, 10):\n        for k in range(9):\n            if (grid[row + k] == digit or grid[column + k * 9] == digit or\n                    grid[box + (k // 3) * 9 + k % 3] == digit):\n                break\n        else:\n            grid[index] = digit\n            if solve_board(grid):\n                return True\n    grid[index] = 0\n    return False\n\n\npuzzle = [\n    1, 0, 0, 0, 0, 7, 0, 9, 0,\n    0, 3, 0, 0, 2, 0, 0, 0, 8,\n    0, 0, 9, 6, 0, 0, 5, 0, 0,\n    0, 0, 5, 3, 0, 0, 9, 0, 0,\n    0, 1, 0, 0, 8, 0, 0, 0, 2,\n    6, 0, 0, 0, 0, 4, 0, 0, 0,\n    3, 0, 0, 0, 0, 0, 0, 1, 0,\n    0, 4, 0, 0, 0, 0, 0, 0, 7,\n    0, 0, 7, 0, 0, 0, 3, 0, 0,\n]\nrepetitions = 10\n\ndef bench():\n    started = time.process_time_ns()\n    checksum = -1\n    for round in range(repetitions):\n        board = puzzle.copy()\n        solved = solve_board(board)\n        if not solved:\n            checksum = -1\n            break\n        checksum = sum(value * index for index, value in enumerate(board, 1))\n    elapsed = time.process_time_ns() - started\n\n    print(checksum)\n    print(elapsed)\n\n\nif __name__ == \"__main__\":\n    bench()\n"
+      },
+      "rounds": [
+        {
+          "samples_ns": {
+            "baseline": [
+              305306000.0,
+              298580000.0,
+              298014000.0,
+              297012000.0,
+              297063000.0,
+              302083000.0,
+              301939000.0
+            ],
+            "candidate": [
+              344669000.0,
+              342474000.0,
+              342209000.0,
+              345114000.0,
+              345067000.0,
+              346004000.0,
+              348690000.0
+            ]
+          },
+          "baseline_median_ns": 298580000,
+          "candidate_median_ns": 345067000,
+          "paired_ratio_median": 1.1482984020884925,
+          "paired_ratio_iqr": [
+            1.145393815606969,
+            1.1615953518277269
+          ]
+        },
+        {
+          "samples_ns": {
+            "baseline": [
+              302118000.0,
+              297986000.0,
+              297727000.0,
+              302604000.0,
+              298097000.0,
+              299048000.0,
+              298358000.0
+            ],
+            "candidate": [
+              350750000.0,
+              343481000.0,
+              345419000.0,
+              346038000.0,
+              345211000.0,
+              343881000.0,
+              343464000.0
+            ]
+          },
+          "baseline_median_ns": 298358000,
+          "candidate_median_ns": 345211000,
+          "paired_ratio_median": 1.1526749578839275,
+          "paired_ratio_iqr": [
+            1.1499190765362082,
+            1.1601870169652064
+          ]
+        },
+        {
+          "samples_ns": {
+            "baseline": [
+              298938000.0,
+              298537000.0,
+              299498000.0,
+              297569000.0,
+              296262000.0,
+              297654000.0,
+              298467000.0
+            ],
+            "candidate": [
+              343047000.0,
+              343692000.0,
+              344339000.0,
+              346252000.0,
+              346087000.0,
+              344437000.0,
+              349754000.0
+            ]
+          },
+          "baseline_median_ns": 298467000,
+          "candidate_median_ns": 344437000,
+          "paired_ratio_median": 1.157172421670799,
+          "paired_ratio_iqr": [
+            1.1497205323574782,
+            1.168178841700927
+          ]
+        }
+      ],
+      "round_ratio_medians": [
+        1.1482984020884925,
+        1.1526749578839275,
+        1.157172421670799
+      ],
+      "samples_ns": {
+        "baseline": [
+          305306000.0,
+          298580000.0,
+          298014000.0,
+          297012000.0,
+          297063000.0,
+          302083000.0,
+          301939000.0,
+          302118000.0,
+          297986000.0,
+          297727000.0,
+          302604000.0,
+          298097000.0,
+          299048000.0,
+          298358000.0,
+          298938000.0,
+          298537000.0,
+          299498000.0,
+          297569000.0,
+          296262000.0,
+          297654000.0,
+          298467000.0
+        ],
+        "candidate": [
+          344669000.0,
+          342474000.0,
+          342209000.0,
+          345114000.0,
+          345067000.0,
+          346004000.0,
+          348690000.0,
+          350750000.0,
+          343481000.0,
+          345419000.0,
+          346038000.0,
+          345211000.0,
+          343881000.0,
+          343464000.0,
+          343047000.0,
+          343692000.0,
+          344339000.0,
+          346252000.0,
+          346087000.0,
+          344437000.0,
+          349754000.0
+        ]
+      },
+      "baseline_median_ns": 298467000,
+      "candidate_median_ns": 345067000,
+      "paired_ratio_median": 1.1526749578839275,
+      "paired_ratio_iqr": [
+        1.1479253686776687,
+        1.1612827843814157
+      ]
+    },
+    {
+      "name": "sudoku_python_valid_flag",
+      "algorithm": "sudoku",
+      "language": "py",
+      "repetitions_per_sample": 1,
+      "checksum": 16605,
+      "sources": {
+        "baseline": "import time\n\n\ndef solve_board(grid):\n    try:\n        index = grid.index(0)\n    except ValueError:\n        return True\n    row = (index // 9) * 9\n    column = index % 9\n    box = (index // 27) * 27 + (column // 3) * 3\n    for digit in range(1, 10):\n        for k in range(9):\n            if (grid[row + k] == digit or grid[column + k * 9] == digit or\n                    grid[box + (k // 3) * 9 + k % 3] == digit):\n                break\n        else:\n            grid[index] = digit\n            if solve_board(grid):\n                return True\n    grid[index] = 0\n    return False\n\n\npuzzle = [\n    1, 0, 0, 0, 0, 7, 0, 9, 0,\n    0, 3, 0, 0, 2, 0, 0, 0, 8,\n    0, 0, 9, 6, 0, 0, 5, 0, 0,\n    0, 0, 5, 3, 0, 0, 9, 0, 0,\n    0, 1, 0, 0, 8, 0, 0, 0, 2,\n    6, 0, 0, 0, 0, 4, 0, 0, 0,\n    3, 0, 0, 0, 0, 0, 0, 1, 0,\n    0, 4, 0, 0, 0, 0, 0, 0, 7,\n    0, 0, 7, 0, 0, 0, 3, 0, 0,\n]\nrepetitions = 10\n\ndef bench():\n    started = time.process_time_ns()\n    checksum = -1\n    for round in range(repetitions):\n        board = puzzle.copy()\n        solved = solve_board(board)\n        if not solved:\n            checksum = -1\n            break\n        checksum = sum(value * index for index, value in enumerate(board, 1))\n    elapsed = time.process_time_ns() - started\n\n    print(checksum)\n    print(elapsed)\n\n\nif __name__ == \"__main__\":\n    bench()\n",
+        "candidate": "import time\n\n\ndef solve_board(grid):\n    try:\n        index = grid.index(0)\n    except ValueError:\n        return True\n    row = (index // 9) * 9\n    column = index % 9\n    box = (index // 27) * 27 + (column // 3) * 3\n    for digit in range(1, 10):\n        valid = True\n        for k in range(9):\n            if (grid[row + k] == digit or grid[column + k * 9] == digit or\n                    grid[box + (k // 3) * 9 + k % 3] == digit):\n                valid = False\n                break\n        if valid:\n            grid[index] = digit\n            if solve_board(grid):\n                return True\n    grid[index] = 0\n    return False\n\n\npuzzle = [\n    1, 0, 0, 0, 0, 7, 0, 9, 0,\n    0, 3, 0, 0, 2, 0, 0, 0, 8,\n    0, 0, 9, 6, 0, 0, 5, 0, 0,\n    0, 0, 5, 3, 0, 0, 9, 0, 0,\n    0, 1, 0, 0, 8, 0, 0, 0, 2,\n    6, 0, 0, 0, 0, 4, 0, 0, 0,\n    3, 0, 0, 0, 0, 0, 0, 1, 0,\n    0, 4, 0, 0, 0, 0, 0, 0, 7,\n    0, 0, 7, 0, 0, 0, 3, 0, 0,\n]\nrepetitions = 10\n\ndef bench():\n    started = time.process_time_ns()\n    checksum = -1\n    for round in range(repetitions):\n        board = puzzle.copy()\n        solved = solve_board(board)\n        if not solved:\n            checksum = -1\n            break\n        checksum = sum(value * index for index, value in enumerate(board, 1))\n    elapsed = time.process_time_ns() - started\n\n    print(checksum)\n    print(elapsed)\n\n\nif __name__ == \"__main__\":\n    bench()\n"
+      },
+      "rounds": [
+        {
+          "samples_ns": {
+            "baseline": [
+              298252000.0,
+              297661000.0,
+              296174000.0,
+              296752000.0,
+              298542000.0,
+              296959000.0,
+              299698000.0
+            ],
+            "candidate": [
+              303391000.0,
+              305057000.0,
+              302561000.0,
+              303510000.0,
+              305125000.0,
+              304895000.0,
+              302187000.0
+            ]
+          },
+          "baseline_median_ns": 297661000,
+          "candidate_median_ns": 303510000,
+          "paired_ratio_median": 1.0220504987572938,
+          "paired_ratio_iqr": [
+            1.0172303957727022,
+            1.0248470575587665
+          ]
+        },
+        {
+          "samples_ns": {
+            "baseline": [
+              296757000.0,
+              298898000.0,
+              298680000.0,
+              298277000.0,
+              301415000.0,
+              296547000.0,
+              297815000.0
+            ],
+            "candidate": [
+              302820000.0,
+              302988000.0,
+              302862000.0,
+              302943000.0,
+              304959000.0,
+              303979000.0,
+              303091000.0
+            ]
+          },
+          "baseline_median_ns": 298277000,
+          "candidate_median_ns": 302988000,
+          "paired_ratio_median": 1.015643177315046,
+          "paired_ratio_iqr": [
+            1.0136835977490648,
+            1.0204308575703354
+          ]
+        },
+        {
+          "samples_ns": {
+            "baseline": [
+              297556000.0,
+              299315000.0,
+              301740000.0,
+              297839000.0,
+              298438000.0,
+              298145000.0,
+              301261000.0
+            ],
+            "candidate": [
+              303981000.0,
+              304774000.0,
+              305750000.0,
+              305176000.0,
+              310036000.0,
+              304008000.0,
+              303287000.0
+            ]
+          },
+          "baseline_median_ns": 298438000,
+          "candidate_median_ns": 304774000,
+          "paired_ratio_median": 1.0196649281389927,
+          "paired_ratio_iqr": [
+            1.0132895870617087,
+            1.0246341144040907
+          ]
+        }
+      ],
+      "round_ratio_medians": [
+        1.0220504987572938,
+        1.015643177315046,
+        1.0196649281389927
+      ],
+      "samples_ns": {
+        "baseline": [
+          298252000.0,
+          297661000.0,
+          296174000.0,
+          296752000.0,
+          298542000.0,
+          296959000.0,
+          299698000.0,
+          296757000.0,
+          298898000.0,
+          298680000.0,
+          298277000.0,
+          301415000.0,
+          296547000.0,
+          297815000.0,
+          297556000.0,
+          299315000.0,
+          301740000.0,
+          297839000.0,
+          298438000.0,
+          298145000.0,
+          301261000.0
+        ],
+        "candidate": [
+          303391000.0,
+          305057000.0,
+          302561000.0,
+          303510000.0,
+          305125000.0,
+          304895000.0,
+          302187000.0,
+          302820000.0,
+          302988000.0,
+          302862000.0,
+          302943000.0,
+          304959000.0,
+          303979000.0,
+          303091000.0,
+          303981000.0,
+          304774000.0,
+          305750000.0,
+          305176000.0,
+          310036000.0,
+          304008000.0,
+          303287000.0
+        ]
+      },
+      "baseline_median_ns": 298252000,
+      "candidate_median_ns": 303979000,
+      "paired_ratio_median": 1.0196649281389927,
+      "paired_ratio_iqr": [
+        1.0138426024100888,
+        1.0237036695921893
+      ]
+    }
+  ],
+  "source_observations": {
+    "tobj_bytes": 16,
+    "tlist_header_bytes": 40,
+    "tlist_inline_slots": 4,
+    "sizeof_probe_source": "#include <stdio.h>\n#include \"tapas/objects/tlist.h\"\nint main(void) {\n    printf(\"%zu %zu\\n\", sizeof(tobj), sizeof(tlist));\n    return 0;\n}\n",
+    "binary_trees_leaf_visits": 3407872,
+    "binary_trees_internal_nodes": 3375108,
+    "native_python_counter_helper": "_collections._count_elements (built-in function)",
+    "native_python_heap_pop": "_heapq.heappop"
+  }
+}

@@ -1,0 +1,2137 @@
+{
+  "date": "2026-10-17T11:27:36.573833+00:00",
+  "runtimes": {
+    "tap": {
+      "path": "/Users/zhuanglinsheng/Documents/Github/tapas/build-release/bin/tapas",
+      "sha256": "80d8465438372b58270f8201cdc5cd9cfc244cee0b5d50ba5ff1da75470072c4"
+    },
+    "py": {
+      "path": "/Users/zhuanglinsheng/.pyenv/versions/3.14.2/bin/python3.14",
+      "sha256": "949f8c2df0cc762cbdaa66889b2bf70d5234c2e7ed902db1eebca50f2ba94e2d"
+    },
+    "lua": {
+      "path": "/opt/homebrew/Cellar/lua/5.5.1/bin/lua",
+      "sha256": "83ea84efb4f7692a4452cfedf9325cc1f342edc6cf0d50b262add4eab1b75bea"
+    }
+  },
+  "runs": 5,
+  "rounds": 2,
+  "warmups_per_round": 1,
+  "rows": [
+    {
+      "name": "huffman_count",
+      "algorithm": "huffman",
+      "language": "tap",
+      "sources": {
+        "baseline": "function frequency_less(a, b)\n{\n    return a[0] < b[0]\n}\n\nfunction total_length(node, depth)\n{\n    if (types::matches(node[1], types::String)) {\n        return node[0] * depth\n    }\n    let children = node[1]\n    return this(children[0], depth + 1) + this(children[1], depth + 1)\n}\n\nfunction huffman_total(text)\n{\n    let freq = {}\n    for (let ch in text) {\n        freq[ch] = idx_or(freq, ch, 0) + 1\n    }\n\n    // Fixed symbol order keeps initial heap entries reproducible.\n    let nodes = []\n    for (let i in 0 to 8) {\n        let ch = 'abcdefgh'[i]\n        if (ch in freq) {\n            nodes.append(freq[ch] : ch)\n        }\n    }\n\n    heap::heapify(nodes, frequency_less)\n    while (nodes.len() > 1) {\n        let left = heap::pop(nodes, frequency_less)\n        let right = heap::pop(nodes, frequency_less)\n        heap::push(nodes, (left[0] + right[0]) : (left : right), frequency_less)\n    }\n\n    return total_length(nodes[0], 0) + 0\n}\n\nlet chars = []\nlet seed = 42\nfor (let index in 0 to 40000) {\n    seed = (seed * 1103515245 + 12345) % 2147483648\n    chars.append('abcdefgh'[seed % 8])\n}\nlet text = join(chars, '')\n\nlet started = clock_ns()\nlet result = huffman_total(text)\nlet elapsed = clock_ns() - started\n\nprint(result)\nprint(elapsed)\n",
+        "candidate": "function frequency_less(a, b)\n{\n    return a[0] < b[0]\n}\n\nfunction total_length(node, depth)\n{\n    if (types::matches(node[1], types::String)) {\n        return node[0] * depth\n    }\n    let children = node[1]\n    return this(children[0], depth + 1) + this(children[1], depth + 1)\n}\n\nfunction huffman_total(text)\n{\n    let freq = {}\n    for (let ch in 'abcdefgh') {\n        let occurrences = count(text, ch)\n        if (occurrences > 0) { freq[ch] = occurrences }\n    }\n\n    // Fixed symbol order keeps initial heap entries reproducible.\n    let nodes = []\n    for (let i in 0 to 8) {\n        let ch = 'abcdefgh'[i]\n        if (ch in freq) {\n            nodes.append(freq[ch] : ch)\n        }\n    }\n\n    heap::heapify(nodes, frequency_less)\n    while (nodes.len() > 1) {\n        let left = heap::pop(nodes, frequency_less)\n        let right = heap::pop(nodes, frequency_less)\n        heap::push(nodes, (left[0] + right[0]) : (left : right), frequency_less)\n    }\n\n    return total_length(nodes[0], 0) + 0\n}\n\nlet chars = []\nlet seed = 42\nfor (let index in 0 to 40000) {\n    seed = (seed * 1103515245 + 12345) % 2147483648\n    chars.append('abcdefgh'[seed % 8])\n}\nlet text = join(chars, '')\n\nlet started = clock_ns()\nlet result = huffman_total(text)\nlet elapsed = clock_ns() - started\n\nprint(result)\nprint(elapsed)\n"
+      },
+      "checksum": 120000,
+      "rounds": [
+        {
+          "samples_ns": {
+            "baseline": [
+              2102000,
+              2061000,
+              2030000,
+              2134000,
+              2029000
+            ],
+            "candidate": [
+              76000,
+              71000,
+              72000,
+              74000,
+              77000
+            ]
+          },
+          "baseline_median_ns": 2061000,
+          "candidate_median_ns": 74000,
+          "paired_ratio_median": 0.035467980295566505,
+          "paired_ratio_iqr": [
+            0.0345629800003365,
+            0.03705288539769911
+          ]
+        },
+        {
+          "samples_ns": {
+            "baseline": [
+              2128000,
+              2015000,
+              2115000,
+              2146000,
+              2059000
+            ],
+            "candidate": [
+              85000,
+              82000,
+              78000,
+              78000,
+              81000
+            ]
+          },
+          "baseline_median_ns": 2115000,
+          "candidate_median_ns": 81000,
+          "paired_ratio_median": 0.03933948518698397,
+          "paired_ratio_iqr": [
+            0.036613062071609394,
+            0.04031919905222112
+          ]
+        }
+      ],
+      "round_ratio_medians": [
+        0.035467980295566505,
+        0.03933948518698397
+      ],
+      "samples_ns": {
+        "baseline": [
+          2102000,
+          2061000,
+          2030000,
+          2134000,
+          2029000,
+          2128000,
+          2015000,
+          2115000,
+          2146000,
+          2059000
+        ],
+        "candidate": [
+          76000,
+          71000,
+          72000,
+          74000,
+          77000,
+          85000,
+          82000,
+          78000,
+          78000,
+          81000
+        ]
+      },
+      "baseline_median_ns": 2081500,
+      "candidate_median_ns": 77500,
+      "paired_ratio_median": 0.036613062071609394,
+      "paired_ratio_iqr": [
+        0.03527015110733561,
+        0.03949051614587708
+      ]
+    },
+    {
+      "name": "huffman_str_count",
+      "algorithm": "huffman",
+      "language": "py",
+      "sources": {
+        "baseline": "import time\nfrom collections import Counter\n\nSYMBOLS = \"abcdefgh\"\n\n\ndef huffman_total(text):\n    freq = Counter(text)\n    # Fixed symbol order makes ties in the minimum scan deterministic.\n    nodes = [(freq[ch], ch) for ch in SYMBOLS if ch in freq]\n\n    def find_min():\n        best = -1\n        for i, node in enumerate(nodes):\n            if best < 0 or node[0] < nodes[best][0]:\n                best = i\n        return best\n\n    while len(nodes) > 1:\n        first = find_min()\n        left = nodes.pop(first)\n        second = find_min()\n        right = nodes.pop(second)\n        nodes.append((left[0] + right[0], (left, right)))\n\n    def total_length(node, depth):\n        if isinstance(node[1], str):\n            return node[0] * depth\n        return (total_length(node[1][0], depth + 1) +\n                total_length(node[1][1], depth + 1))\n\n    return total_length(nodes[0], 0)\n\n\nseed = 42\nchars = []\nfor _ in range(40000):\n    seed = (seed * 1103515245 + 12345) % 2147483648\n    chars.append(SYMBOLS[seed % 8])\ntext = \"\".join(chars)\n\ndef bench():\n    started = time.process_time_ns()\n    result = huffman_total(text)\n    elapsed = time.process_time_ns() - started\n\n    print(result)\n    print(elapsed)\n\n\nif __name__ == \"__main__\":\n    bench()\n",
+        "candidate": "import time\nfrom collections import Counter\n\nSYMBOLS = \"abcdefgh\"\n\n\ndef huffman_total(text):\n    freq = {ch: occurrences for ch in SYMBOLS\n            if (occurrences := text.count(ch))}\n    # Fixed symbol order makes ties in the minimum scan deterministic.\n    nodes = [(freq[ch], ch) for ch in SYMBOLS if ch in freq]\n\n    def find_min():\n        best = -1\n        for i, node in enumerate(nodes):\n            if best < 0 or node[0] < nodes[best][0]:\n                best = i\n        return best\n\n    while len(nodes) > 1:\n        first = find_min()\n        left = nodes.pop(first)\n        second = find_min()\n        right = nodes.pop(second)\n        nodes.append((left[0] + right[0], (left, right)))\n\n    def total_length(node, depth):\n        if isinstance(node[1], str):\n            return node[0] * depth\n        return (total_length(node[1][0], depth + 1) +\n                total_length(node[1][1], depth + 1))\n\n    return total_length(nodes[0], 0)\n\n\nseed = 42\nchars = []\nfor _ in range(40000):\n    seed = (seed * 1103515245 + 12345) % 2147483648\n    chars.append(SYMBOLS[seed % 8])\ntext = \"\".join(chars)\n\ndef bench():\n    started = time.process_time_ns()\n    result = huffman_total(text)\n    elapsed = time.process_time_ns() - started\n\n    print(result)\n    print(elapsed)\n\n\nif __name__ == \"__main__\":\n    bench()\n"
+      },
+      "checksum": 120000,
+      "rounds": [
+        {
+          "samples_ns": {
+            "baseline": [
+              1087000,
+              1152000,
+              1153000,
+              1111000,
+              1098000
+            ],
+            "candidate": [
+              96000,
+              81000,
+              89000,
+              85000,
+              90000
+            ]
+          },
+          "baseline_median_ns": 1111000,
+          "candidate_median_ns": 89000,
+          "paired_ratio_median": 0.07718993928881179,
+          "paired_ratio_iqr": [
+            0.07341007538253826,
+            0.08514184022803023
+          ]
+        },
+        {
+          "samples_ns": {
+            "baseline": [
+              1221000,
+              1149000,
+              1259000,
+              1441000,
+              1141000
+            ],
+            "candidate": [
+              80000,
+              86000,
+              80000,
+              90000,
+              85000
+            ]
+          },
+          "baseline_median_ns": 1221000,
+          "candidate_median_ns": 85000,
+          "paired_ratio_median": 0.06552006552006552,
+          "paired_ratio_iqr": [
+            0.06299956069250735,
+            0.07467187486889869
+          ]
+        }
+      ],
+      "round_ratio_medians": [
+        0.07718993928881179,
+        0.06552006552006552
+      ],
+      "samples_ns": {
+        "baseline": [
+          1087000,
+          1152000,
+          1153000,
+          1111000,
+          1098000,
+          1221000,
+          1149000,
+          1259000,
+          1441000,
+          1141000
+        ],
+        "candidate": [
+          96000,
+          81000,
+          89000,
+          85000,
+          90000,
+          80000,
+          86000,
+          80000,
+          90000,
+          85000
+        ]
+      },
+      "baseline_median_ns": 1150500,
+      "candidate_median_ns": 85500,
+      "paired_ratio_median": 0.07467187486889869,
+      "paired_ratio_iqr": [
+        0.06502567265077194,
+        0.07838425774529736
+      ]
+    },
+    {
+      "name": "huffman_gsub",
+      "algorithm": "huffman",
+      "language": "lua",
+      "sources": {
+        "baseline": "local sub = string.sub\n\nlocal SYMBOLS = \"abcdefgh\"\n\nlocal function huffman_total(text)\n    local freq = {}\n    for i = 1, #text do\n        local ch = sub(text, i, i)\n        freq[ch] = (freq[ch] or 0) + 1\n    end\n\n    -- Fixed symbol order makes ties in the minimum scan deterministic.\n    local nodes = {}\n    for i = 1, 8 do\n        local ch = sub(SYMBOLS, i, i)\n        if freq[ch] then\n            nodes[#nodes + 1] = { freq[ch], ch }\n        end\n    end\n\n    local function find_min()\n        local best = -1\n        for i = 1, #nodes do\n            if best < 0 or nodes[i][1] < nodes[best][1] then\n                best = i\n            end\n        end\n        return best\n    end\n\n    while #nodes > 1 do\n        local first = find_min()\n        local left = table.remove(nodes, first)\n        local second = find_min()\n        local right = table.remove(nodes, second)\n        nodes[#nodes + 1] = { left[1] + right[1], { left, right } }\n    end\n\n    local function total_length(node, depth)\n        if type(node[2]) == \"string\" then\n            return node[1] * depth\n        end\n        return total_length(node[2][1], depth + 1) +\n            total_length(node[2][2], depth + 1)\n    end\n\n    return total_length(nodes[1], 0)\nend\n\nlocal seed = 42\nlocal chars = {}\nfor _ = 1, 40000 do\n    seed = (seed * 1103515245 + 12345) % 2147483648\n    chars[#chars + 1] = sub(SYMBOLS, seed % 8 + 1, seed % 8 + 1)\nend\nlocal text = table.concat(chars)\n\nlocal started = os.clock()\nlocal result = huffman_total(text)\nlocal elapsed = math.floor((os.clock() - started) * 1e9 + 0.5)\n\nprint(result)\nprint(elapsed)\n",
+        "candidate": "local sub = string.sub\n\nlocal SYMBOLS = \"abcdefgh\"\n\nlocal function huffman_total(text)\n    local freq = {}\n    for i = 1, #SYMBOLS do\n        local ch = sub(SYMBOLS, i, i)\n        local _, occurrences = text:gsub(ch, \"\")\n        if occurrences > 0 then freq[ch] = occurrences end\n    end\n\n    -- Fixed symbol order makes ties in the minimum scan deterministic.\n    local nodes = {}\n    for i = 1, 8 do\n        local ch = sub(SYMBOLS, i, i)\n        if freq[ch] then\n            nodes[#nodes + 1] = { freq[ch], ch }\n        end\n    end\n\n    local function find_min()\n        local best = -1\n        for i = 1, #nodes do\n            if best < 0 or nodes[i][1] < nodes[best][1] then\n                best = i\n            end\n        end\n        return best\n    end\n\n    while #nodes > 1 do\n        local first = find_min()\n        local left = table.remove(nodes, first)\n        local second = find_min()\n        local right = table.remove(nodes, second)\n        nodes[#nodes + 1] = { left[1] + right[1], { left, right } }\n    end\n\n    local function total_length(node, depth)\n        if type(node[2]) == \"string\" then\n            return node[1] * depth\n        end\n        return total_length(node[2][1], depth + 1) +\n            total_length(node[2][2], depth + 1)\n    end\n\n    return total_length(nodes[1], 0)\nend\n\nlocal seed = 42\nlocal chars = {}\nfor _ = 1, 40000 do\n    seed = (seed * 1103515245 + 12345) % 2147483648\n    chars[#chars + 1] = sub(SYMBOLS, seed % 8 + 1, seed % 8 + 1)\nend\nlocal text = table.concat(chars)\n\nlocal started = os.clock()\nlocal result = huffman_total(text)\nlocal elapsed = math.floor((os.clock() - started) * 1e9 + 0.5)\n\nprint(result)\nprint(elapsed)\n"
+      },
+      "checksum": 120000,
+      "rounds": [
+        {
+          "samples_ns": {
+            "baseline": [
+              1548000,
+              1626000,
+              1645000,
+              1605000,
+              2009000
+            ],
+            "candidate": [
+              1914000,
+              1940000,
+              1884000,
+              1934000,
+              2342000
+            ]
+          },
+          "baseline_median_ns": 1626000,
+          "candidate_median_ns": 1934000,
+          "paired_ratio_median": 1.1931119311193112,
+          "paired_ratio_iqr": [
+            1.1555214301600247,
+            1.2207092661015722
+          ]
+        },
+        {
+          "samples_ns": {
+            "baseline": [
+              1531000,
+              1499000,
+              1517000,
+              1596000,
+              1505000
+            ],
+            "candidate": [
+              1946000,
+              1901000,
+              1904000,
+              1895000,
+              1917000
+            ]
+          },
+          "baseline_median_ns": 1517000,
+          "candidate_median_ns": 1904000,
+          "paired_ratio_median": 1.2681787858572382,
+          "paired_ratio_iqr": [
+            1.2212260628499396,
+            1.2724094082212352
+          ]
+        }
+      ],
+      "round_ratio_medians": [
+        1.1931119311193112,
+        1.2681787858572382
+      ],
+      "samples_ns": {
+        "baseline": [
+          1548000,
+          1626000,
+          1645000,
+          1605000,
+          2009000,
+          1531000,
+          1499000,
+          1517000,
+          1596000,
+          1505000
+        ],
+        "candidate": [
+          1914000,
+          1940000,
+          1884000,
+          1934000,
+          2342000,
+          1946000,
+          1901000,
+          1904000,
+          1895000,
+          1917000
+        ]
+      },
+      "baseline_median_ns": 1572000,
+      "candidate_median_ns": 1915500,
+      "paired_ratio_median": 1.2207092661015722,
+      "paired_ratio_iqr": [
+        1.1819460454271569,
+        1.2689002552975661
+      ]
+    },
+    {
+      "name": "tree_shared_leaf",
+      "algorithm": "binary_trees",
+      "language": "tap",
+      "sources": {
+        "baseline": "function make_tree(depth)\n{\n    if (depth == 0) {\n        return []\n    }\n    let left = this(depth - 1)\n    let right = this(depth - 1)\n    return [left, right]\n}\n\nfunction checksum(node)\n{\n    if (node.len() == 0) {\n        return 1\n    }\n    return 1 + this(node[0]) + this(node[1])\n}\n\nlet max_depth = 16\n\nlet started = clock_ns()\nlet result = 0\nfor (let depth in 4 to (max_depth + 1)) {\n    let iterations = 1\n    for (let i in 0 to (max_depth - depth + 2)) {\n        iterations = iterations * 2\n    }\n    for (let iteration in 0 to iterations) {\n        let tree = make_tree(depth)\n        result = result + checksum(tree)\n    }\n}\nlet elapsed = clock_ns() - started\n\nprint(result)\nprint(elapsed)\n",
+        "candidate": "function make_tree(depth)\n{\n    if (depth == 0) {\n        return ''\n    }\n    let left = this(depth - 1)\n    let right = this(depth - 1)\n    return [left, right]\n}\n\nfunction checksum(node)\n{\n    if (node.len() == 0) {\n        return 1\n    }\n    return 1 + this(node[0]) + this(node[1])\n}\n\nlet max_depth = 16\n\nlet started = clock_ns()\nlet result = 0\nfor (let depth in 4 to (max_depth + 1)) {\n    let iterations = 1\n    for (let i in 0 to (max_depth - depth + 2)) {\n        iterations = iterations * 2\n    }\n    for (let iteration in 0 to iterations) {\n        let tree = make_tree(depth)\n        result = result + checksum(tree)\n    }\n}\nlet elapsed = clock_ns() - started\n\nprint(result)\nprint(elapsed)\n"
+      },
+      "checksum": 6782980,
+      "rounds": [
+        {
+          "samples_ns": {
+            "baseline": [
+              723897000,
+              716823000,
+              720354000,
+              716347000,
+              717017000
+            ],
+            "candidate": [
+              693468000,
+              690014000,
+              693039000,
+              688417000,
+              690242000
+            ]
+          },
+          "baseline_median_ns": 717017000,
+          "candidate_median_ns": 690242000,
+          "paired_ratio_median": 0.9620811434378097,
+          "paired_ratio_iqr": [
+            0.9594877651065641,
+            0.9626290202664436
+          ]
+        },
+        {
+          "samples_ns": {
+            "baseline": [
+              713943000,
+              719817000,
+              716461000,
+              715548000,
+              719409000
+            ],
+            "candidate": [
+              692457000,
+              695421000,
+              687759000,
+              689954000,
+              690178000
+            ]
+          },
+          "baseline_median_ns": 716461000,
+          "candidate_median_ns": 690178000,
+          "paired_ratio_median": 0.9642316098989865,
+          "paired_ratio_iqr": [
+            0.9596536189879541,
+            0.9680066064796702
+          ]
+        }
+      ],
+      "round_ratio_medians": [
+        0.9620811434378097,
+        0.9642316098989865
+      ],
+      "samples_ns": {
+        "baseline": [
+          723897000,
+          716823000,
+          720354000,
+          716347000,
+          717017000,
+          713943000,
+          719817000,
+          716461000,
+          715548000,
+          719409000
+        ],
+        "candidate": [
+          693468000,
+          690014000,
+          693039000,
+          688417000,
+          690242000,
+          692457000,
+          695421000,
+          687759000,
+          689954000,
+          690178000
+        ]
+      },
+      "baseline_median_ns": 716920000,
+      "candidate_median_ns": 690210000,
+      "paired_ratio_median": 0.9623406974124163,
+      "paired_ratio_iqr": [
+        0.9597964100723756,
+        0.9647007205400735
+      ]
+    },
+    {
+      "name": "tree_pair_shared_leaf",
+      "algorithm": "binary_trees",
+      "language": "tap",
+      "sources": {
+        "baseline": "function make_tree(depth)\n{\n    if (depth == 0) {\n        return []\n    }\n    let left = this(depth - 1)\n    let right = this(depth - 1)\n    return [left, right]\n}\n\nfunction checksum(node)\n{\n    if (node.len() == 0) {\n        return 1\n    }\n    return 1 + this(node[0]) + this(node[1])\n}\n\nlet max_depth = 16\n\nlet started = clock_ns()\nlet result = 0\nfor (let depth in 4 to (max_depth + 1)) {\n    let iterations = 1\n    for (let i in 0 to (max_depth - depth + 2)) {\n        iterations = iterations * 2\n    }\n    for (let iteration in 0 to iterations) {\n        let tree = make_tree(depth)\n        result = result + checksum(tree)\n    }\n}\nlet elapsed = clock_ns() - started\n\nprint(result)\nprint(elapsed)\n",
+        "candidate": "function make_tree(depth)\n{\n    if (depth == 0) {\n        return ''\n    }\n    let left = this(depth - 1)\n    let right = this(depth - 1)\n    return (left : right)\n}\n\nfunction checksum(node)\n{\n    if (node.len() == 0) {\n        return 1\n    }\n    return 1 + this(node[0]) + this(node[1])\n}\n\nlet max_depth = 16\n\nlet started = clock_ns()\nlet result = 0\nfor (let depth in 4 to (max_depth + 1)) {\n    let iterations = 1\n    for (let i in 0 to (max_depth - depth + 2)) {\n        iterations = iterations * 2\n    }\n    for (let iteration in 0 to iterations) {\n        let tree = make_tree(depth)\n        result = result + checksum(tree)\n    }\n}\nlet elapsed = clock_ns() - started\n\nprint(result)\nprint(elapsed)\n"
+      },
+      "checksum": 6782980,
+      "rounds": [
+        {
+          "samples_ns": {
+            "baseline": [
+              724275000,
+              717298000,
+              720849000,
+              717552000,
+              721880000
+            ],
+            "candidate": [
+              723655000,
+              724876000,
+              728719000,
+              724059000,
+              720289000
+            ]
+          },
+          "baseline_median_ns": 720849000,
+          "candidate_median_ns": 724059000,
+          "paired_ratio_median": 1.0090683323299217,
+          "paired_ratio_iqr": [
+            0.9984700020696786,
+            1.0107411642803736
+          ]
+        },
+        {
+          "samples_ns": {
+            "baseline": [
+              721527000,
+              716068000,
+              715471000,
+              716529000,
+              719552000
+            ],
+            "candidate": [
+              725097000,
+              724203000,
+              727461000,
+              723311000,
+              723905000
+            ]
+          },
+          "baseline_median_ns": 716529000,
+          "candidate_median_ns": 724203000,
+          "paired_ratio_median": 1.0094650739886313,
+          "paired_ratio_iqr": [
+            1.0054987186585649,
+            1.0140594221779913
+          ]
+        }
+      ],
+      "round_ratio_medians": [
+        1.0090683323299217,
+        1.0094650739886313
+      ],
+      "samples_ns": {
+        "baseline": [
+          724275000,
+          717298000,
+          720849000,
+          717552000,
+          721880000,
+          721527000,
+          716068000,
+          715471000,
+          716529000,
+          719552000
+        ],
+        "candidate": [
+          723655000,
+          724876000,
+          728719000,
+          724059000,
+          720289000,
+          725097000,
+          724203000,
+          727461000,
+          723311000,
+          723905000
+        ]
+      },
+      "baseline_median_ns": 718552000,
+      "candidate_median_ns": 724131000,
+      "paired_ratio_median": 1.0092667031592764,
+      "paired_ratio_iqr": [
+        1.0034968727317755,
+        1.0110284245665562
+      ]
+    },
+    {
+      "name": "tree_false_leaf",
+      "algorithm": "binary_trees",
+      "language": "lua",
+      "sources": {
+        "baseline": "local function make_tree(depth)\n    if depth == 0 then\n        return {}\n    end\n    return { make_tree(depth - 1), make_tree(depth - 1) }\nend\n\nlocal function checksum(node)\n    if #node == 0 then\n        return 1\n    end\n    return 1 + checksum(node[1]) + checksum(node[2])\nend\n\nlocal max_depth = 16\n\nlocal started = os.clock()\nlocal result = 0\nfor depth = 4, max_depth do\n    local iterations = 2 ^ (max_depth - depth + 2)\n    for _ = 1, iterations do\n        local tree = make_tree(depth)\n        result = result + checksum(tree)\n    end\nend\nlocal elapsed = math.floor((os.clock() - started) * 1e9 + 0.5)\n\nprint(result)\nprint(elapsed)\n",
+        "candidate": "local function make_tree(depth)\n    if depth == 0 then\n        return false\n    end\n    return { make_tree(depth - 1), make_tree(depth - 1) }\nend\n\nlocal function checksum(node)\n    if not node then\n        return 1\n    end\n    return 1 + checksum(node[1]) + checksum(node[2])\nend\n\nlocal max_depth = 16\n\nlocal started = os.clock()\nlocal result = 0\nfor depth = 4, max_depth do\n    local iterations = 2 ^ (max_depth - depth + 2)\n    for _ = 1, iterations do\n        local tree = make_tree(depth)\n        result = result + checksum(tree)\n    end\nend\nlocal elapsed = math.floor((os.clock() - started) * 1e9 + 0.5)\n\nprint(result)\nprint(elapsed)\n"
+      },
+      "checksum": 6782980,
+      "rounds": [
+        {
+          "samples_ns": {
+            "baseline": [
+              847326000,
+              848981000,
+              851386000,
+              850574000,
+              847136000
+            ],
+            "candidate": [
+              645357000,
+              643013000,
+              657431000,
+              649604000,
+              647477000
+            ]
+          },
+          "baseline_median_ns": 848981000,
+          "candidate_median_ns": 647477000,
+          "paired_ratio_median": 0.7637242614987055,
+          "paired_ratio_iqr": [
+            0.7595167108970942,
+            0.7682510224276573
+          ]
+        },
+        {
+          "samples_ns": {
+            "baseline": [
+              847111000,
+              857747000,
+              876398000,
+              911756000,
+              849403000
+            ],
+            "candidate": [
+              639887000,
+              667933000,
+              689340000,
+              646796000,
+              645358000
+            ]
+          },
+          "baseline_median_ns": 857747000,
+          "candidate_median_ns": 646796000,
+          "paired_ratio_median": 0.7597783384329935,
+          "paired_ratio_iqr": [
+            0.7323857793074674,
+            0.782633376251372
+          ]
+        }
+      ],
+      "round_ratio_medians": [
+        0.7637242614987055,
+        0.7597783384329935
+      ],
+      "samples_ns": {
+        "baseline": [
+          847326000,
+          848981000,
+          851386000,
+          850574000,
+          847136000,
+          847111000,
+          857747000,
+          876398000,
+          911756000,
+          849403000
+        ],
+        "candidate": [
+          645357000,
+          643013000,
+          657431000,
+          649604000,
+          647477000,
+          639887000,
+          667933000,
+          689340000,
+          646796000,
+          645358000
+        ]
+      },
+      "baseline_median_ns": 849988500,
+      "candidate_median_ns": 647136500,
+      "paired_ratio_median": 0.7626819096774159,
+      "paired_ratio_iqr": [
+        0.756889303887952,
+        0.773818411734398
+      ]
+    },
+    {
+      "name": "sudoku_start",
+      "algorithm": "sudoku",
+      "language": "tap",
+      "sources": {
+        "baseline": "function solve_board(grid)\n{\n    let index = 0\n    while (index < 81) {\n        if (grid[index] == 0) {\n            let row = (index / 9) * 9\n            let column = index % 9\n            let box = (index / 27) * 27 + (column / 3) * 3\n            let digit = 1\n            while (digit < 10) {\n                let valid = true\n                let k = 0\n                while (k < 9) {\n                    if (grid[row + k] == digit or grid[column + k * 9] == digit) {\n                        valid = false\n                        break\n                    }\n                    if (grid[box + (k / 3) * 9 + k % 3] == digit) {\n                        valid = false\n                        break\n                    }\n                    k = k + 1\n                }\n                if (valid) {\n                    grid[index] = digit\n                    if (this(grid)) {\n                        return true\n                    }\n                }\n                digit = digit + 1\n            }\n            grid[index] = 0\n            return false\n        }\n        index = index + 1\n    }\n    return true\n}\n\nlet puzzle = [\n    1, 0, 0, 0, 0, 7, 0, 9, 0,\n    0, 3, 0, 0, 2, 0, 0, 0, 8,\n    0, 0, 9, 6, 0, 0, 5, 0, 0,\n    0, 0, 5, 3, 0, 0, 9, 0, 0,\n    0, 1, 0, 0, 8, 0, 0, 0, 2,\n    6, 0, 0, 0, 0, 4, 0, 0, 0,\n    3, 0, 0, 0, 0, 0, 0, 1, 0,\n    0, 4, 0, 0, 0, 0, 0, 0, 7,\n    0, 0, 7, 0, 0, 0, 3, 0, 0,\n]\nlet repetitions = 10\n\nlet started = clock_ns()\nvar checksum = -1\nfor (let round in 0 to repetitions) {\n    let board = copy(puzzle)\n    let solved = solve_board(board)\n    if (not solved) {\n        checksum = -1\n        break\n    }\n    checksum = 0\n    for (let index in 0 to 81) {\n        checksum = checksum + board[index] * (index + 1)\n    }\n}\nlet elapsed = clock_ns() - started\n\nprint(checksum)\nprint(elapsed)\n",
+        "candidate": "function solve_from(grid, start)\n{\n    let index = start\n    while (index < 81) {\n        if (grid[index] == 0) {\n            let row = (index / 9) * 9\n            let column = index % 9\n            let box = (index / 27) * 27 + (column / 3) * 3\n            let digit = 1\n            while (digit < 10) {\n                let valid = true\n                let k = 0\n                while (k < 9) {\n                    if (grid[row + k] == digit or grid[column + k * 9] == digit) {\n                        valid = false\n                        break\n                    }\n                    if (grid[box + (k / 3) * 9 + k % 3] == digit) {\n                        valid = false\n                        break\n                    }\n                    k = k + 1\n                }\n                if (valid) {\n                    grid[index] = digit\n                    if (this(grid, index + 1)) {\n                        return true\n                    }\n                }\n                digit = digit + 1\n            }\n            grid[index] = 0\n            return false\n        }\n        index = index + 1\n    }\n    return true\n}\n\nfunction solve_board(grid)\n{\n    return solve_from(grid, 0)\n}\n\nlet puzzle = [\n    1, 0, 0, 0, 0, 7, 0, 9, 0,\n    0, 3, 0, 0, 2, 0, 0, 0, 8,\n    0, 0, 9, 6, 0, 0, 5, 0, 0,\n    0, 0, 5, 3, 0, 0, 9, 0, 0,\n    0, 1, 0, 0, 8, 0, 0, 0, 2,\n    6, 0, 0, 0, 0, 4, 0, 0, 0,\n    3, 0, 0, 0, 0, 0, 0, 1, 0,\n    0, 4, 0, 0, 0, 0, 0, 0, 7,\n    0, 0, 7, 0, 0, 0, 3, 0, 0,\n]\nlet repetitions = 10\n\nlet started = clock_ns()\nvar checksum = -1\nfor (let round in 0 to repetitions) {\n    let board = copy(puzzle)\n    let solved = solve_board(board)\n    if (not solved) {\n        checksum = -1\n        break\n    }\n    checksum = 0\n    for (let index in 0 to 81) {\n        checksum = checksum + board[index] * (index + 1)\n    }\n}\nlet elapsed = clock_ns() - started\n\nprint(checksum)\nprint(elapsed)\n"
+      },
+      "checksum": 16605,
+      "rounds": [
+        {
+          "samples_ns": {
+            "baseline": [
+              362162000,
+              361647000,
+              359622000,
+              360004000,
+              361468000
+            ],
+            "candidate": [
+              269299000,
+              266363000,
+              266097000,
+              266704000,
+              268272000
+            ]
+          },
+          "baseline_median_ns": 361468000,
+          "candidate_median_ns": 266704000,
+          "paired_ratio_median": 0.7408362129309675,
+          "paired_ratio_iqr": [
+            0.7382314368878464,
+            0.7428803525290593
+          ]
+        },
+        {
+          "samples_ns": {
+            "baseline": [
+              358366000,
+              359022000,
+              365451000,
+              361019000,
+              361059000
+            ],
+            "candidate": [
+              267359000,
+              267087000,
+              265698000,
+              265326000,
+              265503000
+            ]
+          },
+          "baseline_median_ns": 361019000,
+          "candidate_median_ns": 265698000,
+          "paired_ratio_median": 0.7353451928909126,
+          "paired_ratio_iqr": [
+            0.7309888850671395,
+            0.7449897344503336
+          ]
+        }
+      ],
+      "round_ratio_medians": [
+        0.7408362129309675,
+        0.7353451928909126
+      ],
+      "samples_ns": {
+        "baseline": [
+          362162000,
+          361647000,
+          359622000,
+          360004000,
+          361468000,
+          358366000,
+          359022000,
+          365451000,
+          361019000,
+          361059000
+        ],
+        "candidate": [
+          269299000,
+          266363000,
+          266097000,
+          266704000,
+          268272000,
+          267359000,
+          267087000,
+          265698000,
+          265326000,
+          265503000
+        ]
+      },
+      "baseline_median_ns": 361039000,
+      "candidate_median_ns": 266533500,
+      "paired_ratio_median": 0.7403857391464654,
+      "paired_ratio_iqr": [
+        0.7352429917655672,
+        0.7436726783400281
+      ]
+    },
+    {
+      "name": "sudoku_for",
+      "algorithm": "sudoku",
+      "language": "tap",
+      "sources": {
+        "baseline": "function solve_board(grid)\n{\n    let index = 0\n    while (index < 81) {\n        if (grid[index] == 0) {\n            let row = (index / 9) * 9\n            let column = index % 9\n            let box = (index / 27) * 27 + (column / 3) * 3\n            let digit = 1\n            while (digit < 10) {\n                let valid = true\n                let k = 0\n                while (k < 9) {\n                    if (grid[row + k] == digit or grid[column + k * 9] == digit) {\n                        valid = false\n                        break\n                    }\n                    if (grid[box + (k / 3) * 9 + k % 3] == digit) {\n                        valid = false\n                        break\n                    }\n                    k = k + 1\n                }\n                if (valid) {\n                    grid[index] = digit\n                    if (this(grid)) {\n                        return true\n                    }\n                }\n                digit = digit + 1\n            }\n            grid[index] = 0\n            return false\n        }\n        index = index + 1\n    }\n    return true\n}\n\nlet puzzle = [\n    1, 0, 0, 0, 0, 7, 0, 9, 0,\n    0, 3, 0, 0, 2, 0, 0, 0, 8,\n    0, 0, 9, 6, 0, 0, 5, 0, 0,\n    0, 0, 5, 3, 0, 0, 9, 0, 0,\n    0, 1, 0, 0, 8, 0, 0, 0, 2,\n    6, 0, 0, 0, 0, 4, 0, 0, 0,\n    3, 0, 0, 0, 0, 0, 0, 1, 0,\n    0, 4, 0, 0, 0, 0, 0, 0, 7,\n    0, 0, 7, 0, 0, 0, 3, 0, 0,\n]\nlet repetitions = 10\n\nlet started = clock_ns()\nvar checksum = -1\nfor (let round in 0 to repetitions) {\n    let board = copy(puzzle)\n    let solved = solve_board(board)\n    if (not solved) {\n        checksum = -1\n        break\n    }\n    checksum = 0\n    for (let index in 0 to 81) {\n        checksum = checksum + board[index] * (index + 1)\n    }\n}\nlet elapsed = clock_ns() - started\n\nprint(checksum)\nprint(elapsed)\n",
+        "candidate": "function solve_board(grid)\n{\n    let index = 0\n    while (index < 81) {\n        if (grid[index] == 0) {\n            let row = (index / 9) * 9\n            let column = index % 9\n            let box = (index / 27) * 27 + (column / 3) * 3\n            for (let digit in 1 to 10) {\n                let valid = true\n                for (let k in 0 to 9) {\n                    if (grid[row + k] == digit or grid[column + k * 9] == digit) {\n                        valid = false\n                        break\n                    }\n                    if (grid[box + (k / 3) * 9 + k % 3] == digit) {\n                        valid = false\n                        break\n                    }\n                }\n                if (valid) {\n                    grid[index] = digit\n                    if (this(grid)) {\n                        return true\n                    }\n                }\n            }\n            grid[index] = 0\n            return false\n        }\n        index = index + 1\n    }\n    return true\n}\n\nlet puzzle = [\n    1, 0, 0, 0, 0, 7, 0, 9, 0,\n    0, 3, 0, 0, 2, 0, 0, 0, 8,\n    0, 0, 9, 6, 0, 0, 5, 0, 0,\n    0, 0, 5, 3, 0, 0, 9, 0, 0,\n    0, 1, 0, 0, 8, 0, 0, 0, 2,\n    6, 0, 0, 0, 0, 4, 0, 0, 0,\n    3, 0, 0, 0, 0, 0, 0, 1, 0,\n    0, 4, 0, 0, 0, 0, 0, 0, 7,\n    0, 0, 7, 0, 0, 0, 3, 0, 0,\n]\nlet repetitions = 10\n\nlet started = clock_ns()\nvar checksum = -1\nfor (let round in 0 to repetitions) {\n    let board = copy(puzzle)\n    let solved = solve_board(board)\n    if (not solved) {\n        checksum = -1\n        break\n    }\n    checksum = 0\n    for (let index in 0 to 81) {\n        checksum = checksum + board[index] * (index + 1)\n    }\n}\nlet elapsed = clock_ns() - started\n\nprint(checksum)\nprint(elapsed)\n"
+      },
+      "checksum": 16605,
+      "rounds": [
+        {
+          "samples_ns": {
+            "baseline": [
+              364647000,
+              359846000,
+              359124000,
+              359975000,
+              360453000
+            ],
+            "candidate": [
+              350172000,
+              349175000,
+              348404000,
+              354608000,
+              348449000
+            ]
+          },
+          "baseline_median_ns": 359975000,
+          "candidate_median_ns": 349175000,
+          "paired_ratio_median": 0.9701495862153462,
+          "paired_ratio_iqr": [
+            0.9635007680749919,
+            0.9777181395771568
+          ]
+        },
+        {
+          "samples_ns": {
+            "baseline": [
+              360432000,
+              360831000,
+              359027000,
+              361298000,
+              358886000
+            ],
+            "candidate": [
+              349239000,
+              346873000,
+              350121000,
+              346335000,
+              350511000
+            ]
+          },
+          "baseline_median_ns": 360432000,
+          "candidate_median_ns": 349239000,
+          "paired_ratio_median": 0.9689455986149953,
+          "paired_ratio_iqr": [
+            0.9599512522517388,
+            0.9759289825134834
+          ]
+        }
+      ],
+      "round_ratio_medians": [
+        0.9701495862153462,
+        0.9689455986149953
+      ],
+      "samples_ns": {
+        "baseline": [
+          364647000,
+          359846000,
+          359124000,
+          359975000,
+          360453000,
+          360432000,
+          360831000,
+          359027000,
+          361298000,
+          358886000
+        ],
+        "candidate": [
+          350172000,
+          349175000,
+          348404000,
+          354608000,
+          348449000,
+          349239000,
+          346873000,
+          350121000,
+          346335000,
+          350511000
+        ]
+      },
+      "baseline_median_ns": 360203500,
+      "candidate_median_ns": 349207000,
+      "paired_ratio_median": 0.9695475924151707,
+      "paired_ratio_iqr": [
+        0.9610638218793439,
+        0.9755615243489604
+      ]
+    },
+    {
+      "name": "sudoku_start_for",
+      "algorithm": "sudoku",
+      "language": "tap",
+      "sources": {
+        "baseline": "function solve_board(grid)\n{\n    let index = 0\n    while (index < 81) {\n        if (grid[index] == 0) {\n            let row = (index / 9) * 9\n            let column = index % 9\n            let box = (index / 27) * 27 + (column / 3) * 3\n            let digit = 1\n            while (digit < 10) {\n                let valid = true\n                let k = 0\n                while (k < 9) {\n                    if (grid[row + k] == digit or grid[column + k * 9] == digit) {\n                        valid = false\n                        break\n                    }\n                    if (grid[box + (k / 3) * 9 + k % 3] == digit) {\n                        valid = false\n                        break\n                    }\n                    k = k + 1\n                }\n                if (valid) {\n                    grid[index] = digit\n                    if (this(grid)) {\n                        return true\n                    }\n                }\n                digit = digit + 1\n            }\n            grid[index] = 0\n            return false\n        }\n        index = index + 1\n    }\n    return true\n}\n\nlet puzzle = [\n    1, 0, 0, 0, 0, 7, 0, 9, 0,\n    0, 3, 0, 0, 2, 0, 0, 0, 8,\n    0, 0, 9, 6, 0, 0, 5, 0, 0,\n    0, 0, 5, 3, 0, 0, 9, 0, 0,\n    0, 1, 0, 0, 8, 0, 0, 0, 2,\n    6, 0, 0, 0, 0, 4, 0, 0, 0,\n    3, 0, 0, 0, 0, 0, 0, 1, 0,\n    0, 4, 0, 0, 0, 0, 0, 0, 7,\n    0, 0, 7, 0, 0, 0, 3, 0, 0,\n]\nlet repetitions = 10\n\nlet started = clock_ns()\nvar checksum = -1\nfor (let round in 0 to repetitions) {\n    let board = copy(puzzle)\n    let solved = solve_board(board)\n    if (not solved) {\n        checksum = -1\n        break\n    }\n    checksum = 0\n    for (let index in 0 to 81) {\n        checksum = checksum + board[index] * (index + 1)\n    }\n}\nlet elapsed = clock_ns() - started\n\nprint(checksum)\nprint(elapsed)\n",
+        "candidate": "function solve_from(grid, start)\n{\n    let index = start\n    while (index < 81) {\n        if (grid[index] == 0) {\n            let row = (index / 9) * 9\n            let column = index % 9\n            let box = (index / 27) * 27 + (column / 3) * 3\n            for (let digit in 1 to 10) {\n                let valid = true\n                for (let k in 0 to 9) {\n                    if (grid[row + k] == digit or grid[column + k * 9] == digit) {\n                        valid = false\n                        break\n                    }\n                    if (grid[box + (k / 3) * 9 + k % 3] == digit) {\n                        valid = false\n                        break\n                    }\n                }\n                if (valid) {\n                    grid[index] = digit\n                    if (this(grid, index + 1)) {\n                        return true\n                    }\n                }\n            }\n            grid[index] = 0\n            return false\n        }\n        index = index + 1\n    }\n    return true\n}\n\nfunction solve_board(grid)\n{\n    return solve_from(grid, 0)\n}\n\nlet puzzle = [\n    1, 0, 0, 0, 0, 7, 0, 9, 0,\n    0, 3, 0, 0, 2, 0, 0, 0, 8,\n    0, 0, 9, 6, 0, 0, 5, 0, 0,\n    0, 0, 5, 3, 0, 0, 9, 0, 0,\n    0, 1, 0, 0, 8, 0, 0, 0, 2,\n    6, 0, 0, 0, 0, 4, 0, 0, 0,\n    3, 0, 0, 0, 0, 0, 0, 1, 0,\n    0, 4, 0, 0, 0, 0, 0, 0, 7,\n    0, 0, 7, 0, 0, 0, 3, 0, 0,\n]\nlet repetitions = 10\n\nlet started = clock_ns()\nvar checksum = -1\nfor (let round in 0 to repetitions) {\n    let board = copy(puzzle)\n    let solved = solve_board(board)\n    if (not solved) {\n        checksum = -1\n        break\n    }\n    checksum = 0\n    for (let index in 0 to 81) {\n        checksum = checksum + board[index] * (index + 1)\n    }\n}\nlet elapsed = clock_ns() - started\n\nprint(checksum)\nprint(elapsed)\n"
+      },
+      "checksum": 16605,
+      "rounds": [
+        {
+          "samples_ns": {
+            "baseline": [
+              363882000,
+              359159000,
+              360300000,
+              359052000,
+              360604000
+            ],
+            "candidate": [
+              258808000,
+              256653000,
+              257627000,
+              257775000,
+              255503000
+            ]
+          },
+          "baseline_median_ns": 360300000,
+          "candidate_median_ns": 257627000,
+          "paired_ratio_median": 0.714594371852021,
+          "paired_ratio_iqr": [
+            0.709891668115654,
+            0.7164834574138951
+          ]
+        },
+        {
+          "samples_ns": {
+            "baseline": [
+              358733000,
+              360314000,
+              357843000,
+              359792000,
+              359573000
+            ],
+            "candidate": [
+              257059000,
+              255006000,
+              253923000,
+              253407000,
+              254943000
+            ]
+          },
+          "baseline_median_ns": 359573000,
+          "candidate_median_ns": 254943000,
+          "paired_ratio_median": 0.7090159717220147,
+          "paired_ratio_iqr": [
+            0.7060239854286618,
+            0.713084017986649
+          ]
+        }
+      ],
+      "round_ratio_medians": [
+        0.714594371852021,
+        0.7090159717220147
+      ],
+      "samples_ns": {
+        "baseline": [
+          363882000,
+          359159000,
+          360300000,
+          359052000,
+          360604000,
+          358733000,
+          360314000,
+          357843000,
+          359792000,
+          359573000
+        ],
+        "candidate": [
+          258808000,
+          256653000,
+          257627000,
+          257775000,
+          255503000,
+          257059000,
+          255006000,
+          253923000,
+          253407000,
+          254943000
+        ]
+      },
+      "baseline_median_ns": 359682500,
+      "candidate_median_ns": 256078000,
+      "paired_ratio_median": 0.710417434798684,
+      "paired_ratio_iqr": [
+        0.7083395098799136,
+        0.7154197006595047
+      ]
+    },
+    {
+      "name": "sudoku_start",
+      "algorithm": "sudoku",
+      "language": "py",
+      "sources": {
+        "baseline": "import time\n\n\ndef solve_board(grid):\n    try:\n        index = grid.index(0)\n    except ValueError:\n        return True\n    row = (index // 9) * 9\n    column = index % 9\n    box = (index // 27) * 27 + (column // 3) * 3\n    for digit in range(1, 10):\n        for k in range(9):\n            if (grid[row + k] == digit or grid[column + k * 9] == digit or\n                    grid[box + (k // 3) * 9 + k % 3] == digit):\n                break\n        else:\n            grid[index] = digit\n            if solve_board(grid):\n                return True\n    grid[index] = 0\n    return False\n\n\npuzzle = [\n    1, 0, 0, 0, 0, 7, 0, 9, 0,\n    0, 3, 0, 0, 2, 0, 0, 0, 8,\n    0, 0, 9, 6, 0, 0, 5, 0, 0,\n    0, 0, 5, 3, 0, 0, 9, 0, 0,\n    0, 1, 0, 0, 8, 0, 0, 0, 2,\n    6, 0, 0, 0, 0, 4, 0, 0, 0,\n    3, 0, 0, 0, 0, 0, 0, 1, 0,\n    0, 4, 0, 0, 0, 0, 0, 0, 7,\n    0, 0, 7, 0, 0, 0, 3, 0, 0,\n]\nrepetitions = 10\n\ndef bench():\n    started = time.process_time_ns()\n    checksum = -1\n    for round in range(repetitions):\n        board = puzzle.copy()\n        solved = solve_board(board)\n        if not solved:\n            checksum = -1\n            break\n        checksum = sum(value * index for index, value in enumerate(board, 1))\n    elapsed = time.process_time_ns() - started\n\n    print(checksum)\n    print(elapsed)\n\n\nif __name__ == \"__main__\":\n    bench()\n",
+        "candidate": "import time\n\n\ndef solve_from(grid, start):\n    try:\n        index = grid.index(0, start)\n    except ValueError:\n        return True\n    row = (index // 9) * 9\n    column = index % 9\n    box = (index // 27) * 27 + (column // 3) * 3\n    for digit in range(1, 10):\n        for k in range(9):\n            if (grid[row + k] == digit or grid[column + k * 9] == digit or\n                    grid[box + (k // 3) * 9 + k % 3] == digit):\n                break\n        else:\n            grid[index] = digit\n            if solve_from(grid, index + 1):\n                return True\n    grid[index] = 0\n    return False\n\n\ndef solve_board(grid):\n    return solve_from(grid, 0)\n\npuzzle = [\n    1, 0, 0, 0, 0, 7, 0, 9, 0,\n    0, 3, 0, 0, 2, 0, 0, 0, 8,\n    0, 0, 9, 6, 0, 0, 5, 0, 0,\n    0, 0, 5, 3, 0, 0, 9, 0, 0,\n    0, 1, 0, 0, 8, 0, 0, 0, 2,\n    6, 0, 0, 0, 0, 4, 0, 0, 0,\n    3, 0, 0, 0, 0, 0, 0, 1, 0,\n    0, 4, 0, 0, 0, 0, 0, 0, 7,\n    0, 0, 7, 0, 0, 0, 3, 0, 0,\n]\nrepetitions = 10\n\ndef bench():\n    started = time.process_time_ns()\n    checksum = -1\n    for round in range(repetitions):\n        board = puzzle.copy()\n        solved = solve_board(board)\n        if not solved:\n            checksum = -1\n            break\n        checksum = sum(value * index for index, value in enumerate(board, 1))\n    elapsed = time.process_time_ns() - started\n\n    print(checksum)\n    print(elapsed)\n\n\nif __name__ == \"__main__\":\n    bench()\n"
+      },
+      "checksum": 16605,
+      "rounds": [
+        {
+          "samples_ns": {
+            "baseline": [
+              296270000,
+              297320000,
+              300199000,
+              295807000,
+              297005000
+            ],
+            "candidate": [
+              274591000,
+              268442000,
+              273621000,
+              274154000,
+              270679000
+            ]
+          },
+          "baseline_median_ns": 297005000,
+          "candidate_median_ns": 273621000,
+          "paired_ratio_median": 0.9114653946215677,
+          "paired_ratio_iqr": [
+            0.9071170438498919,
+            0.9268135628199298
+          ]
+        },
+        {
+          "samples_ns": {
+            "baseline": [
+              298022000,
+              297958000,
+              297963000,
+              297964000,
+              295168000
+            ],
+            "candidate": [
+              282294000,
+              274345000,
+              272812000,
+              270265000,
+              271299000
+            ]
+          },
+          "baseline_median_ns": 297963000,
+          "candidate_median_ns": 272812000,
+          "paired_ratio_median": 0.9191341879878577,
+          "paired_ratio_iqr": [
+            0.9113146480618308,
+            0.933987974103988
+          ]
+        }
+      ],
+      "round_ratio_medians": [
+        0.9114653946215677,
+        0.9191341879878577
+      ],
+      "samples_ns": {
+        "baseline": [
+          296270000,
+          297320000,
+          300199000,
+          295807000,
+          297005000,
+          298022000,
+          297958000,
+          297963000,
+          297964000,
+          295168000
+        ],
+        "candidate": [
+          274591000,
+          268442000,
+          273621000,
+          274154000,
+          270679000,
+          282294000,
+          274345000,
+          272812000,
+          270265000,
+          271299000
+        ]
+      },
+      "baseline_median_ns": 297639000,
+      "candidate_median_ns": 273216500,
+      "paired_ratio_median": 0.9173621893581183,
+      "paired_ratio_iqr": [
+        0.9102810975386997,
+        0.9268069037870554
+      ]
+    },
+    {
+      "name": "sudoku_start",
+      "algorithm": "sudoku",
+      "language": "lua",
+      "sources": {
+        "baseline": "local function solve_board(grid)\n    for slot = 1, 81 do\n        if grid[slot] == 0 then\n            local index = slot - 1\n            local row = (index // 9) * 9 + 1\n            local column = index % 9 + 1\n            local box = (index // 27) * 27 + ((column - 1) // 3) * 3 + 1\n            for digit = 1, 9 do\n                local valid = true\n                for k = 0, 8 do\n                    if grid[row + k] == digit or grid[column + k * 9] == digit or\n                            grid[box + (k // 3) * 9 + k % 3] == digit then\n                        valid = false\n                        break\n                    end\n                end\n                if valid then\n                    grid[slot] = digit\n                    if solve_board(grid) then\n                        return true\n                    end\n                end\n            end\n            grid[slot] = 0\n            return false\n        end\n    end\n    return true\nend\n\n\nlocal puzzle = {\n    1, 0, 0, 0, 0, 7, 0, 9, 0,\n    0, 3, 0, 0, 2, 0, 0, 0, 8,\n    0, 0, 9, 6, 0, 0, 5, 0, 0,\n    0, 0, 5, 3, 0, 0, 9, 0, 0,\n    0, 1, 0, 0, 8, 0, 0, 0, 2,\n    6, 0, 0, 0, 0, 4, 0, 0, 0,\n    3, 0, 0, 0, 0, 0, 0, 1, 0,\n    0, 4, 0, 0, 0, 0, 0, 0, 7,\n    0, 0, 7, 0, 0, 0, 3, 0, 0,\n}\nlocal repetitions = 10\n\nlocal started = os.clock()\nlocal checksum = -1\nfor round = 0, repetitions - 1 do\n    local board = {}\n    for index = 0, 80 do\n        board[index + 1] = puzzle[index + 1]\n    end\n    local solved = solve_board(board)\n    if not solved then\n        checksum = -1\n        break\n    end\n    checksum = 0\n    for index = 0, 80 do\n        checksum = checksum + board[index + 1] * (index + 1)\n    end\nend\nlocal elapsed = math.floor((os.clock() - started) * 1e9 + 0.5)\n\nprint(checksum)\nprint(elapsed)\n",
+        "candidate": "local function solve_from(grid, start)\n    for slot = start, 81 do\n        if grid[slot] == 0 then\n            local index = slot - 1\n            local row = (index // 9) * 9 + 1\n            local column = index % 9 + 1\n            local box = (index // 27) * 27 + ((column - 1) // 3) * 3 + 1\n            for digit = 1, 9 do\n                local valid = true\n                for k = 0, 8 do\n                    if grid[row + k] == digit or grid[column + k * 9] == digit or\n                            grid[box + (k // 3) * 9 + k % 3] == digit then\n                        valid = false\n                        break\n                    end\n                end\n                if valid then\n                    grid[slot] = digit\n                    if solve_from(grid, slot + 1) then\n                        return true\n                    end\n                end\n            end\n            grid[slot] = 0\n            return false\n        end\n    end\n    return true\nend\n\n\nlocal function solve_board(grid)\n    return solve_from(grid, 1)\nend\n\nlocal puzzle = {\n    1, 0, 0, 0, 0, 7, 0, 9, 0,\n    0, 3, 0, 0, 2, 0, 0, 0, 8,\n    0, 0, 9, 6, 0, 0, 5, 0, 0,\n    0, 0, 5, 3, 0, 0, 9, 0, 0,\n    0, 1, 0, 0, 8, 0, 0, 0, 2,\n    6, 0, 0, 0, 0, 4, 0, 0, 0,\n    3, 0, 0, 0, 0, 0, 0, 1, 0,\n    0, 4, 0, 0, 0, 0, 0, 0, 7,\n    0, 0, 7, 0, 0, 0, 3, 0, 0,\n}\nlocal repetitions = 10\n\nlocal started = os.clock()\nlocal checksum = -1\nfor round = 0, repetitions - 1 do\n    local board = {}\n    for index = 0, 80 do\n        board[index + 1] = puzzle[index + 1]\n    end\n    local solved = solve_board(board)\n    if not solved then\n        checksum = -1\n        break\n    end\n    checksum = 0\n    for index = 0, 80 do\n        checksum = checksum + board[index + 1] * (index + 1)\n    end\nend\nlocal elapsed = math.floor((os.clock() - started) * 1e9 + 0.5)\n\nprint(checksum)\nprint(elapsed)\n"
+      },
+      "checksum": 16605,
+      "rounds": [
+        {
+          "samples_ns": {
+            "baseline": [
+              155253000,
+              153573000,
+              153472000,
+              154628000,
+              153908000
+            ],
+            "candidate": [
+              128569000,
+              129182000,
+              129542000,
+              130192000,
+              128629000
+            ]
+          },
+          "baseline_median_ns": 153908000,
+          "candidate_median_ns": 129182000,
+          "paired_ratio_median": 0.841176508891537,
+          "paired_ratio_iqr": [
+            0.8319391159895974,
+            0.8430224526474182
+          ]
+        },
+        {
+          "samples_ns": {
+            "baseline": [
+              154045000,
+              156418000,
+              156198000,
+              154180000,
+              154787000
+            ],
+            "candidate": [
+              127295000,
+              128960000,
+              128866000,
+              129494000,
+              128322000
+            ]
+          },
+          "baseline_median_ns": 154787000,
+          "candidate_median_ns": 128866000,
+          "paired_ratio_median": 0.8263494433444772,
+          "paired_ratio_iqr": [
+            0.8247372544478326,
+            0.83445577562826
+          ]
+        }
+      ],
+      "round_ratio_medians": [
+        0.841176508891537,
+        0.8263494433444772
+      ],
+      "samples_ns": {
+        "baseline": [
+          155253000,
+          153573000,
+          153472000,
+          154628000,
+          153908000,
+          154045000,
+          156418000,
+          156198000,
+          154180000,
+          154787000
+        ],
+        "candidate": [
+          128569000,
+          129182000,
+          129542000,
+          130192000,
+          128629000,
+          127295000,
+          128960000,
+          128866000,
+          129494000,
+          128322000
+        ]
+      },
+      "baseline_median_ns": 154404000,
+      "candidate_median_ns": 128913000,
+      "paired_ratio_median": 0.8323878183298934,
+      "paired_ratio_iqr": [
+        0.8260163239198997,
+        0.841374659910627
+      ]
+    },
+    {
+      "name": "lcs_iter",
+      "algorithm": "longest_common_subsequence",
+      "language": "tap",
+      "sources": {
+        "baseline": "function lcs_length(left, right)\n{\n    let previous = replicate([0], right.len() + 1)\n    let current = replicate([0], right.len() + 1)\n\n    for (let i in 1 to (left.len() + 1)) {\n        current[0] = 0\n        for (let j in 1 to (right.len() + 1)) {\n            if (left[i - 1] == right[j - 1]) {\n                current[j] = previous[j - 1] + 1\n            } elif (previous[j] >= current[j - 1]) {\n                current[j] = previous[j]\n            } else {\n                current[j] = current[j - 1]\n            }\n        }\n        let temporary = previous\n        previous = current\n        current = temporary\n    }\n    return previous[right.len()] + 0\n}\n\nlet left = 'DYNAMICPROGRAMMINGALGORITHMSANDDATASTRUCTURESARECENTRALTOVIRTUALMACHINEBENCHMARKS'\nlet right = 'ALGORITHMSFORDYNAMICLANGUAGESUSEPROGRAMSTRUCTUREANDRUNTIMEDATATOMEASUREPERFORMANCE'\n\nlet started = clock_ns()\nlet result = 0\nfor (let repetition in 0 to 40) {\n    result = result + lcs_length(left, right)\n}\nlet elapsed = clock_ns() - started\n\nprint(result)\nprint(elapsed)\n",
+        "candidate": "function lcs_length(left, right)\n{\n    let previous = replicate([0], right.len() + 1)\n    let current = replicate([0], right.len() + 1)\n\n    for (let ch in left) {\n        current[0] = 0\n        var j = 1\n        for (let other in right) {\n            if (ch == other) {\n                current[j] = previous[j - 1] + 1\n            } elif (previous[j] >= current[j - 1]) {\n                current[j] = previous[j]\n            } else {\n                current[j] = current[j - 1]\n            }\n            j = j + 1\n        }\n        let temporary = previous\n        previous = current\n        current = temporary\n    }\n    return previous[right.len()] + 0\n}\n\nlet left = 'DYNAMICPROGRAMMINGALGORITHMSANDDATASTRUCTURESARECENTRALTOVIRTUALMACHINEBENCHMARKS'\nlet right = 'ALGORITHMSFORDYNAMICLANGUAGESUSEPROGRAMSTRUCTUREANDRUNTIMEDATATOMEASUREPERFORMANCE'\n\nlet started = clock_ns()\nlet result = 0\nfor (let repetition in 0 to 40) {\n    result = result + lcs_length(left, right)\n}\nlet elapsed = clock_ns() - started\n\nprint(result)\nprint(elapsed)\n"
+      },
+      "error": "Command '['/Users/zhuanglinsheng/Documents/Github/tapas/build-release/bin/tapas', '/var/folders/7g/nxmw_wbs1nsfwhdcb7s3zrtc0000gn/T/tapas-idiomatic-7w229vta/longest_common_subsequence_lcs_iter_candidate.tap']' returned non-zero exit status 255.",
+      "stdout": "",
+      "stderr": "Compile Error: Variable Declaration in Block\n  at /private/var/folders/7g/nxmw_wbs1nsfwhdcb7s3zrtc0000gn/T/tapas-idiomatic-7w229vta/longest_common_subsequence_lcs_iter_candidate.tap\n  from: tobj_ctr_obj_create\n"
+    },
+    {
+      "name": "lcs_scalar",
+      "algorithm": "longest_common_subsequence",
+      "language": "tap",
+      "sources": {
+        "baseline": "function lcs_length(left, right)\n{\n    let previous = replicate([0], right.len() + 1)\n    let current = replicate([0], right.len() + 1)\n\n    for (let i in 1 to (left.len() + 1)) {\n        current[0] = 0\n        for (let j in 1 to (right.len() + 1)) {\n            if (left[i - 1] == right[j - 1]) {\n                current[j] = previous[j - 1] + 1\n            } elif (previous[j] >= current[j - 1]) {\n                current[j] = previous[j]\n            } else {\n                current[j] = current[j - 1]\n            }\n        }\n        let temporary = previous\n        previous = current\n        current = temporary\n    }\n    return previous[right.len()] + 0\n}\n\nlet left = 'DYNAMICPROGRAMMINGALGORITHMSANDDATASTRUCTURESARECENTRALTOVIRTUALMACHINEBENCHMARKS'\nlet right = 'ALGORITHMSFORDYNAMICLANGUAGESUSEPROGRAMSTRUCTUREANDRUNTIMEDATATOMEASUREPERFORMANCE'\n\nlet started = clock_ns()\nlet result = 0\nfor (let repetition in 0 to 40) {\n    result = result + lcs_length(left, right)\n}\nlet elapsed = clock_ns() - started\n\nprint(result)\nprint(elapsed)\n",
+        "candidate": "function lcs_length(left, right)\n{\n    let previous = replicate([0], right.len() + 1)\n    let current = replicate([0], right.len() + 1)\n\n    for (let i in 1 to (left.len() + 1)) {\n        current[0] = 0\n        var diagonal = 0\n        var preceding = 0\n        for (let j in 1 to (right.len() + 1)) {\n            let above = previous[j]\n            if (left[i - 1] == right[j - 1]) {\n                preceding = diagonal + 1\n            } elif (above > preceding) {\n                preceding = above\n            }\n            current[j] = preceding\n            diagonal = above\n        }\n        let temporary = previous\n        previous = current\n        current = temporary\n    }\n    return previous[right.len()] + 0\n}\n\nlet left = 'DYNAMICPROGRAMMINGALGORITHMSANDDATASTRUCTURESARECENTRALTOVIRTUALMACHINEBENCHMARKS'\nlet right = 'ALGORITHMSFORDYNAMICLANGUAGESUSEPROGRAMSTRUCTUREANDRUNTIMEDATATOMEASUREPERFORMANCE'\n\nlet started = clock_ns()\nlet result = 0\nfor (let repetition in 0 to 40) {\n    result = result + lcs_length(left, right)\n}\nlet elapsed = clock_ns() - started\n\nprint(result)\nprint(elapsed)\n"
+      },
+      "error": "Command '['/Users/zhuanglinsheng/Documents/Github/tapas/build-release/bin/tapas', '/var/folders/7g/nxmw_wbs1nsfwhdcb7s3zrtc0000gn/T/tapas-idiomatic-7w229vta/longest_common_subsequence_lcs_scalar_candidate.tap']' returned non-zero exit status 255.",
+      "stdout": "",
+      "stderr": "Compile Error: Variable Declaration in Block\n  at /private/var/folders/7g/nxmw_wbs1nsfwhdcb7s3zrtc0000gn/T/tapas-idiomatic-7w229vta/longest_common_subsequence_lcs_scalar_candidate.tap\n  from: tobj_ctr_obj_create\n"
+    },
+    {
+      "name": "lcs_scalar_iter",
+      "algorithm": "longest_common_subsequence",
+      "language": "tap",
+      "sources": {
+        "baseline": "function lcs_length(left, right)\n{\n    let previous = replicate([0], right.len() + 1)\n    let current = replicate([0], right.len() + 1)\n\n    for (let i in 1 to (left.len() + 1)) {\n        current[0] = 0\n        for (let j in 1 to (right.len() + 1)) {\n            if (left[i - 1] == right[j - 1]) {\n                current[j] = previous[j - 1] + 1\n            } elif (previous[j] >= current[j - 1]) {\n                current[j] = previous[j]\n            } else {\n                current[j] = current[j - 1]\n            }\n        }\n        let temporary = previous\n        previous = current\n        current = temporary\n    }\n    return previous[right.len()] + 0\n}\n\nlet left = 'DYNAMICPROGRAMMINGALGORITHMSANDDATASTRUCTURESARECENTRALTOVIRTUALMACHINEBENCHMARKS'\nlet right = 'ALGORITHMSFORDYNAMICLANGUAGESUSEPROGRAMSTRUCTUREANDRUNTIMEDATATOMEASUREPERFORMANCE'\n\nlet started = clock_ns()\nlet result = 0\nfor (let repetition in 0 to 40) {\n    result = result + lcs_length(left, right)\n}\nlet elapsed = clock_ns() - started\n\nprint(result)\nprint(elapsed)\n",
+        "candidate": "function lcs_length(left, right)\n{\n    let previous = replicate([0], right.len() + 1)\n    let current = replicate([0], right.len() + 1)\n\n    for (let ch in left) {\n        current[0] = 0\n        var diagonal = 0\n        var preceding = 0\n        var j = 1\n        for (let other in right) {\n            let above = previous[j]\n            if (ch == other) {\n                preceding = diagonal + 1\n            } elif (above > preceding) {\n                preceding = above\n            }\n            current[j] = preceding\n            diagonal = above\n            j = j + 1\n        }\n        let temporary = previous\n        previous = current\n        current = temporary\n    }\n    return previous[right.len()] + 0\n}\n\nlet left = 'DYNAMICPROGRAMMINGALGORITHMSANDDATASTRUCTURESARECENTRALTOVIRTUALMACHINEBENCHMARKS'\nlet right = 'ALGORITHMSFORDYNAMICLANGUAGESUSEPROGRAMSTRUCTUREANDRUNTIMEDATATOMEASUREPERFORMANCE'\n\nlet started = clock_ns()\nlet result = 0\nfor (let repetition in 0 to 40) {\n    result = result + lcs_length(left, right)\n}\nlet elapsed = clock_ns() - started\n\nprint(result)\nprint(elapsed)\n"
+      },
+      "error": "Command '['/Users/zhuanglinsheng/Documents/Github/tapas/build-release/bin/tapas', '/var/folders/7g/nxmw_wbs1nsfwhdcb7s3zrtc0000gn/T/tapas-idiomatic-7w229vta/longest_common_subsequence_lcs_scalar_iter_candidate.tap']' returned non-zero exit status 255.",
+      "stdout": "",
+      "stderr": "Compile Error: Variable Declaration in Block\n  at /private/var/folders/7g/nxmw_wbs1nsfwhdcb7s3zrtc0000gn/T/tapas-idiomatic-7w229vta/longest_common_subsequence_lcs_scalar_iter_candidate.tap\n  from: tobj_ctr_obj_create\n"
+    },
+    {
+      "name": "lcs_scalar",
+      "algorithm": "longest_common_subsequence",
+      "language": "py",
+      "sources": {
+        "baseline": "import time\n\n\ndef lcs_length(left, right):\n    previous = [0] * (len(right) + 1)\n    current = [0] * (len(right) + 1)\n\n    for ch in left:\n        current[0] = 0\n        for j, other in enumerate(right, 1):\n            if ch == other:\n                current[j] = previous[j - 1] + 1\n            elif previous[j] >= current[j - 1]:\n                current[j] = previous[j]\n            else:\n                current[j] = current[j - 1]\n        previous, current = current, previous\n    return previous[len(right)]\n\n\nleft = \"DYNAMICPROGRAMMINGALGORITHMSANDDATASTRUCTURESARECENTRALTOVIRTUALMACHINEBENCHMARKS\"\nright = \"ALGORITHMSFORDYNAMICLANGUAGESUSEPROGRAMSTRUCTUREANDRUNTIMEDATATOMEASUREPERFORMANCE\"\n\ndef bench():\n    started = time.process_time_ns()\n    result = 0\n    for _ in range(40):\n        result += lcs_length(left, right)\n    elapsed = time.process_time_ns() - started\n\n    print(result)\n    print(elapsed)\n\n\nif __name__ == \"__main__\":\n    bench()\n",
+        "candidate": "import time\n\n\ndef lcs_length(left, right):\n    previous = [0] * (len(right) + 1)\n    current = [0] * (len(right) + 1)\n\n    for ch in left:\n        current[0] = 0\n        diagonal = preceding = 0\n        for j, other in enumerate(right, 1):\n            above = previous[j]\n            if ch == other:\n                preceding = diagonal + 1\n            elif above > preceding:\n                preceding = above\n            current[j] = preceding\n            diagonal = above\n        previous, current = current, previous\n    return previous[len(right)]\n\n\nleft = \"DYNAMICPROGRAMMINGALGORITHMSANDDATASTRUCTURESARECENTRALTOVIRTUALMACHINEBENCHMARKS\"\nright = \"ALGORITHMSFORDYNAMICLANGUAGESUSEPROGRAMSTRUCTUREANDRUNTIMEDATATOMEASUREPERFORMANCE\"\n\ndef bench():\n    started = time.process_time_ns()\n    result = 0\n    for _ in range(40):\n        result += lcs_length(left, right)\n    elapsed = time.process_time_ns() - started\n\n    print(result)\n    print(elapsed)\n\n\nif __name__ == \"__main__\":\n    bench()\n"
+      },
+      "checksum": 1480,
+      "rounds": [
+        {
+          "samples_ns": {
+            "baseline": [
+              10406000,
+              10833000,
+              10431000,
+              10413000,
+              10473000
+            ],
+            "candidate": [
+              9407000,
+              9454000,
+              9501000,
+              9599000,
+              9515000
+            ]
+          },
+          "baseline_median_ns": 10431000,
+          "candidate_median_ns": 9501000,
+          "paired_ratio_median": 0.9085266876730641,
+          "paired_ratio_iqr": [
+            0.8883507345695352,
+            0.9163355820489537
+          ]
+        },
+        {
+          "samples_ns": {
+            "baseline": [
+              10366000,
+              10449000,
+              10449000,
+              10410000,
+              10460000
+            ],
+            "candidate": [
+              9324000,
+              9353000,
+              9505000,
+              9454000,
+              9486000
+            ]
+          },
+          "baseline_median_ns": 10449000,
+          "candidate_median_ns": 9454000,
+          "paired_ratio_median": 0.9068833652007648,
+          "paired_ratio_iqr": [
+            0.8972943230209955,
+            0.9089108260983843
+          ]
+        }
+      ],
+      "round_ratio_medians": [
+        0.9085266876730641,
+        0.9068833652007648
+      ],
+      "samples_ns": {
+        "baseline": [
+          10406000,
+          10833000,
+          10431000,
+          10413000,
+          10473000,
+          10366000,
+          10449000,
+          10449000,
+          10410000,
+          10460000
+        ],
+        "candidate": [
+          9407000,
+          9454000,
+          9501000,
+          9599000,
+          9515000,
+          9324000,
+          9353000,
+          9505000,
+          9454000,
+          9486000
+        ]
+      },
+      "baseline_median_ns": 10440000,
+      "candidate_median_ns": 9470000,
+      "paired_ratio_median": 0.9075242954726206,
+      "paired_ratio_iqr": [
+        0.8983866945994424,
+        0.9099529899571368
+      ]
+    },
+    {
+      "name": "sieve_for_bound",
+      "algorithm": "sieve",
+      "language": "tap",
+      "sources": {
+        "baseline": "function primes_up_to(limit)\n{\n    let is_prime = replicate([true], limit + 1)\n    is_prime[0] = false\n    is_prime[1] = false\n\n    let candidate = 2\n    while (candidate * candidate <= limit) {\n        if (is_prime[candidate]) {\n            fill(is_prime, false, iter(candidate * candidate, candidate, limit + 1))\n        }\n        candidate = candidate + 1\n    }\n\n    return count(is_prime, true)\n}\n\nlet started = clock_ns()\nlet result = primes_up_to(20000)\n\nlet elapsed = clock_ns() - started\nprint(result)\nprint(elapsed)\n",
+        "candidate": "function primes_up_to(limit)\n{\n    let is_prime = replicate([true], limit + 1)\n    is_prime[0] = false\n    is_prime[1] = false\n\n    for (let candidate in 2 to (int(math::sqrt(limit)) + 1)) {\n        if (is_prime[candidate]) {\n            fill(is_prime, false, iter(candidate * candidate, candidate, limit + 1))\n        }\n    }\n\n    return count(is_prime, true)\n}\n\nlet started = clock_ns()\nlet result = primes_up_to(20000)\n\nlet elapsed = clock_ns() - started\nprint(result)\nprint(elapsed)\n"
+      },
+      "checksum": 2262,
+      "rounds": [
+        {
+          "samples_ns": {
+            "baseline": [
+              83000,
+              91000,
+              82000,
+              85000,
+              82000
+            ],
+            "candidate": [
+              79000,
+              78000,
+              79000,
+              81000,
+              99000
+            ]
+          },
+          "baseline_median_ns": 83000,
+          "candidate_median_ns": 79000,
+          "paired_ratio_median": 0.9529411764705882,
+          "paired_ratio_iqr": [
+            0.9044750430292599,
+            1.0853658536585367
+          ]
+        },
+        {
+          "samples_ns": {
+            "baseline": [
+              87000,
+              79000,
+              95000,
+              83000,
+              85000
+            ],
+            "candidate": [
+              84000,
+              80000,
+              86000,
+              85000,
+              89000
+            ]
+          },
+          "baseline_median_ns": 85000,
+          "candidate_median_ns": 85000,
+          "paired_ratio_median": 1.0126582278481013,
+          "paired_ratio_iqr": [
+            0.9353901996370236,
+            1.0355776045357903
+          ]
+        }
+      ],
+      "round_ratio_medians": [
+        0.9529411764705882,
+        1.0126582278481013
+      ],
+      "samples_ns": {
+        "baseline": [
+          83000,
+          91000,
+          82000,
+          85000,
+          82000,
+          87000,
+          79000,
+          95000,
+          83000,
+          85000
+        ],
+        "candidate": [
+          79000,
+          78000,
+          79000,
+          81000,
+          99000,
+          84000,
+          80000,
+          86000,
+          85000,
+          89000
+        ]
+      },
+      "baseline_median_ns": 84000,
+      "candidate_median_ns": 82500,
+      "paired_ratio_median": 0.964465937762826,
+      "paired_ratio_iqr": [
+        0.9401712111604312,
+        1.0298369950389794
+      ]
+    },
+    {
+      "name": "dijkstra_direct_iteration",
+      "algorithm": "dijkstra",
+      "language": "tap",
+      "sources": {
+        "baseline": "function distance_less(a, b)\n{\n    return a[0] < b[0]\n}\n\nfunction dijkstra(graph, source, size)\n{\n    let dist = replicate([1000000000000], size)\n    dist[source] = 0\n    let queue = [[0, source]]\n    while (len(queue) > 0) {\n        let current = heap::pop(queue, distance_less)\n        let distance = current[0]\n        let vertex = current[1]\n        if (distance == dist[vertex] and vertex in graph) {\n            for (let edge in graph[vertex]) {\n                let target = edge[0]\n                let alt = distance + edge[1]\n                if (alt < dist[target]) {\n                    dist[target] = alt\n                    heap::push(queue, [alt, target], distance_less)\n                }\n            }\n        }\n    }\n    return copy(dist)\n}\n\nlet size = 250\nlet degree = 6\nlet graph = {}\nfor (let i in 0 to size) {\n    let edges = []\n    edges.append([(i + 1) % size, 1])\n    for (let k in 0 to degree) {\n        let j = (i * 7 + k * 13 + 3) % size\n        let w = (i * 5 + k * 11 + 7) % 19 + 1\n        edges.append([j, w])\n    }\n    graph[i] = edges\n}\nlet sources = [0, size / 4, size / 2, size * 3 / 4]\nlet rounds = 4\n\nlet started = clock_ns()\nvar checksum = 0\nfor (let round in 0 to rounds) {\n    for (let s in 0 to len(sources)) {\n        let dist = dijkstra(graph, sources[s], size)\n        for (let i in 0 to size) {\n            checksum = checksum + dist[i]\n        }\n    }\n}\nlet elapsed = clock_ns() - started\n\nprint(checksum)\nprint(elapsed)\n",
+        "candidate": "function distance_less(a, b)\n{\n    return a[0] < b[0]\n}\n\nfunction dijkstra(graph, source, size)\n{\n    let dist = replicate([1000000000000], size)\n    dist[source] = 0\n    let queue = [[0, source]]\n    while (len(queue) > 0) {\n        let current = heap::pop(queue, distance_less)\n        let distance = current[0]\n        let vertex = current[1]\n        if (distance == dist[vertex] and vertex in graph) {\n            for (let edge in graph[vertex]) {\n                let target = edge[0]\n                let alt = distance + edge[1]\n                if (alt < dist[target]) {\n                    dist[target] = alt\n                    heap::push(queue, [alt, target], distance_less)\n                }\n            }\n        }\n    }\n    return copy(dist)\n}\n\nlet size = 250\nlet degree = 6\nlet graph = {}\nfor (let i in 0 to size) {\n    let edges = []\n    edges.append([(i + 1) % size, 1])\n    for (let k in 0 to degree) {\n        let j = (i * 7 + k * 13 + 3) % size\n        let w = (i * 5 + k * 11 + 7) % 19 + 1\n        edges.append([j, w])\n    }\n    graph[i] = edges\n}\nlet sources = [0, size / 4, size / 2, size * 3 / 4]\nlet rounds = 4\n\nlet started = clock_ns()\nvar checksum = 0\nfor (let round in 0 to rounds) {\n    for (let source in sources) {\n        let dist = dijkstra(graph, source, size)\n        for (let distance in dist) {\n            checksum = checksum + distance\n        }\n    }\n}\nlet elapsed = clock_ns() - started\n\nprint(checksum)\nprint(elapsed)\n"
+      },
+      "checksum": 40796,
+      "rounds": [
+        {
+          "samples_ns": {
+            "baseline": [
+              7225000,
+              6794000,
+              6958000,
+              7163000,
+              6821000
+            ],
+            "candidate": [
+              7144000,
+              6961000,
+              6893000,
+              6786000,
+              6793000
+            ]
+          },
+          "baseline_median_ns": 6958000,
+          "candidate_median_ns": 6893000,
+          "paired_ratio_median": 0.9906582351250359,
+          "paired_ratio_iqr": [
+            0.9680786741941358,
+            1.010237771135453
+          ]
+        },
+        {
+          "samples_ns": {
+            "baseline": [
+              7289000,
+              7195000,
+              7117000,
+              6959000,
+              7039000
+            ],
+            "candidate": [
+              7261000,
+              6948000,
+              7018000,
+              6979000,
+              6857000
+            ]
+          },
+          "baseline_median_ns": 7117000,
+          "candidate_median_ns": 6979000,
+          "paired_ratio_median": 0.9860896445131375,
+          "paired_ratio_iqr": [
+            0.969907329569861,
+            0.9995162856446823
+          ]
+        }
+      ],
+      "round_ratio_medians": [
+        0.9906582351250359,
+        0.9860896445131375
+      ],
+      "samples_ns": {
+        "baseline": [
+          7225000,
+          6794000,
+          6958000,
+          7163000,
+          6821000,
+          7289000,
+          7195000,
+          7117000,
+          6959000,
+          7039000
+        ],
+        "candidate": [
+          7144000,
+          6961000,
+          6893000,
+          6786000,
+          6793000,
+          7261000,
+          6948000,
+          7018000,
+          6979000,
+          6857000
+        ]
+      },
+      "baseline_median_ns": 7078000,
+      "candidate_median_ns": 6954500,
+      "paired_ratio_median": 0.989723581230338,
+      "paired_ratio_iqr": [
+        0.9720256920615323,
+        0.9978374403940244
+      ]
+    },
+    {
+      "name": "dijkstra_lookup",
+      "algorithm": "dijkstra",
+      "language": "tap",
+      "sources": {
+        "baseline": "function distance_less(a, b)\n{\n    return a[0] < b[0]\n}\n\nfunction dijkstra(graph, source, size)\n{\n    let dist = replicate([1000000000000], size)\n    dist[source] = 0\n    let queue = [[0, source]]\n    while (len(queue) > 0) {\n        let current = heap::pop(queue, distance_less)\n        let distance = current[0]\n        let vertex = current[1]\n        if (distance == dist[vertex] and vertex in graph) {\n            for (let edge in graph[vertex]) {\n                let target = edge[0]\n                let alt = distance + edge[1]\n                if (alt < dist[target]) {\n                    dist[target] = alt\n                    heap::push(queue, [alt, target], distance_less)\n                }\n            }\n        }\n    }\n    return copy(dist)\n}\n\nlet size = 250\nlet degree = 6\nlet graph = {}\nfor (let i in 0 to size) {\n    let edges = []\n    edges.append([(i + 1) % size, 1])\n    for (let k in 0 to degree) {\n        let j = (i * 7 + k * 13 + 3) % size\n        let w = (i * 5 + k * 11 + 7) % 19 + 1\n        edges.append([j, w])\n    }\n    graph[i] = edges\n}\nlet sources = [0, size / 4, size / 2, size * 3 / 4]\nlet rounds = 4\n\nlet started = clock_ns()\nvar checksum = 0\nfor (let round in 0 to rounds) {\n    for (let s in 0 to len(sources)) {\n        let dist = dijkstra(graph, sources[s], size)\n        for (let i in 0 to size) {\n            checksum = checksum + dist[i]\n        }\n    }\n}\nlet elapsed = clock_ns() - started\n\nprint(checksum)\nprint(elapsed)\n",
+        "candidate": "function distance_less(a, b)\n{\n    return a[0] < b[0]\n}\n\nfunction dijkstra(graph, source, size)\n{\n    let dist = replicate([1000000000000], size)\n    dist[source] = 0\n    let queue = [[0, source]]\n    while (len(queue) > 0) {\n        let current = heap::pop(queue, distance_less)\n        let distance = current[0]\n        let vertex = current[1]\n        if (distance == dist[vertex]) {\n            for (let edge in idx_or(graph, vertex, [])) {\n                let target = edge[0]\n                let alt = distance + edge[1]\n                if (alt < dist[target]) {\n                    dist[target] = alt\n                    heap::push(queue, [alt, target], distance_less)\n                }\n            }\n        }\n    }\n    return copy(dist)\n}\n\nlet size = 250\nlet degree = 6\nlet graph = {}\nfor (let i in 0 to size) {\n    let edges = []\n    edges.append([(i + 1) % size, 1])\n    for (let k in 0 to degree) {\n        let j = (i * 7 + k * 13 + 3) % size\n        let w = (i * 5 + k * 11 + 7) % 19 + 1\n        edges.append([j, w])\n    }\n    graph[i] = edges\n}\nlet sources = [0, size / 4, size / 2, size * 3 / 4]\nlet rounds = 4\n\nlet started = clock_ns()\nvar checksum = 0\nfor (let round in 0 to rounds) {\n    for (let s in 0 to len(sources)) {\n        let dist = dijkstra(graph, sources[s], size)\n        for (let i in 0 to size) {\n            checksum = checksum + dist[i]\n        }\n    }\n}\nlet elapsed = clock_ns() - started\n\nprint(checksum)\nprint(elapsed)\n"
+      },
+      "checksum": 40796,
+      "rounds": [
+        {
+          "samples_ns": {
+            "baseline": [
+              6855000,
+              6886000,
+              6916000,
+              6979000,
+              6970000
+            ],
+            "candidate": [
+              6802000,
+              6871000,
+              6899000,
+              6840000,
+              7277000
+            ]
+          },
+          "baseline_median_ns": 6916000,
+          "candidate_median_ns": 6871000,
+          "paired_ratio_median": 0.9975419317524581,
+          "paired_ratio_iqr": [
+            0.9861757618379783,
+            1.020933789099043
+          ]
+        },
+        {
+          "samples_ns": {
+            "baseline": [
+              7532000,
+              7875000,
+              7426000,
+              7269000,
+              7135000
+            ],
+            "candidate": [
+              7270000,
+              7218000,
+              7367000,
+              7346000,
+              7262000
+            ]
+          },
+          "baseline_median_ns": 7426000,
+          "candidate_median_ns": 7270000,
+          "paired_ratio_median": 0.9920549420953407,
+          "paired_ratio_iqr": [
+            0.9408932554434413,
+            1.01419625420677
+          ]
+        }
+      ],
+      "round_ratio_medians": [
+        0.9975419317524581,
+        0.9920549420953407
+      ],
+      "samples_ns": {
+        "baseline": [
+          6855000,
+          6886000,
+          6916000,
+          6979000,
+          6970000,
+          7532000,
+          7875000,
+          7426000,
+          7269000,
+          7135000
+        ],
+        "candidate": [
+          6802000,
+          6871000,
+          6899000,
+          6840000,
+          7277000,
+          7270000,
+          7218000,
+          7367000,
+          7346000,
+          7262000
+        ]
+      },
+      "baseline_median_ns": 7057000,
+      "candidate_median_ns": 7240000,
+      "paired_ratio_median": 0.9949051744830854,
+      "paired_ratio_iqr": [
+        0.9763661004255464,
+        1.0123945915414094
+      ]
+    },
+    {
+      "name": "merge_cached_lengths",
+      "algorithm": "merge_sort",
+      "language": "tap",
+      "sources": {
+        "baseline": "function merge_sort(values)\n{\n    if (values.len() <= 1) {\n        return values.copy()\n    }\n\n    let middle = values.len() / 2\n    let left = this(values[:middle])\n    let right = this(values[middle:])\n    let merged = []\n    let i = 0\n    let j = 0\n\n    while (i < left.len() and j < right.len()) {\n        if (left[i] <= right[j]) {\n            merged.append(left[i])\n            i = i + 1\n        } else {\n            merged.append(right[j])\n            j = j + 1\n        }\n    }\n    while (i < left.len()) {\n        merged.append(left[i])\n        i = i + 1\n    }\n    while (j < right.len()) {\n        merged.append(right[j])\n        j = j + 1\n    }\n    return merged.copy()\n}\n\nlet values = []\nfor (let index in 0 to 4096) {\n    values.append((index * 73 + 19) % 1009)\n}\n\nlet started = clock_ns()\nlet sorted = merge_sort(values)\nlet checksum = 0\nfor (let index in 0 to sorted.len()) {\n    checksum = checksum + sorted[index] * (index + 1)\n}\nlet elapsed = clock_ns() - started\n\nprint(checksum)\nprint(elapsed)\n",
+        "candidate": "function merge_sort(values)\n{\n    if (values.len() <= 1) {\n        return values.copy()\n    }\n\n    let middle = values.len() / 2\n    let left = this(values[:middle])\n    let right = this(values[middle:])\n    let left_size = left.len()\n    let right_size = right.len()\n    let merged = []\n    let i = 0\n    let j = 0\n\n    while (i < left_size and j < right_size) {\n        if (left[i] <= right[j]) {\n            merged.append(left[i])\n            i = i + 1\n        } else {\n            merged.append(right[j])\n            j = j + 1\n        }\n    }\n    while (i < left_size) {\n        merged.append(left[i])\n        i = i + 1\n    }\n    while (j < right_size) {\n        merged.append(right[j])\n        j = j + 1\n    }\n    return merged.copy()\n}\n\nlet values = []\nfor (let index in 0 to 4096) {\n    values.append((index * 73 + 19) % 1009)\n}\n\nlet started = clock_ns()\nlet sorted = merge_sort(values)\nlet checksum = 0\nfor (let index in 0 to sorted.len()) {\n    checksum = checksum + sorted[index] * (index + 1)\n}\nlet elapsed = clock_ns() - started\n\nprint(checksum)\nprint(elapsed)\n"
+      },
+      "checksum": 5638402144,
+      "rounds": [
+        {
+          "samples_ns": {
+            "baseline": [
+              4847000,
+              4820000,
+              4826000,
+              7819000,
+              5129000
+            ],
+            "candidate": [
+              4329000,
+              4218000,
+              4084000,
+              4222000,
+              4551000
+            ]
+          },
+          "baseline_median_ns": 4847000,
+          "candidate_median_ns": 4222000,
+          "paired_ratio_median": 0.875103734439834,
+          "paired_ratio_iqr": [
+            0.693108114819295,
+            0.8902186191674641
+          ]
+        },
+        {
+          "samples_ns": {
+            "baseline": [
+              4858000,
+              4757000,
+              4801000,
+              4969000,
+              4670000
+            ],
+            "candidate": [
+              4292000,
+              4260000,
+              4194000,
+              4163000,
+              4192000
+            ]
+          },
+          "baseline_median_ns": 4801000,
+          "candidate_median_ns": 4194000,
+          "paired_ratio_median": 0.8834911486208317,
+          "paired_ratio_iqr": [
+            0.855681165739562,
+            0.8965834638371313
+          ]
+        }
+      ],
+      "round_ratio_medians": [
+        0.875103734439834,
+        0.8834911486208317
+      ],
+      "samples_ns": {
+        "baseline": [
+          4847000,
+          4820000,
+          4826000,
+          7819000,
+          5129000,
+          4858000,
+          4757000,
+          4801000,
+          4969000,
+          4670000
+        ],
+        "candidate": [
+          4329000,
+          4218000,
+          4084000,
+          4222000,
+          4551000,
+          4292000,
+          4260000,
+          4194000,
+          4163000,
+          4192000
+        ]
+      },
+      "baseline_median_ns": 4836500,
+      "candidate_median_ns": 4220000,
+      "paired_ratio_median": 0.8792974415303328,
+      "paired_ratio_iqr": [
+        0.8441356926829475,
+        0.8937279252592002
+      ]
+    },
+    {
+      "name": "merge_bulk_tail",
+      "algorithm": "merge_sort",
+      "language": "tap",
+      "sources": {
+        "baseline": "function merge_sort(values)\n{\n    if (values.len() <= 1) {\n        return values.copy()\n    }\n\n    let middle = values.len() / 2\n    let left = this(values[:middle])\n    let right = this(values[middle:])\n    let merged = []\n    let i = 0\n    let j = 0\n\n    while (i < left.len() and j < right.len()) {\n        if (left[i] <= right[j]) {\n            merged.append(left[i])\n            i = i + 1\n        } else {\n            merged.append(right[j])\n            j = j + 1\n        }\n    }\n    while (i < left.len()) {\n        merged.append(left[i])\n        i = i + 1\n    }\n    while (j < right.len()) {\n        merged.append(right[j])\n        j = j + 1\n    }\n    return merged.copy()\n}\n\nlet values = []\nfor (let index in 0 to 4096) {\n    values.append((index * 73 + 19) % 1009)\n}\n\nlet started = clock_ns()\nlet sorted = merge_sort(values)\nlet checksum = 0\nfor (let index in 0 to sorted.len()) {\n    checksum = checksum + sorted[index] * (index + 1)\n}\nlet elapsed = clock_ns() - started\n\nprint(checksum)\nprint(elapsed)\n",
+        "candidate": "function merge_sort(values)\n{\n    if (values.len() <= 1) {\n        return values.copy()\n    }\n\n    let middle = values.len() / 2\n    let left = this(values[:middle])\n    let right = this(values[middle:])\n    let left_size = left.len()\n    let right_size = right.len()\n    let merged = []\n    let i = 0\n    let j = 0\n\n    while (i < left_size and j < right_size) {\n        if (left[i] <= right[j]) {\n            merged.append(left[i])\n            i = i + 1\n        } else {\n            merged.append(right[j])\n            j = j + 1\n        }\n    }\n    if (i < left_size) {\n        return concat(merged, left[i:])\n    }\n    return concat(merged, right[j:])\n}\n\nlet values = []\nfor (let index in 0 to 4096) {\n    values.append((index * 73 + 19) % 1009)\n}\n\nlet started = clock_ns()\nlet sorted = merge_sort(values)\nlet checksum = 0\nfor (let index in 0 to sorted.len()) {\n    checksum = checksum + sorted[index] * (index + 1)\n}\nlet elapsed = clock_ns() - started\n\nprint(checksum)\nprint(elapsed)\n"
+      },
+      "checksum": 5638402144,
+      "rounds": [
+        {
+          "samples_ns": {
+            "baseline": [
+              4827000,
+              4649000,
+              4720000,
+              4891000,
+              5127000
+            ],
+            "candidate": [
+              4321000,
+              4281000,
+              4337000,
+              4506000,
+              4465000
+            ]
+          },
+          "baseline_median_ns": 4827000,
+          "candidate_median_ns": 4337000,
+          "paired_ratio_median": 0.9188559322033898,
+          "paired_ratio_iqr": [
+            0.8830263210052001,
+            0.9210635915441019
+          ]
+        },
+        {
+          "samples_ns": {
+            "baseline": [
+              4973000,
+              5119000,
+              4806000,
+              5019000,
+              4673000
+            ],
+            "candidate": [
+              4360000,
+              4403000,
+              4468000,
+              4320000,
+              4303000
+            ]
+          },
+          "baseline_median_ns": 4973000,
+          "candidate_median_ns": 4360000,
+          "paired_ratio_median": 0.8767343655741001,
+          "paired_ratio_iqr": [
+            0.8604290801809931,
+            0.9252464930998319
+          ]
+        }
+      ],
+      "round_ratio_medians": [
+        0.9188559322033898,
+        0.8767343655741001
+      ],
+      "samples_ns": {
+        "baseline": [
+          4827000,
+          4649000,
+          4720000,
+          4891000,
+          5127000,
+          4973000,
+          5119000,
+          4806000,
+          5019000,
+          4673000
+        ],
+        "candidate": [
+          4321000,
+          4281000,
+          4337000,
+          4506000,
+          4465000,
+          4360000,
+          4403000,
+          4468000,
+          4320000,
+          4303000
+        ]
+      },
+      "baseline_median_ns": 4859000,
+      "candidate_median_ns": 4348500,
+      "paired_ratio_median": 0.9070144587472304,
+      "paired_ratio_iqr": [
+        0.8683420497720131,
+        0.9209533918142105
+      ]
+    },
+    {
+      "name": "kmp_cached_length",
+      "algorithm": "kmp",
+      "language": "tap",
+      "sources": {
+        "baseline": "function kmp_search(text, pattern)\n{\n    let pi = replicate([0], pattern.len())\n    let j = 0\n    for (let i in 1 to pattern.len()) {\n        while (j > 0 and pattern[i] != pattern[j]) {\n            j = pi[j - 1]\n        }\n        if (pattern[i] == pattern[j]) {\n            j = j + 1\n        }\n        pi[i] = j\n    }\n\n    let total = 0\n    j = 0\n    for (let i in 0 to text.len()) {\n        while (j > 0 and text[i] != pattern[j]) {\n            j = pi[j - 1]\n        }\n        if (text[i] == pattern[j]) {\n            j = j + 1\n        }\n        if (j == pattern.len()) {\n            total = total + i - pattern.len() + 1\n            j = pi[j - 1]\n        }\n    }\n    return total + 0\n}\n\nlet text_parts = replicate(['ABCABABCAB'], 500)\nlet text = join(text_parts, '')\nlet pattern = 'ABCAB'\nlet rounds = 60\n\nlet started = clock_ns()\nlet result = 0\nfor (let round in 0 to rounds) {\n    result = result + kmp_search(text, pattern)\n}\nlet elapsed = clock_ns() - started\n\nprint(result)\nprint(elapsed)\n",
+        "candidate": "function kmp_search(text, pattern)\n{\n    let pattern_size = pattern.len()\n    let pi = replicate([0], pattern_size)\n    let j = 0\n    for (let i in 1 to pattern_size) {\n        while (j > 0 and pattern[i] != pattern[j]) {\n            j = pi[j - 1]\n        }\n        if (pattern[i] == pattern[j]) {\n            j = j + 1\n        }\n        pi[i] = j\n    }\n\n    let total = 0\n    j = 0\n    for (let i in 0 to text.len()) {\n        while (j > 0 and text[i] != pattern[j]) {\n            j = pi[j - 1]\n        }\n        if (text[i] == pattern[j]) {\n            j = j + 1\n        }\n        if (j == pattern_size) {\n            total = total + i - pattern_size + 1\n            j = pi[j - 1]\n        }\n    }\n    return total + 0\n}\n\nlet text_parts = replicate(['ABCABABCAB'], 500)\nlet text = join(text_parts, '')\nlet pattern = 'ABCAB'\nlet rounds = 60\n\nlet started = clock_ns()\nlet result = 0\nfor (let round in 0 to rounds) {\n    result = result + kmp_search(text, pattern)\n}\nlet elapsed = clock_ns() - started\n\nprint(result)\nprint(elapsed)\n"
+      },
+      "checksum": 149850000,
+      "rounds": [
+        {
+          "samples_ns": {
+            "baseline": [
+              20704000,
+              20588000,
+              21157000,
+              21324000,
+              21785000
+            ],
+            "candidate": [
+              17328000,
+              17136000,
+              17905000,
+              17834000,
+              17653000
+            ]
+          },
+          "baseline_median_ns": 21157000,
+          "candidate_median_ns": 17653000,
+          "paired_ratio_median": 0.8363346464078034,
+          "paired_ratio_iqr": [
+            0.8213288599097481,
+            0.8416158645831682
+          ]
+        },
+        {
+          "samples_ns": {
+            "baseline": [
+              22649000,
+              22680000,
+              21298000,
+              21334000,
+              21507000
+            ],
+            "candidate": [
+              17418000,
+              18380000,
+              18689000,
+              17967000,
+              17866000
+            ]
+          },
+          "baseline_median_ns": 21507000,
+          "candidate_median_ns": 17967000,
+          "paired_ratio_median": 0.8307062816757335,
+          "paired_ratio_iqr": [
+            0.7897231097409178,
+            0.8598385208693048
+          ]
+        }
+      ],
+      "round_ratio_medians": [
+        0.8363346464078034,
+        0.8307062816757335
+      ],
+      "samples_ns": {
+        "baseline": [
+          20704000,
+          20588000,
+          21157000,
+          21324000,
+          21785000,
+          22649000,
+          22680000,
+          21298000,
+          21334000,
+          21507000
+        ],
+        "candidate": [
+          17328000,
+          17136000,
+          17905000,
+          17834000,
+          17653000,
+          17418000,
+          18380000,
+          18689000,
+          17967000,
+          17866000
+        ]
+      },
+      "baseline_median_ns": 21329000,
+      "candidate_median_ns": 17850000,
+      "paired_ratio_median": 0.8343320793725436,
+      "paired_ratio_iqr": [
+        0.8103862846747859,
+        0.843205607074448
+      ]
+    },
+    {
+      "name": "matrix_transpose",
+      "algorithm": "matrix_multiply",
+      "language": "tap",
+      "sources": {
+        "baseline": "function multiply_checksum(left, right, size)\n{\n    let result = array(size, size, 0)\n    for (let row in 0 to size) {\n        for (let column in 0 to size) {\n            let total = 0\n            for (let inner in 0 to size) {\n                total = total + left[row, inner] * right[inner, column]\n            }\n            result[row, column] = total\n        }\n    }\n\n    let checksum = 0\n    for (let row in 0 to size) {\n        for (let column in 0 to size) {\n            checksum = checksum + result[row, column] * (row + column + 1)\n        }\n    }\n    return int(checksum)\n}\n\nlet size = 48\nlet left = array(size, size, 0)\nlet right = array(size, size, 0)\nfor (let row in 0 to size) {\n    for (let column in 0 to size) {\n        left[row, column] = (row * 17 + column * 11 + 3) % 23\n        right[row, column] = (row * 7 + column * 19 + 5) % 29\n    }\n}\n\nlet started = clock_ns()\nlet result = multiply_checksum(left, right, size)\nlet elapsed = clock_ns() - started\n\nprint(result)\nprint(elapsed)\n",
+        "candidate": "function multiply_checksum(left, right, size)\n{\n    let transposed = dense::transpose(right)\n    let result = array(size, size, 0)\n    for (let row in 0 to size) {\n        for (let column in 0 to size) {\n            let total = 0\n            for (let inner in 0 to size) {\n                total = total + left[row, inner] * transposed[column, inner]\n            }\n            result[row, column] = total\n        }\n    }\n\n    let checksum = 0\n    for (let row in 0 to size) {\n        for (let column in 0 to size) {\n            checksum = checksum + result[row, column] * (row + column + 1)\n        }\n    }\n    return int(checksum)\n}\n\nlet size = 48\nlet left = array(size, size, 0)\nlet right = array(size, size, 0)\nfor (let row in 0 to size) {\n    for (let column in 0 to size) {\n        left[row, column] = (row * 17 + column * 11 + 3) % 23\n        right[row, column] = (row * 7 + column * 19 + 5) % 29\n    }\n}\n\nlet started = clock_ns()\nlet result = multiply_checksum(left, right, size)\nlet elapsed = clock_ns() - started\n\nprint(result)\nprint(elapsed)\n"
+      },
+      "checksum": 817318963,
+      "rounds": [
+        {
+          "samples_ns": {
+            "baseline": [
+              3247000,
+              3118000,
+              3034000,
+              3054000,
+              3046000
+            ],
+            "candidate": [
+              3090000,
+              3113000,
+              3028000,
+              3041000,
+              3111000
+            ]
+          },
+          "baseline_median_ns": 3054000,
+          "candidate_median_ns": 3090000,
+          "paired_ratio_median": 0.998022412656559,
+          "paired_ratio_iqr": [
+            0.9736954811342655,
+            1.0098679347713928
+          ]
+        },
+        {
+          "samples_ns": {
+            "baseline": [
+              3130000,
+              3053000,
+              3105000,
+              3101000,
+              3110000
+            ],
+            "candidate": [
+              3146000,
+              3014000,
+              3039000,
+              3022000,
+              3071000
+            ]
+          },
+          "baseline_median_ns": 3105000,
+          "candidate_median_ns": 3039000,
+          "paired_ratio_median": 0.9872256796593515,
+          "paired_ratio_iqr": [
+            0.9766341541687502,
+            0.9962858140801085
+          ]
+        }
+      ],
+      "round_ratio_medians": [
+        0.998022412656559,
+        0.9872256796593515
+      ],
+      "samples_ns": {
+        "baseline": [
+          3247000,
+          3118000,
+          3034000,
+          3054000,
+          3046000,
+          3130000,
+          3053000,
+          3105000,
+          3101000,
+          3110000
+        ],
+        "candidate": [
+          3090000,
+          3113000,
+          3028000,
+          3041000,
+          3111000,
+          3146000,
+          3014000,
+          3039000,
+          3022000,
+          3071000
+        ]
+      },
+      "baseline_median_ns": 3103000,
+      "candidate_median_ns": 3056000,
+      "paired_ratio_median": 0.9916015472828845,
+      "paired_ratio_iqr": [
+        0.9776890577607037,
+        1.000075261236928
+      ]
+    },
+    {
+      "name": "kmers_single_iteration",
+      "algorithm": "k_nucleotide",
+      "language": "tap",
+      "sources": {
+        "baseline": "function count_kmers(sequence, k)\n{\n    let counts = {}\n    for (let i in 0 to (sequence.len() - k + 1)) {\n        let key = sequence[i:i + k]\n        counts[key] = idx_or(counts, key, 0) + 1\n    }\n    return counts.copy()\n}\n\nlet probes = []\nfor (let index in 0 to 4) {\n    probes.append('ACGT'[index])\n}\nfor (let a in 0 to 4) {\n    for (let b in 0 to 4) {\n        probes.append(join(['ACGT'[a], 'ACGT'[b]], ''))\n    }\n}\n\nlet parts = []\nlet seed = 42\nfor (let index in 0 to 120000) {\n    seed = (seed * 1103515245 + 12345) % 2147483648\n    parts.append('ACGT'[seed % 4])\n}\nlet sequence = join(parts, '')\n\nlet started = clock_ns()\nlet result = 0\nfor (let round in 0 to 6) {\n    let single = count_kmers(sequence, 1)\n    for (let i in 0 to 4) {\n        if (probes[i] in single) {\n            result = result + single[probes[i]]\n        }\n    }\n    let pairs = count_kmers(sequence, 2)\n    for (let i in 4 to 20) {\n        if (probes[i] in pairs) {\n            result = result + pairs[probes[i]]\n        }\n    }\n}\nlet elapsed = clock_ns() - started\n\nprint(result)\nprint(elapsed)\n",
+        "candidate": "function count_kmers(sequence, k)\n{\n    let counts = {}\n    if (k == 1) {\n        for (let key in sequence) {\n            counts[key] = idx_or(counts, key, 0) + 1\n        }\n    } else {\n        for (let i in 0 to (sequence.len() - k + 1)) {\n            let key = sequence[i:i + k]\n            counts[key] = idx_or(counts, key, 0) + 1\n        }\n    }\n    return counts.copy()\n}\n\nlet probes = []\nfor (let index in 0 to 4) {\n    probes.append('ACGT'[index])\n}\nfor (let a in 0 to 4) {\n    for (let b in 0 to 4) {\n        probes.append(join(['ACGT'[a], 'ACGT'[b]], ''))\n    }\n}\n\nlet parts = []\nlet seed = 42\nfor (let index in 0 to 120000) {\n    seed = (seed * 1103515245 + 12345) % 2147483648\n    parts.append('ACGT'[seed % 4])\n}\nlet sequence = join(parts, '')\n\nlet started = clock_ns()\nlet result = 0\nfor (let round in 0 to 6) {\n    let single = count_kmers(sequence, 1)\n    for (let i in 0 to 4) {\n        if (probes[i] in single) {\n            result = result + single[probes[i]]\n        }\n    }\n    let pairs = count_kmers(sequence, 2)\n    for (let i in 4 to 20) {\n        if (probes[i] in pairs) {\n            result = result + pairs[probes[i]]\n        }\n    }\n}\nlet elapsed = clock_ns() - started\n\nprint(result)\nprint(elapsed)\n"
+      },
+      "checksum": 1439994,
+      "rounds": [
+        {
+          "samples_ns": {
+            "baseline": [
+              109065000,
+              112083000,
+              108354000,
+              107688000,
+              108646000
+            ],
+            "candidate": [
+              96800000,
+              100714000,
+              91604000,
+              92849000,
+              90773000
+            ]
+          },
+          "baseline_median_ns": 108646000,
+          "candidate_median_ns": 92849000,
+          "paired_ratio_median": 0.8622037738652403,
+          "paired_ratio_iqr": [
+            0.8404536794674452,
+            0.8930551830761143
+          ]
+        },
+        {
+          "samples_ns": {
+            "baseline": [
+              108238000,
+              107344000,
+              110868000,
+              107851000,
+              109111000
+            ],
+            "candidate": [
+              91737000,
+              90328000,
+              91213000,
+              90879000,
+              90715000
+            ]
+          },
+          "baseline_median_ns": 108238000,
+          "candidate_median_ns": 90879000,
+          "paired_ratio_median": 0.8414815918914891,
+          "paired_ratio_iqr": [
+            0.8270590776661825,
+            0.8450918330287646
+          ]
+        }
+      ],
+      "round_ratio_medians": [
+        0.8622037738652403,
+        0.8414815918914891
+      ],
+      "samples_ns": {
+        "baseline": [
+          109065000,
+          112083000,
+          108354000,
+          107688000,
+          108646000,
+          108238000,
+          107344000,
+          110868000,
+          107851000,
+          109111000
+        ],
+        "candidate": [
+          96800000,
+          100714000,
+          91604000,
+          92849000,
+          90773000,
+          91737000,
+          90328000,
+          91213000,
+          90879000,
+          90715000
+        ]
+      },
+      "baseline_median_ns": 108500000,
+      "candidate_median_ns": 91408500,
+      "paired_ratio_median": 0.8440244258508255,
+      "paired_ratio_iqr": [
+        0.8344702025652289,
+        0.8685388616646892
+      ]
+    },
+    {
+      "name": "queens_reuse_locals",
+      "algorithm": "n_queens",
+      "language": "tap",
+      "sources": {
+        "baseline": "function count_queens(positions, row, size)\n{\n    if (row == size) {\n        return 1\n    }\n\n    let count = 0\n    for (let column in 0 to size) {\n        let valid = true\n        for (let previous in 0 to row) {\n            let placed = positions[previous]\n            let distance = row - previous\n            if (placed == column or placed == column - distance or placed == column + distance) {\n                valid = false\n                break\n            }\n        }\n        if (valid) {\n            positions[row] = column\n            count = count + this(positions, row + 1, size)\n        }\n    }\n    return count + 0\n}\n\nlet size = 10\nlet positions = replicate([-1], size)\n\nlet started = clock_ns()\nlet result = count_queens(positions, 0, size)\nlet elapsed = clock_ns() - started\n\nprint(result)\nprint(elapsed)\n",
+        "candidate": "function count_queens(positions, row, size)\n{\n    if (row == size) {\n        return 1\n    }\n\n    let count = 0\n    var placed = 0\n    var distance = 0\n    for (let column in 0 to size) {\n        let valid = true\n        for (let previous in 0 to row) {\n            placed = positions[previous]\n            distance = row - previous\n            if (placed == column or placed == column - distance or placed == column + distance) {\n                valid = false\n                break\n            }\n        }\n        if (valid) {\n            positions[row] = column\n            count = count + this(positions, row + 1, size)\n        }\n    }\n    return count + 0\n}\n\nlet size = 10\nlet positions = replicate([-1], size)\n\nlet started = clock_ns()\nlet result = count_queens(positions, 0, size)\nlet elapsed = clock_ns() - started\n\nprint(result)\nprint(elapsed)\n"
+      },
+      "checksum": 724,
+      "rounds": [
+        {
+          "samples_ns": {
+            "baseline": [
+              67340000,
+              68227000,
+              69050000,
+              67690000,
+              67520000
+            ],
+            "candidate": [
+              71952000,
+              71567000,
+              73054000,
+              71444000,
+              71358000
+            ]
+          },
+          "baseline_median_ns": 67690000,
+          "candidate_median_ns": 71567000,
+          "paired_ratio_median": 1.0568424170616113,
+          "paired_ratio_iqr": [
+            1.052206467576151,
+            1.0632376172274796
+          ]
+        },
+        {
+          "samples_ns": {
+            "baseline": [
+              69122000,
+              68172000,
+              67173000,
+              67969000,
+              67248000
+            ],
+            "candidate": [
+              71041000,
+              71410000,
+              71301000,
+              71520000,
+              71892000
+            ]
+          },
+          "baseline_median_ns": 67969000,
+          "candidate_median_ns": 71410000,
+          "paired_ratio_median": 1.0522444055378186,
+          "paired_ratio_iqr": [
+            1.0376300065897412,
+            1.0652555391586764
+          ]
+        }
+      ],
+      "round_ratio_medians": [
+        1.0568424170616113,
+        1.0522444055378186
+      ],
+      "samples_ns": {
+        "baseline": [
+          67340000,
+          68227000,
+          69050000,
+          67690000,
+          67520000,
+          69122000,
+          68172000,
+          67173000,
+          67969000,
+          67248000
+        ],
+        "candidate": [
+          71952000,
+          71567000,
+          73054000,
+          71444000,
+          71358000,
+          71041000,
+          71410000,
+          71301000,
+          71520000,
+          71892000
+        ]
+      },
+      "baseline_median_ns": 67829500,
+      "candidate_median_ns": 71482000,
+      "paired_ratio_median": 1.0561505629406152,
+      "paired_ratio_iqr": [
+        1.0485900463264066,
+        1.0632120139757135
+      ]
+    }
+  ]
+}

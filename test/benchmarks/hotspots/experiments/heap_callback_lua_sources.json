@@ -1,0 +1,175 @@
+{
+  "sources": {
+    "baseline": "local function less(a, b) return a[1] < b[1] end\nlocal function sift_down(queue, parent, size)\n    while parent * 2 <= size do\n        local child = parent * 2\n        if child < size and less(queue[child + 1], queue[child]) then child = child + 1 end\n        if not less(queue[child], queue[parent]) then break end\n        queue[parent], queue[child] = queue[child], queue[parent]\n        parent = child\n    end\nend\nlocal function pop(queue)\n    local result = queue[1]\n    local replacement = table.remove(queue)\n    if #queue > 0 then\n        local parent, start = 1, 1\n        queue[1] = replacement\n        while parent * 2 <= #queue do\n            local child = parent * 2\n            if child < #queue and less(queue[child + 1], queue[child]) then child = child + 1 end\n            queue[parent], queue[child] = queue[child], queue[parent]\n            parent = child\n        end\n        while parent > start do\n            local previous = parent // 2\n            if not less(queue[parent], queue[previous]) then break end\n            queue[parent], queue[previous] = queue[previous], queue[parent]\n            parent = previous\n        end\n    end\n    return result\nend\nlocal function bench(repetitions, values)\n    local started = os.clock()\n    local checksum = 0\n    for _ = 1, repetitions do\n        local queue = table.move(values, 1, #values, 1, {})\n        for parent = #queue // 2, 1, -1 do sift_down(queue, parent, #queue) end\n        for position = 1, #values do checksum = checksum + pop(queue)[1] * position end\n    end\n    local elapsed = math.floor((os.clock() - started) * 1e9 + 0.5)\n    print(checksum)\n    print(elapsed)\nend\nlocal values = {}\nfor i = 0, 255 do values[#values + 1] = {(i * 73 + 19) % 1009 - 500, i} end\nbench(64, values)\n",
+    "candidate": "local function less(a, b) return a[1] < b[1] end\nlocal function sift_down(queue, parent, size)\n    local replacement = queue[parent]\n    while parent * 2 <= size do\n        local child = parent * 2\n        if child < size and less(queue[child + 1], queue[child]) then child = child + 1 end\n        if not less(queue[child], replacement) then break end\n        queue[parent] = queue[child]\n        parent = child\n    end\n    queue[parent] = replacement\nend\nlocal function pop(queue)\n    local result = queue[1]\n    local replacement = table.remove(queue)\n    local size = #queue\n    if size > 0 then\n        local parent = 1\n        while parent * 2 <= size do\n            local child = parent * 2\n            if child < size and less(queue[child + 1], queue[child]) then child = child + 1 end\n            queue[parent] = queue[child]\n            parent = child\n        end\n        while parent > 1 do\n            local previous = parent // 2\n            if not less(replacement, queue[previous]) then break end\n            queue[parent] = queue[previous]\n            parent = previous\n        end\n        queue[parent] = replacement\n    end\n    return result\nend\nlocal function bench(repetitions, values)\n    local started = os.clock()\n    local checksum = 0\n    for _ = 1, repetitions do\n        local queue = table.move(values, 1, #values, 1, {})\n        for parent = #queue // 2, 1, -1 do sift_down(queue, parent, #queue) end\n        for position = 1, #values do checksum = checksum + pop(queue)[1] * position end\n    end\n    local elapsed = math.floor((os.clock() - started) * 1e9 + 0.5)\n    print(checksum)\n    print(elapsed)\nend\nlocal values = {}\nfor i = 0, 255 do values[#values + 1] = {(i * 73 + 19) % 1009 - 500, i} end\nbench(64, values)\n"
+  },
+  "checksum": 348023040,
+  "rounds": [
+    {
+      "samples_ns": {
+        "baseline": [
+          9656000,
+          9784000,
+          9636000,
+          9541000,
+          9616000,
+          9433000,
+          9441000,
+          9379000,
+          9509000
+        ],
+        "candidate": [
+          8132000,
+          8146000,
+          8106000,
+          8131000,
+          8063000,
+          8003000,
+          8007000,
+          7964000,
+          8078000
+        ]
+      },
+      "baseline_median_ns": 9541000,
+      "candidate_median_ns": 8078000,
+      "paired_ratio_median": 0.848109310454401,
+      "paired_ratio_iqr": [
+        0.8398593797593468,
+        0.8493210135064215
+      ]
+    },
+    {
+      "samples_ns": {
+        "baseline": [
+          9510000,
+          9417000,
+          9349000,
+          9611000,
+          9644000,
+          9823000,
+          9775000,
+          9529000,
+          9578000
+        ],
+        "candidate": [
+          8085000,
+          8060000,
+          8107000,
+          8065000,
+          8124000,
+          8229000,
+          8224000,
+          7942000,
+          8162000
+        ]
+      },
+      "baseline_median_ns": 9578000,
+      "candidate_median_ns": 8107000,
+      "paired_ratio_median": 0.8423890501866446,
+      "paired_ratio_iqr": [
+        0.8384352153923531,
+        0.8540300544948621
+      ]
+    },
+    {
+      "samples_ns": {
+        "baseline": [
+          9554000,
+          9650000,
+          9505000,
+          9370000,
+          9521000,
+          9497000,
+          9371000,
+          9330000,
+          9501000
+        ],
+        "candidate": [
+          8170000,
+          7977000,
+          8186000,
+          8239000,
+          7994000,
+          7999000,
+          8136000,
+          8135000,
+          8019000
+        ]
+      },
+      "baseline_median_ns": 9501000,
+      "candidate_median_ns": 8135000,
+      "paired_ratio_median": 0.8551392087083944,
+      "paired_ratio_iqr": [
+        0.8409418329739273,
+        0.8700644893947176
+      ]
+    }
+  ],
+  "samples_ns": {
+    "baseline": [
+      9656000,
+      9784000,
+      9636000,
+      9541000,
+      9616000,
+      9433000,
+      9441000,
+      9379000,
+      9509000,
+      9510000,
+      9417000,
+      9349000,
+      9611000,
+      9644000,
+      9823000,
+      9775000,
+      9529000,
+      9578000,
+      9554000,
+      9650000,
+      9505000,
+      9370000,
+      9521000,
+      9497000,
+      9371000,
+      9330000,
+      9501000
+    ],
+    "candidate": [
+      8132000,
+      8146000,
+      8106000,
+      8131000,
+      8063000,
+      8003000,
+      8007000,
+      7964000,
+      8078000,
+      8085000,
+      8060000,
+      8107000,
+      8065000,
+      8124000,
+      8229000,
+      8224000,
+      7942000,
+      8162000,
+      8170000,
+      7977000,
+      8186000,
+      8239000,
+      7994000,
+      7999000,
+      8136000,
+      8135000,
+      8019000
+    ]
+  },
+  "baseline_median_ns": 9521000,
+  "candidate_median_ns": 8106000,
+  "paired_ratio_median": 0.848109310454401,
+  "paired_ratio_iqr": [
+    0.8396176872177292,
+    0.8551392087083944
+  ]
+}

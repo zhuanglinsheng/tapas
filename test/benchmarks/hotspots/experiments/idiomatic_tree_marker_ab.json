@@ -1,0 +1,228 @@
+{
+  "date": "2026-10-17T11:52:45.116293+00:00",
+  "runtime": {
+    "path": "/Users/zhuanglinsheng/Documents/Github/tapas/build-release/bin/tapas",
+    "sha256": "80d8465438372b58270f8201cdc5cd9cfc244cee0b5d50ba5ff1da75470072c4",
+    "version": "Tapas 0.1.0 Copyright (C) 2020-2026",
+    "build_config": [
+      "CMAKE_BUILD_TYPE:STRING=Release",
+      "CMAKE_C_COMPILER:FILEPATH=/usr/bin/cc",
+      "CMAKE_C_FLAGS:STRING=",
+      "CMAKE_C_FLAGS_RELEASE:STRING=-O3 -DNDEBUG",
+      "CMAKE_EXE_LINKER_FLAGS:STRING=",
+      "TAPAS_ENABLE_IPO:BOOL=ON"
+    ]
+  },
+  "sources": {
+    "baseline": {
+      "path": "/Users/zhuanglinsheng/Documents/Github/tapas/test/benchmarks/hotspots/tree_build.tap",
+      "sha256": "e340d8f602b0c7adeaf69512cf064c9b189e1300c180ec3e39dc3d8a85756f9c",
+      "source": "// false marks a leaf; every internal node is a fresh List.\n// Build and release fresh immutable-use trees; inspect the final full tree.\nfunction tree_size(node)\n{\n    if (node == false) { return 1 }\n    return 1 + this(node[0]) + this(node[1])\n}\n\nfunction make_tree(depth)\n{\n    if (depth == 0) {\n        return false\n    }\n    return [this(depth - 1), this(depth - 1)]\n}\n\n\nfunction bench(n)\n{\n    let started = clock_ns()\n    let result = 0\n    let tree = false\n    for (let r in 0 to n) {\n        tree = make_tree(10)\n        result = result + tree.len()\n    }\n    result = result + tree_size(tree)\n    let elapsed = clock_ns() - started\n    print(result)\n    print(elapsed)\n}\n\nbench(300)\n"
+    },
+    "candidate": {
+      "path": "/private/tmp/tapas-tree-int-marker.tap",
+      "sha256": "879e6d50d3ba57431c56e22e94bd4c8c0e0d7a892402998a55c38f38e3a16c09",
+      "source": "// 0 marks a leaf; every internal node is a fresh List.\n// Build and release fresh immutable-use trees; inspect the final full tree.\nfunction tree_size(node)\n{\n    if (node == 0) { return 1 }\n    return 1 + this(node[0]) + this(node[1])\n}\n\nfunction make_tree(depth)\n{\n    if (depth == 0) {\n        return 0\n    }\n    return [this(depth - 1), this(depth - 1)]\n}\n\n\nfunction bench(n)\n{\n    let started = clock_ns()\n    let result = 0\n    let tree = 0\n    for (let r in 0 to n) {\n        tree = make_tree(10)\n        result = result + tree.len()\n    }\n    result = result + tree_size(tree)\n    let elapsed = clock_ns() - started\n    print(result)\n    print(elapsed)\n}\n\nbench(300)\n"
+    }
+  },
+  "checksum": 2647,
+  "runs": 11,
+  "rounds": [
+    {
+      "samples_ns": {
+        "baseline": [
+          21978000,
+          21901000,
+          21921000,
+          21913000,
+          22307000,
+          22092000,
+          22418000,
+          22815000,
+          23410000,
+          22926000,
+          24169000
+        ],
+        "candidate": [
+          22556000,
+          22345000,
+          22756000,
+          22453000,
+          23250000,
+          23024000,
+          23088000,
+          23493000,
+          23762000,
+          23992000,
+          23965000
+        ]
+      },
+      "baseline_median_ns": 22307000,
+      "candidate_median_ns": 23088000,
+      "paired_ratio_median": 1.0297172912557528,
+      "paired_ratio_iqr": [
+        1.020273046892836,
+        1.04218721709216
+      ]
+    },
+    {
+      "samples_ns": {
+        "baseline": [
+          22560000,
+          23492000,
+          22326000,
+          21897000,
+          22079000,
+          21265000,
+          21527000,
+          22397000,
+          21938000,
+          22206000,
+          22765000
+        ],
+        "candidate": [
+          22457000,
+          22651000,
+          22729000,
+          23184000,
+          22926000,
+          22467000,
+          22492000,
+          23369000,
+          24541000,
+          30997000,
+          22973000
+        ]
+      },
+      "baseline_median_ns": 22206000,
+      "candidate_median_ns": 22926000,
+      "paired_ratio_median": 1.0433986694646604,
+      "paired_ratio_iqr": [
+        1.0091368328574566,
+        1.0587751746814633
+      ]
+    },
+    {
+      "samples_ns": {
+        "baseline": [
+          21884000,
+          22390000,
+          21646000,
+          21774000,
+          22082000,
+          21849000,
+          22489000,
+          22255000,
+          21806000,
+          21534000,
+          21722000
+        ],
+        "candidate": [
+          22721000,
+          22670000,
+          22460000,
+          22855000,
+          23523000,
+          22517000,
+          22547000,
+          22673000,
+          22629000,
+          22311000,
+          22740000
+        ]
+      },
+      "baseline_median_ns": 21849000,
+      "candidate_median_ns": 22670000,
+      "paired_ratio_median": 1.0376051002494686,
+      "paired_ratio_iqr": [
+        1.018782296113233,
+        1.0468649295644967
+      ]
+    }
+  ],
+  "warmups_per_round": 1,
+  "round_ratio_medians": [
+    1.0297172912557528,
+    1.0433986694646604,
+    1.0376051002494686
+  ],
+  "samples_ns": {
+    "baseline": [
+      21978000,
+      21901000,
+      21921000,
+      21913000,
+      22307000,
+      22092000,
+      22418000,
+      22815000,
+      23410000,
+      22926000,
+      24169000,
+      22560000,
+      23492000,
+      22326000,
+      21897000,
+      22079000,
+      21265000,
+      21527000,
+      22397000,
+      21938000,
+      22206000,
+      22765000,
+      21884000,
+      22390000,
+      21646000,
+      21774000,
+      22082000,
+      21849000,
+      22489000,
+      22255000,
+      21806000,
+      21534000,
+      21722000
+    ],
+    "candidate": [
+      22556000,
+      22345000,
+      22756000,
+      22453000,
+      23250000,
+      23024000,
+      23088000,
+      23493000,
+      23762000,
+      23992000,
+      23965000,
+      22457000,
+      22651000,
+      22729000,
+      23184000,
+      22926000,
+      22467000,
+      22492000,
+      23369000,
+      24541000,
+      30997000,
+      22973000,
+      22721000,
+      22670000,
+      22460000,
+      22855000,
+      23523000,
+      22517000,
+      22547000,
+      22673000,
+      22629000,
+      22311000,
+      22740000
+    ]
+  },
+  "baseline_median_ns": 22082000,
+  "candidate_median_ns": 22740000,
+  "paired_ratio_median": 1.0376051002494686,
+  "paired_ratio_iqr": [
+    1.0184164996646072,
+    1.0456624262628973
+  ]
+}

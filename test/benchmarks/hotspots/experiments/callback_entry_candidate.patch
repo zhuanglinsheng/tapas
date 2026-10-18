@@ -1,0 +1,52 @@
+diff --git a/src/runtime/tvm.c b/src/runtime/tvm.c
+index d1c17d1..1851cc8 100644
+--- a/src/runtime/tvm.c
++++ b/src/runtime/tvm.c
+@@ -1183,11 +1183,12 @@ static tcall_frame *tvm_frame_push(
+ }
+ 
+ /* Inline fast path for the steady state of hot calls: the pooled frame
+- * already serves this exact function with fixed arity. Anything else
++ * already serves this exact function with fixed arity. Native callbacks copy
++ * borrowed arguments; bytecode calls transfer their argument slots. Anything else
+  * (pool growth, prepare miss, dynamic arity, tight capacity) falls back
+  * to tvm_frame_push. */
+ static inline TVM_ALWAYS_INLINE tcall_frame *tvm_frame_push_fast(
+-	tvm *vm, tfunc *f, tobj *params, uint_regs nparams)
++	tvm *vm, tfunc *f, tobj *params, uint_regs nparams, int move_params)
+ {
+ 	if (vm->frame_len >= vm->frame_cap)
+ 		return nullptr;
+@@ -1212,7 +1213,10 @@ static inline TVM_ALWAYS_INLINE tcall_frame *tvm_frame_push_fast(
+ 		vm->loop_state_len = 0;
+ 		vm->loop_state_cap = fr->loop_state_cap;
+ 	}
+-	tvm_frame_move_params(&fr->env.base.objs, params, nparams);
++	if (move_params)
++		tvm_frame_move_params(&fr->env.base.objs, params, nparams);
++	else
++		tvm_frame_copy_params(&fr->env.base.objs, params, nparams);
+ 	fr->env.params = fr->env.base.objs.data;
+ 	fr->env.dynamic_nparams = nparams;
+ 	vm->tmps = fr->tmps;
+@@ -3222,8 +3226,10 @@ static void vm_invoke_non_tfunc(tvm *vm, tcompo_v *callable,
+ static void vm_execute_tfunc_nested(tvm *vm, tfunc *function,
+ 				    tobj *arguments, uint_regs argument_count)
+ {
+-	tcall_frame *frame = tvm_frame_push(
++	tcall_frame *frame = tvm_frame_push_fast(
+ 		vm, function, arguments, argument_count, 0);
++	if (!frame)
++		frame = tvm_frame_push(vm, function, arguments, argument_count, 0);
+ 	exec_tins(vm, function->cmdloc, function->ncmds, &frame->env);
+ 	tvm_frame_pop(vm);
+ }
+@@ -5807,7 +5813,7 @@ void exec_tins(tvm *vm, uint_cmds from, uint_cmds ncmds, tcompo_env *env)
+ 			env = &vm->frames[vm->frame_len - 1]->env;
+ 		} else {
+ 			tcall_frame *frame = tvm_frame_push_fast(
+-				vm, function, call.params, call.nparams);
++				vm, function, call.params, call.nparams, 1);
+ 			if (!frame)
+ 				frame = tvm_frame_push(
+ 					vm, function, call.params, call.nparams, 1);

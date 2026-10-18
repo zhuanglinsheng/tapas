@@ -1,0 +1,7389 @@
+{
+  "date": "2026-10-17T11:04:11.619991+00:00",
+  "system": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+  "architecture": "arm64",
+  "runs": 7,
+  "warmups": 1,
+  "rounds": 3,
+  "first": "baseline",
+  "seed": 0,
+  "round_orders": [
+    [
+      "tail_recursion",
+      "binary_trees",
+      "string_count",
+      "recursive_fibonacci",
+      "list_update",
+      "function_callbacks",
+      "fannkuch",
+      "dijkstra",
+      "function_call_baseline",
+      "list_access",
+      "lru_cache",
+      "sudoku",
+      "matrix_multiply",
+      "sieve",
+      "dict_lookup",
+      "n_body",
+      "k_nucleotide",
+      "substring_count",
+      "dict_insert",
+      "constraint_probe",
+      "dict_update",
+      "tree_build",
+      "branch_logic",
+      "float_arithmetic",
+      "record_update",
+      "heap_callback",
+      "dp_row",
+      "n_queens",
+      "while_search",
+      "longest_common_subsequence",
+      "kmp",
+      "optimize",
+      "recursive_loops",
+      "huffman",
+      "list_append",
+      "dict_delete",
+      "function_calls",
+      "list_from_iterable",
+      "dict_literal",
+      "dict_counting",
+      "vm_hot_paths",
+      "merge_sort",
+      "list_replicate",
+      "list_copy"
+    ],
+    [
+      "sieve",
+      "sudoku",
+      "while_search",
+      "list_copy",
+      "tail_recursion",
+      "heap_callback",
+      "substring_count",
+      "dijkstra",
+      "dict_update",
+      "binary_trees",
+      "list_replicate",
+      "function_call_baseline",
+      "list_append",
+      "optimize",
+      "huffman",
+      "list_update",
+      "constraint_probe",
+      "function_calls",
+      "dict_insert",
+      "kmp",
+      "n_queens",
+      "record_update",
+      "vm_hot_paths",
+      "k_nucleotide",
+      "dict_lookup",
+      "merge_sort",
+      "dict_counting",
+      "float_arithmetic",
+      "dict_delete",
+      "branch_logic",
+      "tree_build",
+      "dp_row",
+      "fannkuch",
+      "lru_cache",
+      "longest_common_subsequence",
+      "function_callbacks",
+      "n_body",
+      "list_access",
+      "dict_literal",
+      "recursive_loops",
+      "recursive_fibonacci",
+      "string_count",
+      "list_from_iterable",
+      "matrix_multiply"
+    ],
+    [
+      "function_calls",
+      "heap_callback",
+      "recursive_fibonacci",
+      "n_body",
+      "dict_counting",
+      "dp_row",
+      "n_queens",
+      "tail_recursion",
+      "list_from_iterable",
+      "sieve",
+      "dict_literal",
+      "string_count",
+      "dict_insert",
+      "k_nucleotide",
+      "function_callbacks",
+      "fannkuch",
+      "list_copy",
+      "huffman",
+      "while_search",
+      "sudoku",
+      "dijkstra",
+      "list_update",
+      "branch_logic",
+      "record_update",
+      "dict_update",
+      "substring_count",
+      "list_access",
+      "float_arithmetic",
+      "list_replicate",
+      "list_append",
+      "dict_lookup",
+      "constraint_probe",
+      "recursive_loops",
+      "kmp",
+      "optimize",
+      "matrix_multiply",
+      "longest_common_subsequence",
+      "dict_delete",
+      "vm_hot_paths",
+      "merge_sort",
+      "tree_build",
+      "lru_cache",
+      "binary_trees",
+      "function_call_baseline"
+    ]
+  ],
+  "baseline": {
+    "path": "/private/tmp/tapas-before-generic-heap",
+    "sha256": "2c543424a5884d5a647a99e8cf7b3134d170920aa714813705e4ae0d1e00dc1a",
+    "version": "Tapas 0.1.0 Copyright (C) 2020-2026",
+    "build_config": null
+  },
+  "candidate": {
+    "path": "/Users/zhuanglinsheng/Documents/Github/tapas/build-release/bin/tapas",
+    "sha256": "80d8465438372b58270f8201cdc5cd9cfc244cee0b5d50ba5ff1da75470072c4",
+    "version": "Tapas 0.1.0 Copyright (C) 2020-2026",
+    "build_config": [
+      "CMAKE_BUILD_TYPE:STRING=Release",
+      "CMAKE_C_COMPILER:FILEPATH=/usr/bin/cc",
+      "CMAKE_C_FLAGS:STRING=",
+      "CMAKE_C_FLAGS_RELEASE:STRING=-O3 -DNDEBUG",
+      "CMAKE_EXE_LINKER_FLAGS:STRING=",
+      "TAPAS_ENABLE_IPO:BOOL=ON"
+    ]
+  },
+  "rows": [
+    {
+      "checksum": 46368,
+      "source_sha256": "940f26b128cb81f7969c8ca5d6c3e747b5d3bee0bf400d956b6d52918c3f13ee",
+      "samples_ns": {
+        "baseline": [
+          4250000,
+          4173000,
+          4269000,
+          4172000,
+          4193000,
+          4077000,
+          4263000,
+          4203000,
+          4192000,
+          4190000,
+          4319000,
+          4148000,
+          4306000,
+          4149000,
+          4224000,
+          4177000,
+          4171000,
+          4239000,
+          4083000,
+          4233000,
+          4090000
+        ],
+        "candidate": [
+          4136000,
+          4323000,
+          4197000,
+          4201000,
+          4068000,
+          4286000,
+          4177000,
+          4247000,
+          4080000,
+          4242000,
+          4088000,
+          4281000,
+          4106000,
+          4223000,
+          4154000,
+          4154000,
+          4188000,
+          4074000,
+          4182000,
+          4065000,
+          4057000
+        ]
+      },
+      "baseline_median_ns": 4192000,
+      "candidate_median_ns": 4177000,
+      "paired_ratio_median": 0.9919315403422982,
+      "paired_ratio_iqr": [
+        0.9716824399208766,
+        1.0151230621175071
+      ],
+      "round_ratio_medians": [
+        0.983134223471539,
+        1.0104687128241732,
+        0.9919315403422982
+      ],
+      "rounds": [
+        {
+          "checksum": 46368,
+          "source_sha256": "940f26b128cb81f7969c8ca5d6c3e747b5d3bee0bf400d956b6d52918c3f13ee",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              4250000,
+              4173000,
+              4269000,
+              4172000,
+              4193000,
+              4077000,
+              4263000
+            ],
+            "candidate": [
+              4136000,
+              4323000,
+              4197000,
+              4201000,
+              4068000,
+              4286000,
+              4177000
+            ]
+          },
+          "baseline_median_ns": 4193000,
+          "candidate_median_ns": 4197000,
+          "paired_ratio_median": 0.983134223471539,
+          "paired_ratio_iqr": [
+            0.9731764705882353,
+            1.0359453630481668
+          ]
+        },
+        {
+          "checksum": 46368,
+          "source_sha256": "940f26b128cb81f7969c8ca5d6c3e747b5d3bee0bf400d956b6d52918c3f13ee",
+          "first": "candidate",
+          "samples_ns": {
+            "baseline": [
+              4203000,
+              4192000,
+              4190000,
+              4319000,
+              4148000,
+              4306000,
+              4149000
+            ],
+            "candidate": [
+              4247000,
+              4080000,
+              4242000,
+              4088000,
+              4281000,
+              4106000,
+              4223000
+            ]
+          },
+          "baseline_median_ns": 4192000,
+          "candidate_median_ns": 4223000,
+          "paired_ratio_median": 1.0104687128241732,
+          "paired_ratio_iqr": [
+            0.9535531816070599,
+            1.0178356230416967
+          ]
+        },
+        {
+          "checksum": 46368,
+          "source_sha256": "940f26b128cb81f7969c8ca5d6c3e747b5d3bee0bf400d956b6d52918c3f13ee",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              4224000,
+              4177000,
+              4171000,
+              4239000,
+              4083000,
+              4233000,
+              4090000
+            ],
+            "candidate": [
+              4154000,
+              4154000,
+              4188000,
+              4074000,
+              4182000,
+              4065000,
+              4057000
+            ]
+          },
+          "baseline_median_ns": 4177000,
+          "candidate_median_ns": 4154000,
+          "paired_ratio_median": 0.9919315403422982,
+          "paired_ratio_iqr": [
+            0.9610757254069356,
+            1.0040757612083433
+          ]
+        }
+      ],
+      "name": "recursive_fibonacci",
+      "kind": "algorithm"
+    },
+    {
+      "checksum": 2262,
+      "source_sha256": "9dbb0a64b87fe0a3fa703bb6479c166b8871dc12646be435a74137c30316207e",
+      "samples_ns": {
+        "baseline": [
+          99000,
+          92000,
+          89000,
+          91000,
+          83000,
+          92000,
+          80000,
+          92000,
+          103000,
+          85000,
+          96000,
+          89000,
+          91000,
+          82000,
+          83000,
+          83000,
+          83000,
+          84000,
+          90000,
+          85000,
+          98000
+        ],
+        "candidate": [
+          88000,
+          88000,
+          93000,
+          84000,
+          94000,
+          91000,
+          90000,
+          89000,
+          88000,
+          83000,
+          96000,
+          82000,
+          83000,
+          79000,
+          86000,
+          82000,
+          95000,
+          85000,
+          89000,
+          80000,
+          87000
+        ]
+      },
+      "baseline_median_ns": 89000,
+      "candidate_median_ns": 88000,
+      "paired_ratio_median": 0.9764705882352941,
+      "paired_ratio_iqr": [
+        0.9222126188418324,
+        1.0240246701090074
+      ],
+      "round_ratio_medians": [
+        0.9891304347826086,
+        0.9634146341463414,
+        0.9888888888888889
+      ],
+      "rounds": [
+        {
+          "checksum": 2262,
+          "source_sha256": "9dbb0a64b87fe0a3fa703bb6479c166b8871dc12646be435a74137c30316207e",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              99000,
+              92000,
+              89000,
+              91000,
+              83000,
+              92000,
+              80000
+            ],
+            "candidate": [
+              88000,
+              88000,
+              93000,
+              84000,
+              94000,
+              91000,
+              90000
+            ]
+          },
+          "baseline_median_ns": 91000,
+          "candidate_median_ns": 90000,
+          "paired_ratio_median": 0.9891304347826086,
+          "paired_ratio_iqr": [
+            0.9230769230769231,
+            1.125
+          ]
+        },
+        {
+          "checksum": 2262,
+          "source_sha256": "9dbb0a64b87fe0a3fa703bb6479c166b8871dc12646be435a74137c30316207e",
+          "first": "candidate",
+          "samples_ns": {
+            "baseline": [
+              92000,
+              103000,
+              85000,
+              96000,
+              89000,
+              91000,
+              82000
+            ],
+            "candidate": [
+              89000,
+              88000,
+              83000,
+              96000,
+              82000,
+              83000,
+              79000
+            ]
+          },
+          "baseline_median_ns": 91000,
+          "candidate_median_ns": 83000,
+          "paired_ratio_median": 0.9634146341463414,
+          "paired_ratio_iqr": [
+            0.9120879120879121,
+            0.9764705882352941
+          ]
+        },
+        {
+          "checksum": 2262,
+          "source_sha256": "9dbb0a64b87fe0a3fa703bb6479c166b8871dc12646be435a74137c30316207e",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              83000,
+              83000,
+              83000,
+              84000,
+              90000,
+              85000,
+              98000
+            ],
+            "candidate": [
+              86000,
+              82000,
+              95000,
+              85000,
+              89000,
+              80000,
+              87000
+            ]
+          },
+          "baseline_median_ns": 84000,
+          "candidate_median_ns": 86000,
+          "paired_ratio_median": 0.9888888888888889,
+          "paired_ratio_iqr": [
+            0.9411764705882353,
+            1.036144578313253
+          ]
+        }
+      ],
+      "name": "sieve",
+      "kind": "algorithm"
+    },
+    {
+      "checksum": 5638402144,
+      "source_sha256": "be149f9368fba347640f3f1fe1f2736aef2193604a065fb279f09dcb29044009",
+      "samples_ns": {
+        "baseline": [
+          4740000,
+          4783000,
+          4669000,
+          4806000,
+          4778000,
+          4745000,
+          4816000,
+          4784000,
+          4758000,
+          4907000,
+          4844000,
+          4726000,
+          4748000,
+          4750000,
+          4653000,
+          4667000,
+          4877000,
+          4730000,
+          4927000,
+          5142000,
+          4800000
+        ],
+        "candidate": [
+          4693000,
+          4708000,
+          4795000,
+          4692000,
+          4921000,
+          4809000,
+          4738000,
+          4645000,
+          4996000,
+          4803000,
+          4681000,
+          4717000,
+          4718000,
+          5080000,
+          4784000,
+          4853000,
+          4730000,
+          4737000,
+          4856000,
+          4919000,
+          4822000
+        ]
+      },
+      "baseline_median_ns": 4778000,
+      "candidate_median_ns": 4784000,
+      "paired_ratio_median": 0.993681550126369,
+      "paired_ratio_iqr": [
+        0.9775427190436247,
+        1.027570192982168
+      ],
+      "round_ratio_medians": [
+        0.990084388185654,
+        0.993681550126369,
+        1.0014799154334038
+      ],
+      "rounds": [
+        {
+          "checksum": 5638402144,
+          "source_sha256": "be149f9368fba347640f3f1fe1f2736aef2193604a065fb279f09dcb29044009",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              4740000,
+              4783000,
+              4669000,
+              4806000,
+              4778000,
+              4745000,
+              4816000
+            ],
+            "candidate": [
+              4693000,
+              4708000,
+              4795000,
+              4692000,
+              4921000,
+              4809000,
+              4738000
+            ]
+          },
+          "baseline_median_ns": 4778000,
+          "candidate_median_ns": 4738000,
+          "paired_ratio_median": 0.990084388185654,
+          "paired_ratio_iqr": [
+            0.9838039867109635,
+            1.0269865067466266
+          ]
+        },
+        {
+          "checksum": 5638402144,
+          "source_sha256": "be149f9368fba347640f3f1fe1f2736aef2193604a065fb279f09dcb29044009",
+          "first": "candidate",
+          "samples_ns": {
+            "baseline": [
+              4784000,
+              4758000,
+              4907000,
+              4844000,
+              4726000,
+              4748000,
+              4750000
+            ],
+            "candidate": [
+              4645000,
+              4996000,
+              4803000,
+              4681000,
+              4717000,
+              4718000,
+              5080000
+            ]
+          },
+          "baseline_median_ns": 4758000,
+          "candidate_median_ns": 4718000,
+          "paired_ratio_median": 0.993681550126369,
+          "paired_ratio_iqr": [
+            0.9709448160535117,
+            1.050021017234132
+          ]
+        },
+        {
+          "checksum": 5638402144,
+          "source_sha256": "be149f9368fba347640f3f1fe1f2736aef2193604a065fb279f09dcb29044009",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              4653000,
+              4667000,
+              4877000,
+              4730000,
+              4927000,
+              5142000,
+              4800000
+            ],
+            "candidate": [
+              4784000,
+              4853000,
+              4730000,
+              4737000,
+              4856000,
+              4919000,
+              4822000
+            ]
+          },
+          "baseline_median_ns": 4800000,
+          "candidate_median_ns": 4822000,
+          "paired_ratio_median": 1.0014799154334038,
+          "paired_ratio_iqr": [
+            0.9698585195817101,
+            1.028153879217709
+          ]
+        }
+      ],
+      "name": "merge_sort",
+      "kind": "algorithm"
+    },
+    {
+      "checksum": 724,
+      "source_sha256": "68845f8fd4fdd2ba3af3b11c21693793a6122375938196e4c58e73c37ba8bef9",
+      "samples_ns": {
+        "baseline": [
+          67940000,
+          68640000,
+          68844000,
+          67339000,
+          67870000,
+          67463000,
+          67568000,
+          67840000,
+          67722000,
+          67332000,
+          67827000,
+          67331000,
+          67182000,
+          68501000,
+          67298000,
+          68084000,
+          69514000,
+          67264000,
+          67441000,
+          69040000,
+          68812000
+        ],
+        "candidate": [
+          67620000,
+          67561000,
+          68008000,
+          67901000,
+          67671000,
+          67712000,
+          67429000,
+          67897000,
+          67363000,
+          67389000,
+          67984000,
+          67733000,
+          67848000,
+          67837000,
+          67384000,
+          67142000,
+          67626000,
+          67738000,
+          67330000,
+          67890000,
+          71146000
+        ]
+      },
+      "baseline_median_ns": 67827000,
+      "candidate_median_ns": 67712000,
+      "paired_ratio_median": 0.9983541169318367,
+      "paired_ratio_iqr": [
+        0.9890816570930064,
+        1.0048307079919256
+      ],
+      "round_ratio_medians": [
+        0.9970679239722999,
+        1.0008465514168596,
+        0.9983541169318367
+      ],
+      "rounds": [
+        {
+          "checksum": 724,
+          "source_sha256": "68845f8fd4fdd2ba3af3b11c21693793a6122375938196e4c58e73c37ba8bef9",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              67940000,
+              68640000,
+              68844000,
+              67339000,
+              67870000,
+              67463000,
+              67568000
+            ],
+            "candidate": [
+              67620000,
+              67561000,
+              68008000,
+              67901000,
+              67671000,
+              67712000,
+              67429000
+            ]
+          },
+          "baseline_median_ns": 67870000,
+          "candidate_median_ns": 67671000,
+          "paired_ratio_median": 0.9970679239722999,
+          "paired_ratio_iqr": [
+            0.9878566033350764,
+            1.003690912055497
+          ]
+        },
+        {
+          "checksum": 724,
+          "source_sha256": "68845f8fd4fdd2ba3af3b11c21693793a6122375938196e4c58e73c37ba8bef9",
+          "first": "candidate",
+          "samples_ns": {
+            "baseline": [
+              67840000,
+              67722000,
+              67332000,
+              67827000,
+              67331000,
+              67182000,
+              68501000
+            ],
+            "candidate": [
+              67897000,
+              67363000,
+              67389000,
+              67984000,
+              67733000,
+              67848000,
+              67837000
+            ]
+          },
+          "baseline_median_ns": 67722000,
+          "candidate_median_ns": 67837000,
+          "paired_ratio_median": 1.0008465514168596,
+          "paired_ratio_iqr": [
+            0.994698916157231,
+            1.005970503928354
+          ]
+        },
+        {
+          "checksum": 724,
+          "source_sha256": "68845f8fd4fdd2ba3af3b11c21693793a6122375938196e4c58e73c37ba8bef9",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              67298000,
+              68084000,
+              69514000,
+              67264000,
+              67441000,
+              69040000,
+              68812000
+            ],
+            "candidate": [
+              67384000,
+              67142000,
+              67626000,
+              67738000,
+              67330000,
+              67890000,
+              71146000
+            ]
+          },
+          "baseline_median_ns": 68084000,
+          "candidate_median_ns": 67626000,
+          "paired_ratio_median": 0.9983541169318367,
+          "paired_ratio_iqr": [
+            0.983342989571263,
+            1.0070468601332065
+          ]
+        }
+      ],
+      "name": "n_queens",
+      "kind": "algorithm"
+    },
+    {
+      "checksum": 1480,
+      "source_sha256": "cf2367f9721b2f2fe0e6c3eb7a7686f45f26b42508a29ce1ee89da777d5e8e89",
+      "samples_ns": {
+        "baseline": [
+          14514000,
+          14796000,
+          14421000,
+          14390000,
+          14335000,
+          14260000,
+          14529000,
+          14230000,
+          14679000,
+          14376000,
+          14564000,
+          14616000,
+          14532000,
+          14313000,
+          14532000,
+          14500000,
+          14559000,
+          14702000,
+          14593000,
+          14545000,
+          14442000
+        ],
+        "candidate": [
+          14890000,
+          14327000,
+          14482000,
+          14452000,
+          14391000,
+          14426000,
+          14536000,
+          14720000,
+          14543000,
+          14556000,
+          14333000,
+          14347000,
+          14376000,
+          14330000,
+          14579000,
+          14362000,
+          14430000,
+          14678000,
+          14602000,
+          14546000,
+          14801000
+        ]
+      },
+      "baseline_median_ns": 14529000,
+      "candidate_median_ns": 14482000,
+      "paired_ratio_median": 1.0006167340505723,
+      "paired_ratio_iqr": [
+        0.9906089111585634,
+        1.0079747506595957
+      ],
+      "round_ratio_medians": [
+        1.0042299424450454,
+        0.990735063696437,
+        1.0000687521485045
+      ],
+      "rounds": [
+        {
+          "checksum": 1480,
+          "source_sha256": "cf2367f9721b2f2fe0e6c3eb7a7686f45f26b42508a29ce1ee89da777d5e8e89",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              14514000,
+              14796000,
+              14421000,
+              14390000,
+              14335000,
+              14260000,
+              14529000
+            ],
+            "candidate": [
+              14890000,
+              14327000,
+              14482000,
+              14452000,
+              14391000,
+              14426000,
+              14536000
+            ]
+          },
+          "baseline_median_ns": 14421000,
+          "candidate_median_ns": 14452000,
+          "paired_ratio_median": 1.0042299424450454,
+          "paired_ratio_iqr": [
+            1.0004817950306284,
+            1.01164095371669
+          ]
+        },
+        {
+          "checksum": 1480,
+          "source_sha256": "cf2367f9721b2f2fe0e6c3eb7a7686f45f26b42508a29ce1ee89da777d5e8e89",
+          "first": "candidate",
+          "samples_ns": {
+            "baseline": [
+              14230000,
+              14679000,
+              14376000,
+              14564000,
+              14616000,
+              14532000,
+              14313000
+            ],
+            "candidate": [
+              14720000,
+              14543000,
+              14556000,
+              14333000,
+              14347000,
+              14376000,
+              14330000
+            ]
+          },
+          "baseline_median_ns": 14532000,
+          "candidate_median_ns": 14376000,
+          "paired_ratio_median": 0.990735063696437,
+          "paired_ratio_iqr": [
+            0.9841389728096677,
+            1.0125208681135225
+          ]
+        },
+        {
+          "checksum": 1480,
+          "source_sha256": "cf2367f9721b2f2fe0e6c3eb7a7686f45f26b42508a29ce1ee89da777d5e8e89",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              14532000,
+              14500000,
+              14559000,
+              14702000,
+              14593000,
+              14545000,
+              14442000
+            ],
+            "candidate": [
+              14579000,
+              14362000,
+              14430000,
+              14678000,
+              14602000,
+              14546000,
+              14801000
+            ]
+          },
+          "baseline_median_ns": 14545000,
+          "candidate_median_ns": 14579000,
+          "paired_ratio_median": 1.0000687521485045,
+          "paired_ratio_iqr": [
+            0.9911395013393777,
+            1.003234241673548
+          ]
+        }
+      ],
+      "name": "longest_common_subsequence",
+      "kind": "algorithm"
+    },
+    {
+      "checksum": 817318963,
+      "source_sha256": "def43db797da32f764443fbe5de544a83d221b132a101862bded3aa05b3770f3",
+      "samples_ns": {
+        "baseline": [
+          2994000,
+          3004000,
+          2991000,
+          2967000,
+          3079000,
+          3112000,
+          3161000,
+          3096000,
+          3052000,
+          3098000,
+          3035000,
+          3113000,
+          3039000,
+          3042000,
+          3093000,
+          3097000,
+          3129000,
+          3042000,
+          2979000,
+          3092000,
+          3046000
+        ],
+        "candidate": [
+          3102000,
+          2997000,
+          2987000,
+          3002000,
+          2981000,
+          3158000,
+          3032000,
+          3057000,
+          3039000,
+          3063000,
+          3120000,
+          3018000,
+          3094000,
+          3049000,
+          3040000,
+          3150000,
+          3153000,
+          3068000,
+          3215000,
+          3094000,
+          3067000
+        ]
+      },
+      "baseline_median_ns": 3052000,
+      "candidate_median_ns": 3063000,
+      "paired_ratio_median": 1.002301117685733,
+      "paired_ratio_iqr": [
+        0.9880527447065124,
+        1.0159474132442625
+      ],
+      "round_ratio_medians": [
+        0.9986626546305584,
+        0.995740498034076,
+        1.0076701821668264
+      ],
+      "rounds": [
+        {
+          "checksum": 817318963,
+          "source_sha256": "def43db797da32f764443fbe5de544a83d221b132a101862bded3aa05b3770f3",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              2994000,
+              3004000,
+              2991000,
+              2967000,
+              3079000,
+              3112000,
+              3161000
+            ],
+            "candidate": [
+              3102000,
+              2997000,
+              2987000,
+              3002000,
+              2981000,
+              3158000,
+              3032000
+            ]
+          },
+          "baseline_median_ns": 3004000,
+          "candidate_median_ns": 3002000,
+          "paired_ratio_median": 0.9986626546305584,
+          "paired_ratio_iqr": [
+            0.9681714842481325,
+            1.0147814910025708
+          ]
+        },
+        {
+          "checksum": 817318963,
+          "source_sha256": "def43db797da32f764443fbe5de544a83d221b132a101862bded3aa05b3770f3",
+          "first": "candidate",
+          "samples_ns": {
+            "baseline": [
+              3096000,
+              3052000,
+              3098000,
+              3035000,
+              3113000,
+              3039000,
+              3042000
+            ],
+            "candidate": [
+              3057000,
+              3039000,
+              3063000,
+              3120000,
+              3018000,
+              3094000,
+              3049000
+            ]
+          },
+          "baseline_median_ns": 3052000,
+          "candidate_median_ns": 3057000,
+          "paired_ratio_median": 0.995740498034076,
+          "paired_ratio_iqr": [
+            0.9874031007751938,
+            1.0180980585718986
+          ]
+        },
+        {
+          "checksum": 817318963,
+          "source_sha256": "def43db797da32f764443fbe5de544a83d221b132a101862bded3aa05b3770f3",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              3093000,
+              3097000,
+              3129000,
+              3042000,
+              2979000,
+              3092000,
+              3046000
+            ],
+            "candidate": [
+              3040000,
+              3150000,
+              3153000,
+              3068000,
+              3215000,
+              3094000,
+              3067000
+            ]
+          },
+          "baseline_median_ns": 3092000,
+          "candidate_median_ns": 3094000,
+          "paired_ratio_median": 1.0076701821668264,
+          "paired_ratio_iqr": [
+            1.000646830530401,
+            1.017113335485954
+          ]
+        }
+      ],
+      "name": "matrix_multiply",
+      "kind": "algorithm"
+    },
+    {
+      "checksum": 16605,
+      "source_sha256": "be77ea8f64d4a7f400e51ec3a48df88922dc9936846d616ce05cf9a03de772cf",
+      "samples_ns": {
+        "baseline": [
+          358681000,
+          360789000,
+          359072000,
+          358819000,
+          359506000,
+          358433000,
+          358833000,
+          360543000,
+          360743000,
+          358522000,
+          360379000,
+          360340000,
+          373998000,
+          361584000,
+          383607000,
+          362232000,
+          367725000,
+          361323000,
+          358598000,
+          361000000,
+          360640000
+        ],
+        "candidate": [
+          359614000,
+          359914000,
+          358181000,
+          357852000,
+          359896000,
+          359606000,
+          361957000,
+          360416000,
+          359224000,
+          361030000,
+          361482000,
+          362149000,
+          362226000,
+          360923000,
+          362121000,
+          362007000,
+          360773000,
+          362177000,
+          359499000,
+          362121000,
+          360338000
+        ]
+      },
+      "baseline_median_ns": 360543000,
+      "candidate_median_ns": 360773000,
+      "paired_ratio_median": 0.9996477535273185,
+      "paired_ratio_iqr": [
+        0.9974118257301197,
+        1.0030829649224553
+      ],
+      "round_ratio_medians": [
+        1.0010848219501205,
+        0.9996477535273185,
+        0.9993788511230371
+      ],
+      "rounds": [
+        {
+          "checksum": 16605,
+          "source_sha256": "be77ea8f64d4a7f400e51ec3a48df88922dc9936846d616ce05cf9a03de772cf",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              358681000,
+              360789000,
+              359072000,
+              358819000,
+              359506000,
+              358433000,
+              358833000
+            ],
+            "candidate": [
+              359614000,
+              359914000,
+              358181000,
+              357852000,
+              359896000,
+              359606000,
+              361957000
+            ]
+          },
+          "baseline_median_ns": 358833000,
+          "candidate_median_ns": 359614000,
+          "paired_ratio_median": 1.0010848219501205,
+          "paired_ratio_iqr": [
+            0.9975186035112735,
+            1.0032725781387317
+          ]
+        },
+        {
+          "checksum": 16605,
+          "source_sha256": "be77ea8f64d4a7f400e51ec3a48df88922dc9936846d616ce05cf9a03de772cf",
+          "first": "candidate",
+          "samples_ns": {
+            "baseline": [
+              360543000,
+              360743000,
+              358522000,
+              360379000,
+              360340000,
+              373998000,
+              361584000
+            ],
+            "candidate": [
+              360416000,
+              359224000,
+              361030000,
+              361482000,
+              362149000,
+              362226000,
+              360923000
+            ]
+          },
+          "baseline_median_ns": 360543000,
+          "candidate_median_ns": 361030000,
+          "paired_ratio_median": 0.9996477535273185,
+          "paired_ratio_iqr": [
+            0.9957892460837771,
+            1.0050202586446135
+          ]
+        },
+        {
+          "checksum": 16605,
+          "source_sha256": "be77ea8f64d4a7f400e51ec3a48df88922dc9936846d616ce05cf9a03de772cf",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              383607000,
+              362232000,
+              367725000,
+              361323000,
+              358598000,
+              361000000,
+              360640000
+            ],
+            "candidate": [
+              362121000,
+              362007000,
+              360773000,
+              362177000,
+              359499000,
+              362121000,
+              360338000
+            ]
+          },
+          "baseline_median_ns": 361323000,
+          "candidate_median_ns": 362007000,
+          "paired_ratio_median": 0.9993788511230371,
+          "paired_ratio_iqr": [
+            0.9810945679515942,
+            1.0025125628140703
+          ]
+        }
+      ],
+      "name": "sudoku",
+      "kind": "algorithm"
+    },
+    {
+      "checksum": 40796,
+      "source_sha256": "ec8d478f5d54db25151f9896bcfd439ddcdda4883ce7d4e47012f4ec0754df7e",
+      "samples_ns": {
+        "baseline": [
+          8073000,
+          8110000,
+          8155000,
+          8594000,
+          8122000,
+          8059000,
+          7924000,
+          8136000,
+          7964000,
+          8126000,
+          8017000,
+          8661000,
+          8169000,
+          8084000,
+          8031000,
+          8137000,
+          8042000,
+          8135000,
+          8100000,
+          8048000,
+          8080000
+        ],
+        "candidate": [
+          6880000,
+          6776000,
+          7097000,
+          6770000,
+          6798000,
+          6798000,
+          6880000,
+          6970000,
+          6910000,
+          6942000,
+          7040000,
+          7415000,
+          6793000,
+          6941000,
+          7016000,
+          7091000,
+          7185000,
+          7073000,
+          6994000,
+          6918000,
+          7322000
+        ]
+      },
+      "baseline_median_ns": 8100000,
+      "candidate_median_ns": 6942000,
+      "paired_ratio_median": 0.8595924453280318,
+      "paired_ratio_iqr": [
+        0.8478762173686023,
+        0.8708575184002166
+      ],
+      "round_ratio_medians": [
+        0.8435289738180916,
+        0.8566863323500492,
+        0.8714513948629716
+      ],
+      "rounds": [
+        {
+          "checksum": 40796,
+          "source_sha256": "ec8d478f5d54db25151f9896bcfd439ddcdda4883ce7d4e47012f4ec0754df7e",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              8073000,
+              8110000,
+              8155000,
+              8594000,
+              8122000,
+              8059000,
+              7924000
+            ],
+            "candidate": [
+              6880000,
+              6776000,
+              7097000,
+              6770000,
+              6798000,
+              6798000,
+              6880000
+            ]
+          },
+          "baseline_median_ns": 8110000,
+          "candidate_median_ns": 6798000,
+          "paired_ratio_median": 0.8435289738180916,
+          "paired_ratio_iqr": [
+            0.8355117139334155,
+            0.8682483594144371
+          ]
+        },
+        {
+          "checksum": 40796,
+          "source_sha256": "ec8d478f5d54db25151f9896bcfd439ddcdda4883ce7d4e47012f4ec0754df7e",
+          "first": "candidate",
+          "samples_ns": {
+            "baseline": [
+              8136000,
+              7964000,
+              8126000,
+              8017000,
+              8661000,
+              8169000,
+              8084000
+            ],
+            "candidate": [
+              6970000,
+              6910000,
+              6942000,
+              7040000,
+              7415000,
+              6793000,
+              6941000
+            ]
+          },
+          "baseline_median_ns": 8126000,
+          "candidate_median_ns": 6942000,
+          "paired_ratio_median": 0.8566863323500492,
+          "paired_ratio_iqr": [
+            0.8542948560177209,
+            0.8676544450025113
+          ]
+        },
+        {
+          "checksum": 40796,
+          "source_sha256": "ec8d478f5d54db25151f9896bcfd439ddcdda4883ce7d4e47012f4ec0754df7e",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              8031000,
+              8137000,
+              8042000,
+              8135000,
+              8100000,
+              8048000,
+              8080000
+            ],
+            "candidate": [
+              7016000,
+              7091000,
+              7185000,
+              7073000,
+              6994000,
+              6918000,
+              7322000
+            ]
+          },
+          "baseline_median_ns": 8080000,
+          "candidate_median_ns": 7073000,
+          "paired_ratio_median": 0.8714513948629716,
+          "paired_ratio_iqr": [
+            0.8634567901234568,
+            0.8934344690375529
+          ]
+        }
+      ],
+      "name": "dijkstra",
+      "kind": "algorithm"
+    },
+    {
+      "checksum": 8058,
+      "source_sha256": "cba4a3fd0bdee91e8b89b0060d57aaa48e052c7ba4d15b002f34b8302dd8402e",
+      "samples_ns": {
+        "baseline": [
+          18114000,
+          18091000,
+          18118000,
+          19106000,
+          18311000,
+          18242000,
+          18064000,
+          18264000,
+          18497000,
+          19011000,
+          18455000,
+          18344000,
+          18345000,
+          18381000,
+          18368000,
+          18251000,
+          18387000,
+          18275000,
+          18520000,
+          18392000,
+          18328000
+        ],
+        "candidate": [
+          18303000,
+          18638000,
+          18253000,
+          18762000,
+          18539000,
+          18479000,
+          18200000,
+          18211000,
+          18330000,
+          18793000,
+          18289000,
+          18297000,
+          18321000,
+          18504000,
+          18355000,
+          18379000,
+          18257000,
+          18436000,
+          18248000,
+          18734000,
+          18338000
+        ]
+      },
+      "baseline_median_ns": 18344000,
+      "candidate_median_ns": 18338000,
+      "paired_ratio_median": 1.0005456132693147,
+      "paired_ratio_iqr": [
+        0.9919674675031098,
+        1.0096218840186344
+      ],
+      "round_ratio_medians": [
+        1.010433918516065,
+        0.9970981165133597,
+        1.0005456132693147
+      ],
+      "rounds": [
+        {
+          "checksum": 8058,
+          "source_sha256": "cba4a3fd0bdee91e8b89b0060d57aaa48e052c7ba4d15b002f34b8302dd8402e",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              18114000,
+              18091000,
+              18118000,
+              19106000,
+              18311000,
+              18242000,
+              18064000
+            ],
+            "candidate": [
+              18303000,
+              18638000,
+              18253000,
+              18762000,
+              18539000,
+              18479000,
+              18200000
+            ]
+          },
+          "baseline_median_ns": 18118000,
+          "candidate_median_ns": 18479000,
+          "paired_ratio_median": 1.010433918516065,
+          "paired_ratio_iqr": [
+            1.0074511535489568,
+            1.0129919964916128
+          ]
+        },
+        {
+          "checksum": 8058,
+          "source_sha256": "cba4a3fd0bdee91e8b89b0060d57aaa48e052c7ba4d15b002f34b8302dd8402e",
+          "first": "candidate",
+          "samples_ns": {
+            "baseline": [
+              18264000,
+              18497000,
+              19011000,
+              18455000,
+              18344000,
+              18345000,
+              18381000
+            ],
+            "candidate": [
+              18211000,
+              18330000,
+              18793000,
+              18289000,
+              18297000,
+              18321000,
+              18504000
+            ]
+          },
+          "baseline_median_ns": 18381000,
+          "candidate_median_ns": 18321000,
+          "paired_ratio_median": 0.9970981165133597,
+          "paired_ratio_iqr": [
+            0.9909715088933341,
+            0.9986917416189698
+          ]
+        },
+        {
+          "checksum": 8058,
+          "source_sha256": "cba4a3fd0bdee91e8b89b0060d57aaa48e052c7ba4d15b002f34b8302dd8402e",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              18368000,
+              18251000,
+              18387000,
+              18275000,
+              18520000,
+              18392000,
+              18328000
+            ],
+            "candidate": [
+              18355000,
+              18379000,
+              18257000,
+              18436000,
+              18248000,
+              18734000,
+              18338000
+            ]
+          },
+          "baseline_median_ns": 18368000,
+          "candidate_median_ns": 18355000,
+          "paired_ratio_median": 1.0005456132693147,
+          "paired_ratio_iqr": [
+            0.992929787349758,
+            1.008809849521204
+          ]
+        }
+      ],
+      "name": "optimize",
+      "kind": "algorithm"
+    },
+    {
+      "checksum": 149850000,
+      "source_sha256": "210e4bb137830cbab28b647418c7666864b0c89c41fe16fd08191e15005d94cf",
+      "samples_ns": {
+        "baseline": [
+          20591000,
+          20485000,
+          21055000,
+          20999000,
+          21402000,
+          20757000,
+          20785000,
+          20781000,
+          20768000,
+          20663000,
+          20625000,
+          21120000,
+          20568000,
+          20887000,
+          20793000,
+          20855000,
+          20706000,
+          20715000,
+          20740000,
+          21460000,
+          20927000
+        ],
+        "candidate": [
+          20930000,
+          20882000,
+          20721000,
+          21038000,
+          21441000,
+          21043000,
+          20887000,
+          20825000,
+          20708000,
+          20774000,
+          20645000,
+          21310000,
+          21672000,
+          23107000,
+          21220000,
+          20873000,
+          20673000,
+          20811000,
+          20627000,
+          20906000,
+          21003000
+        ]
+      },
+      "baseline_median_ns": 20781000,
+      "candidate_median_ns": 20887000,
+      "paired_ratio_median": 1.003631672002676,
+      "paired_ratio_iqr": [
+        0.999634680714439,
+        1.0151209939195551
+      ],
+      "round_ratio_medians": [
+        1.0049073851335097,
+        1.0053719208246625,
+        1.0008631023735315
+      ],
+      "rounds": [
+        {
+          "checksum": 149850000,
+          "source_sha256": "210e4bb137830cbab28b647418c7666864b0c89c41fe16fd08191e15005d94cf",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              20591000,
+              20485000,
+              21055000,
+              20999000,
+              21402000,
+              20757000,
+              20785000
+            ],
+            "candidate": [
+              20930000,
+              20882000,
+              20721000,
+              21038000,
+              21441000,
+              21043000,
+              20887000
+            ]
+          },
+          "baseline_median_ns": 20785000,
+          "candidate_median_ns": 20930000,
+          "paired_ratio_median": 1.0049073851335097,
+          "paired_ratio_iqr": [
+            1.0018222596019064,
+            1.0164635034723908
+          ]
+        },
+        {
+          "checksum": 149850000,
+          "source_sha256": "210e4bb137830cbab28b647418c7666864b0c89c41fe16fd08191e15005d94cf",
+          "first": "candidate",
+          "samples_ns": {
+            "baseline": [
+              20781000,
+              20768000,
+              20663000,
+              20625000,
+              21120000,
+              20568000,
+              20887000
+            ],
+            "candidate": [
+              20825000,
+              20708000,
+              20774000,
+              20645000,
+              21310000,
+              21672000,
+              23107000
+            ]
+          },
+          "baseline_median_ns": 20768000,
+          "candidate_median_ns": 20825000,
+          "paired_ratio_median": 1.0053719208246625,
+          "paired_ratio_iqr": [
+            1.000969696969697,
+            1.0536756126021003
+          ]
+        },
+        {
+          "checksum": 149850000,
+          "source_sha256": "210e4bb137830cbab28b647418c7666864b0c89c41fe16fd08191e15005d94cf",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              20793000,
+              20855000,
+              20706000,
+              20715000,
+              20740000,
+              21460000,
+              20927000
+            ],
+            "candidate": [
+              21220000,
+              20873000,
+              20673000,
+              20811000,
+              20627000,
+              20906000,
+              21003000
+            ]
+          },
+          "baseline_median_ns": 20793000,
+          "candidate_median_ns": 20873000,
+          "paired_ratio_median": 1.0008631023735315,
+          "paired_ratio_iqr": [
+            0.9945515911282545,
+            1.0046343229543808
+          ]
+        }
+      ],
+      "name": "kmp",
+      "kind": "algorithm"
+    },
+    {
+      "checksum": 1439994,
+      "source_sha256": "726e4e3c616d90618a818edd375907d3586524419c7cf7c0712165066fce19c4",
+      "samples_ns": {
+        "baseline": [
+          110950000,
+          110680000,
+          110118000,
+          108943000,
+          108786000,
+          109499000,
+          108626000,
+          109961000,
+          109527000,
+          111116000,
+          110196000,
+          109991000,
+          111191000,
+          109788000,
+          109885000,
+          109729000,
+          110082000,
+          109405000,
+          109535000,
+          109893000,
+          109290000
+        ],
+        "candidate": [
+          107428000,
+          108112000,
+          108034000,
+          108019000,
+          108230000,
+          108979000,
+          108357000,
+          107300000,
+          107962000,
+          107931000,
+          108673000,
+          107583000,
+          108187000,
+          107619000,
+          110107000,
+          108599000,
+          109666000,
+          108377000,
+          108484000,
+          108651000,
+          110298000
+        ]
+      },
+      "baseline_median_ns": 109885000,
+      "candidate_median_ns": 108230000,
+      "paired_ratio_median": 0.9886980972400425,
+      "paired_ratio_iqr": [
+        0.9774526379178042,
+        0.9950700732033311
+      ],
+      "round_ratio_medians": [
+        0.9915185005002616,
+        0.9781072996881564,
+        0.9906037201224807
+      ],
+      "rounds": [
+        {
+          "checksum": 1439994,
+          "source_sha256": "726e4e3c616d90618a818edd375907d3586524419c7cf7c0712165066fce19c4",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              110950000,
+              110680000,
+              110118000,
+              108943000,
+              108786000,
+              109499000,
+              108626000
+            ],
+            "candidate": [
+              107428000,
+              108112000,
+              108034000,
+              108019000,
+              108230000,
+              108979000,
+              108357000
+            ]
+          },
+          "baseline_median_ns": 109499000,
+          "candidate_median_ns": 108112000,
+          "paired_ratio_median": 0.9915185005002616,
+          "paired_ratio_iqr": [
+            0.9767979761474521,
+            0.9952510981835451
+          ]
+        },
+        {
+          "checksum": 1439994,
+          "source_sha256": "726e4e3c616d90618a818edd375907d3586524419c7cf7c0712165066fce19c4",
+          "first": "candidate",
+          "samples_ns": {
+            "baseline": [
+              109961000,
+              109527000,
+              111116000,
+              110196000,
+              109991000,
+              111191000,
+              109788000
+            ],
+            "candidate": [
+              107300000,
+              107962000,
+              107931000,
+              108673000,
+              107583000,
+              108187000,
+              107619000
+            ]
+          },
+          "baseline_median_ns": 109991000,
+          "candidate_median_ns": 107931000,
+          "paired_ratio_median": 0.9781072996881564,
+          "paired_ratio_iqr": [
+            0.9729834249174844,
+            0.9857112858016744
+          ]
+        },
+        {
+          "checksum": 1439994,
+          "source_sha256": "726e4e3c616d90618a818edd375907d3586524419c7cf7c0712165066fce19c4",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              109885000,
+              109729000,
+              110082000,
+              109405000,
+              109535000,
+              109893000,
+              109290000
+            ],
+            "candidate": [
+              110107000,
+              108599000,
+              109666000,
+              108377000,
+              108484000,
+              108651000,
+              110298000
+            ]
+          },
+          "baseline_median_ns": 109729000,
+          "candidate_median_ns": 108651000,
+          "paired_ratio_median": 0.9906037201224807,
+          "paired_ratio_iqr": [
+            0.9897019019584613,
+            1.0020202939436684
+          ]
+        }
+      ],
+      "name": "k_nucleotide",
+      "kind": "algorithm"
+    },
+    {
+      "checksum": 6782980,
+      "source_sha256": "b1bc4f7398a69e05b36ccd7448cf19a1f5086e8db30e4a2165b75ea9d2c14464",
+      "samples_ns": {
+        "baseline": [
+          727036000,
+          724069000,
+          722519000,
+          719836000,
+          722378000,
+          720823000,
+          720760000,
+          722550000,
+          723697000,
+          724325000,
+          723810000,
+          724603000,
+          728724000,
+          721299000,
+          723764000,
+          725563000,
+          725685000,
+          725954000,
+          724468000,
+          726435000,
+          722723000
+        ],
+        "candidate": [
+          719388000,
+          722155000,
+          719272000,
+          719645000,
+          718158000,
+          717754000,
+          719556000,
+          723839000,
+          723288000,
+          723082000,
+          718207000,
+          725364000,
+          720885000,
+          723424000,
+          723830000,
+          722239000,
+          722155000,
+          723049000,
+          724843000,
+          724078000,
+          723687000
+        ]
+      },
+      "baseline_median_ns": 723810000,
+      "candidate_median_ns": 722239000,
+      "paired_ratio_median": 0.9973566055168775,
+      "paired_ratio_iqr": [
+        0.995277180240091,
+        1.000304405576038
+      ],
+      "round_ratio_medians": [
+        0.995742366711384,
+        0.9994348463514426,
+        0.9967553876121057
+      ],
+      "rounds": [
+        {
+          "checksum": 6782980,
+          "source_sha256": "b1bc4f7398a69e05b36ccd7448cf19a1f5086e8db30e4a2165b75ea9d2c14464",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              727036000,
+              724069000,
+              722519000,
+              719836000,
+              722378000,
+              720823000,
+              720760000
+            ],
+            "candidate": [
+              719388000,
+              722155000,
+              719272000,
+              719645000,
+              718158000,
+              717754000,
+              719556000
+            ]
+          },
+          "baseline_median_ns": 722378000,
+          "candidate_median_ns": 719388000,
+          "paired_ratio_median": 0.995742366711384,
+          "paired_ratio_iqr": [
+            0.9941581831118887,
+            0.9983295410400134
+          ]
+        },
+        {
+          "checksum": 6782980,
+          "source_sha256": "b1bc4f7398a69e05b36ccd7448cf19a1f5086e8db30e4a2165b75ea9d2c14464",
+          "first": "candidate",
+          "samples_ns": {
+            "baseline": [
+              722550000,
+              723697000,
+              724325000,
+              723810000,
+              724603000,
+              728724000,
+              721299000
+            ],
+            "candidate": [
+              723839000,
+              723288000,
+              723082000,
+              718207000,
+              725364000,
+              720885000,
+              723424000
+            ]
+          },
+          "baseline_median_ns": 723810000,
+          "candidate_median_ns": 723288000,
+          "paired_ratio_median": 0.9994348463514426,
+          "paired_ratio_iqr": [
+            0.9922590182506459,
+            1.0017839595875717
+          ]
+        },
+        {
+          "checksum": 6782980,
+          "source_sha256": "b1bc4f7398a69e05b36ccd7448cf19a1f5086e8db30e4a2165b75ea9d2c14464",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              723764000,
+              725563000,
+              725685000,
+              725954000,
+              724468000,
+              726435000,
+              722723000
+            ],
+            "candidate": [
+              723830000,
+              722239000,
+              722155000,
+              723049000,
+              724843000,
+              724078000,
+              723687000
+            ]
+          },
+          "baseline_median_ns": 725563000,
+          "candidate_median_ns": 723687000,
+          "paired_ratio_median": 0.9967553876121057,
+          "paired_ratio_iqr": [
+            0.995418730006905,
+            1.0005176212061817
+          ]
+        }
+      ],
+      "name": "binary_trees",
+      "kind": "algorithm"
+    },
+    {
+      "checksum": -11217876,
+      "source_sha256": "4e44b63adc8ffd63ca84de2a6aa0ae66c08cb6446029274fd2795f0ae9beda5e",
+      "samples_ns": {
+        "baseline": [
+          42305000,
+          42074000,
+          42932000,
+          44585000,
+          46333000,
+          44474000,
+          43012000,
+          42090000,
+          42227000,
+          42613000,
+          41959000,
+          42555000,
+          41900000,
+          41777000,
+          42447000,
+          42369000,
+          42341000,
+          42554000,
+          42114000,
+          42332000,
+          42283000
+        ],
+        "candidate": [
+          42921000,
+          42151000,
+          42123000,
+          41804000,
+          43272000,
+          46195000,
+          42164000,
+          41640000,
+          41948000,
+          43662000,
+          41723000,
+          42515000,
+          42355000,
+          41931000,
+          42009000,
+          42024000,
+          43753000,
+          43401000,
+          41812000,
+          42121000,
+          42025000
+        ]
+      },
+      "baseline_median_ns": 42341000,
+      "candidate_median_ns": 42123000,
+      "paired_ratio_median": 0.9943754617602898,
+      "paired_ratio_iqr": [
+        0.9894949369673045,
+        1.0127100575742864
+      ],
+      "round_ratio_medians": [
+        0.9811562470884189,
+        0.9990600399483022,
+        0.9938982569827117
+      ],
+      "rounds": [
+        {
+          "checksum": -11217876,
+          "source_sha256": "4e44b63adc8ffd63ca84de2a6aa0ae66c08cb6446029274fd2795f0ae9beda5e",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              42305000,
+              42074000,
+              42932000,
+              44585000,
+              46333000,
+              44474000,
+              43012000
+            ],
+            "candidate": [
+              42921000,
+              42151000,
+              42123000,
+              41804000,
+              43272000,
+              46195000,
+              42164000
+            ]
+          },
+          "baseline_median_ns": 43012000,
+          "candidate_median_ns": 42164000,
+          "paired_ratio_median": 0.9811562470884189,
+          "paired_ratio_iqr": [
+            0.9376247616911517,
+            1.0145609266044202
+          ]
+        },
+        {
+          "checksum": -11217876,
+          "source_sha256": "4e44b63adc8ffd63ca84de2a6aa0ae66c08cb6446029274fd2795f0ae9beda5e",
+          "first": "candidate",
+          "samples_ns": {
+            "baseline": [
+              42090000,
+              42227000,
+              42613000,
+              41959000,
+              42555000,
+              41900000,
+              41777000
+            ],
+            "candidate": [
+              41640000,
+              41948000,
+              43662000,
+              41723000,
+              42515000,
+              42355000,
+              41931000
+            ]
+          },
+          "baseline_median_ns": 42090000,
+          "candidate_median_ns": 41948000,
+          "paired_ratio_median": 0.9990600399483022,
+          "paired_ratio_iqr": [
+            0.9933928529140124,
+            1.0108591885441527
+          ]
+        },
+        {
+          "checksum": -11217876,
+          "source_sha256": "4e44b63adc8ffd63ca84de2a6aa0ae66c08cb6446029274fd2795f0ae9beda5e",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              42447000,
+              42369000,
+              42341000,
+              42554000,
+              42114000,
+              42332000,
+              42283000
+            ],
+            "candidate": [
+              42009000,
+              42024000,
+              43753000,
+              43401000,
+              41812000,
+              42121000,
+              42025000
+            ]
+          },
+          "baseline_median_ns": 42341000,
+          "candidate_median_ns": 42025000,
+          "paired_ratio_median": 0.9938982569827117,
+          "paired_ratio_iqr": [
+            0.9918572541244778,
+            1.0199041218216853
+          ]
+        }
+      ],
+      "name": "lru_cache",
+      "kind": "algorithm"
+    },
+    {
+      "checksum": 120000,
+      "source_sha256": "6010a85db62d33ce6346cc9e3370596bfd86f3067f36ff146a64f99d227c22a7",
+      "samples_ns": {
+        "baseline": [
+          2143000,
+          2064000,
+          2063000,
+          2032000,
+          2102000,
+          2021000,
+          2217000,
+          2171000,
+          2052000,
+          2055000,
+          2032000,
+          2057000,
+          2107000,
+          2057000,
+          2075000,
+          2142000,
+          2056000,
+          2093000,
+          2026000,
+          2042000,
+          2029000
+        ],
+        "candidate": [
+          2060000,
+          2049000,
+          2020000,
+          2080000,
+          2065000,
+          2087000,
+          2052000,
+          2068000,
+          2165000,
+          2121000,
+          2035000,
+          2058000,
+          2052000,
+          2046000,
+          2062000,
+          2083000,
+          2128000,
+          2048000,
+          2141000,
+          2219000,
+          2199000
+        ]
+      },
+      "baseline_median_ns": 2057000,
+      "candidate_median_ns": 2065000,
+      "paired_ratio_median": 0.9946524064171123,
+      "paired_ratio_iqr": [
+        0.976198148233393,
+        1.0338382778491213
+      ],
+      "round_ratio_medians": [
+        0.9823977164605138,
+        1.0004861448711717,
+        1.0350194552529184
+      ],
+      "rounds": [
+        {
+          "checksum": 120000,
+          "source_sha256": "6010a85db62d33ce6346cc9e3370596bfd86f3067f36ff146a64f99d227c22a7",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              2143000,
+              2064000,
+              2063000,
+              2032000,
+              2102000,
+              2021000,
+              2217000
+            ],
+            "candidate": [
+              2060000,
+              2049000,
+              2020000,
+              2080000,
+              2065000,
+              2087000,
+              2052000
+            ]
+          },
+          "baseline_median_ns": 2064000,
+          "candidate_median_ns": 2060000,
+          "paired_ratio_median": 0.9823977164605138,
+          "paired_ratio_iqr": [
+            0.9612692487167522,
+            1.0236220472440944
+          ]
+        },
+        {
+          "checksum": 120000,
+          "source_sha256": "6010a85db62d33ce6346cc9e3370596bfd86f3067f36ff146a64f99d227c22a7",
+          "first": "candidate",
+          "samples_ns": {
+            "baseline": [
+              2171000,
+              2052000,
+              2055000,
+              2032000,
+              2057000,
+              2107000,
+              2057000
+            ],
+            "candidate": [
+              2068000,
+              2165000,
+              2121000,
+              2035000,
+              2058000,
+              2052000,
+              2046000
+            ]
+          },
+          "baseline_median_ns": 2057000,
+          "candidate_median_ns": 2058000,
+          "paired_ratio_median": 1.0004861448711717,
+          "paired_ratio_iqr": [
+            0.9738965353583294,
+            1.032116788321168
+          ]
+        },
+        {
+          "checksum": 120000,
+          "source_sha256": "6010a85db62d33ce6346cc9e3370596bfd86f3067f36ff146a64f99d227c22a7",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              2075000,
+              2142000,
+              2056000,
+              2093000,
+              2026000,
+              2042000,
+              2029000
+            ],
+            "candidate": [
+              2062000,
+              2083000,
+              2128000,
+              2048000,
+              2141000,
+              2219000,
+              2199000
+            ]
+          },
+          "baseline_median_ns": 2056000,
+          "candidate_median_ns": 2128000,
+          "paired_ratio_median": 1.0350194552529184,
+          "paired_ratio_iqr": [
+            0.9784997611084567,
+            1.0837851158206013
+          ]
+        }
+      ],
+      "name": "huffman",
+      "kind": "algorithm"
+    },
+    {
+      "checksum": 180282,
+      "source_sha256": "49e7595c83cb8bd653b067110eed7ea2a2cf087684cc9d9eb8cf7fc330f19753",
+      "samples_ns": {
+        "baseline": [
+          39459000,
+          39581000,
+          39599000,
+          39257000,
+          39141000,
+          39491000,
+          39461000,
+          39551000,
+          39751000,
+          39520000,
+          39421000,
+          39452000,
+          39661000,
+          39220000,
+          39613000,
+          39181000,
+          39444000,
+          39701000,
+          39337000,
+          39363000,
+          39810000
+        ],
+        "candidate": [
+          39883000,
+          39581000,
+          39555000,
+          40385000,
+          39485000,
+          39437000,
+          39181000,
+          39431000,
+          39357000,
+          39398000,
+          39679000,
+          39456000,
+          39301000,
+          39357000,
+          39812000,
+          39814000,
+          39653000,
+          39521000,
+          39492000,
+          39747000,
+          40515000
+        ]
+      },
+      "baseline_median_ns": 39461000,
+      "candidate_median_ns": 39521000,
+      "paired_ratio_median": 1.0034931157572666,
+      "paired_ratio_iqr": [
+        0.9969394490862359,
+        1.0092720460822306
+      ],
+      "round_ratio_medians": [
+        1.0,
+        0.9969659427068848,
+        1.0052986512524085
+      ],
+      "rounds": [
+        {
+          "checksum": 180282,
+          "source_sha256": "49e7595c83cb8bd653b067110eed7ea2a2cf087684cc9d9eb8cf7fc330f19753",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              39459000,
+              39581000,
+              39599000,
+              39257000,
+              39141000,
+              39491000,
+              39461000
+            ],
+            "candidate": [
+              39883000,
+              39581000,
+              39555000,
+              40385000,
+              39485000,
+              39437000,
+              39181000
+            ]
+          },
+          "baseline_median_ns": 39461000,
+          "candidate_median_ns": 39555000,
+          "paired_ratio_median": 1.0,
+          "paired_ratio_iqr": [
+            0.9986325998328733,
+            1.0107453305963152
+          ]
+        },
+        {
+          "checksum": 180282,
+          "source_sha256": "49e7595c83cb8bd653b067110eed7ea2a2cf087684cc9d9eb8cf7fc330f19753",
+          "first": "candidate",
+          "samples_ns": {
+            "baseline": [
+              39551000,
+              39751000,
+              39520000,
+              39421000,
+              39452000,
+              39661000,
+              39220000
+            ],
+            "candidate": [
+              39431000,
+              39357000,
+              39398000,
+              39679000,
+              39456000,
+              39301000,
+              39357000
+            ]
+          },
+          "baseline_median_ns": 39520000,
+          "candidate_median_ns": 39398000,
+          "paired_ratio_median": 0.9969659427068848,
+          "paired_ratio_iqr": [
+            0.9909230730440484,
+            1.0034931157572666
+          ]
+        },
+        {
+          "checksum": 180282,
+          "source_sha256": "49e7595c83cb8bd653b067110eed7ea2a2cf087684cc9d9eb8cf7fc330f19753",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              39613000,
+              39181000,
+              39444000,
+              39701000,
+              39337000,
+              39363000,
+              39810000
+            ],
+            "candidate": [
+              39812000,
+              39814000,
+              39653000,
+              39521000,
+              39492000,
+              39747000,
+              40515000
+            ]
+          },
+          "baseline_median_ns": 39444000,
+          "candidate_median_ns": 39747000,
+          "paired_ratio_median": 1.0052986512524085,
+          "paired_ratio_iqr": [
+            1.0039403106490072,
+            1.0161557897960747
+          ]
+        }
+      ],
+      "name": "fannkuch",
+      "kind": "algorithm"
+    },
+    {
+      "checksum": 199830979999,
+      "source_sha256": "ccddd921a563d3796dbeb3cced8d9bfc59f029b56761d6ae033833702721935a",
+      "samples_ns": {
+        "baseline": [
+          24187000,
+          24333000,
+          24213000,
+          23913000,
+          24172000,
+          24255000,
+          24157000,
+          24241000,
+          24275000,
+          24025000,
+          23860000,
+          23908000,
+          23922000,
+          24145000,
+          24010000,
+          24131000,
+          24029000,
+          24076000,
+          24206000,
+          24365000,
+          24220000
+        ],
+        "candidate": [
+          23859000,
+          24046000,
+          24268000,
+          23992000,
+          24058000,
+          24212000,
+          23967000,
+          24037000,
+          24279000,
+          24184000,
+          23887000,
+          24184000,
+          24249000,
+          24141000,
+          24029000,
+          23930000,
+          25103000,
+          24435000,
+          23833000,
+          24295000,
+          24021000
+        ]
+      },
+      "baseline_median_ns": 24157000,
+      "candidate_median_ns": 24058000,
+      "paired_ratio_median": 0.9998343342306896,
+      "paired_ratio_iqr": [
+        0.9917270576263111,
+        1.0049608742548486
+      ],
+      "round_ratio_medians": [
+        0.9952837994373656,
+        1.0011316010058675,
+        0.9971270264723989
+      ],
+      "rounds": [
+        {
+          "checksum": 199830979999,
+          "source_sha256": "ccddd921a563d3796dbeb3cced8d9bfc59f029b56761d6ae033833702721935a",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              24187000,
+              24333000,
+              24213000,
+              23913000,
+              24172000,
+              24255000,
+              24157000
+            ],
+            "candidate": [
+              23859000,
+              24046000,
+              24268000,
+              23992000,
+              24058000,
+              24212000,
+              23967000
+            ]
+          },
+          "baseline_median_ns": 24187000,
+          "candidate_median_ns": 24046000,
+          "paired_ratio_median": 0.9952837994373656,
+          "paired_ratio_iqr": [
+            0.9882053178810669,
+            1.002271507041672
+          ]
+        },
+        {
+          "checksum": 199830979999,
+          "source_sha256": "ccddd921a563d3796dbeb3cced8d9bfc59f029b56761d6ae033833702721935a",
+          "first": "candidate",
+          "samples_ns": {
+            "baseline": [
+              24241000,
+              24275000,
+              24025000,
+              23860000,
+              23908000,
+              23922000,
+              24145000
+            ],
+            "candidate": [
+              24037000,
+              24279000,
+              24184000,
+              23887000,
+              24184000,
+              24249000,
+              24141000
+            ]
+          },
+          "baseline_median_ns": 24025000,
+          "candidate_median_ns": 24184000,
+          "paired_ratio_median": 1.0011316010058675,
+          "paired_ratio_iqr": [
+            0.9998343342306896,
+            1.0115442529697172
+          ]
+        },
+        {
+          "checksum": 199830979999,
+          "source_sha256": "ccddd921a563d3796dbeb3cced8d9bfc59f029b56761d6ae033833702721935a",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              24010000,
+              24131000,
+              24029000,
+              24076000,
+              24206000,
+              24365000,
+              24220000
+            ],
+            "candidate": [
+              24029000,
+              23930000,
+              25103000,
+              24435000,
+              23833000,
+              24295000,
+              24021000
+            ]
+          },
+          "baseline_median_ns": 24131000,
+          "candidate_median_ns": 24029000,
+          "paired_ratio_median": 0.9971270264723989,
+          "paired_ratio_iqr": [
+            0.9916704653764867,
+            1.0149111148031233
+          ]
+        }
+      ],
+      "name": "n_body",
+      "kind": "algorithm"
+    },
+    {
+      "checksum": 8999994,
+      "source_sha256": "a52967d72f3ef71f0b893384edd02e5aac560b42304530c68d4502863e5978ef",
+      "samples_ns": {
+        "baseline": [
+          73802000,
+          73959000,
+          73957000,
+          74403000,
+          75377000,
+          75994000,
+          73927000,
+          74945000,
+          75021000,
+          75116000,
+          74899000,
+          76029000,
+          76049000,
+          74522000,
+          74661000,
+          74597000,
+          74470000,
+          75059000,
+          74464000,
+          74124000,
+          75145000
+        ],
+        "candidate": [
+          76018000,
+          74470000,
+          73957000,
+          74849000,
+          74346000,
+          74312000,
+          73973000,
+          74849000,
+          74783000,
+          74743000,
+          76220000,
+          75215000,
+          74378000,
+          74187000,
+          74749000,
+          75095000,
+          74480000,
+          75803000,
+          75163000,
+          73594000,
+          74091000
+        ]
+      },
+      "baseline_median_ns": 74661000,
+      "candidate_median_ns": 74743000,
+      "paired_ratio_median": 1.0,
+      "paired_ratio_iqr": [
+        0.9910716891292639,
+        1.0067925525890407
+      ],
+      "round_ratio_medians": [
+        1.000622235448483,
+        0.9955046831808056,
+        1.0011786608805133
+      ],
+      "rounds": [
+        {
+          "checksum": 8999994,
+          "source_sha256": "a52967d72f3ef71f0b893384edd02e5aac560b42304530c68d4502863e5978ef",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              73802000,
+              73959000,
+              73957000,
+              74403000,
+              75377000,
+              75994000,
+              73927000
+            ],
+            "candidate": [
+              76018000,
+              74470000,
+              73957000,
+              74849000,
+              74346000,
+              74312000,
+              73973000
+            ]
+          },
+          "baseline_median_ns": 73959000,
+          "candidate_median_ns": 74346000,
+          "paired_ratio_median": 1.000622235448483,
+          "paired_ratio_iqr": [
+            0.9863220876394656,
+            1.0069092334942333
+          ]
+        },
+        {
+          "checksum": 8999994,
+          "source_sha256": "a52967d72f3ef71f0b893384edd02e5aac560b42304530c68d4502863e5978ef",
+          "first": "candidate",
+          "samples_ns": {
+            "baseline": [
+              74945000,
+              75021000,
+              75116000,
+              74899000,
+              76029000,
+              76049000,
+              74522000
+            ],
+            "candidate": [
+              74849000,
+              74783000,
+              74743000,
+              76220000,
+              75215000,
+              74378000,
+              74187000
+            ]
+          },
+          "baseline_median_ns": 75021000,
+          "candidate_median_ns": 74783000,
+          "paired_ratio_median": 0.9955046831808056,
+          "paired_ratio_iqr": [
+            0.9892935590366834,
+            0.9987190606444726
+          ]
+        },
+        {
+          "checksum": 8999994,
+          "source_sha256": "a52967d72f3ef71f0b893384edd02e5aac560b42304530c68d4502863e5978ef",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              74661000,
+              74597000,
+              74470000,
+              75059000,
+              74464000,
+              74124000,
+              75145000
+            ],
+            "candidate": [
+              74749000,
+              75095000,
+              74480000,
+              75803000,
+              75163000,
+              73594000,
+              74091000
+            ]
+          },
+          "baseline_median_ns": 74597000,
+          "candidate_median_ns": 74749000,
+          "paired_ratio_median": 1.0011786608805133,
+          "paired_ratio_iqr": [
+            0.9928498192218445,
+            1.0093870863773098
+          ]
+        }
+      ],
+      "name": "vm_hot_paths",
+      "kind": "hotspot"
+    },
+    {
+      "checksum": 125627,
+      "source_sha256": "809035a281ee689b086bfd6cc354c515fb476da706753c1c2f6b33d469db1aae",
+      "samples_ns": {
+        "baseline": [
+          22189000,
+          22096000,
+          21888000,
+          21986000,
+          21542000,
+          21607000,
+          22094000,
+          21591000,
+          22081000,
+          21808000,
+          21904000,
+          21980000,
+          22047000,
+          22166000,
+          21751000,
+          22286000,
+          22138000,
+          21812000,
+          21880000,
+          22042000,
+          22100000
+        ],
+        "candidate": [
+          22389000,
+          22394000,
+          22279000,
+          21925000,
+          21850000,
+          21898000,
+          22143000,
+          22188000,
+          22234000,
+          21681000,
+          21869000,
+          21954000,
+          22856000,
+          22476000,
+          21804000,
+          21766000,
+          22156000,
+          21966000,
+          21799000,
+          22396000,
+          22135000
+        ]
+      },
+      "baseline_median_ns": 21986000,
+      "candidate_median_ns": 22135000,
+      "paired_ratio_median": 1.0069290340111408,
+      "paired_ratio_iqr": [
+        0.9986096123974846,
+        1.0141415170596073
+      ],
+      "round_ratio_medians": [
+        1.0134678576387282,
+        1.0069290340111408,
+        1.0015837104072398
+      ],
+      "rounds": [
+        {
+          "checksum": 125627,
+          "source_sha256": "809035a281ee689b086bfd6cc354c515fb476da706753c1c2f6b33d469db1aae",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              22189000,
+              22096000,
+              21888000,
+              21986000,
+              21542000,
+              21607000,
+              22094000
+            ],
+            "candidate": [
+              22389000,
+              22394000,
+              22279000,
+              21925000,
+              21850000,
+              21898000,
+              22143000
+            ]
+          },
+          "baseline_median_ns": 21986000,
+          "candidate_median_ns": 22143000,
+          "paired_ratio_median": 1.0134678576387282,
+          "paired_ratio_iqr": [
+            1.0022177966868833,
+            1.0142976511001764
+          ]
+        },
+        {
+          "checksum": 125627,
+          "source_sha256": "809035a281ee689b086bfd6cc354c515fb476da706753c1c2f6b33d469db1aae",
+          "first": "candidate",
+          "samples_ns": {
+            "baseline": [
+              21591000,
+              22081000,
+              21808000,
+              21904000,
+              21980000,
+              22047000,
+              22166000
+            ],
+            "candidate": [
+              22188000,
+              22234000,
+              21681000,
+              21869000,
+              21954000,
+              22856000,
+              22476000
+            ]
+          },
+          "baseline_median_ns": 21980000,
+          "candidate_median_ns": 22188000,
+          "paired_ratio_median": 1.0069290340111408,
+          "paired_ratio_iqr": [
+            0.9984021183345507,
+            1.027650409893011
+          ]
+        },
+        {
+          "checksum": 125627,
+          "source_sha256": "809035a281ee689b086bfd6cc354c515fb476da706753c1c2f6b33d469db1aae",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              21751000,
+              22286000,
+              22138000,
+              21812000,
+              21880000,
+              22042000,
+              22100000
+            ],
+            "candidate": [
+              21804000,
+              21766000,
+              22156000,
+              21966000,
+              21799000,
+              22396000,
+              22135000
+            ]
+          },
+          "baseline_median_ns": 22042000,
+          "candidate_median_ns": 21966000,
+          "paired_ratio_median": 1.0015837104072398,
+          "paired_ratio_iqr": [
+            0.9962979890310786,
+            1.0070603337612323
+          ]
+        }
+      ],
+      "name": "float_arithmetic",
+      "kind": "hotspot"
+    },
+    {
+      "checksum": 599994,
+      "source_sha256": "86bccda59a2585fa6bc48a77de16c0afe920ebee3d94add47a3bf1d3d0857aea",
+      "samples_ns": {
+        "baseline": [
+          2803000,
+          2705000,
+          2686000,
+          2677000,
+          2750000,
+          2671000,
+          2646000,
+          2739000,
+          2727000,
+          2729000,
+          3099000,
+          2803000,
+          2770000,
+          2701000,
+          2905000,
+          2698000,
+          2882000,
+          2934000,
+          2749000,
+          2749000,
+          2717000
+        ],
+        "candidate": [
+          2671000,
+          2781000,
+          2712000,
+          2682000,
+          2682000,
+          2690000,
+          2760000,
+          2780000,
+          2766000,
+          2660000,
+          2822000,
+          2893000,
+          2706000,
+          2846000,
+          2773000,
+          2913000,
+          2770000,
+          2752000,
+          2733000,
+          2754000,
+          2727000
+        ]
+      },
+      "baseline_median_ns": 2739000,
+      "candidate_median_ns": 2754000,
+      "paired_ratio_median": 1.00186776242062,
+      "paired_ratio_iqr": [
+        0.967927055867162,
+        1.0215325425378206
+      ],
+      "round_ratio_medians": [
+        1.0071134406589293,
+        1.0143014301430142,
+        0.9941797017097126
+      ],
+      "rounds": [
+        {
+          "checksum": 599994,
+          "source_sha256": "86bccda59a2585fa6bc48a77de16c0afe920ebee3d94add47a3bf1d3d0857aea",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              2803000,
+              2705000,
+              2686000,
+              2677000,
+              2750000,
+              2671000,
+              2646000
+            ],
+            "candidate": [
+              2671000,
+              2781000,
+              2712000,
+              2682000,
+              2682000,
+              2690000,
+              2760000
+            ]
+          },
+          "baseline_median_ns": 2686000,
+          "candidate_median_ns": 2690000,
+          "paired_ratio_median": 1.0071134406589293,
+          "paired_ratio_iqr": [
+            0.9752727272727273,
+            1.0280961182994455
+          ]
+        },
+        {
+          "checksum": 599994,
+          "source_sha256": "86bccda59a2585fa6bc48a77de16c0afe920ebee3d94add47a3bf1d3d0857aea",
+          "first": "candidate",
+          "samples_ns": {
+            "baseline": [
+              2739000,
+              2727000,
+              2729000,
+              3099000,
+              2803000,
+              2770000,
+              2701000
+            ],
+            "candidate": [
+              2780000,
+              2766000,
+              2660000,
+              2822000,
+              2893000,
+              2706000,
+              2846000
+            ]
+          },
+          "baseline_median_ns": 2739000,
+          "candidate_median_ns": 2780000,
+          "paired_ratio_median": 1.0143014301430142,
+          "paired_ratio_iqr": [
+            0.9747160131916452,
+            1.032108455226543
+          ]
+        },
+        {
+          "checksum": 599994,
+          "source_sha256": "86bccda59a2585fa6bc48a77de16c0afe920ebee3d94add47a3bf1d3d0857aea",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              2905000,
+              2698000,
+              2882000,
+              2934000,
+              2749000,
+              2749000,
+              2717000
+            ],
+            "candidate": [
+              2773000,
+              2913000,
+              2770000,
+              2752000,
+              2733000,
+              2754000,
+              2727000
+            ]
+          },
+          "baseline_median_ns": 2749000,
+          "candidate_median_ns": 2754000,
+          "paired_ratio_median": 0.9941797017097126,
+          "paired_ratio_iqr": [
+            0.9545611015490534,
+            1.0036805299963194
+          ]
+        }
+      ],
+      "name": "function_call_baseline",
+      "kind": "hotspot"
+    },
+    {
+      "checksum": 599994,
+      "source_sha256": "34f70a69488b36743ddecf021b9608d41e83473a4c69d943da9bff36453ef637",
+      "samples_ns": {
+        "baseline": [
+          6841000,
+          6701000,
+          6679000,
+          6665000,
+          6687000,
+          6655000,
+          6591000,
+          6704000,
+          6523000,
+          6620000,
+          6773000,
+          6676000,
+          6712000,
+          6705000,
+          6510000,
+          6636000,
+          6687000,
+          6712000,
+          6675000,
+          6589000,
+          6699000
+        ],
+        "candidate": [
+          6804000,
+          6816000,
+          6675000,
+          6506000,
+          6618000,
+          6782000,
+          6997000,
+          6853000,
+          6632000,
+          6653000,
+          6574000,
+          6575000,
+          6676000,
+          6643000,
+          6584000,
+          6622000,
+          6694000,
+          6750000,
+          6664000,
+          6713000,
+          6710000
+        ]
+      },
+      "baseline_median_ns": 6679000,
+      "candidate_median_ns": 6675000,
+      "paired_ratio_median": 1.0010468072379244,
+      "paired_ratio_iqr": [
+        0.9926723016387682,
+        1.0169358601912402
+      ],
+      "round_ratio_medians": [
+        0.9994011079502919,
+        0.9946364719904648,
+        1.0016420361247949
+      ],
+      "rounds": [
+        {
+          "checksum": 599994,
+          "source_sha256": "34f70a69488b36743ddecf021b9608d41e83473a4c69d943da9bff36453ef637",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              6841000,
+              6701000,
+              6679000,
+              6665000,
+              6687000,
+              6655000,
+              6591000
+            ],
+            "candidate": [
+              6804000,
+              6816000,
+              6675000,
+              6506000,
+              6618000,
+              6782000,
+              6997000
+            ]
+          },
+          "baseline_median_ns": 6679000,
+          "candidate_median_ns": 6782000,
+          "paired_ratio_median": 0.9994011079502919,
+          "paired_ratio_iqr": [
+            0.9896814715118888,
+            1.0190833959429
+          ]
+        },
+        {
+          "checksum": 599994,
+          "source_sha256": "34f70a69488b36743ddecf021b9608d41e83473a4c69d943da9bff36453ef637",
+          "first": "candidate",
+          "samples_ns": {
+            "baseline": [
+              6704000,
+              6523000,
+              6620000,
+              6773000,
+              6676000,
+              6712000,
+              6705000
+            ],
+            "candidate": [
+              6853000,
+              6632000,
+              6653000,
+              6574000,
+              6575000,
+              6676000,
+              6643000
+            ]
+          },
+          "baseline_median_ns": 6704000,
+          "candidate_median_ns": 6643000,
+          "paired_ratio_median": 0.9946364719904648,
+          "paired_ratio_iqr": [
+            0.9848711803475135,
+            1.0167101027134755
+          ]
+        },
+        {
+          "checksum": 599994,
+          "source_sha256": "34f70a69488b36743ddecf021b9608d41e83473a4c69d943da9bff36453ef637",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              6510000,
+              6636000,
+              6687000,
+              6712000,
+              6675000,
+              6589000,
+              6699000
+            ],
+            "candidate": [
+              6584000,
+              6622000,
+              6694000,
+              6750000,
+              6664000,
+              6713000,
+              6710000
+            ]
+          },
+          "baseline_median_ns": 6675000,
+          "candidate_median_ns": 6694000,
+          "paired_ratio_median": 1.0016420361247949,
+          "paired_ratio_iqr": [
+            0.9983520599250937,
+            1.0113671274961598
+          ]
+        }
+      ],
+      "name": "function_calls",
+      "kind": "hotspot"
+    },
+    {
+      "checksum": 599994,
+      "source_sha256": "65211125296cb79763dce03fe73117eaeb0e22d9d6d7cdc0627d025b3bd1a64e",
+      "samples_ns": {
+        "baseline": [
+          12337000,
+          12475000,
+          12242000,
+          12331000,
+          12475000,
+          12231000,
+          12263000,
+          12162000,
+          12111000,
+          12288000,
+          12369000,
+          12144000,
+          12200000,
+          12695000,
+          12398000,
+          12546000,
+          12452000,
+          12203000,
+          12244000,
+          12118000,
+          12204000
+        ],
+        "candidate": [
+          12286000,
+          12343000,
+          12190000,
+          12142000,
+          12036000,
+          12353000,
+          12158000,
+          12212000,
+          12088000,
+          12109000,
+          12159000,
+          12227000,
+          12269000,
+          12437000,
+          12474000,
+          12126000,
+          12168000,
+          12301000,
+          12210000,
+          12176000,
+          12206000
+        ]
+      },
+      "baseline_median_ns": 12263000,
+      "candidate_median_ns": 12206000,
+      "paired_ratio_median": 0.9958660938639864,
+      "paired_ratio_iqr": [
+        0.983847423618941,
+        1.0052210030330169
+      ],
+      "round_ratio_medians": [
+        0.9914376579955965,
+        0.9981009000082569,
+        1.000163880694854
+      ],
+      "rounds": [
+        {
+          "checksum": 599994,
+          "source_sha256": "65211125296cb79763dce03fe73117eaeb0e22d9d6d7cdc0627d025b3bd1a64e",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              12337000,
+              12475000,
+              12242000,
+              12331000,
+              12475000,
+              12231000,
+              12263000
+            ],
+            "candidate": [
+              12286000,
+              12343000,
+              12190000,
+              12142000,
+              12036000,
+              12353000,
+              12158000
+            ]
+          },
+          "baseline_median_ns": 12331000,
+          "candidate_median_ns": 12190000,
+          "paired_ratio_median": 0.9914376579955965,
+          "paired_ratio_iqr": [
+            0.9846727759305814,
+            0.9958660938639864
+          ]
+        },
+        {
+          "checksum": 599994,
+          "source_sha256": "65211125296cb79763dce03fe73117eaeb0e22d9d6d7cdc0627d025b3bd1a64e",
+          "first": "candidate",
+          "samples_ns": {
+            "baseline": [
+              12162000,
+              12111000,
+              12288000,
+              12369000,
+              12144000,
+              12200000,
+              12695000
+            ],
+            "candidate": [
+              12212000,
+              12088000,
+              12109000,
+              12159000,
+              12227000,
+              12269000,
+              12437000
+            ]
+          },
+          "baseline_median_ns": 12200000,
+          "candidate_median_ns": 12212000,
+          "paired_ratio_median": 0.9981009000082569,
+          "paired_ratio_iqr": [
+            0.9830220713073005,
+            1.005655737704918
+          ]
+        },
+        {
+          "checksum": 599994,
+          "source_sha256": "65211125296cb79763dce03fe73117eaeb0e22d9d6d7cdc0627d025b3bd1a64e",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              12398000,
+              12546000,
+              12452000,
+              12203000,
+              12244000,
+              12118000,
+              12204000
+            ],
+            "candidate": [
+              12474000,
+              12126000,
+              12168000,
+              12301000,
+              12210000,
+              12176000,
+              12206000
+            ]
+          },
+          "baseline_median_ns": 12244000,
+          "candidate_median_ns": 12206000,
+          "paired_ratio_median": 1.000163880694854,
+          "paired_ratio_iqr": [
+            0.9771924188885319,
+            1.0061300209711244
+          ]
+        }
+      ],
+      "name": "function_callbacks",
+      "kind": "hotspot"
+    },
+    {
+      "checksum": 500007,
+      "source_sha256": "79927b7a2faab18067a8409909d7d1573a64c28b8df348114a076fd1720e780c",
+      "samples_ns": {
+        "baseline": [
+          6298000,
+          6153000,
+          6282000,
+          6317000,
+          6061000,
+          6402000,
+          6222000,
+          6304000,
+          6176000,
+          6124000,
+          6522000,
+          6162000,
+          6149000,
+          6349000,
+          6478000,
+          6345000,
+          6214000,
+          6281000,
+          6369000,
+          6168000,
+          6143000
+        ],
+        "candidate": [
+          6079000,
+          6411000,
+          6090000,
+          6157000,
+          6323000,
+          6218000,
+          6104000,
+          6248000,
+          6264000,
+          6304000,
+          6248000,
+          6186000,
+          6235000,
+          6061000,
+          6058000,
+          6328000,
+          6113000,
+          6192000,
+          6194000,
+          6469000,
+          6169000
+        ]
+      },
+      "baseline_median_ns": 6281000,
+      "candidate_median_ns": 6194000,
+      "paired_ratio_median": 0.9858302818022607,
+      "paired_ratio_iqr": [
+        0.9703477333820287,
+        1.0141173593246133
+      ],
+      "round_ratio_medians": [
+        0.9746715212917524,
+        1.0038948393378773,
+        0.9858302818022607
+      ],
+      "rounds": [
+        {
+          "checksum": 500007,
+          "source_sha256": "79927b7a2faab18067a8409909d7d1573a64c28b8df348114a076fd1720e780c",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              6298000,
+              6153000,
+              6282000,
+              6317000,
+              6061000,
+              6402000,
+              6222000
+            ],
+            "candidate": [
+              6079000,
+              6411000,
+              6090000,
+              6157000,
+              6323000,
+              6218000,
+              6104000
+            ]
+          },
+          "baseline_median_ns": 6282000,
+          "candidate_median_ns": 6157000,
+          "paired_ratio_median": 0.9746715212917524,
+          "paired_ratio_iqr": [
+            0.9694364851957975,
+            1.0419307654802534
+          ]
+        },
+        {
+          "checksum": 500007,
+          "source_sha256": "79927b7a2faab18067a8409909d7d1573a64c28b8df348114a076fd1720e780c",
+          "first": "candidate",
+          "samples_ns": {
+            "baseline": [
+              6304000,
+              6176000,
+              6124000,
+              6522000,
+              6162000,
+              6149000,
+              6349000
+            ],
+            "candidate": [
+              6248000,
+              6264000,
+              6304000,
+              6248000,
+              6186000,
+              6235000,
+              6061000
+            ]
+          },
+          "baseline_median_ns": 6176000,
+          "candidate_median_ns": 6248000,
+          "paired_ratio_median": 1.0038948393378773,
+          "paired_ratio_iqr": [
+            0.9579883471327814,
+            1.0142487046632125
+          ]
+        },
+        {
+          "checksum": 500007,
+          "source_sha256": "79927b7a2faab18067a8409909d7d1573a64c28b8df348114a076fd1720e780c",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              6478000,
+              6345000,
+              6214000,
+              6281000,
+              6369000,
+              6168000,
+              6143000
+            ],
+            "candidate": [
+              6058000,
+              6328000,
+              6113000,
+              6192000,
+              6194000,
+              6469000,
+              6169000
+            ]
+          },
+          "baseline_median_ns": 6281000,
+          "candidate_median_ns": 6192000,
+          "paired_ratio_median": 0.9858302818022607,
+          "paired_ratio_iqr": [
+            0.9725231590516564,
+            1.0042324597102392
+          ]
+        }
+      ],
+      "name": "list_access",
+      "kind": "hotspot"
+    },
+    {
+      "checksum": 1000122,
+      "source_sha256": "1878773eb576b5d9bff9b69ab81b0becf4180ff81bc36291bfbc48c6dd0af1d2",
+      "samples_ns": {
+        "baseline": [
+          7549000,
+          7607000,
+          7548000,
+          7609000,
+          7495000,
+          7581000,
+          7428000,
+          7554000,
+          7612000,
+          7593000,
+          7416000,
+          7405000,
+          7473000,
+          7454000,
+          7660000,
+          7618000,
+          7678000,
+          7441000,
+          7645000,
+          7673000,
+          7559000
+        ],
+        "candidate": [
+          7690000,
+          7696000,
+          7512000,
+          7620000,
+          7514000,
+          7652000,
+          7768000,
+          7482000,
+          7452000,
+          7570000,
+          7592000,
+          7605000,
+          7547000,
+          7539000,
+          7839000,
+          7717000,
+          7629000,
+          7659000,
+          7615000,
+          7476000,
+          7597000
+        ]
+      },
+      "baseline_median_ns": 7559000,
+      "candidate_median_ns": 7605000,
+      "paired_ratio_median": 1.00936551906081,
+      "paired_ratio_iqr": [
+        0.9956531956108765,
+        1.0210230584031152
+      ],
+      "round_ratio_medians": [
+        1.00936551906081,
+        1.0099023150006692,
+        1.0050271199894165
+      ],
+      "rounds": [
+        {
+          "checksum": 1000122,
+          "source_sha256": "1878773eb576b5d9bff9b69ab81b0becf4180ff81bc36291bfbc48c6dd0af1d2",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              7549000,
+              7607000,
+              7548000,
+              7609000,
+              7495000,
+              7581000,
+              7428000
+            ],
+            "candidate": [
+              7690000,
+              7696000,
+              7512000,
+              7620000,
+              7514000,
+              7652000,
+              7768000
+            ]
+          },
+          "baseline_median_ns": 7549000,
+          "candidate_median_ns": 7652000,
+          "paired_ratio_median": 1.00936551906081,
+          "paired_ratio_iqr": [
+            1.0014456564594558,
+            1.0186779705921314
+          ]
+        },
+        {
+          "checksum": 1000122,
+          "source_sha256": "1878773eb576b5d9bff9b69ab81b0becf4180ff81bc36291bfbc48c6dd0af1d2",
+          "first": "candidate",
+          "samples_ns": {
+            "baseline": [
+              7554000,
+              7612000,
+              7593000,
+              7416000,
+              7405000,
+              7473000,
+              7454000
+            ],
+            "candidate": [
+              7482000,
+              7452000,
+              7570000,
+              7592000,
+              7605000,
+              7547000,
+              7539000
+            ]
+          },
+          "baseline_median_ns": 7473000,
+          "candidate_median_ns": 7547000,
+          "paired_ratio_median": 1.0099023150006692,
+          "paired_ratio_iqr": [
+            0.9904686258935663,
+            1.0237324703344122
+          ]
+        },
+        {
+          "checksum": 1000122,
+          "source_sha256": "1878773eb576b5d9bff9b69ab81b0becf4180ff81bc36291bfbc48c6dd0af1d2",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              7660000,
+              7618000,
+              7678000,
+              7441000,
+              7645000,
+              7673000,
+              7559000
+            ],
+            "candidate": [
+              7839000,
+              7717000,
+              7629000,
+              7659000,
+              7615000,
+              7476000,
+              7597000
+            ]
+          },
+          "baseline_median_ns": 7645000,
+          "candidate_median_ns": 7629000,
+          "paired_ratio_median": 1.0050271199894165,
+          "paired_ratio_iqr": [
+            0.9936181297212816,
+            1.023368146214099
+          ]
+        }
+      ],
+      "name": "list_append",
+      "kind": "hotspot"
+    },
+    {
+      "checksum": 2170,
+      "source_sha256": "875425abe172655194100f1bbc192874c3381b16acb9af6c3b6be2b31bddb413",
+      "samples_ns": {
+        "baseline": [
+          4905000,
+          4935000,
+          4744000,
+          4806000,
+          4949000,
+          4800000,
+          4767000,
+          4845000,
+          4863000,
+          4740000,
+          4828000,
+          4736000,
+          4775000,
+          4916000,
+          4857000,
+          4882000,
+          4804000,
+          4941000,
+          4845000,
+          4799000,
+          4773000
+        ],
+        "candidate": [
+          4975000,
+          4803000,
+          5095000,
+          4879000,
+          4774000,
+          4893000,
+          4778000,
+          4827000,
+          4877000,
+          4804000,
+          5165000,
+          4744000,
+          4832000,
+          4808000,
+          4772000,
+          4868000,
+          4827000,
+          4762000,
+          4734000,
+          4754000,
+          4954000
+        ]
+      },
+      "baseline_median_ns": 4828000,
+      "candidate_median_ns": 4827000,
+      "paired_ratio_median": 1.002307530941892,
+      "paired_ratio_iqr": [
+        0.9802652023628418,
+        1.0147302492679258
+      ],
+      "round_ratio_medians": [
+        1.0142711518858307,
+        1.0028788813489615,
+        0.9906230464680141
+      ],
+      "rounds": [
+        {
+          "checksum": 2170,
+          "source_sha256": "875425abe172655194100f1bbc192874c3381b16acb9af6c3b6be2b31bddb413",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              4905000,
+              4935000,
+              4744000,
+              4806000,
+              4949000,
+              4800000,
+              4767000
+            ],
+            "candidate": [
+              4975000,
+              4803000,
+              5095000,
+              4879000,
+              4774000,
+              4893000,
+              4778000
+            ]
+          },
+          "baseline_median_ns": 4806000,
+          "candidate_median_ns": 4879000,
+          "paired_ratio_median": 1.0142711518858307,
+          "paired_ratio_iqr": [
+            0.9732522796352584,
+            1.019375
+          ]
+        },
+        {
+          "checksum": 2170,
+          "source_sha256": "875425abe172655194100f1bbc192874c3381b16acb9af6c3b6be2b31bddb413",
+          "first": "candidate",
+          "samples_ns": {
+            "baseline": [
+              4845000,
+              4863000,
+              4740000,
+              4828000,
+              4736000,
+              4775000,
+              4916000
+            ],
+            "candidate": [
+              4827000,
+              4877000,
+              4804000,
+              5165000,
+              4744000,
+              4832000,
+              4808000
+            ]
+          },
+          "baseline_median_ns": 4828000,
+          "candidate_median_ns": 4827000,
+          "paired_ratio_median": 1.0028788813489615,
+          "paired_ratio_iqr": [
+            0.9962848297213622,
+            1.0135021097046413
+          ]
+        },
+        {
+          "checksum": 2170,
+          "source_sha256": "875425abe172655194100f1bbc192874c3381b16acb9af6c3b6be2b31bddb413",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              4857000,
+              4882000,
+              4804000,
+              4941000,
+              4845000,
+              4799000,
+              4773000
+            ],
+            "candidate": [
+              4772000,
+              4868000,
+              4827000,
+              4762000,
+              4734000,
+              4754000,
+              4954000
+            ]
+          },
+          "baseline_median_ns": 4845000,
+          "candidate_median_ns": 4772000,
+          "paired_ratio_median": 0.9906230464680141,
+          "paired_ratio_iqr": [
+            0.9770897832817338,
+            1.0047876769358868
+          ]
+        }
+      ],
+      "name": "list_update",
+      "kind": "hotspot"
+    },
+    {
+      "checksum": 1023,
+      "source_sha256": "ddb02fc3227b93ee8a3f654715c0c3026231d80a62fd6784a796711b128043a7",
+      "samples_ns": {
+        "baseline": [
+          4784000,
+          5018000,
+          4872000,
+          4683000,
+          5088000,
+          4914000,
+          5077000,
+          5026000,
+          4708000,
+          4983000,
+          4575000,
+          4584000,
+          4921000,
+          4868000,
+          4866000,
+          4656000,
+          4953000,
+          4688000,
+          4833000,
+          4752000,
+          4705000
+        ],
+        "candidate": [
+          4853000,
+          4605000,
+          4934000,
+          4881000,
+          4729000,
+          4942000,
+          4733000,
+          4568000,
+          5085000,
+          4827000,
+          4712000,
+          4902000,
+          4792000,
+          5054000,
+          4693000,
+          4767000,
+          4597000,
+          4827000,
+          4875000,
+          4803000,
+          4947000
+        ]
+      },
+      "baseline_median_ns": 4866000,
+      "candidate_median_ns": 4827000,
+      "paired_ratio_median": 1.0107323232323233,
+      "paired_ratio_iqr": [
+        0.9483453177013167,
+        1.0340770325668691
+      ],
+      "round_ratio_medians": [
+        1.0056980056980056,
+        1.0299453551912567,
+        1.0107323232323233
+      ],
+      "rounds": [
+        {
+          "checksum": 1023,
+          "source_sha256": "ddb02fc3227b93ee8a3f654715c0c3026231d80a62fd6784a796711b128043a7",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              4784000,
+              5018000,
+              4872000,
+              4683000,
+              5088000,
+              4914000,
+              5077000
+            ],
+            "candidate": [
+              4853000,
+              4605000,
+              4934000,
+              4881000,
+              4729000,
+              4942000,
+              4733000
+            ]
+          },
+          "baseline_median_ns": 4914000,
+          "candidate_median_ns": 4853000,
+          "paired_ratio_median": 1.0056980056980056,
+          "paired_ratio_iqr": [
+            0.929441823899371,
+            1.0144230769230769
+          ]
+        },
+        {
+          "checksum": 1023,
+          "source_sha256": "ddb02fc3227b93ee8a3f654715c0c3026231d80a62fd6784a796711b128043a7",
+          "first": "candidate",
+          "samples_ns": {
+            "baseline": [
+              5026000,
+              4708000,
+              4983000,
+              4575000,
+              4584000,
+              4921000,
+              4868000
+            ],
+            "candidate": [
+              4568000,
+              5085000,
+              4827000,
+              4712000,
+              4902000,
+              4792000,
+              5054000
+            ]
+          },
+          "baseline_median_ns": 4868000,
+          "candidate_median_ns": 4827000,
+          "paired_ratio_median": 1.0299453551912567,
+          "paired_ratio_iqr": [
+            0.9686935580975317,
+            1.0693717277486912
+          ]
+        },
+        {
+          "checksum": 1023,
+          "source_sha256": "ddb02fc3227b93ee8a3f654715c0c3026231d80a62fd6784a796711b128043a7",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              4866000,
+              4656000,
+              4953000,
+              4688000,
+              4833000,
+              4752000,
+              4705000
+            ],
+            "candidate": [
+              4693000,
+              4767000,
+              4597000,
+              4827000,
+              4875000,
+              4803000,
+              4947000
+            ]
+          },
+          "baseline_median_ns": 4752000,
+          "candidate_median_ns": 4803000,
+          "paired_ratio_median": 1.0107323232323233,
+          "paired_ratio_iqr": [
+            0.9644471845458282,
+            1.0296501706484642
+          ]
+        }
+      ],
+      "name": "list_copy",
+      "kind": "hotspot"
+    },
+    {
+      "checksum": 1023,
+      "source_sha256": "aa5c0ae7ad99b64df3aed6b656143dd54cd6a9c228e509840dc0b1f312ad1d5c",
+      "samples_ns": {
+        "baseline": [
+          10122000,
+          10128000,
+          10098000,
+          10242000,
+          10657000,
+          10390000,
+          10233000,
+          10156000,
+          10907000,
+          10768000,
+          10101000,
+          10185000,
+          10065000,
+          10101000,
+          10112000,
+          11187000,
+          10234000,
+          10088000,
+          10205000,
+          10763000,
+          10383000
+        ],
+        "candidate": [
+          10099000,
+          10163000,
+          10106000,
+          11085000,
+          10248000,
+          10412000,
+          10216000,
+          10175000,
+          10287000,
+          10357000,
+          10178000,
+          10183000,
+          10065000,
+          11139000,
+          10207000,
+          10245000,
+          11063000,
+          9932000,
+          10151000,
+          10197000,
+          10236000
+        ]
+      },
+      "baseline_median_ns": 10205000,
+      "candidate_median_ns": 10207000,
+      "paired_ratio_median": 0.9998036327933235,
+      "paired_ratio_iqr": [
+        0.9731837173143794,
+        1.0055393869078704
+      ],
+      "round_ratio_medians": [
+        1.0007922360863537,
+        1.0,
+        0.985842242126553
+      ],
+      "rounds": [
+        {
+          "checksum": 1023,
+          "source_sha256": "aa5c0ae7ad99b64df3aed6b656143dd54cd6a9c228e509840dc0b1f312ad1d5c",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              10122000,
+              10128000,
+              10098000,
+              10242000,
+              10657000,
+              10390000,
+              10233000
+            ],
+            "candidate": [
+              10099000,
+              10163000,
+              10106000,
+              11085000,
+              10248000,
+              10412000,
+              10216000
+            ]
+          },
+          "baseline_median_ns": 10233000,
+          "candidate_median_ns": 10216000,
+          "paired_ratio_median": 1.0007922360863537,
+          "paired_ratio_iqr": [
+            0.9977277217941118,
+            1.003455766192733
+          ]
+        },
+        {
+          "checksum": 1023,
+          "source_sha256": "aa5c0ae7ad99b64df3aed6b656143dd54cd6a9c228e509840dc0b1f312ad1d5c",
+          "first": "candidate",
+          "samples_ns": {
+            "baseline": [
+              10156000,
+              10907000,
+              10768000,
+              10101000,
+              10185000,
+              10065000,
+              10101000
+            ],
+            "candidate": [
+              10175000,
+              10287000,
+              10357000,
+              10178000,
+              10183000,
+              10065000,
+              11139000
+            ]
+          },
+          "baseline_median_ns": 10156000,
+          "candidate_median_ns": 10183000,
+          "paired_ratio_median": 1.0,
+          "paired_ratio_iqr": [
+            0.961831352154532,
+            1.0076230076230077
+          ]
+        },
+        {
+          "checksum": 1023,
+          "source_sha256": "aa5c0ae7ad99b64df3aed6b656143dd54cd6a9c228e509840dc0b1f312ad1d5c",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              10112000,
+              11187000,
+              10234000,
+              10088000,
+              10205000,
+              10763000,
+              10383000
+            ],
+            "candidate": [
+              10207000,
+              10245000,
+              11063000,
+              9932000,
+              10151000,
+              10197000,
+              10236000
+            ]
+          },
+          "baseline_median_ns": 10234000,
+          "candidate_median_ns": 10207000,
+          "paired_ratio_median": 0.985842242126553,
+          "paired_ratio_iqr": [
+            0.9474124314782124,
+            1.0093947784810127
+          ]
+        }
+      ],
+      "name": "list_from_iterable",
+      "kind": "hotspot"
+    },
+    {
+      "checksum": 3,
+      "source_sha256": "4721d15f1dfbad05980e3ec54edd348d085027daea393cdb1eb3f9ceaa09d381",
+      "samples_ns": {
+        "baseline": [
+          5470000,
+          5581000,
+          5335000,
+          5571000,
+          5546000,
+          5280000,
+          5344000,
+          5650000,
+          5505000,
+          5222000,
+          5245000,
+          5272000,
+          5453000,
+          5660000,
+          5593000,
+          5620000,
+          5652000,
+          5615000,
+          5474000,
+          5772000,
+          5804000
+        ],
+        "candidate": [
+          5474000,
+          5386000,
+          5510000,
+          5991000,
+          5415000,
+          5462000,
+          5902000,
+          5477000,
+          5478000,
+          5342000,
+          5365000,
+          5315000,
+          5349000,
+          5333000,
+          5606000,
+          5522000,
+          5650000,
+          5521000,
+          5519000,
+          5593000,
+          5697000
+        ]
+      },
+      "baseline_median_ns": 5546000,
+      "candidate_median_ns": 5478000,
+      "paired_ratio_median": 0.9996461429582448,
+      "paired_ratio_iqr": [
+        0.9786536510503917,
+        1.0229293167901878
+      ],
+      "round_ratio_medians": [
+        1.0328022492970947,
+        0.9950953678474115,
+        0.9832591273374889
+      ],
+      "rounds": [
+        {
+          "checksum": 3,
+          "source_sha256": "4721d15f1dfbad05980e3ec54edd348d085027daea393cdb1eb3f9ceaa09d381",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              5470000,
+              5581000,
+              5335000,
+              5571000,
+              5546000,
+              5280000,
+              5344000
+            ],
+            "candidate": [
+              5474000,
+              5386000,
+              5510000,
+              5991000,
+              5415000,
+              5462000,
+              5902000
+            ]
+          },
+          "baseline_median_ns": 5470000,
+          "candidate_median_ns": 5474000,
+          "paired_ratio_median": 1.0328022492970947,
+          "paired_ratio_iqr": [
+            0.9763793725207357,
+            1.0753904146472806
+          ]
+        },
+        {
+          "checksum": 3,
+          "source_sha256": "4721d15f1dfbad05980e3ec54edd348d085027daea393cdb1eb3f9ceaa09d381",
+          "first": "candidate",
+          "samples_ns": {
+            "baseline": [
+              5650000,
+              5505000,
+              5222000,
+              5245000,
+              5272000,
+              5453000,
+              5660000
+            ],
+            "candidate": [
+              5477000,
+              5478000,
+              5342000,
+              5365000,
+              5315000,
+              5349000,
+              5333000
+            ]
+          },
+          "baseline_median_ns": 5453000,
+          "candidate_median_ns": 5349000,
+          "paired_ratio_median": 0.9950953678474115,
+          "paired_ratio_iqr": [
+            0.9693805309734513,
+            1.022878932316492
+          ]
+        },
+        {
+          "checksum": 3,
+          "source_sha256": "4721d15f1dfbad05980e3ec54edd348d085027daea393cdb1eb3f9ceaa09d381",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              5593000,
+              5620000,
+              5652000,
+              5615000,
+              5474000,
+              5772000,
+              5804000
+            ],
+            "candidate": [
+              5606000,
+              5522000,
+              5650000,
+              5521000,
+              5519000,
+              5593000,
+              5697000
+            ]
+          },
+          "baseline_median_ns": 5620000,
+          "candidate_median_ns": 5593000,
+          "paired_ratio_median": 0.9832591273374889,
+          "paired_ratio_iqr": [
+            0.9815644383184011,
+            1.0023243339889147
+          ]
+        }
+      ],
+      "name": "list_replicate",
+      "kind": "hotspot"
+    },
+    {
+      "checksum": 400122,
+      "source_sha256": "45258da2088c7bf2507e3afed1aafbf87276a40d6b75da26049ee6316f2e7fc3",
+      "samples_ns": {
+        "baseline": [
+          7300000,
+          7147000,
+          7083000,
+          7031000,
+          7241000,
+          7455000,
+          7369000,
+          7159000,
+          6942000,
+          7064000,
+          7061000,
+          7281000,
+          7135000,
+          7322000,
+          7338000,
+          7743000,
+          7557000,
+          7290000,
+          7279000,
+          7269000,
+          7444000
+        ],
+        "candidate": [
+          7368000,
+          7008000,
+          7124000,
+          7847000,
+          7122000,
+          7169000,
+          7156000,
+          7401000,
+          7075000,
+          7437000,
+          7093000,
+          7144000,
+          7071000,
+          7470000,
+          7165000,
+          7289000,
+          7603000,
+          7116000,
+          7144000,
+          7238000,
+          7055000
+        ]
+      },
+      "baseline_median_ns": 7279000,
+      "candidate_median_ns": 7156000,
+      "paired_ratio_median": 0.9910301331464612,
+      "paired_ratio_iqr": [
+        0.9762778905006578,
+        1.0142369061854979
+      ],
+      "round_ratio_medians": [
+        0.9835658058279243,
+        1.019158743877845,
+        0.9764240937585174
+      ],
+      "rounds": [
+        {
+          "checksum": 400122,
+          "source_sha256": "45258da2088c7bf2507e3afed1aafbf87276a40d6b75da26049ee6316f2e7fc3",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              7300000,
+              7147000,
+              7083000,
+              7031000,
+              7241000,
+              7455000,
+              7369000
+            ],
+            "candidate": [
+              7368000,
+              7008000,
+              7124000,
+              7847000,
+              7122000,
+              7169000,
+              7156000
+            ]
+          },
+          "baseline_median_ns": 7241000,
+          "candidate_median_ns": 7156000,
+          "paired_ratio_median": 0.9835658058279243,
+          "paired_ratio_iqr": [
+            0.971095128239924,
+            1.0093150684931507
+          ]
+        },
+        {
+          "checksum": 400122,
+          "source_sha256": "45258da2088c7bf2507e3afed1aafbf87276a40d6b75da26049ee6316f2e7fc3",
+          "first": "candidate",
+          "samples_ns": {
+            "baseline": [
+              7159000,
+              6942000,
+              7064000,
+              7061000,
+              7281000,
+              7135000,
+              7322000
+            ],
+            "candidate": [
+              7401000,
+              7075000,
+              7437000,
+              7093000,
+              7144000,
+              7071000,
+              7470000
+            ]
+          },
+          "baseline_median_ns": 7135000,
+          "candidate_median_ns": 7144000,
+          "paired_ratio_median": 1.019158743877845,
+          "paired_ratio_iqr": [
+            0.9910301331464612,
+            1.0338036038552871
+          ]
+        },
+        {
+          "checksum": 400122,
+          "source_sha256": "45258da2088c7bf2507e3afed1aafbf87276a40d6b75da26049ee6316f2e7fc3",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              7338000,
+              7743000,
+              7557000,
+              7290000,
+              7279000,
+              7269000,
+              7444000
+            ],
+            "candidate": [
+              7165000,
+              7289000,
+              7603000,
+              7116000,
+              7144000,
+              7238000,
+              7055000
+            ]
+          },
+          "baseline_median_ns": 7338000,
+          "candidate_median_ns": 7165000,
+          "paired_ratio_median": 0.9764240937585174,
+          "paired_ratio_iqr": [
+            0.9477431488447071,
+            0.9957353143486036
+          ]
+        }
+      ],
+      "name": "dict_insert",
+      "kind": "hotspot"
+    },
+    {
+      "checksum": 999999,
+      "source_sha256": "ef3bcd28ffdf377cc203c40da2bbfd21b21eb631e258cffa89d69be2ddfb4170",
+      "samples_ns": {
+        "baseline": [
+          5852000,
+          5904000,
+          5776000,
+          5861000,
+          5887000,
+          6066000,
+          5915000,
+          5926000,
+          5802000,
+          5910000,
+          5829000,
+          5892000,
+          5863000,
+          5729000,
+          5973000,
+          5842000,
+          6017000,
+          6104000,
+          5686000,
+          5887000,
+          5819000
+        ],
+        "candidate": [
+          6003000,
+          5893000,
+          5670000,
+          5827000,
+          5688000,
+          5882000,
+          5775000,
+          5921000,
+          5860000,
+          5790000,
+          5708000,
+          5871000,
+          5863000,
+          5697000,
+          5887000,
+          5901000,
+          5863000,
+          5927000,
+          5846000,
+          5938000,
+          5845000
+        ]
+      },
+      "baseline_median_ns": 5887000,
+      "candidate_median_ns": 5863000,
+      "paired_ratio_median": 0.9944143829638681,
+      "paired_ratio_iqr": [
+        0.9777865416845583,
+        1.006565638888533
+      ],
+      "round_ratio_medians": [
+        0.9816481994459834,
+        0.9964358452138493,
+        1.0044681216703901
+      ],
+      "rounds": [
+        {
+          "checksum": 999999,
+          "source_sha256": "ef3bcd28ffdf377cc203c40da2bbfd21b21eb631e258cffa89d69be2ddfb4170",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              5852000,
+              5904000,
+              5776000,
+              5861000,
+              5887000,
+              6066000,
+              5915000
+            ],
+            "candidate": [
+              6003000,
+              5893000,
+              5670000,
+              5827000,
+              5688000,
+              5882000,
+              5775000
+            ]
+          },
+          "baseline_median_ns": 5887000,
+          "candidate_median_ns": 5827000,
+          "paired_ratio_median": 0.9816481994459834,
+          "paired_ratio_iqr": [
+            0.9696669963732278,
+            0.9981368563685636
+          ]
+        },
+        {
+          "checksum": 999999,
+          "source_sha256": "ef3bcd28ffdf377cc203c40da2bbfd21b21eb631e258cffa89d69be2ddfb4170",
+          "first": "candidate",
+          "samples_ns": {
+            "baseline": [
+              5926000,
+              5802000,
+              5910000,
+              5829000,
+              5892000,
+              5863000,
+              5729000
+            ],
+            "candidate": [
+              5921000,
+              5860000,
+              5790000,
+              5708000,
+              5871000,
+              5863000,
+              5697000
+            ]
+          },
+          "baseline_median_ns": 5863000,
+          "candidate_median_ns": 5860000,
+          "paired_ratio_median": 0.9964358452138493,
+          "paired_ratio_iqr": [
+            0.9796954314720813,
+            1.0
+          ]
+        },
+        {
+          "checksum": 999999,
+          "source_sha256": "ef3bcd28ffdf377cc203c40da2bbfd21b21eb631e258cffa89d69be2ddfb4170",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              5973000,
+              5842000,
+              6017000,
+              6104000,
+              5686000,
+              5887000,
+              5819000
+            ],
+            "candidate": [
+              5887000,
+              5901000,
+              5863000,
+              5927000,
+              5846000,
+              5938000,
+              5845000
+            ]
+          },
+          "baseline_median_ns": 5887000,
+          "candidate_median_ns": 5887000,
+          "paired_ratio_median": 1.0044681216703901,
+          "paired_ratio_iqr": [
+            0.9744058500914077,
+            1.0100992810681273
+          ]
+        }
+      ],
+      "name": "dict_lookup",
+      "kind": "hotspot"
+    },
+    {
+      "checksum": 1000122,
+      "source_sha256": "e832f10cc6d8b9eea73e24b6a2cb1869bf793a0ad23855e37f6dbef95feb4f3f",
+      "samples_ns": {
+        "baseline": [
+          4893000,
+          4760000,
+          4758000,
+          4839000,
+          4901000,
+          4915000,
+          4672000,
+          4677000,
+          4741000,
+          4807000,
+          4752000,
+          5066000,
+          4742000,
+          4703000,
+          4891000,
+          4849000,
+          4876000,
+          4730000,
+          4833000,
+          4722000,
+          4845000
+        ],
+        "candidate": [
+          4829000,
+          4772000,
+          4694000,
+          4870000,
+          4720000,
+          4814000,
+          4711000,
+          4868000,
+          4727000,
+          4775000,
+          4738000,
+          5051000,
+          4753000,
+          4879000,
+          4790000,
+          4686000,
+          4915000,
+          4732000,
+          4841000,
+          4768000,
+          4798000
+        ]
+      },
+      "baseline_median_ns": 4807000,
+      "candidate_median_ns": 4775000,
+      "paired_ratio_median": 0.9970538720538721,
+      "paired_ratio_iqr": [
+        0.9867345300399546,
+        1.00720232080032
+      ],
+      "round_ratio_medians": [
+        0.9869200899243817,
+        0.9970538720538721,
+        1.0004228329809726
+      ],
+      "rounds": [
+        {
+          "checksum": 1000122,
+          "source_sha256": "e832f10cc6d8b9eea73e24b6a2cb1869bf793a0ad23855e37f6dbef95feb4f3f",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              4893000,
+              4760000,
+              4758000,
+              4839000,
+              4901000,
+              4915000,
+              4672000
+            ],
+            "candidate": [
+              4829000,
+              4772000,
+              4694000,
+              4870000,
+              4720000,
+              4814000,
+              4711000
+            ]
+          },
+          "baseline_median_ns": 4839000,
+          "candidate_median_ns": 4772000,
+          "paired_ratio_median": 0.9869200899243817,
+          "paired_ratio_iqr": [
+            0.9794506612410987,
+            1.0064062822897293
+          ]
+        },
+        {
+          "checksum": 1000122,
+          "source_sha256": "e832f10cc6d8b9eea73e24b6a2cb1869bf793a0ad23855e37f6dbef95feb4f3f",
+          "first": "candidate",
+          "samples_ns": {
+            "baseline": [
+              4677000,
+              4741000,
+              4807000,
+              4752000,
+              5066000,
+              4742000,
+              4703000
+            ],
+            "candidate": [
+              4868000,
+              4727000,
+              4775000,
+              4738000,
+              5051000,
+              4753000,
+              4879000
+            ]
+          },
+          "baseline_median_ns": 4742000,
+          "candidate_median_ns": 4775000,
+          "paired_ratio_median": 0.9970538720538721,
+          "paired_ratio_iqr": [
+            0.9970390840900119,
+            1.0374229215394428
+          ]
+        },
+        {
+          "checksum": 1000122,
+          "source_sha256": "e832f10cc6d8b9eea73e24b6a2cb1869bf793a0ad23855e37f6dbef95feb4f3f",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              4891000,
+              4849000,
+              4876000,
+              4730000,
+              4833000,
+              4722000,
+              4845000
+            ],
+            "candidate": [
+              4790000,
+              4686000,
+              4915000,
+              4732000,
+              4841000,
+              4768000,
+              4798000
+            ]
+          },
+          "baseline_median_ns": 4845000,
+          "candidate_median_ns": 4790000,
+          "paired_ratio_median": 1.0004228329809726,
+          "paired_ratio_iqr": [
+            0.9793498262114088,
+            1.0079983593109105
+          ]
+        }
+      ],
+      "name": "dict_update",
+      "kind": "hotspot"
+    },
+    {
+      "checksum": 0,
+      "source_sha256": "05b4c47ead775b786888d98ce0552583eae714041c35b418f46484ddca378b85",
+      "samples_ns": {
+        "baseline": [
+          3695000,
+          3576000,
+          3616000,
+          3685000,
+          3578000,
+          3518000,
+          3593000,
+          3522000,
+          3509000,
+          3768000,
+          3644000,
+          3613000,
+          3678000,
+          3644000,
+          3603000,
+          3654000,
+          3563000,
+          3663000,
+          3647000,
+          3618000,
+          3618000
+        ],
+        "candidate": [
+          3659000,
+          3494000,
+          3604000,
+          3566000,
+          3599000,
+          3593000,
+          3501000,
+          3514000,
+          3485000,
+          3493000,
+          3645000,
+          3528000,
+          3572000,
+          3592000,
+          3692000,
+          3528000,
+          3796000,
+          3606000,
+          3554000,
+          3596000,
+          3599000
+        ]
+      },
+      "baseline_median_ns": 3618000,
+      "candidate_median_ns": 3592000,
+      "paired_ratio_median": 0.9902571041948579,
+      "paired_ratio_iqr": [
+        0.9744471224895681,
+        0.9990014935132531
+      ],
+      "round_ratio_medians": [
+        0.9902571041948579,
+        0.9857299670691547,
+        0.9939192924267551
+      ],
+      "rounds": [
+        {
+          "checksum": 0,
+          "source_sha256": "05b4c47ead775b786888d98ce0552583eae714041c35b418f46484ddca378b85",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              3695000,
+              3576000,
+              3616000,
+              3685000,
+              3578000,
+              3518000,
+              3593000
+            ],
+            "candidate": [
+              3659000,
+              3494000,
+              3604000,
+              3566000,
+              3599000,
+              3593000,
+              3501000
+            ]
+          },
+          "baseline_median_ns": 3593000,
+          "candidate_median_ns": 3593000,
+          "paired_ratio_median": 0.9902571041948579,
+          "paired_ratio_iqr": [
+            0.9743946562760925,
+            1.0058692006707657
+          ]
+        },
+        {
+          "checksum": 0,
+          "source_sha256": "05b4c47ead775b786888d98ce0552583eae714041c35b418f46484ddca378b85",
+          "first": "candidate",
+          "samples_ns": {
+            "baseline": [
+              3522000,
+              3509000,
+              3768000,
+              3644000,
+              3613000,
+              3678000,
+              3644000
+            ],
+            "candidate": [
+              3514000,
+              3485000,
+              3493000,
+              3645000,
+              3528000,
+              3572000,
+              3592000
+            ]
+          },
+          "baseline_median_ns": 3644000,
+          "candidate_median_ns": 3528000,
+          "paired_ratio_median": 0.9857299670691547,
+          "paired_ratio_iqr": [
+            0.9711799891245242,
+            0.9977285633162976
+          ]
+        },
+        {
+          "checksum": 0,
+          "source_sha256": "05b4c47ead775b786888d98ce0552583eae714041c35b418f46484ddca378b85",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              3603000,
+              3654000,
+              3563000,
+              3663000,
+              3647000,
+              3618000,
+              3618000
+            ],
+            "candidate": [
+              3692000,
+              3528000,
+              3796000,
+              3606000,
+              3554000,
+              3596000,
+              3599000
+            ]
+          },
+          "baseline_median_ns": 3618000,
+          "candidate_median_ns": 3599000,
+          "paired_ratio_median": 0.9939192924267551,
+          "paired_ratio_iqr": [
+            0.9744995887030437,
+            1.0247016375242852
+          ]
+        }
+      ],
+      "name": "dict_delete",
+      "kind": "hotspot"
+    },
+    {
+      "checksum": 299999,
+      "source_sha256": "abe6c70229591ea6078287c5cafc7810bfa97a7691f21e27d12b56104736388c",
+      "samples_ns": {
+        "baseline": [
+          16892000,
+          16992000,
+          16952000,
+          16754000,
+          16821000,
+          17004000,
+          16746000,
+          16799000,
+          16641000,
+          16854000,
+          16814000,
+          16943000,
+          16925000,
+          17016000,
+          16875000,
+          16926000,
+          16805000,
+          16781000,
+          16683000,
+          17027000,
+          16852000
+        ],
+        "candidate": [
+          16782000,
+          16779000,
+          17240000,
+          16934000,
+          16841000,
+          16921000,
+          16799000,
+          16772000,
+          16819000,
+          16660000,
+          16636000,
+          16984000,
+          16797000,
+          17107000,
+          16874000,
+          16934000,
+          16625000,
+          16978000,
+          17037000,
+          16859000,
+          17025000
+        ]
+      },
+      "baseline_median_ns": 16854000,
+      "candidate_median_ns": 16859000,
+      "paired_ratio_median": 1.000472645633936,
+      "paired_ratio_iqr": [
+        0.9912852703573845,
+        1.010481158192256
+      ],
+      "round_ratio_medians": [
+        1.0011889899530348,
+        0.9983927614738972,
+        1.000472645633936
+      ],
+      "rounds": [
+        {
+          "checksum": 299999,
+          "source_sha256": "abe6c70229591ea6078287c5cafc7810bfa97a7691f21e27d12b56104736388c",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              16892000,
+              16992000,
+              16952000,
+              16754000,
+              16821000,
+              17004000,
+              16746000
+            ],
+            "candidate": [
+              16782000,
+              16779000,
+              17240000,
+              16934000,
+              16841000,
+              16921000,
+              16799000
+            ]
+          },
+          "baseline_median_ns": 16892000,
+          "candidate_median_ns": 16841000,
+          "paired_ratio_median": 1.0011889899530348,
+          "paired_ratio_iqr": [
+            0.9934880416765333,
+            1.0107437029962993
+          ]
+        },
+        {
+          "checksum": 299999,
+          "source_sha256": "abe6c70229591ea6078287c5cafc7810bfa97a7691f21e27d12b56104736388c",
+          "first": "candidate",
+          "samples_ns": {
+            "baseline": [
+              16799000,
+              16641000,
+              16854000,
+              16814000,
+              16943000,
+              16925000,
+              17016000
+            ],
+            "candidate": [
+              16772000,
+              16819000,
+              16660000,
+              16636000,
+              16984000,
+              16797000,
+              17107000
+            ]
+          },
+          "baseline_median_ns": 16854000,
+          "candidate_median_ns": 16797000,
+          "paired_ratio_median": 0.9983927614738972,
+          "paired_ratio_iqr": [
+            0.9894135839181635,
+            1.005347907851434
+          ]
+        },
+        {
+          "checksum": 299999,
+          "source_sha256": "abe6c70229591ea6078287c5cafc7810bfa97a7691f21e27d12b56104736388c",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              16875000,
+              16926000,
+              16805000,
+              16781000,
+              16683000,
+              17027000,
+              16852000
+            ],
+            "candidate": [
+              16874000,
+              16934000,
+              16625000,
+              16978000,
+              17037000,
+              16859000,
+              17025000
+            ]
+          },
+          "baseline_median_ns": 16852000,
+          "candidate_median_ns": 16934000,
+          "paired_ratio_median": 1.000472645633936,
+          "paired_ratio_iqr": [
+            0.9901333176719328,
+            1.0117394672546332
+          ]
+        }
+      ],
+      "name": "dict_literal",
+      "kind": "hotspot"
+    },
+    {
+      "checksum": 1023701648,
+      "source_sha256": "21a61c3305425bc4dfe048f2d2e79b126e2aaa2b6f179b1dc615d90a4439eb04",
+      "samples_ns": {
+        "baseline": [
+          19871000,
+          20192000,
+          19841000,
+          19712000,
+          19681000,
+          19697000,
+          19885000,
+          19766000,
+          19992000,
+          19806000,
+          19983000,
+          22847000,
+          19993000,
+          19906000,
+          19881000,
+          19912000,
+          19823000,
+          19837000,
+          19894000,
+          19973000,
+          19689000
+        ],
+        "candidate": [
+          20059000,
+          20056000,
+          19964000,
+          19980000,
+          22454000,
+          20401000,
+          19782000,
+          20049000,
+          19920000,
+          19765000,
+          19955000,
+          19801000,
+          19901000,
+          22024000,
+          19750000,
+          19808000,
+          19873000,
+          19884000,
+          19819000,
+          19756000,
+          19691000
+        ]
+      },
+      "baseline_median_ns": 19881000,
+      "candidate_median_ns": 19901000,
+      "paired_ratio_median": 0.9985988089876395,
+      "paired_ratio_iqr": [
+        0.9947986175632426,
+        1.011528401411507
+      ],
+      "round_ratio_medians": [
+        1.0094610236022343,
+        0.9979299202261941,
+        0.9962300191012365
+      ],
+      "rounds": [
+        {
+          "checksum": 1023701648,
+          "source_sha256": "21a61c3305425bc4dfe048f2d2e79b126e2aaa2b6f179b1dc615d90a4439eb04",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              19871000,
+              20192000,
+              19841000,
+              19712000,
+              19681000,
+              19697000,
+              19885000
+            ],
+            "candidate": [
+              20059000,
+              20056000,
+              19964000,
+              19980000,
+              22454000,
+              20401000,
+              19782000
+            ]
+          },
+          "baseline_median_ns": 19841000,
+          "candidate_median_ns": 20056000,
+          "paired_ratio_median": 1.0094610236022343,
+          "paired_ratio_iqr": [
+            0.9948202162433996,
+            1.0357414834746408
+          ]
+        },
+        {
+          "checksum": 1023701648,
+          "source_sha256": "21a61c3305425bc4dfe048f2d2e79b126e2aaa2b6f179b1dc615d90a4439eb04",
+          "first": "candidate",
+          "samples_ns": {
+            "baseline": [
+              19766000,
+              19992000,
+              19806000,
+              19983000,
+              22847000,
+              19993000,
+              19906000
+            ],
+            "candidate": [
+              20049000,
+              19920000,
+              19765000,
+              19955000,
+              19801000,
+              19901000,
+              22024000
+            ]
+          },
+          "baseline_median_ns": 19983000,
+          "candidate_median_ns": 19920000,
+          "paired_ratio_median": 0.9979299202261941,
+          "paired_ratio_iqr": [
+            0.9953983894363027,
+            1.014317514924618
+          ]
+        },
+        {
+          "checksum": 1023701648,
+          "source_sha256": "21a61c3305425bc4dfe048f2d2e79b126e2aaa2b6f179b1dc615d90a4439eb04",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              19881000,
+              19912000,
+              19823000,
+              19837000,
+              19894000,
+              19973000,
+              19689000
+            ],
+            "candidate": [
+              19750000,
+              19808000,
+              19873000,
+              19884000,
+              19819000,
+              19756000,
+              19691000
+            ]
+          },
+          "baseline_median_ns": 19881000,
+          "candidate_median_ns": 19808000,
+          "paired_ratio_median": 0.9962300191012365,
+          "paired_ratio_iqr": [
+            0.9934107942256426,
+            1.0023693098754851
+          ]
+        }
+      ],
+      "name": "dict_counting",
+      "kind": "hotspot"
+    },
+    {
+      "checksum": 50000,
+      "source_sha256": "a4c76fe4bf6def873559e0b6b804c02f4dac6418e2ef5259146adbfa8e96b8d2",
+      "samples_ns": {
+        "baseline": [
+          1843000,
+          1837000,
+          1764000,
+          1755000,
+          1789000,
+          1817000,
+          1853000,
+          2184000,
+          1791000,
+          1803000,
+          1769000,
+          1830000,
+          1754000,
+          1789000,
+          1770000,
+          1755000,
+          1766000,
+          1754000,
+          1872000,
+          1827000,
+          1769000
+        ],
+        "candidate": [
+          1760000,
+          1776000,
+          1771000,
+          1852000,
+          1793000,
+          1754000,
+          1830000,
+          1787000,
+          1836000,
+          1758000,
+          1757000,
+          1826000,
+          1836000,
+          1790000,
+          1824000,
+          1818000,
+          1853000,
+          1754000,
+          1753000,
+          1753000,
+          1831000
+        ]
+      },
+      "baseline_median_ns": 1789000,
+      "candidate_median_ns": 1790000,
+      "paired_ratio_median": 1.0,
+      "paired_ratio_iqr": [
+        0.9660605741037063,
+        1.032778262160945
+      ],
+      "round_ratio_medians": [
+        0.9875876956287102,
+        0.9978142076502732,
+        1.0305084745762711
+      ],
+      "rounds": [
+        {
+          "checksum": 50000,
+          "source_sha256": "a4c76fe4bf6def873559e0b6b804c02f4dac6418e2ef5259146adbfa8e96b8d2",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              1843000,
+              1837000,
+              1764000,
+              1755000,
+              1789000,
+              1817000,
+              1853000
+            ],
+            "candidate": [
+              1760000,
+              1776000,
+              1771000,
+              1852000,
+              1793000,
+              1754000,
+              1830000
+            ]
+          },
+          "baseline_median_ns": 1817000,
+          "candidate_median_ns": 1776000,
+          "paired_ratio_median": 0.9875876956287102,
+          "paired_ratio_iqr": [
+            0.965327462850853,
+            1.003968253968254
+          ]
+        },
+        {
+          "checksum": 50000,
+          "source_sha256": "a4c76fe4bf6def873559e0b6b804c02f4dac6418e2ef5259146adbfa8e96b8d2",
+          "first": "candidate",
+          "samples_ns": {
+            "baseline": [
+              2184000,
+              1791000,
+              1803000,
+              1769000,
+              1830000,
+              1754000,
+              1789000
+            ],
+            "candidate": [
+              1787000,
+              1836000,
+              1758000,
+              1757000,
+              1826000,
+              1836000,
+              1790000
+            ]
+          },
+          "baseline_median_ns": 1791000,
+          "candidate_median_ns": 1790000,
+          "paired_ratio_median": 0.9978142076502732,
+          "paired_ratio_iqr": [
+            0.9750415973377704,
+            1.0251256281407035
+          ]
+        },
+        {
+          "checksum": 50000,
+          "source_sha256": "a4c76fe4bf6def873559e0b6b804c02f4dac6418e2ef5259146adbfa8e96b8d2",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              1770000,
+              1755000,
+              1766000,
+              1754000,
+              1872000,
+              1827000,
+              1769000
+            ],
+            "candidate": [
+              1824000,
+              1818000,
+              1853000,
+              1754000,
+              1753000,
+              1753000,
+              1831000
+            ]
+          },
+          "baseline_median_ns": 1769000,
+          "candidate_median_ns": 1818000,
+          "paired_ratio_median": 1.0305084745762711,
+          "paired_ratio_iqr": [
+            0.9594964422550629,
+            1.035897435897436
+          ]
+        }
+      ],
+      "name": "tail_recursion",
+      "kind": "hotspot"
+    },
+    {
+      "checksum": 51,
+      "source_sha256": "e868faab0e582635e598e73f85f0b3e2fc10380e355cd91bfc9035f3e548d690",
+      "samples_ns": {
+        "baseline": [
+          22006000,
+          22009000,
+          23035000,
+          22653000,
+          22832000,
+          21939000,
+          21939000,
+          22017000,
+          21788000,
+          21926000,
+          21897000,
+          21866000,
+          21784000,
+          21761000,
+          21904000,
+          21893000,
+          22153000,
+          21778000,
+          21706000,
+          22361000,
+          21650000
+        ],
+        "candidate": [
+          22301000,
+          22009000,
+          22571000,
+          22020000,
+          22673000,
+          21869000,
+          22340000,
+          21790000,
+          21730000,
+          21872000,
+          21917000,
+          22066000,
+          22145000,
+          22002000,
+          21527000,
+          21672000,
+          21638000,
+          21955000,
+          21869000,
+          22001000,
+          22599000
+        ]
+      },
+      "baseline_median_ns": 21926000,
+      "candidate_median_ns": 22001000,
+      "paired_ratio_median": 0.9975371704825321,
+      "paired_ratio_iqr": [
+        0.9867951631433547,
+        1.0101107395079731
+      ],
+      "round_ratio_medians": [
+        0.9968093349742467,
+        1.0009133671279171,
+        0.9899054492303476
+      ],
+      "rounds": [
+        {
+          "checksum": 51,
+          "source_sha256": "e868faab0e582635e598e73f85f0b3e2fc10380e355cd91bfc9035f3e548d690",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              22006000,
+              22009000,
+              23035000,
+              22653000,
+              22832000,
+              21939000,
+              21939000
+            ],
+            "candidate": [
+              22301000,
+              22009000,
+              22571000,
+              22020000,
+              22673000,
+              21869000,
+              22340000
+            ]
+          },
+          "baseline_median_ns": 22009000,
+          "candidate_median_ns": 22301000,
+          "paired_ratio_median": 0.9968093349742467,
+          "paired_ratio_iqr": [
+            0.979856739743868,
+            1.013405434881396
+          ]
+        },
+        {
+          "checksum": 51,
+          "source_sha256": "e868faab0e582635e598e73f85f0b3e2fc10380e355cd91bfc9035f3e548d690",
+          "first": "candidate",
+          "samples_ns": {
+            "baseline": [
+              22017000,
+              21788000,
+              21926000,
+              21897000,
+              21866000,
+              21784000,
+              21761000
+            ],
+            "candidate": [
+              21790000,
+              21730000,
+              21872000,
+              21917000,
+              22066000,
+              22145000,
+              22002000
+            ]
+          },
+          "baseline_median_ns": 21866000,
+          "candidate_median_ns": 21917000,
+          "paired_ratio_median": 1.0009133671279171,
+          "paired_ratio_iqr": [
+            0.9973379842114926,
+            1.0110748586921556
+          ]
+        },
+        {
+          "checksum": 51,
+          "source_sha256": "e868faab0e582635e598e73f85f0b3e2fc10380e355cd91bfc9035f3e548d690",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              21904000,
+              21893000,
+              22153000,
+              21778000,
+              21706000,
+              22361000,
+              21650000
+            ],
+            "candidate": [
+              21527000,
+              21672000,
+              21638000,
+              21955000,
+              21869000,
+              22001000,
+              22599000
+            ]
+          },
+          "baseline_median_ns": 21893000,
+          "candidate_median_ns": 21869000,
+          "paired_ratio_median": 0.9899054492303476,
+          "paired_ratio_iqr": [
+            0.9827885317750182,
+            1.0081274680870604
+          ]
+        }
+      ],
+      "name": "branch_logic",
+      "kind": "hotspot"
+    },
+    {
+      "checksum": 390117,
+      "source_sha256": "481a643a33a81965e05e9c0bebdc89f0d8961ce4e78ea90fa1e44b9f1e5c9ccb",
+      "samples_ns": {
+        "baseline": [
+          69748000,
+          69247000,
+          69655000,
+          68896000,
+          69221000,
+          68790000,
+          69957000,
+          69123000,
+          69213000,
+          69457000,
+          70061000,
+          69088000,
+          69062000,
+          70319000,
+          69557000,
+          69200000,
+          69437000,
+          69993000,
+          69263000,
+          69342000,
+          70237000
+        ],
+        "candidate": [
+          68984000,
+          69135000,
+          69383000,
+          69635000,
+          69590000,
+          69245000,
+          75899000,
+          69494000,
+          68178000,
+          69337000,
+          69233000,
+          69272000,
+          69048000,
+          69887000,
+          70159000,
+          70389000,
+          69915000,
+          69133000,
+          68814000,
+          68604000,
+          70787000
+        ]
+      },
+      "baseline_median_ns": 69342000,
+      "candidate_median_ns": 69337000,
+      "paired_ratio_median": 0.9997972836002432,
+      "paired_ratio_iqr": [
+        0.9914372810095731,
+        1.0073572842687368
+      ],
+      "round_ratio_medians": [
+        1.00533075222837,
+        0.9982723123659243,
+        1.0068839379581491
+      ],
+      "rounds": [
+        {
+          "checksum": 390117,
+          "source_sha256": "481a643a33a81965e05e9c0bebdc89f0d8961ce4e78ea90fa1e44b9f1e5c9ccb",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              69748000,
+              69247000,
+              69655000,
+              68896000,
+              69221000,
+              68790000,
+              69957000
+            ],
+            "candidate": [
+              68984000,
+              69135000,
+              69383000,
+              69635000,
+              69590000,
+              69245000,
+              75899000
+            ]
+          },
+          "baseline_median_ns": 69247000,
+          "candidate_median_ns": 69383000,
+          "paired_ratio_median": 1.00533075222837,
+          "paired_ratio_iqr": [
+            0.9960950398392076,
+            1.0107263121226195
+          ]
+        },
+        {
+          "checksum": 390117,
+          "source_sha256": "481a643a33a81965e05e9c0bebdc89f0d8961ce4e78ea90fa1e44b9f1e5c9ccb",
+          "first": "candidate",
+          "samples_ns": {
+            "baseline": [
+              69123000,
+              69213000,
+              69457000,
+              70061000,
+              69088000,
+              69062000,
+              70319000
+            ],
+            "candidate": [
+              69494000,
+              68178000,
+              69337000,
+              69233000,
+              69272000,
+              69048000,
+              69887000
+            ]
+          },
+          "baseline_median_ns": 69213000,
+          "candidate_median_ns": 69272000,
+          "paired_ratio_median": 0.9982723123659243,
+          "paired_ratio_iqr": [
+            0.988181727351879,
+            1.0026632700324225
+          ]
+        },
+        {
+          "checksum": 390117,
+          "source_sha256": "481a643a33a81965e05e9c0bebdc89f0d8961ce4e78ea90fa1e44b9f1e5c9ccb",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              69557000,
+              69200000,
+              69437000,
+              69993000,
+              69263000,
+              69342000,
+              70237000
+            ],
+            "candidate": [
+              70159000,
+              70389000,
+              69915000,
+              69133000,
+              68814000,
+              68604000,
+              70787000
+            ]
+          },
+          "baseline_median_ns": 69437000,
+          "candidate_median_ns": 69915000,
+          "paired_ratio_median": 1.0068839379581491,
+          "paired_ratio_iqr": [
+            0.9893570995933201,
+            1.0086547723449832
+          ]
+        }
+      ],
+      "name": "constraint_probe",
+      "kind": "hotspot"
+    },
+    {
+      "checksum": 260659,
+      "source_sha256": "e75a8067c9ad8b243e7ccb0bbfa9af0f2683f9415dcd4ef3fc063a59687b0a93",
+      "samples_ns": {
+        "baseline": [
+          41695000,
+          41990000,
+          41723000,
+          40564000,
+          40627000,
+          40715000,
+          40555000,
+          40440000,
+          41031000,
+          40555000,
+          40167000,
+          40382000,
+          40254000,
+          41019000,
+          41286000,
+          40636000,
+          40514000,
+          40644000,
+          40460000,
+          41022000,
+          40737000
+        ],
+        "candidate": [
+          43112000,
+          41950000,
+          41011000,
+          40859000,
+          40602000,
+          40478000,
+          40684000,
+          41057000,
+          40903000,
+          40775000,
+          40932000,
+          40409000,
+          41214000,
+          41059000,
+          42000000,
+          41086000,
+          41296000,
+          40638000,
+          40681000,
+          40762000,
+          40694000
+        ]
+      },
+      "baseline_median_ns": 40636000,
+      "candidate_median_ns": 40903000,
+      "paired_ratio_median": 1.0031808654913081,
+      "paired_ratio_iqr": [
+        0.998995920385988,
+        1.0162755845415585
+      ],
+      "round_ratio_medians": [
+        0.999384645678982,
+        1.0054247318456417,
+        1.0054621848739496
+      ],
+      "rounds": [
+        {
+          "checksum": 260659,
+          "source_sha256": "e75a8067c9ad8b243e7ccb0bbfa9af0f2683f9415dcd4ef3fc063a59687b0a93",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              41695000,
+              41990000,
+              41723000,
+              40564000,
+              40627000,
+              40715000,
+              40555000
+            ],
+            "candidate": [
+              43112000,
+              41950000,
+              41011000,
+              40859000,
+              40602000,
+              40478000,
+              40684000
+            ]
+          },
+          "baseline_median_ns": 40715000,
+          "candidate_median_ns": 40859000,
+          "paired_ratio_median": 0.999384645678982,
+          "paired_ratio_iqr": [
+            0.9941790494903598,
+            1.0072724583374422
+          ]
+        },
+        {
+          "checksum": 260659,
+          "source_sha256": "e75a8067c9ad8b243e7ccb0bbfa9af0f2683f9415dcd4ef3fc063a59687b0a93",
+          "first": "candidate",
+          "samples_ns": {
+            "baseline": [
+              40440000,
+              41031000,
+              40555000,
+              40167000,
+              40382000,
+              40254000,
+              41019000
+            ],
+            "candidate": [
+              41057000,
+              40903000,
+              40775000,
+              40932000,
+              40409000,
+              41214000,
+              41059000
+            ]
+          },
+          "baseline_median_ns": 40440000,
+          "candidate_median_ns": 40932000,
+          "paired_ratio_median": 1.0054247318456417,
+          "paired_ratio_iqr": [
+            1.0006686147293349,
+            1.0190454850997088
+          ]
+        },
+        {
+          "checksum": 260659,
+          "source_sha256": "e75a8067c9ad8b243e7ccb0bbfa9af0f2683f9415dcd4ef3fc063a59687b0a93",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              41286000,
+              40636000,
+              40514000,
+              40644000,
+              40460000,
+              41022000,
+              40737000
+            ],
+            "candidate": [
+              42000000,
+              41086000,
+              41296000,
+              40638000,
+              40681000,
+              40762000,
+              40694000
+            ]
+          },
+          "baseline_median_ns": 40644000,
+          "candidate_median_ns": 40762000,
+          "paired_ratio_median": 1.0054621848739496,
+          "paired_ratio_iqr": [
+            0.9989444485357292,
+            1.017293997965412
+          ]
+        }
+      ],
+      "name": "dp_row",
+      "kind": "hotspot"
+    },
+    {
+      "checksum": 348023040,
+      "source_sha256": "8130546cbb277b8947c3a3a30a9cfdd95ce84d35e07c805a980ab6a64b0f0dd7",
+      "samples_ns": {
+        "baseline": [
+          11018000,
+          11299000,
+          11261000,
+          11253000,
+          11121000,
+          11242000,
+          11274000,
+          11296000,
+          11220000,
+          11237000,
+          11314000,
+          11102000,
+          11071000,
+          11400000,
+          11195000,
+          11405000,
+          11352000,
+          11072000,
+          11141000,
+          11311000,
+          11310000
+        ],
+        "candidate": [
+          8740000,
+          8805000,
+          8930000,
+          8645000,
+          8886000,
+          8739000,
+          8755000,
+          8860000,
+          8735000,
+          8784000,
+          8817000,
+          8750000,
+          8701000,
+          8741000,
+          8822000,
+          8766000,
+          8820000,
+          8799000,
+          8676000,
+          8736000,
+          8773000
+        ]
+      },
+      "baseline_median_ns": 11253000,
+      "candidate_median_ns": 8766000,
+      "paired_ratio_median": 0.7792725019913267,
+      "paired_ratio_iqr": [
+        0.7761253916784188,
+        0.7880883253253823
+      ],
+      "round_ratio_medians": [
+        0.7792725019913267,
+        0.7817033015929519,
+        0.7769556025369979
+      ],
+      "rounds": [
+        {
+          "checksum": 348023040,
+          "source_sha256": "8130546cbb277b8947c3a3a30a9cfdd95ce84d35e07c805a980ab6a64b0f0dd7",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              11018000,
+              11299000,
+              11261000,
+              11253000,
+              11121000,
+              11242000,
+              11274000
+            ],
+            "candidate": [
+              8740000,
+              8805000,
+              8930000,
+              8645000,
+              8886000,
+              8739000,
+              8755000
+            ]
+          },
+          "baseline_median_ns": 11253000,
+          "candidate_median_ns": 8755000,
+          "paired_ratio_median": 0.7792725019913267,
+          "paired_ratio_iqr": [
+            0.7765655490509136,
+            0.7932474133236522
+          ]
+        },
+        {
+          "checksum": 348023040,
+          "source_sha256": "8130546cbb277b8947c3a3a30a9cfdd95ce84d35e07c805a980ab6a64b0f0dd7",
+          "first": "candidate",
+          "samples_ns": {
+            "baseline": [
+              11296000,
+              11220000,
+              11237000,
+              11314000,
+              11102000,
+              11071000,
+              11400000
+            ],
+            "candidate": [
+              8860000,
+              8735000,
+              8784000,
+              8817000,
+              8750000,
+              8701000,
+              8741000
+            ]
+          },
+          "baseline_median_ns": 11237000,
+          "candidate_median_ns": 8750000,
+          "paired_ratio_median": 0.7817033015929519,
+          "paired_ratio_iqr": [
+            0.7785204991087344,
+            0.7859271971818264
+          ]
+        },
+        {
+          "checksum": 348023040,
+          "source_sha256": "8130546cbb277b8947c3a3a30a9cfdd95ce84d35e07c805a980ab6a64b0f0dd7",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              11195000,
+              11405000,
+              11352000,
+              11072000,
+              11141000,
+              11311000,
+              11310000
+            ],
+            "candidate": [
+              8822000,
+              8766000,
+              8820000,
+              8799000,
+              8676000,
+              8736000,
+              8773000
+            ]
+          },
+          "baseline_median_ns": 11310000,
+          "candidate_median_ns": 8773000,
+          "paired_ratio_median": 0.7769556025369979,
+          "paired_ratio_iqr": [
+            0.7723455043762709,
+            0.7880303707012059
+          ]
+        }
+      ],
+      "name": "heap_callback",
+      "kind": "hotspot"
+    },
+    {
+      "checksum": 125000,
+      "source_sha256": "fa2729576414aa8beb11060e194938db04d6b7b77bcaff3b5964f6d5652fa246",
+      "samples_ns": {
+        "baseline": [
+          10461000,
+          10549000,
+          10509000,
+          10338000,
+          10688000,
+          10667000,
+          10926000,
+          10648000,
+          10476000,
+          10398000,
+          10509000,
+          10543000,
+          10572000,
+          10611000,
+          10571000,
+          10504000,
+          10446000,
+          10614000,
+          10676000,
+          10582000,
+          10576000
+        ],
+        "candidate": [
+          10429000,
+          10594000,
+          10506000,
+          10289000,
+          10735000,
+          10623000,
+          10597000,
+          10636000,
+          10676000,
+          10516000,
+          10531000,
+          10460000,
+          10498000,
+          10619000,
+          10536000,
+          10628000,
+          10498000,
+          10468000,
+          10551000,
+          10594000,
+          10683000
+        ]
+      },
+      "baseline_median_ns": 10571000,
+      "candidate_median_ns": 10551000,
+      "paired_ratio_median": 0.9997145304025121,
+      "paired_ratio_iqr": [
+        0.9941302917133026,
+        1.0046877185462504
+      ],
+      "round_ratio_medians": [
+        0.996941019023038,
+        1.0007539345961738,
+        1.001134001134001
+      ],
+      "rounds": [
+        {
+          "checksum": 125000,
+          "source_sha256": "fa2729576414aa8beb11060e194938db04d6b7b77bcaff3b5964f6d5652fa246",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              10461000,
+              10549000,
+              10509000,
+              10338000,
+              10688000,
+              10667000,
+              10926000
+            ],
+            "candidate": [
+              10429000,
+              10594000,
+              10506000,
+              10289000,
+              10735000,
+              10623000,
+              10597000
+            ]
+          },
+          "baseline_median_ns": 10549000,
+          "candidate_median_ns": 10594000,
+          "paired_ratio_median": 0.996941019023038,
+          "paired_ratio_iqr": [
+            0.9952602050686786,
+            1.0042658071855153
+          ]
+        },
+        {
+          "checksum": 125000,
+          "source_sha256": "fa2729576414aa8beb11060e194938db04d6b7b77bcaff3b5964f6d5652fa246",
+          "first": "candidate",
+          "samples_ns": {
+            "baseline": [
+              10648000,
+              10476000,
+              10398000,
+              10509000,
+              10543000,
+              10572000,
+              10611000
+            ],
+            "candidate": [
+              10636000,
+              10676000,
+              10516000,
+              10531000,
+              10460000,
+              10498000,
+              10619000
+            ]
+          },
+          "baseline_median_ns": 10543000,
+          "candidate_median_ns": 10531000,
+          "paired_ratio_median": 1.0007539345961738,
+          "paired_ratio_iqr": [
+            0.9930003783579266,
+            1.0113483362185036
+          ]
+        },
+        {
+          "checksum": 125000,
+          "source_sha256": "fa2729576414aa8beb11060e194938db04d6b7b77bcaff3b5964f6d5652fa246",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              10571000,
+              10504000,
+              10446000,
+              10614000,
+              10676000,
+              10582000,
+              10576000
+            ],
+            "candidate": [
+              10536000,
+              10628000,
+              10498000,
+              10468000,
+              10551000,
+              10594000,
+              10683000
+            ]
+          },
+          "baseline_median_ns": 10576000,
+          "candidate_median_ns": 10551000,
+          "paired_ratio_median": 1.001134001134001,
+          "paired_ratio_iqr": [
+            0.9882914949419258,
+            1.0101172465960666
+          ]
+        }
+      ],
+      "name": "record_update",
+      "kind": "hotspot"
+    },
+    {
+      "checksum": 1310710,
+      "source_sha256": "a111399f5062412fb0c61c831683fb9bdae46bcc9e4f9e0b39643086fb97060d",
+      "samples_ns": {
+        "baseline": [
+          15382000,
+          15778000,
+          15429000,
+          15348000,
+          15386000,
+          15514000,
+          15867000,
+          15489000,
+          15454000,
+          15320000,
+          15440000,
+          15253000,
+          15107000,
+          15317000,
+          16123000,
+          15521000,
+          15719000,
+          15433000,
+          15257000,
+          15127000,
+          15243000
+        ],
+        "candidate": [
+          15318000,
+          15092000,
+          15356000,
+          15242000,
+          15451000,
+          15352000,
+          15532000,
+          15359000,
+          14936000,
+          15477000,
+          15207000,
+          15434000,
+          15629000,
+          15351000,
+          15601000,
+          15302000,
+          15422000,
+          15434000,
+          15016000,
+          15287000,
+          15316000
+        ]
+      },
+      "baseline_median_ns": 15429000,
+      "candidate_median_ns": 15352000,
+      "paired_ratio_median": 0.9930935626791765,
+      "paired_ratio_iqr": [
+        0.9826548201234065,
+        1.0045068516489817
+      ],
+      "round_ratio_medians": [
+        0.9930935626791765,
+        1.002219755826859,
+        0.9858900844017783
+      ],
+      "rounds": [
+        {
+          "checksum": 1310710,
+          "source_sha256": "a111399f5062412fb0c61c831683fb9bdae46bcc9e4f9e0b39643086fb97060d",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              15382000,
+              15778000,
+              15429000,
+              15348000,
+              15386000,
+              15514000,
+              15867000
+            ],
+            "candidate": [
+              15318000,
+              15092000,
+              15356000,
+              15242000,
+              15451000,
+              15352000,
+              15532000
+            ]
+          },
+          "baseline_median_ns": 15429000,
+          "candidate_median_ns": 15352000,
+          "paired_ratio_median": 0.9930935626791765,
+          "paired_ratio_iqr": [
+            0.9788869981723073,
+            0.9958392926797556
+          ]
+        },
+        {
+          "checksum": 1310710,
+          "source_sha256": "a111399f5062412fb0c61c831683fb9bdae46bcc9e4f9e0b39643086fb97060d",
+          "first": "candidate",
+          "samples_ns": {
+            "baseline": [
+              15489000,
+              15454000,
+              15320000,
+              15440000,
+              15253000,
+              15107000,
+              15317000
+            ],
+            "candidate": [
+              15359000,
+              14936000,
+              15477000,
+              15207000,
+              15434000,
+              15629000,
+              15351000
+            ]
+          },
+          "baseline_median_ns": 15320000,
+          "candidate_median_ns": 15359000,
+          "paired_ratio_median": 1.002219755826859,
+          "paired_ratio_iqr": [
+            0.9849093264248705,
+            1.0118665180620205
+          ]
+        },
+        {
+          "checksum": 1310710,
+          "source_sha256": "a111399f5062412fb0c61c831683fb9bdae46bcc9e4f9e0b39643086fb97060d",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              16123000,
+              15521000,
+              15719000,
+              15433000,
+              15257000,
+              15127000,
+              15243000
+            ],
+            "candidate": [
+              15601000,
+              15302000,
+              15422000,
+              15434000,
+              15016000,
+              15287000,
+              15316000
+            ]
+          },
+          "baseline_median_ns": 15433000,
+          "candidate_median_ns": 15316000,
+          "paired_ratio_median": 0.9858900844017783,
+          "paired_ratio_iqr": [
+            0.9811056682995102,
+            1.004789083513744
+          ]
+        }
+      ],
+      "name": "recursive_loops",
+      "kind": "hotspot"
+    },
+    {
+      "checksum": 1375000,
+      "source_sha256": "9da2f37a692985c42257919e6962b5b2c2404b33ae01d198e8256594ac9054ad",
+      "samples_ns": {
+        "baseline": [
+          24241000,
+          24511000,
+          24482000,
+          24138000,
+          25052000,
+          24875000,
+          24264000,
+          24493000,
+          24115000,
+          24545000,
+          24527000,
+          24305000,
+          24251000,
+          24415000,
+          24507000,
+          24597000,
+          24316000,
+          24293000,
+          24220000,
+          24474000,
+          24584000
+        ],
+        "candidate": [
+          24692000,
+          26769000,
+          24407000,
+          24333000,
+          24250000,
+          24517000,
+          24217000,
+          24351000,
+          24120000,
+          24482000,
+          24173000,
+          24275000,
+          24152000,
+          24275000,
+          24096000,
+          26456000,
+          24281000,
+          24273000,
+          24367000,
+          24053000,
+          24506000
+        ]
+      },
+      "baseline_median_ns": 24474000,
+      "candidate_median_ns": 24281000,
+      "paired_ratio_median": 0.997433285801589,
+      "paired_ratio_iqr": [
+        0.9899052326918552,
+        1.0031383519959154
+      ],
+      "round_ratio_medians": [
+        0.9980629739531817,
+        0.9959176941157065,
+        0.9985606185227833
+      ],
+      "rounds": [
+        {
+          "checksum": 1375000,
+          "source_sha256": "9da2f37a692985c42257919e6962b5b2c2404b33ae01d198e8256594ac9054ad",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              24241000,
+              24511000,
+              24482000,
+              24138000,
+              25052000,
+              24875000,
+              24264000
+            ],
+            "candidate": [
+              24692000,
+              26769000,
+              24407000,
+              24333000,
+              24250000,
+              24517000,
+              24217000
+            ]
+          },
+          "baseline_median_ns": 24482000,
+          "candidate_median_ns": 24407000,
+          "paired_ratio_median": 0.9980629739531817,
+          "paired_ratio_iqr": [
+            0.985608040201005,
+            1.0186048430345283
+          ]
+        },
+        {
+          "checksum": 1375000,
+          "source_sha256": "9da2f37a692985c42257919e6962b5b2c2404b33ae01d198e8256594ac9054ad",
+          "first": "candidate",
+          "samples_ns": {
+            "baseline": [
+              24493000,
+              24115000,
+              24545000,
+              24527000,
+              24305000,
+              24251000,
+              24415000
+            ],
+            "candidate": [
+              24351000,
+              24120000,
+              24482000,
+              24173000,
+              24275000,
+              24152000,
+              24275000
+            ]
+          },
+          "baseline_median_ns": 24415000,
+          "candidate_median_ns": 24275000,
+          "paired_ratio_median": 0.9959176941157065,
+          "paired_ratio_iqr": [
+            0.9942024251827053,
+            0.9987656860728246
+          ]
+        },
+        {
+          "checksum": 1375000,
+          "source_sha256": "9da2f37a692985c42257919e6962b5b2c2404b33ae01d198e8256594ac9054ad",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              24507000,
+              24597000,
+              24316000,
+              24293000,
+              24220000,
+              24474000,
+              24584000
+            ],
+            "candidate": [
+              24096000,
+              26456000,
+              24281000,
+              24273000,
+              24367000,
+              24053000,
+              24506000
+            ]
+          },
+          "baseline_median_ns": 24474000,
+          "candidate_median_ns": 24281000,
+          "paired_ratio_median": 0.9985606185227833,
+          "paired_ratio_iqr": [
+            0.9832292814297956,
+            1.0060693641618497
+          ]
+        }
+      ],
+      "name": "string_count",
+      "kind": "hotspot"
+    },
+    {
+      "checksum": 441866,
+      "source_sha256": "a80afb81dbcf4eb5fb1d8405dde8878c955e48b03b917872f42e91f6fe97272c",
+      "samples_ns": {
+        "baseline": [
+          18614000,
+          19697000,
+          18958000,
+          19042000,
+          18935000,
+          17984000,
+          19676000,
+          19530000,
+          19999000,
+          18802000,
+          19165000,
+          18672000,
+          18090000,
+          18160000,
+          18318000,
+          18280000,
+          19102000,
+          19512000,
+          19163000,
+          17894000,
+          18653000
+        ],
+        "candidate": [
+          20217000,
+          19300000,
+          19392000,
+          19979000,
+          18495000,
+          18588000,
+          19254000,
+          19158000,
+          19846000,
+          18587000,
+          19921000,
+          18683000,
+          18908000,
+          17948000,
+          18094000,
+          18606000,
+          18687000,
+          22035000,
+          18314000,
+          17629000,
+          19588000
+        ]
+      },
+      "baseline_median_ns": 18935000,
+      "candidate_median_ns": 18908000,
+      "paired_ratio_median": 0.992349617480874,
+      "paired_ratio_iqr": [
+        0.9803985136726163,
+        1.0423326305539296
+      ],
+      "round_ratio_medians": [
+        1.022892710201498,
+        0.992349617480874,
+        0.9877715907850202
+      ],
+      "rounds": [
+        {
+          "checksum": 441866,
+          "source_sha256": "a80afb81dbcf4eb5fb1d8405dde8878c955e48b03b917872f42e91f6fe97272c",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              18614000,
+              19697000,
+              18958000,
+              19042000,
+              18935000,
+              17984000,
+              19676000
+            ],
+            "candidate": [
+              20217000,
+              19300000,
+              19392000,
+              19979000,
+              18495000,
+              18588000,
+              19254000
+            ]
+          },
+          "baseline_median_ns": 18958000,
+          "candidate_median_ns": 19300000,
+          "paired_ratio_median": 1.022892710201498,
+          "paired_ratio_iqr": [
+            0.9785525513315715,
+            1.0492070160697407
+          ]
+        },
+        {
+          "checksum": 441866,
+          "source_sha256": "a80afb81dbcf4eb5fb1d8405dde8878c955e48b03b917872f42e91f6fe97272c",
+          "first": "candidate",
+          "samples_ns": {
+            "baseline": [
+              19530000,
+              19999000,
+              18802000,
+              19165000,
+              18672000,
+              18090000,
+              18160000
+            ],
+            "candidate": [
+              19158000,
+              19846000,
+              18587000,
+              19921000,
+              18683000,
+              18908000,
+              17948000
+            ]
+          },
+          "baseline_median_ns": 18802000,
+          "candidate_median_ns": 18908000,
+          "paired_ratio_median": 0.992349617480874,
+          "paired_ratio_iqr": [
+            0.9883259911894273,
+            1.0394469084268196
+          ]
+        },
+        {
+          "checksum": 441866,
+          "source_sha256": "a80afb81dbcf4eb5fb1d8405dde8878c955e48b03b917872f42e91f6fe97272c",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              18318000,
+              18280000,
+              19102000,
+              19512000,
+              19163000,
+              17894000,
+              18653000
+            ],
+            "candidate": [
+              18094000,
+              18606000,
+              18687000,
+              22035000,
+              18314000,
+              17629000,
+              19588000
+            ]
+          },
+          "baseline_median_ns": 18653000,
+          "candidate_median_ns": 18606000,
+          "paired_ratio_median": 0.9877715907850202,
+          "paired_ratio_iqr": [
+            0.9782745262276201,
+            1.0501259850962312
+          ]
+        }
+      ],
+      "name": "substring_count",
+      "kind": "hotspot"
+    },
+    {
+      "checksum": 2647,
+      "source_sha256": "f89be43a065c0ee0c8407f60dcc8b34e6aded06bca8d658a00e180b115b07464",
+      "samples_ns": {
+        "baseline": [
+          29497000,
+          29368000,
+          29259000,
+          29232000,
+          29153000,
+          29456000,
+          28989000,
+          29263000,
+          29539000,
+          30048000,
+          30261000,
+          29123000,
+          29292000,
+          29422000,
+          29211000,
+          29537000,
+          29232000,
+          29601000,
+          29293000,
+          29291000,
+          29380000
+        ],
+        "candidate": [
+          29465000,
+          29514000,
+          29645000,
+          28931000,
+          28904000,
+          29082000,
+          29195000,
+          29265000,
+          29178000,
+          29216000,
+          29139000,
+          28923000,
+          29257000,
+          29047000,
+          29094000,
+          29062000,
+          29274000,
+          29152000,
+          29051000,
+          29053000,
+          29003000
+        ]
+      },
+      "baseline_median_ns": 29293000,
+      "candidate_median_ns": 29139000,
+      "paired_ratio_median": 0.9917386406308675,
+      "paired_ratio_iqr": [
+        0.9872112885246908,
+        0.9994917448027265
+      ],
+      "round_ratio_medians": [
+        0.9989151439129403,
+        0.9877788686143743,
+        0.9917386406308675
+      ],
+      "rounds": [
+        {
+          "checksum": 2647,
+          "source_sha256": "f89be43a065c0ee0c8407f60dcc8b34e6aded06bca8d658a00e180b115b07464",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              29497000,
+              29368000,
+              29259000,
+              29232000,
+              29153000,
+              29456000,
+              28989000
+            ],
+            "candidate": [
+              29465000,
+              29514000,
+              29645000,
+              28931000,
+              28904000,
+              29082000,
+              29195000
+            ]
+          },
+          "baseline_median_ns": 29259000,
+          "candidate_median_ns": 29195000,
+          "paired_ratio_median": 0.9989151439129403,
+          "paired_ratio_iqr": [
+            0.9897030651340997,
+            1.0071061437096829
+          ]
+        },
+        {
+          "checksum": 2647,
+          "source_sha256": "f89be43a065c0ee0c8407f60dcc8b34e6aded06bca8d658a00e180b115b07464",
+          "first": "candidate",
+          "samples_ns": {
+            "baseline": [
+              29263000,
+              29539000,
+              30048000,
+              30261000,
+              29123000,
+              29292000,
+              29422000
+            ],
+            "candidate": [
+              29265000,
+              29178000,
+              29216000,
+              29139000,
+              28923000,
+              29257000,
+              29047000
+            ]
+          },
+          "baseline_median_ns": 29422000,
+          "candidate_median_ns": 29178000,
+          "paired_ratio_median": 0.9877788686143743,
+          "paired_ratio_iqr": [
+            0.972310969116081,
+            0.9988051345077155
+          ]
+        },
+        {
+          "checksum": 2647,
+          "source_sha256": "f89be43a065c0ee0c8407f60dcc8b34e6aded06bca8d658a00e180b115b07464",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              29211000,
+              29537000,
+              29232000,
+              29601000,
+              29293000,
+              29291000,
+              29380000
+            ],
+            "candidate": [
+              29094000,
+              29062000,
+              29274000,
+              29152000,
+              29051000,
+              29053000,
+              29003000
+            ]
+          },
+          "baseline_median_ns": 29293000,
+          "candidate_median_ns": 29062000,
+          "paired_ratio_median": 0.9917386406308675,
+          "paired_ratio_iqr": [
+            0.9848315935272457,
+            0.9959946595460614
+          ]
+        }
+      ],
+      "name": "tree_build",
+      "kind": "hotspot"
+    },
+    {
+      "checksum": 2750000,
+      "source_sha256": "e1072b1f97e09c4323e4a194b555faa48fd6a4af46b8ddf04354cc554619211a",
+      "samples_ns": {
+        "baseline": [
+          52707000,
+          53046000,
+          52651000,
+          52371000,
+          52440000,
+          52654000,
+          52682000,
+          52144000,
+          52476000,
+          54466000,
+          52515000,
+          52410000,
+          52644000,
+          52517000,
+          52812000,
+          52474000,
+          52749000,
+          52293000,
+          52590000,
+          54173000,
+          53156000
+        ],
+        "candidate": [
+          52768000,
+          53307000,
+          53007000,
+          52873000,
+          52391000,
+          52260000,
+          52427000,
+          52074000,
+          52570000,
+          52333000,
+          52785000,
+          52564000,
+          52299000,
+          52092000,
+          52613000,
+          52373000,
+          52481000,
+          52890000,
+          54755000,
+          56691000,
+          53068000
+        ]
+      },
+      "baseline_median_ns": 52644000,
+      "candidate_median_ns": 52570000,
+      "paired_ratio_median": 0.9990655987795576,
+      "paired_ratio_iqr": [
+        0.9950394860156926,
+        1.0059514465897301
+      ],
+      "round_ratio_medians": [
+        1.001157341529588,
+        0.9986575636698374,
+        0.9983444954473625
+      ],
+      "rounds": [
+        {
+          "checksum": 2750000,
+          "source_sha256": "e1072b1f97e09c4323e4a194b555faa48fd6a4af46b8ddf04354cc554619211a",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              52707000,
+              53046000,
+              52651000,
+              52371000,
+              52440000,
+              52654000,
+              52682000
+            ],
+            "candidate": [
+              52768000,
+              53307000,
+              53007000,
+              52873000,
+              52391000,
+              52260000,
+              52427000
+            ]
+          },
+          "baseline_median_ns": 52654000,
+          "candidate_median_ns": 52768000,
+          "paired_ratio_median": 1.001157341529588,
+          "paired_ratio_iqr": [
+            0.9951596370676892,
+            1.0067615050046532
+          ]
+        },
+        {
+          "checksum": 2750000,
+          "source_sha256": "e1072b1f97e09c4323e4a194b555faa48fd6a4af46b8ddf04354cc554619211a",
+          "first": "candidate",
+          "samples_ns": {
+            "baseline": [
+              52144000,
+              52476000,
+              54466000,
+              52515000,
+              52410000,
+              52644000,
+              52517000
+            ],
+            "candidate": [
+              52074000,
+              52570000,
+              52333000,
+              52785000,
+              52564000,
+              52299000,
+              52092000
+            ]
+          },
+          "baseline_median_ns": 52515000,
+          "candidate_median_ns": 52333000,
+          "paired_ratio_median": 0.9986575636698374,
+          "paired_ratio_iqr": [
+            0.9919073823714226,
+            1.0029383705399733
+          ]
+        },
+        {
+          "checksum": 2750000,
+          "source_sha256": "e1072b1f97e09c4323e4a194b555faa48fd6a4af46b8ddf04354cc554619211a",
+          "first": "baseline",
+          "samples_ns": {
+            "baseline": [
+              52812000,
+              52474000,
+              52749000,
+              52293000,
+              52590000,
+              54173000,
+              53156000
+            ],
+            "candidate": [
+              52613000,
+              52373000,
+              52481000,
+              52890000,
+              54755000,
+              56691000,
+              53068000
+            ]
+          },
+          "baseline_median_ns": 52749000,
+          "candidate_median_ns": 52890000,
+          "paired_ratio_median": 0.9983444954473625,
+          "paired_ratio_iqr": [
+            0.9962319169885632,
+            1.0411675223426506
+          ]
+        }
+      ],
+      "name": "while_search",
+      "kind": "hotspot"
+    }
+  ],
+  "git_head": "77049ae2fdbaf972bba8dc25b85cb84035e4936e",
+  "runtime_diff_sha256": "ce4c1711cfb226e767866dbf6a7076faa6d83d903f63824f71271c1be483d800"
+}

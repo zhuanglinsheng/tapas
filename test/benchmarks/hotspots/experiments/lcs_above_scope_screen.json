@@ -1,0 +1,341 @@
+{
+  "date": "2026-10-17T15:43:52.987089+00:00",
+  "runtime": {
+    "path": "/Users/zhuanglinsheng/Documents/Github/tapas/build-release/bin/tapas",
+    "sha256": "17cd65cd3faf59131d8f126ee339aec8c3e1e32aa78fcd141e53fb91fb30752d",
+    "version": "Tapas 0.2.1 Copyright (C) 2020-2026",
+    "build_config": [
+      "CMAKE_BUILD_TYPE:STRING=Release",
+      "CMAKE_C_COMPILER:FILEPATH=/usr/bin/cc",
+      "CMAKE_C_FLAGS:STRING=",
+      "CMAKE_C_FLAGS_RELEASE:STRING=-O3 -DNDEBUG",
+      "CMAKE_EXE_LINKER_FLAGS:STRING=",
+      "TAPAS_ENABLE_IPO:BOOL=ON"
+    ]
+  },
+  "runs": 7,
+  "rounds": [
+    {
+      "baseline": [
+        13093000,
+        13233000,
+        13111000,
+        13047000,
+        13225000,
+        13032000,
+        13087000
+      ],
+      "row_above": [
+        12558000,
+        12618000,
+        12619000,
+        12565000,
+        12692000,
+        13046000,
+        12609000
+      ],
+      "outer_above": [
+        12681000,
+        12567000,
+        12611000,
+        12600000,
+        12567000,
+        12619000,
+        12766000
+      ],
+      "outer_above_width": [
+        12565000,
+        12607000,
+        12475000,
+        12531000,
+        12524000,
+        12479000,
+        12815000
+      ]
+    },
+    {
+      "baseline": [
+        13003000,
+        13102000,
+        13140000,
+        13349000,
+        13069000,
+        13083000,
+        13782000
+      ],
+      "row_above": [
+        12613000,
+        12707000,
+        12736000,
+        13132000,
+        12514000,
+        12572000,
+        13233000
+      ],
+      "outer_above": [
+        12749000,
+        12606000,
+        12692000,
+        13248000,
+        12495000,
+        12888000,
+        12602000
+      ],
+      "outer_above_width": [
+        12676000,
+        12649000,
+        13212000,
+        12754000,
+        12579000,
+        12650000,
+        12397000
+      ]
+    },
+    {
+      "baseline": [
+        13330000,
+        13038000,
+        13220000,
+        13203000,
+        13276000,
+        13198000,
+        12918000
+      ],
+      "row_above": [
+        12657000,
+        12757000,
+        12630000,
+        12673000,
+        12868000,
+        12668000,
+        12758000
+      ],
+      "outer_above": [
+        12720000,
+        12669000,
+        12625000,
+        12528000,
+        12577000,
+        12559000,
+        12543000
+      ],
+      "outer_above_width": [
+        12637000,
+        12437000,
+        12524000,
+        12574000,
+        12480000,
+        12563000,
+        12532000
+      ]
+    }
+  ],
+  "checksum": 1480,
+  "sources": {
+    "baseline": {
+      "source": "function lcs_length(left, right)\n{\n    let previous = replicate([0], right.len() + 1)\n    let current = replicate([0], right.len() + 1)\n\n    for (let i in 1 to (left.len() + 1)) {\n        current[0] = 0\n        let diagonal = 0\n        let preceding = 0\n        for (let j in 1 to (right.len() + 1)) {\n            let above = previous[j]\n            if (left[i - 1] == right[j - 1]) {\n                preceding = diagonal + 1\n            } elif (above > preceding) {\n                preceding = above\n            }\n            current[j] = preceding\n            diagonal = above\n        }\n        let temporary = previous\n        previous = current\n        current = temporary\n    }\n    return previous[right.len()] + 0\n}\n\nlet left = 'DYNAMICPROGRAMMINGALGORITHMSANDDATASTRUCTURESARECENTRALTOVIRTUALMACHINEBENCHMARKS'\nlet right = 'ALGORITHMSFORDYNAMICLANGUAGESUSEPROGRAMSTRUCTUREANDRUNTIMEDATATOMEASUREPERFORMANCE'\n\nlet started = clock_ns()\nlet result = 0\nfor (let repetition in 0 to 40) {\n    result = result + lcs_length(left, right)\n}\nlet elapsed = clock_ns() - started\n\nprint(result)\nprint(elapsed)\n",
+      "sha256": "5117bb9efb31a2088b5642726987c281a095d7761a43a2c4c33b204d3b7fbc45"
+    },
+    "row_above": {
+      "source": "function lcs_length(left, right)\n{\n    let previous = replicate([0], right.len() + 1)\n    let current = replicate([0], right.len() + 1)\n\n    for (let i in 1 to (left.len() + 1)) {\n        current[0] = 0\n        let diagonal = 0\n        let preceding = 0\n        let above = 0\n        for (let j in 1 to (right.len() + 1)) {\n            above = previous[j]\n            if (left[i - 1] == right[j - 1]) {\n                preceding = diagonal + 1\n            } elif (above > preceding) {\n                preceding = above\n            }\n            current[j] = preceding\n            diagonal = above\n        }\n        let temporary = previous\n        previous = current\n        current = temporary\n    }\n    return previous[right.len()] + 0\n}\n\nlet left = 'DYNAMICPROGRAMMINGALGORITHMSANDDATASTRUCTURESARECENTRALTOVIRTUALMACHINEBENCHMARKS'\nlet right = 'ALGORITHMSFORDYNAMICLANGUAGESUSEPROGRAMSTRUCTUREANDRUNTIMEDATATOMEASUREPERFORMANCE'\n\nlet started = clock_ns()\nlet result = 0\nfor (let repetition in 0 to 40) {\n    result = result + lcs_length(left, right)\n}\nlet elapsed = clock_ns() - started\n\nprint(result)\nprint(elapsed)\n",
+      "sha256": "2247c5a3c09635537a56dbbae6bf1f4441863da20b7b02858d387efa8d42587b"
+    },
+    "outer_above": {
+      "source": "function lcs_length(left, right)\n{\n    let previous = replicate([0], right.len() + 1)\n    let current = replicate([0], right.len() + 1)\n\n    let above = 0\n\n    for (let i in 1 to (left.len() + 1)) {\n        current[0] = 0\n        let diagonal = 0\n        let preceding = 0\n        for (let j in 1 to (right.len() + 1)) {\n            above = previous[j]\n            if (left[i - 1] == right[j - 1]) {\n                preceding = diagonal + 1\n            } elif (above > preceding) {\n                preceding = above\n            }\n            current[j] = preceding\n            diagonal = above\n        }\n        let temporary = previous\n        previous = current\n        current = temporary\n    }\n    return previous[right.len()] + 0\n}\n\nlet left = 'DYNAMICPROGRAMMINGALGORITHMSANDDATASTRUCTURESARECENTRALTOVIRTUALMACHINEBENCHMARKS'\nlet right = 'ALGORITHMSFORDYNAMICLANGUAGESUSEPROGRAMSTRUCTUREANDRUNTIMEDATATOMEASUREPERFORMANCE'\n\nlet started = clock_ns()\nlet result = 0\nfor (let repetition in 0 to 40) {\n    result = result + lcs_length(left, right)\n}\nlet elapsed = clock_ns() - started\n\nprint(result)\nprint(elapsed)\n",
+      "sha256": "8c9caa6fcb74b2b8a677d348b7bcc92a2b5fc259ba67bf749aa26f061440c381"
+    },
+    "outer_above_width": {
+      "source": "function lcs_length(left, right)\n{\n    let row_size = right.len() + 1\n    let previous = replicate([0], row_size)\n    let current = replicate([0], row_size)\n\n    let above = 0\n\n    for (let i in 1 to (left.len() + 1)) {\n        current[0] = 0\n        let diagonal = 0\n        let preceding = 0\n        for (let j in 1 to row_size) {\n            above = previous[j]\n            if (left[i - 1] == right[j - 1]) {\n                preceding = diagonal + 1\n            } elif (above > preceding) {\n                preceding = above\n            }\n            current[j] = preceding\n            diagonal = above\n        }\n        let temporary = previous\n        previous = current\n        current = temporary\n    }\n    return previous[row_size - 1] + 0\n}\n\nlet left = 'DYNAMICPROGRAMMINGALGORITHMSANDDATASTRUCTURESARECENTRALTOVIRTUALMACHINEBENCHMARKS'\nlet right = 'ALGORITHMSFORDYNAMICLANGUAGESUSEPROGRAMSTRUCTUREANDRUNTIMEDATATOMEASUREPERFORMANCE'\n\nlet started = clock_ns()\nlet result = 0\nfor (let repetition in 0 to 40) {\n    result = result + lcs_length(left, right)\n}\nlet elapsed = clock_ns() - started\n\nprint(result)\nprint(elapsed)\n",
+      "sha256": "d5f7ea9c9ec2ed65dfed367bc2a7aed1fb9f648c0b07db431423fa53216cdac6"
+    }
+  },
+  "results": {
+    "row_above": {
+      "samples_ns": {
+        "baseline": [
+          13093000,
+          13233000,
+          13111000,
+          13047000,
+          13225000,
+          13032000,
+          13087000,
+          13003000,
+          13102000,
+          13140000,
+          13349000,
+          13069000,
+          13083000,
+          13782000,
+          13330000,
+          13038000,
+          13220000,
+          13203000,
+          13276000,
+          13198000,
+          12918000
+        ],
+        "candidate": [
+          12558000,
+          12618000,
+          12619000,
+          12565000,
+          12692000,
+          13046000,
+          12609000,
+          12613000,
+          12707000,
+          12736000,
+          13132000,
+          12514000,
+          12572000,
+          13233000,
+          12657000,
+          12757000,
+          12630000,
+          12673000,
+          12868000,
+          12668000,
+          12758000
+        ]
+      },
+      "baseline_median_ns": 13111000,
+      "candidate_median_ns": 12668000,
+      "paired_ratio_median": 0.9624742582564259,
+      "paired_ratio_iqr": [
+        0.9594180067358754,
+        0.9699294262412794
+      ],
+      "round_ratio_medians": [
+        0.9624742582564259,
+        0.9692541856925418,
+        0.9598576081193668
+      ]
+    },
+    "outer_above": {
+      "samples_ns": {
+        "baseline": [
+          13093000,
+          13233000,
+          13111000,
+          13047000,
+          13225000,
+          13032000,
+          13087000,
+          13003000,
+          13102000,
+          13140000,
+          13349000,
+          13069000,
+          13083000,
+          13782000,
+          13330000,
+          13038000,
+          13220000,
+          13203000,
+          13276000,
+          13198000,
+          12918000
+        ],
+        "candidate": [
+          12681000,
+          12567000,
+          12611000,
+          12600000,
+          12567000,
+          12619000,
+          12766000,
+          12749000,
+          12606000,
+          12692000,
+          13248000,
+          12495000,
+          12888000,
+          12602000,
+          12720000,
+          12669000,
+          12625000,
+          12528000,
+          12577000,
+          12559000,
+          12543000
+        ]
+      },
+      "baseline_median_ns": 13111000,
+      "candidate_median_ns": 12611000,
+      "paired_ratio_median": 0.9621431842466799,
+      "paired_ratio_iqr": [
+        0.9509146599802742,
+        0.9713344258559797
+      ],
+      "round_ratio_medians": [
+        0.9657392504023914,
+        0.9659056316590563,
+        0.95423855963991
+      ]
+    },
+    "outer_above_width": {
+      "samples_ns": {
+        "baseline": [
+          13093000,
+          13233000,
+          13111000,
+          13047000,
+          13225000,
+          13032000,
+          13087000,
+          13003000,
+          13102000,
+          13140000,
+          13349000,
+          13069000,
+          13083000,
+          13782000,
+          13330000,
+          13038000,
+          13220000,
+          13203000,
+          13276000,
+          13198000,
+          12918000
+        ],
+        "candidate": [
+          12565000,
+          12607000,
+          12475000,
+          12531000,
+          12524000,
+          12479000,
+          12815000,
+          12676000,
+          12649000,
+          13212000,
+          12754000,
+          12579000,
+          12650000,
+          12397000,
+          12637000,
+          12437000,
+          12524000,
+          12574000,
+          12480000,
+          12563000,
+          12532000
+        ]
+      },
+      "baseline_median_ns": 13111000,
+      "candidate_median_ns": 12565000,
+      "paired_ratio_median": 0.9554273728369166,
+      "paired_ratio_iqr": [
+        0.9497515586661138,
+        0.9661643706568538
+      ],
+      "round_ratio_medians": [
+        0.9575659914057704,
+        0.9654251259349718,
+        0.9518866494923474
+      ]
+    }
+  },
+  "method": "3 rounds; one discarded warm-up; 7 measured runs; rotating and reversed source order per repetition"
+}

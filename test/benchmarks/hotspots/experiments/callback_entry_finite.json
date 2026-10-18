@@ -1,0 +1,199 @@
+{
+  "baseline": {
+    "path": "/tmp/tapas-heap-hybrid-stage",
+    "sha256": "80d8465438372b58270f8201cdc5cd9cfc244cee0b5d50ba5ff1da75470072c4",
+    "version": "Tapas 0.1.0 Copyright (C) 2020-2026",
+    "build_config": null
+  },
+  "candidate": {
+    "path": "/tmp/tapas-callback-fast-stage",
+    "sha256": "ed8a71a5c3a6249af6ac7988476ee9f919e2214db55d98a6f9650cf3ba1afaf4",
+    "version": "Tapas 0.1.0 Copyright (C) 2020-2026",
+    "build_config": null
+  },
+  "source": "function identity(index) { return index }\nfunction run_mapping(distribution, shape)\n{\n    var checksum = 0\n    for (let repetition in 0 to 256) {\n        let mapped = finite::map(distribution, shape, identity)\n        checksum = checksum + int(finite::prob(mapped, finite::index([0])) * 128.0)\n    }\n    return checksum + 0\n}\nlet distribution = finite::uniform(128)\nlet shape = finite::index([128])\nlet started = clock_ns()\nlet checksum = run_mapping(distribution, shape)\nlet elapsed = clock_ns() - started\nprint(checksum)\nprint(elapsed)\n",
+  "checksum": 256,
+  "source_sha256": "cfe329347dd22232b6b65f603e989a09b69c92c6aef125eaf3a2cb04aaabd4c9",
+  "samples_ns": {
+    "baseline": [
+      2566000,
+      2539000,
+      2482000,
+      2477000,
+      2491000,
+      2580000,
+      2493000,
+      2470000,
+      2561000,
+      2667000,
+      2554000,
+      2509000,
+      2581000,
+      2531000,
+      2472000,
+      2456000,
+      2571000,
+      2506000,
+      2569000,
+      2495000,
+      2568000,
+      2582000,
+      2580000,
+      2657000,
+      2597000,
+      2573000,
+      2650000
+    ],
+    "candidate": [
+      2607000,
+      2471000,
+      2462000,
+      2594000,
+      2547000,
+      2469000,
+      2472000,
+      2551000,
+      2502000,
+      2560000,
+      2464000,
+      2516000,
+      2502000,
+      2484000,
+      2466000,
+      2504000,
+      2465000,
+      2459000,
+      2460000,
+      2503000,
+      2460000,
+      2513000,
+      2551000,
+      2545000,
+      2566000,
+      2814000,
+      2540000
+    ]
+  },
+  "baseline_median_ns": 2561000,
+  "candidate_median_ns": 2503000,
+  "paired_ratio_median": 0.9814302647175029,
+  "paired_ratio_iqr": [
+    0.9598800149981253,
+    1.0032064128256513
+  ],
+  "round_ratio_medians": [
+    0.991941982272361,
+    0.981245011971269,
+    0.9732765298218435
+  ],
+  "rounds": [
+    {
+      "checksum": 256,
+      "source_sha256": "cfe329347dd22232b6b65f603e989a09b69c92c6aef125eaf3a2cb04aaabd4c9",
+      "first": "baseline",
+      "samples_ns": {
+        "baseline": [
+          2566000,
+          2539000,
+          2482000,
+          2477000,
+          2491000,
+          2580000,
+          2493000,
+          2470000,
+          2561000
+        ],
+        "candidate": [
+          2607000,
+          2471000,
+          2462000,
+          2594000,
+          2547000,
+          2469000,
+          2472000,
+          2551000,
+          2502000
+        ]
+      },
+      "baseline_median_ns": 2493000,
+      "candidate_median_ns": 2502000,
+      "paired_ratio_median": 0.991941982272361,
+      "paired_ratio_iqr": [
+        0.9750899632273049,
+        1.0276372268100384
+      ]
+    },
+    {
+      "checksum": 256,
+      "source_sha256": "cfe329347dd22232b6b65f603e989a09b69c92c6aef125eaf3a2cb04aaabd4c9",
+      "first": "candidate",
+      "samples_ns": {
+        "baseline": [
+          2667000,
+          2554000,
+          2509000,
+          2581000,
+          2531000,
+          2472000,
+          2456000,
+          2571000,
+          2506000
+        ],
+        "candidate": [
+          2560000,
+          2464000,
+          2516000,
+          2502000,
+          2484000,
+          2466000,
+          2504000,
+          2465000,
+          2459000
+        ]
+      },
+      "baseline_median_ns": 2531000,
+      "candidate_median_ns": 2484000,
+      "paired_ratio_median": 0.981245011971269,
+      "paired_ratio_iqr": [
+        0.9623205869822262,
+        1.000181385845906
+      ]
+    },
+    {
+      "checksum": 256,
+      "source_sha256": "cfe329347dd22232b6b65f603e989a09b69c92c6aef125eaf3a2cb04aaabd4c9",
+      "first": "baseline",
+      "samples_ns": {
+        "baseline": [
+          2569000,
+          2495000,
+          2568000,
+          2582000,
+          2580000,
+          2657000,
+          2597000,
+          2573000,
+          2650000
+        ],
+        "candidate": [
+          2460000,
+          2503000,
+          2460000,
+          2513000,
+          2551000,
+          2545000,
+          2566000,
+          2814000,
+          2540000
+        ]
+      },
+      "baseline_median_ns": 2580000,
+      "candidate_median_ns": 2540000,
+      "paired_ratio_median": 0.9732765298218435,
+      "paired_ratio_iqr": [
+        0.9578955606597279,
+        0.995983051374066
+      ]
+    }
+  ]
+}

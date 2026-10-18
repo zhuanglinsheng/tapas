@@ -1,0 +1,14 @@
+{
+  "test/benchmarks/sieve.tap": {
+    "sha256": "9dbb0a64b87fe0a3fa703bb6479c166b8871dc12646be435a74137c30316207e",
+    "source": "function primes_up_to(limit)\n{\n    let is_prime = replicate([true], limit + 1)\n    is_prime[0] = false\n    is_prime[1] = false\n\n    let candidate = 2\n    while (candidate * candidate <= limit) {\n        if (is_prime[candidate]) {\n            fill(is_prime, false, iter(candidate * candidate, candidate, limit + 1))\n        }\n        candidate = candidate + 1\n    }\n\n    return count(is_prime, true)\n}\n\nlet started = clock_ns()\nlet result = primes_up_to(20000)\n\nlet elapsed = clock_ns() - started\nprint(result)\nprint(elapsed)\n"
+  },
+  "test/benchmarks/sieve.py": {
+    "sha256": "eac1d7280c8777a54ec204f7673bcd55f7fe2cc2c461e3aa4a76796f82a902d0",
+    "source": "import math\nimport time\n\n\ndef primes_up_to(limit):\n    is_prime = bytearray(b\"\\x01\") * (limit + 1)\n    is_prime[:2] = b\"\\x00\\x00\"\n    for candidate in range(2, math.isqrt(limit) + 1):\n        if is_prime[candidate]:\n            start = candidate * candidate\n            is_prime[start::candidate] = bytes((limit - start) // candidate + 1)\n    return is_prime.count(1)\n\n\ndef bench():\n    started = time.process_time_ns()\n    result = primes_up_to(20_000)\n\n    elapsed = time.process_time_ns() - started\n    print(result)\n    print(elapsed)\n\n\nif __name__ == \"__main__\":\n    bench()\n"
+  },
+  "test/benchmarks/sieve.lua": {
+    "sha256": "3ce558912194980bf8315b312760cd1afa90ad9dad746f30434c77805954ca68",
+    "source": "local function primes_up_to(limit)\n    local is_prime = {}\n    for value = 0, limit do\n        is_prime[value] = value >= 2\n    end\n\n    local candidate = 2\n    while candidate * candidate <= limit do\n        if is_prime[candidate] then\n            local multiple = candidate * candidate\n            while multiple <= limit do\n                is_prime[multiple] = false\n                multiple = multiple + candidate\n            end\n        end\n        candidate = candidate + 1\n    end\n\n    local count = 0\n    for value = 2, limit do\n        if is_prime[value] then\n            count = count + 1\n        end\n    end\n    return count\nend\n\nlocal started = os.clock()\nlocal result = primes_up_to(20000)\n\nlocal elapsed = math.floor((os.clock() - started) * 1e9 + 0.5)\nprint(result)\nprint(elapsed)\n"
+  }
+}

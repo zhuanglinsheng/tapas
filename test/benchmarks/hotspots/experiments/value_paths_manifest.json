@@ -1,0 +1,28 @@
+{
+  "baseline_origin": "build-release/bin/tapas copied before this turn changed compiler/runtime sources; includes prior uncommitted work",
+  "baseline_sha256": "17cd65cd3faf59131d8f126ee339aec8c3e1e32aa78fcd141e53fb91fb30752d",
+  "candidate_sha256": "fa7b0ec89ed71d51d49d4ae9bd03746af7b646491026849b2f8266569ffd2ce1",
+  "unchanged_build_configuration": [
+    "CMAKE_BUILD_TYPE:STRING=Release",
+    "CMAKE_C_COMPILER:FILEPATH=/usr/bin/cc",
+    "CMAKE_C_FLAGS:STRING=",
+    "CMAKE_C_FLAGS_RELEASE:STRING=-O3 -DNDEBUG",
+    "CMAKE_EXE_LINKER_FLAGS:STRING=",
+    "TAPAS_ENABLE_IPO:BOOL=ON"
+  ],
+  "git_head": "77049ae2fdbaf972bba8dc25b85cb84035e4936e",
+  "source_sha256": {
+    "src/runtime/tvm.c": "459d7858db442ab2db8bf5400932c985cdbd6d7436890863f868a6010869ce80",
+    "src/compile/backend/statement_ast_emit.c": "8d4558a9d01fca081870dba1762eddc1bea9a50902b45bdcac727e5fc3dff6f1",
+    "test/benchmarks/longest_common_subsequence.tap": "9cd5bcd55d1e7712d14101da067571056b086983686db93d709cbc195acc67ee"
+  },
+  "checks": {
+    "release_ctest": "56 passed (serial)",
+    "asan": "compile_frontend and language_rules passed; ASAN_OPTIONS=detect_leaks=0",
+    "ubsan": "compile_frontend and language_rules passed",
+    "python_scripts": "13 tests passed",
+    "semantics": "46 benchmark triples and 14 kernel probe groups passed",
+    "hotspot_oracles": "94 complete-row/histogram/heap probes passed",
+    "lcs_oracle": "88 cases passed"
+  }
+}

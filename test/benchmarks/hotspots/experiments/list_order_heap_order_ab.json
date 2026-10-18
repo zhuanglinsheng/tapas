@@ -1,0 +1,204 @@
+{
+  "date": "2026-10-17T12:26:48.655805+00:00",
+  "runtime": {
+    "path": "/Users/zhuanglinsheng/Documents/Github/tapas/build-release/bin/tapas",
+    "sha256": "7777c261957cc1780d2e9ad58b08e4f79fed29ae692ef55d68e9afea4ea7d41c",
+    "version": "Tapas 0.1.0 Copyright (C) 2020-2026",
+    "build_config": [
+      "CMAKE_BUILD_TYPE:STRING=Release",
+      "CMAKE_C_COMPILER:FILEPATH=/usr/bin/cc",
+      "CMAKE_C_FLAGS:STRING=",
+      "CMAKE_C_FLAGS_RELEASE:STRING=-O3 -DNDEBUG",
+      "CMAKE_EXE_LINKER_FLAGS:STRING=",
+      "TAPAS_ENABLE_IPO:BOOL=ON"
+    ]
+  },
+  "sources": {
+    "baseline": {
+      "path": "/private/tmp/tapas-heap-order-callback.tap",
+      "sha256": "183732a8f1899082e3e3705d6e1b3bcd8dcf7ce54cea963591a5ea409d7aeea6",
+      "source": "function record_less(a, b) { return a[0] < b[0] or (a[0] == b[0] and a[1] < b[1]) }\nfunction bench(repetitions, values)\n{\n    let started = clock_ns()\n    var checksum = 0\n    for (let repetition in 0 to repetitions) {\n        let queue = copy(values)\n        heap::heapify(queue, record_less)\n        for (let position in 0 to len(values)) {\n            checksum = checksum + heap::pop(queue, record_less)[0] * (position + 1)\n        }\n    }\n    let elapsed = clock_ns() - started\n    print(checksum)\n    print(elapsed)\n}\nlet values = []\nfor (let i in 0 to 256) { values.append([(i * 73 + 19) % 31 - 15, i]) }\nbench(64, values)\n"
+    },
+    "candidate": {
+      "path": "/Users/zhuanglinsheng/Documents/Github/tapas/test/benchmarks/hotspots/heap_order.tap",
+      "sha256": "1ceb7e5af5fbf654aec123a184f021fc47edc60d63268e8dede5a9de58f50bdc",
+      "source": "function bench(repetitions, values)\n{\n    let started = clock_ns()\n    var checksum = 0\n    for (let repetition in 0 to repetitions) {\n        let queue = copy(values)\n        heap::heapify(queue)\n        for (let position in 0 to len(values)) {\n            checksum = checksum + heap::pop(queue)[0] * (position + 1)\n        }\n    }\n    let elapsed = clock_ns() - started\n    print(checksum)\n    print(elapsed)\n}\nlet values = []\nfor (let i in 0 to 256) { values.append([(i * 73 + 19) % 31 - 15, i]) }\nbench(64, values)\n"
+    }
+  },
+  "checksum": 10835392,
+  "runs": 9,
+  "rounds": [
+    {
+      "samples_ns": {
+        "baseline": [
+          12784000,
+          12651000,
+          13417000,
+          13327000,
+          12751000,
+          12113000,
+          12836000,
+          12424000,
+          12636000
+        ],
+        "candidate": [
+          3031000,
+          2805000,
+          3095000,
+          2889000,
+          3386000,
+          2925000,
+          3269000,
+          2759000,
+          2995000
+        ]
+      },
+      "baseline_median_ns": 12751000,
+      "candidate_median_ns": 2995000,
+      "paired_ratio_median": 0.23702120924343145,
+      "paired_ratio_iqr": [
+        0.22189589488534206,
+        0.24807522671945237
+      ]
+    },
+    {
+      "samples_ns": {
+        "baseline": [
+          12561000,
+          12824000,
+          12387000,
+          12250000,
+          12965000,
+          12847000,
+          12494000,
+          12280000,
+          12545000
+        ],
+        "candidate": [
+          3009000,
+          2853000,
+          2911000,
+          2901000,
+          2844000,
+          3023000,
+          2838000,
+          3020000,
+          2877000
+        ]
+      },
+      "baseline_median_ns": 12545000,
+      "candidate_median_ns": 2901000,
+      "paired_ratio_median": 0.23500444013885524,
+      "paired_ratio_iqr": [
+        0.22481125937330765,
+        0.2381836588468681
+      ]
+    },
+    {
+      "samples_ns": {
+        "baseline": [
+          12257000,
+          12464000,
+          12316000,
+          12448000,
+          12586000,
+          12678000,
+          12385000,
+          12573000,
+          12550000
+        ],
+        "candidate": [
+          2839000,
+          2876000,
+          2798000,
+          2814000,
+          3039000,
+          2777000,
+          2901000,
+          2843000,
+          2889000
+        ]
+      },
+      "baseline_median_ns": 12464000,
+      "candidate_median_ns": 2843000,
+      "paired_ratio_median": 0.23019920318725098,
+      "paired_ratio_iqr": [
+        0.2260899368254944,
+        0.23292885391650342
+      ]
+    }
+  ],
+  "warmups_per_round": 1,
+  "round_ratio_medians": [
+    0.23702120924343145,
+    0.23500444013885524,
+    0.23019920318725098
+  ],
+  "samples_ns": {
+    "baseline": [
+      12784000,
+      12651000,
+      13417000,
+      13327000,
+      12751000,
+      12113000,
+      12836000,
+      12424000,
+      12636000,
+      12561000,
+      12824000,
+      12387000,
+      12250000,
+      12965000,
+      12847000,
+      12494000,
+      12280000,
+      12545000,
+      12257000,
+      12464000,
+      12316000,
+      12448000,
+      12586000,
+      12678000,
+      12385000,
+      12573000,
+      12550000
+    ],
+    "candidate": [
+      3031000,
+      2805000,
+      3095000,
+      2889000,
+      3386000,
+      2925000,
+      3269000,
+      2759000,
+      2995000,
+      3009000,
+      2853000,
+      2911000,
+      2901000,
+      2844000,
+      3023000,
+      2838000,
+      3020000,
+      2877000,
+      2839000,
+      2876000,
+      2798000,
+      2814000,
+      3039000,
+      2777000,
+      2901000,
+      2843000,
+      2889000
+    ]
+  },
+  "baseline_median_ns": 12561000,
+  "candidate_median_ns": 2889000,
+  "paired_ratio_median": 0.23074454428754815,
+  "paired_ratio_iqr": [
+    0.22606041131105398,
+    0.23709324155193992
+  ]
+}

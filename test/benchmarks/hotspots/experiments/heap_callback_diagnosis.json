@@ -1,0 +1,246 @@
+{
+  "date": "2026-10-17T16:45:16.813870+00:00",
+  "system": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+  "runtime": {
+    "path": "/Users/zhuanglinsheng/Documents/Github/tapas/build-release/bin/tapas",
+    "sha256": "fa7b0ec89ed71d51d49d4ae9bd03746af7b646491026849b2f8266569ffd2ce1",
+    "version": "Tapas 0.2.1 Copyright (C) 2020-2026",
+    "build_config": [
+      "CMAKE_BUILD_TYPE:STRING=Release",
+      "CMAKE_C_COMPILER:FILEPATH=/usr/bin/cc",
+      "CMAKE_C_FLAGS:STRING=",
+      "CMAKE_C_FLAGS_RELEASE:STRING=-O3 -DNDEBUG",
+      "CMAKE_EXE_LINKER_FLAGS:STRING=",
+      "TAPAS_ENABLE_IPO:BOOL=ON"
+    ]
+  },
+  "python_version": "Python 3.14.2",
+  "commands": {
+    "tap_callback": [
+      "/Users/zhuanglinsheng/Documents/Github/tapas/build-release/bin/tapas",
+      "/tmp/tapas-heap-callback-analysis/callback.tap"
+    ],
+    "tap_native": [
+      "/Users/zhuanglinsheng/Documents/Github/tapas/build-release/bin/tapas",
+      "/tmp/tapas-heap-callback-analysis/native.tap"
+    ],
+    "python_native": [
+      "python3.14",
+      "/Users/zhuanglinsheng/Documents/Github/tapas/test/benchmarks/hotspots/heap_callback.py"
+    ],
+    "python_tuple_callback": [
+      "python3.14",
+      "/Users/zhuanglinsheng/Documents/Github/tapas/test/benchmarks/hotspots/heap_callback.py",
+      "--matched"
+    ],
+    "python_priority_callback": [
+      "python3.14",
+      "/tmp/tapas-heap-callback-analysis/priority_callback.py",
+      "--matched"
+    ],
+    "lua_callback": [
+      "lua",
+      "/Users/zhuanglinsheng/Documents/Github/tapas/test/benchmarks/hotspots/heap_callback.lua"
+    ]
+  },
+  "sources": {
+    "/tmp/tapas-heap-callback-analysis/callback.tap": "function priority_less(a, b) { return a[0] < b[0] }\nfunction bench(repetitions, values)\n{\n    let started = clock_ns()\n    var checksum = 0\n    for (let repetition in 0 to repetitions) {\n        let queue = copy(values)\n        heap::heapify(queue, priority_less)\n        for (let position in 0 to len(values)) {\n            checksum = checksum + heap::pop(queue, priority_less)[0] * (position + 1)\n        }\n    }\n    let elapsed = clock_ns() - started\n    print(checksum)\n    print(elapsed)\n}\nlet values = []\nfor (let i in 0 to 256) { values.append([(i * 73 + 19) % 1009 - 500, i]) }\nbench(64, values)\n",
+    "/tmp/tapas-heap-callback-analysis/native.tap": "function priority_less(a, b) { return a[0] < b[0] }\nfunction bench(repetitions, values)\n{\n    let started = clock_ns()\n    var checksum = 0\n    for (let repetition in 0 to repetitions) {\n        let queue = copy(values)\n        heap::heapify(queue)\n        for (let position in 0 to len(values)) {\n            checksum = checksum + heap::pop(queue)[0] * (position + 1)\n        }\n    }\n    let elapsed = clock_ns() - started\n    print(checksum)\n    print(elapsed)\n}\nlet values = []\nfor (let i in 0 to 256) { values.append([(i * 73 + 19) % 1009 - 500, i]) }\nbench(64, values)\n",
+    "/tmp/tapas-heap-callback-analysis/priority_callback.py": "import heapq\nimport sys\nimport time\n\n\nclass Comparable(tuple):\n    def __lt__(self, other):\n        return self[0] < other[0]\n\n\ndef bench(repetitions, values):\n    # Construct comparison wrappers outside the timed task, just as input values.\n    if '--matched' in sys.argv:\n        values = list(map(Comparable, values))\n    started = time.process_time_ns()\n    checksum = 0\n    for _ in range(repetitions):\n        queue = values.copy()\n        heapq.heapify(queue)\n        for position in range(1, len(values) + 1):\n            checksum += heapq.heappop(queue)[0] * position\n    elapsed = time.process_time_ns() - started\n    print(checksum)\n    print(elapsed)\n\n\nif __name__ == '__main__':\n    bench(64, [((i * 73 + 19) % 1009 - 500, i) for i in range(256)])\n",
+    "/Users/zhuanglinsheng/Documents/Github/tapas/test/benchmarks/hotspots/heap_callback.py": "import heapq\nimport sys\nimport time\n\n\nclass Comparable(tuple):\n    def __lt__(self, other):\n        return tuple.__lt__(self, other)\n\n\ndef bench(repetitions, values):\n    # Construct comparison wrappers outside the timed task, just as input values.\n    if '--matched' in sys.argv:\n        values = list(map(Comparable, values))\n    started = time.process_time_ns()\n    checksum = 0\n    for _ in range(repetitions):\n        queue = values.copy()\n        heapq.heapify(queue)\n        for position in range(1, len(values) + 1):\n            checksum += heapq.heappop(queue)[0] * position\n    elapsed = time.process_time_ns() - started\n    print(checksum)\n    print(elapsed)\n\n\nif __name__ == '__main__':\n    bench(64, [((i * 73 + 19) % 1009 - 500, i) for i in range(256)])\n",
+    "/Users/zhuanglinsheng/Documents/Github/tapas/test/benchmarks/hotspots/heap_callback.lua": "local function less(a, b) return a[1] < b[1] end\nlocal function sift_down(queue, parent, size)\n    local replacement = queue[parent]\n    while parent * 2 <= size do\n        local child = parent * 2\n        if child < size and less(queue[child + 1], queue[child]) then child = child + 1 end\n        if not less(queue[child], replacement) then break end\n        queue[parent] = queue[child]\n        parent = child\n    end\n    queue[parent] = replacement\nend\nlocal function pop(queue)\n    local result = queue[1]\n    local replacement = table.remove(queue)\n    local size = #queue\n    if size > 0 then\n        local parent = 1\n        while parent * 2 <= size do\n            local child = parent * 2\n            if child < size and less(queue[child + 1], queue[child]) then child = child + 1 end\n            queue[parent] = queue[child]\n            parent = child\n        end\n        while parent > 1 do\n            local previous = parent // 2\n            if not less(replacement, queue[previous]) then break end\n            queue[parent] = queue[previous]\n            parent = previous\n        end\n        queue[parent] = replacement\n    end\n    return result\nend\nlocal function bench(repetitions, values)\n    local started = os.clock()\n    local checksum = 0\n    for _ = 1, repetitions do\n        local queue = table.move(values, 1, #values, 1, {})\n        for parent = #queue // 2, 1, -1 do sift_down(queue, parent, #queue) end\n        for position = 1, #values do checksum = checksum + pop(queue)[1] * position end\n    end\n    local elapsed = math.floor((os.clock() - started) * 1e9 + 0.5)\n    print(checksum)\n    print(elapsed)\nend\nlocal values = {}\nfor i = 0, 255 do values[#values + 1] = {(i * 73 + 19) % 1009 - 500, i} end\nbench(64, values)\n"
+  },
+  "seed": 83,
+  "runs": 7,
+  "rounds": 3,
+  "checksum": 348023040,
+  "samples_ns": {
+    "tap_callback": [
+      [
+        8697000,
+        8514000,
+        8692000,
+        8925000,
+        8617000,
+        8705000,
+        8756000
+      ],
+      [
+        8681000,
+        8606000,
+        8686000,
+        8624000,
+        8752000,
+        8734000,
+        8674000
+      ],
+      [
+        8709000,
+        8530000,
+        8786000,
+        8576000,
+        8660000,
+        8723000,
+        8541000
+      ]
+    ],
+    "tap_native": [
+      [
+        2471000,
+        2443000,
+        2430000,
+        2538000,
+        2572000,
+        2465000,
+        2459000
+      ],
+      [
+        2455000,
+        2503000,
+        2541000,
+        2432000,
+        2454000,
+        2434000,
+        2430000
+      ],
+      [
+        2554000,
+        2492000,
+        2439000,
+        2473000,
+        2553000,
+        2436000,
+        2450000
+      ]
+    ],
+    "python_native": [
+      [
+        3941000,
+        3937000,
+        3906000,
+        3914000,
+        3964000,
+        4047000,
+        3919000
+      ],
+      [
+        3895000,
+        3917000,
+        3892000,
+        3900000,
+        3991000,
+        3894000,
+        4034000
+      ],
+      [
+        4001000,
+        3978000,
+        3966000,
+        4041000,
+        3898000,
+        3954000,
+        3894000
+      ]
+    ],
+    "python_tuple_callback": [
+      [
+        15791000,
+        15641000,
+        15698000,
+        15653000,
+        15546000,
+        15728000,
+        15588000
+      ],
+      [
+        15468000,
+        15472000,
+        15426000,
+        15599000,
+        15624000,
+        15577000,
+        15594000
+      ],
+      [
+        15995000,
+        15637000,
+        15627000,
+        15496000,
+        15551000,
+        15739000,
+        15724000
+      ]
+    ],
+    "python_priority_callback": [
+      [
+        9939000,
+        10130000,
+        10086000,
+        10099000,
+        10103000,
+        10102000,
+        9993000
+      ],
+      [
+        10311000,
+        9995000,
+        10129000,
+        10201000,
+        10223000,
+        10050000,
+        10278000
+      ],
+      [
+        10177000,
+        10075000,
+        10062000,
+        9930000,
+        10020000,
+        10207000,
+        10155000
+      ]
+    ],
+    "lua_callback": [
+      [
+        8197000,
+        8097000,
+        8041000,
+        8402000,
+        8138000,
+        8091000,
+        8059000
+      ],
+      [
+        8264000,
+        7911000,
+        8042000,
+        7911000,
+        8131000,
+        8008000,
+        8237000
+      ],
+      [
+        8404000,
+        8156000,
+        8131000,
+        8010000,
+        8094000,
+        8207000,
+        8081000
+      ]
+    ]
+  },
+  "medians_ns": {
+    "tap_callback": 8686000,
+    "tap_native": 2459000,
+    "python_native": 3937000,
+    "python_tuple_callback": 15624000,
+    "python_priority_callback": 10102000,
+    "lua_callback": 8097000
+  },
+  "work_count_probe": {
+    "source": "var comparisons = 0\nfunction priority_less(a, b) { comparisons = comparisons + 1\n return a[0] < b[0] }\nfunction bench(repetitions, values)\n{\n    let started = clock_ns()\n    var checksum = 0\n    for (let repetition in 0 to repetitions) {\n        let queue = copy(values)\n        heap::heapify(queue, priority_less)\n        for (let position in 0 to len(values)) {\n            checksum = checksum + heap::pop(queue, priority_less)[0] * (position + 1)\n        }\n    }\n    let elapsed = clock_ns() - started\n    print(checksum)\n    print(elapsed)\n}\nlet values = []\nfor (let i in 0 to 256) { values.append([(i * 73 + 19) % 1009 - 500, i]) }\nbench(64, values)\n\nprint(comparisons)\n",
+    "comparisons": 155520,
+    "note": "instrumented timing excluded from performance conclusions"
+  }
+}

@@ -1,0 +1,6178 @@
+{
+  "date": "2026-10-17T15:12:11.200664+00:00",
+  "drivers": {
+    "baseline": {
+      "path": "/private/tmp/tapas-recovery-sort-baseline",
+      "sha256": "ca29799a78b2cb5599513aa51ec27f8678e7695d1877337c4e73020419176f41"
+    },
+    "candidate": {
+      "path": "/Users/zhuanglinsheng/Documents/Github/tapas/build-release/benchmark_sort",
+      "sha256": "18d2d83fd5c867ae1f83e0de4e927ea2a46a64ecad6cdf549dcad5c02a63d414"
+    }
+  },
+  "note": "Compare builtin times reported by two native drivers. Each driver alternates builtin/qsort internally; outer driver order reverses per round. No VM. Input copies and validation included.",
+  "runs": 7,
+  "rounds": 1,
+  "rows": [
+    {
+      "type": "int",
+      "pattern": "random",
+      "size": 8192,
+      "rounds": [
+        {
+          "baseline": {
+            "value_bytes": 16,
+            "size": 8192,
+            "pattern": 0,
+            "float": 0,
+            "batches": 8,
+            "comparisons": {
+              "qsort": 111151,
+              "tapas": 120055
+            },
+            "partition_control": {
+              "single_comparisons": 113492,
+              "single_writes": 151087,
+              "selected_writes": 64277
+            },
+            "qsort_ns": [
+              3754000,
+              3737000,
+              3784000,
+              3726000,
+              3753000,
+              3740000,
+              3712000
+            ],
+            "tapas_ns": [
+              2722000,
+              2813000,
+              2668000,
+              2836000,
+              2695000,
+              2673000,
+              2666000
+            ],
+            "validated_qsort_ns": [
+              3918000,
+              3799000,
+              3822000,
+              3822000,
+              3778000,
+              3851000,
+              3904000
+            ],
+            "validation_ns": [
+              65000,
+              65000,
+              68000,
+              65000,
+              66000,
+              66000,
+              67000
+            ]
+          },
+          "candidate": {
+            "value_bytes": 16,
+            "size": 8192,
+            "pattern": 0,
+            "float": 0,
+            "batches": 8,
+            "comparisons": {
+              "qsort": 111151,
+              "tapas": 126900
+            },
+            "partition_control": {
+              "single_comparisons": 113492,
+              "single_writes": 151087,
+              "selected_writes": 66777
+            },
+            "qsort_ns": [
+              6958000,
+              6012000,
+              5283000,
+              4613000,
+              4007000,
+              4034000,
+              3870000
+            ],
+            "tapas_ns": [
+              4983000,
+              3628000,
+              3422000,
+              2991000,
+              2855000,
+              2614000,
+              2598000
+            ],
+            "validated_qsort_ns": [
+              7091000,
+              6600000,
+              4936000,
+              4356000,
+              4087000,
+              4051000,
+              3868000
+            ],
+            "validation_ns": [
+              122000,
+              109000,
+              95000,
+              79000,
+              70000,
+              72000,
+              69000
+            ]
+          }
+        }
+      ],
+      "samples_ns": {
+        "baseline": [
+          2722000,
+          2813000,
+          2668000,
+          2836000,
+          2695000,
+          2673000,
+          2666000
+        ],
+        "candidate": [
+          4983000,
+          3628000,
+          3422000,
+          2991000,
+          2855000,
+          2614000,
+          2598000
+        ]
+      },
+      "baseline_median_ns": 2695000,
+      "candidate_median_ns": 2991000,
+      "paired_ratio_median": 1.059369202226345,
+      "paired_ratio_iqr": [
+        0.9779274223718668,
+        1.289726270885176
+      ]
+    },
+    {
+      "type": "int",
+      "pattern": "random",
+      "size": 65536,
+      "rounds": [
+        {
+          "baseline": {
+            "value_bytes": 16,
+            "size": 65536,
+            "pattern": 0,
+            "float": 0,
+            "batches": 1,
+            "comparisons": {
+              "qsort": 1077285,
+              "tapas": 1158744
+            },
+            "partition_control": {
+              "single_comparisons": 1110876,
+              "single_writes": 1536638,
+              "selected_writes": 611012
+            },
+            "qsort_ns": [
+              4780000,
+              4911000,
+              4790000,
+              4855000,
+              4762000,
+              4835000,
+              4841000
+            ],
+            "tapas_ns": [
+              3601000,
+              3621000,
+              3552000,
+              3542000,
+              3673000,
+              3604000,
+              3535000
+            ],
+            "validated_qsort_ns": [
+              4999000,
+              4820000,
+              5015000,
+              4856000,
+              4928000,
+              4933000,
+              4939000
+            ],
+            "validation_ns": [
+              59000,
+              59000,
+              64000,
+              62000,
+              60000,
+              72000,
+              62000
+            ]
+          },
+          "candidate": {
+            "value_bytes": 16,
+            "size": 65536,
+            "pattern": 0,
+            "float": 0,
+            "batches": 1,
+            "comparisons": {
+              "qsort": 1077285,
+              "tapas": 1235346
+            },
+            "partition_control": {
+              "single_comparisons": 1110876,
+              "single_writes": 1536638,
+              "selected_writes": 627919
+            },
+            "qsort_ns": [
+              4955000,
+              4838000,
+              4828000,
+              4753000,
+              4876000,
+              4749000,
+              4840000
+            ],
+            "tapas_ns": [
+              3284000,
+              3432000,
+              3284000,
+              3301000,
+              3367000,
+              3328000,
+              3291000
+            ],
+            "validated_qsort_ns": [
+              4802000,
+              4896000,
+              4806000,
+              4846000,
+              4965000,
+              4823000,
+              4800000
+            ],
+            "validation_ns": [
+              59000,
+              58000,
+              59000,
+              58000,
+              59000,
+              59000,
+              59000
+            ]
+          }
+        }
+      ],
+      "samples_ns": {
+        "baseline": [
+          3601000,
+          3621000,
+          3552000,
+          3542000,
+          3673000,
+          3604000,
+          3535000
+        ],
+        "candidate": [
+          3284000,
+          3432000,
+          3284000,
+          3301000,
+          3367000,
+          3328000,
+          3291000
+        ]
+      },
+      "baseline_median_ns": 3601000,
+      "candidate_median_ns": 3301000,
+      "paired_ratio_median": 0.9245495495495496,
+      "paired_ratio_iqr": [
+        0.9166893547508849,
+        0.9319593450028233
+      ]
+    },
+    {
+      "type": "int",
+      "pattern": "sorted",
+      "size": 8192,
+      "rounds": [
+        {
+          "baseline": {
+            "value_bytes": 16,
+            "size": 8192,
+            "pattern": 1,
+            "float": 0,
+            "batches": 8,
+            "comparisons": {
+              "qsort": 16391,
+              "tapas": 8191
+            },
+            "partition_control": {
+              "single_comparisons": 8191,
+              "single_writes": 0,
+              "selected_writes": 0
+            },
+            "qsort_ns": [
+              192000,
+              194000,
+              196000,
+              193000,
+              185000,
+              185000,
+              186000
+            ],
+            "tapas_ns": [
+              106000,
+              111000,
+              110000,
+              111000,
+              111000,
+              107000,
+              106000
+            ],
+            "validated_qsort_ns": [
+              228000,
+              239000,
+              239000,
+              253000,
+              237000,
+              229000,
+              230000
+            ],
+            "validation_ns": [
+              64000,
+              68000,
+              71000,
+              77000,
+              65000,
+              66000,
+              65000
+            ]
+          },
+          "candidate": {
+            "value_bytes": 16,
+            "size": 8192,
+            "pattern": 1,
+            "float": 0,
+            "batches": 8,
+            "comparisons": {
+              "qsort": 16391,
+              "tapas": 8191
+            },
+            "partition_control": {
+              "single_comparisons": 8191,
+              "single_writes": 0,
+              "selected_writes": 0
+            },
+            "qsort_ns": [
+              186000,
+              186000,
+              185000,
+              187000,
+              192000,
+              193000,
+              186000
+            ],
+            "tapas_ns": [
+              107000,
+              106000,
+              108000,
+              107000,
+              106000,
+              111000,
+              106000
+            ],
+            "validated_qsort_ns": [
+              229000,
+              231000,
+              229000,
+              229000,
+              229000,
+              238000,
+              229000
+            ],
+            "validation_ns": [
+              65000,
+              65000,
+              65000,
+              65000,
+              65000,
+              68000,
+              65000
+            ]
+          }
+        }
+      ],
+      "samples_ns": {
+        "baseline": [
+          106000,
+          111000,
+          110000,
+          111000,
+          111000,
+          107000,
+          106000
+        ],
+        "candidate": [
+          107000,
+          106000,
+          108000,
+          107000,
+          106000,
+          111000,
+          106000
+        ]
+      },
+      "baseline_median_ns": 110000,
+      "candidate_median_ns": 107000,
+      "paired_ratio_median": 0.9818181818181818,
+      "paired_ratio_iqr": [
+        0.954954954954955,
+        1.009433962264151
+      ]
+    },
+    {
+      "type": "int",
+      "pattern": "sorted",
+      "size": 65536,
+      "rounds": [
+        {
+          "baseline": {
+            "value_bytes": 16,
+            "size": 65536,
+            "pattern": 1,
+            "float": 0,
+            "batches": 1,
+            "comparisons": {
+              "qsort": 131079,
+              "tapas": 65535
+            },
+            "partition_control": {
+              "single_comparisons": 65535,
+              "single_writes": 0,
+              "selected_writes": 0
+            },
+            "qsort_ns": [
+              185000,
+              187000,
+              192000,
+              182000,
+              178000,
+              178000,
+              178000
+            ],
+            "tapas_ns": [
+              100000,
+              108000,
+              105000,
+              99000,
+              99000,
+              96000,
+              97000
+            ],
+            "validated_qsort_ns": [
+              228000,
+              228000,
+              236000,
+              221000,
+              219000,
+              221000,
+              220000
+            ],
+            "validation_ns": [
+              59000,
+              62000,
+              64000,
+              60000,
+              56000,
+              58000,
+              56000
+            ]
+          },
+          "candidate": {
+            "value_bytes": 16,
+            "size": 65536,
+            "pattern": 1,
+            "float": 0,
+            "batches": 1,
+            "comparisons": {
+              "qsort": 131079,
+              "tapas": 65535
+            },
+            "partition_control": {
+              "single_comparisons": 65535,
+              "single_writes": 0,
+              "selected_writes": 0
+            },
+            "qsort_ns": [
+              178000,
+              179000,
+              179000,
+              178000,
+              178000,
+              178000,
+              184000
+            ],
+            "tapas_ns": [
+              97000,
+              96000,
+              97000,
+              97000,
+              97000,
+              98000,
+              102000
+            ],
+            "validated_qsort_ns": [
+              219000,
+              221000,
+              221000,
+              220000,
+              220000,
+              219000,
+              234000
+            ],
+            "validation_ns": [
+              55000,
+              56000,
+              56000,
+              56000,
+              55000,
+              56000,
+              58000
+            ]
+          }
+        }
+      ],
+      "samples_ns": {
+        "baseline": [
+          100000,
+          108000,
+          105000,
+          99000,
+          99000,
+          96000,
+          97000
+        ],
+        "candidate": [
+          97000,
+          96000,
+          97000,
+          97000,
+          97000,
+          98000,
+          102000
+        ]
+      },
+      "baseline_median_ns": 99000,
+      "candidate_median_ns": 97000,
+      "paired_ratio_median": 0.9797979797979798,
+      "paired_ratio_iqr": [
+        0.9238095238095239,
+        1.0208333333333333
+      ]
+    },
+    {
+      "type": "int",
+      "pattern": "reverse",
+      "size": 8192,
+      "rounds": [
+        {
+          "baseline": {
+            "value_bytes": 16,
+            "size": 8192,
+            "pattern": 2,
+            "float": 0,
+            "batches": 8,
+            "comparisons": {
+              "qsort": 81297,
+              "tapas": 8191
+            },
+            "partition_control": {
+              "single_comparisons": 8191,
+              "single_writes": 8192,
+              "selected_writes": 8192
+            },
+            "qsort_ns": [
+              969000,
+              978000,
+              992000,
+              1021000,
+              969000,
+              1001000,
+              979000
+            ],
+            "tapas_ns": [
+              126000,
+              127000,
+              130000,
+              134000,
+              131000,
+              134000,
+              126000
+            ],
+            "validated_qsort_ns": [
+              1011000,
+              1013000,
+              1055000,
+              1048000,
+              1038000,
+              1017000,
+              1016000
+            ],
+            "validation_ns": [
+              66000,
+              66000,
+              65000,
+              67000,
+              65000,
+              66000,
+              70000
+            ]
+          },
+          "candidate": {
+            "value_bytes": 16,
+            "size": 8192,
+            "pattern": 2,
+            "float": 0,
+            "batches": 8,
+            "comparisons": {
+              "qsort": 81297,
+              "tapas": 8191
+            },
+            "partition_control": {
+              "single_comparisons": 8191,
+              "single_writes": 8192,
+              "selected_writes": 8192
+            },
+            "qsort_ns": [
+              969000,
+              993000,
+              970000,
+              1030000,
+              972000,
+              968000,
+              968000
+            ],
+            "tapas_ns": [
+              126000,
+              130000,
+              126000,
+              131000,
+              130000,
+              127000,
+              126000
+            ],
+            "validated_qsort_ns": [
+              1012000,
+              1012000,
+              1057000,
+              1050000,
+              1034000,
+              1012000,
+              1023000
+            ],
+            "validation_ns": [
+              65000,
+              64000,
+              65000,
+              67000,
+              65000,
+              64000,
+              64000
+            ]
+          }
+        }
+      ],
+      "samples_ns": {
+        "baseline": [
+          126000,
+          127000,
+          130000,
+          134000,
+          131000,
+          134000,
+          126000
+        ],
+        "candidate": [
+          126000,
+          130000,
+          126000,
+          131000,
+          130000,
+          127000,
+          126000
+        ]
+      },
+      "baseline_median_ns": 130000,
+      "candidate_median_ns": 127000,
+      "paired_ratio_median": 0.9923664122137404,
+      "paired_ratio_iqr": [
+        0.9692307692307692,
+        1.0
+      ]
+    },
+    {
+      "type": "int",
+      "pattern": "reverse",
+      "size": 65536,
+      "rounds": [
+        {
+          "baseline": {
+            "value_bytes": 16,
+            "size": 65536,
+            "pattern": 2,
+            "float": 0,
+            "batches": 1,
+            "comparisons": {
+              "qsort": 654901,
+              "tapas": 65535
+            },
+            "partition_control": {
+              "single_comparisons": 65535,
+              "single_writes": 65536,
+              "selected_writes": 65536
+            },
+            "qsort_ns": [
+              964000,
+              973000,
+              934000,
+              935000,
+              935000,
+              934000,
+              940000
+            ],
+            "tapas_ns": [
+              122000,
+              121000,
+              120000,
+              119000,
+              119000,
+              120000,
+              122000
+            ],
+            "validated_qsort_ns": [
+              1050000,
+              977000,
+              975000,
+              980000,
+              976000,
+              976000,
+              1047000
+            ],
+            "validation_ns": [
+              63000,
+              60000,
+              64000,
+              58000,
+              56000,
+              56000,
+              55000
+            ]
+          },
+          "candidate": {
+            "value_bytes": 16,
+            "size": 65536,
+            "pattern": 2,
+            "float": 0,
+            "batches": 1,
+            "comparisons": {
+              "qsort": 654901,
+              "tapas": 65535
+            },
+            "partition_control": {
+              "single_comparisons": 65535,
+              "single_writes": 65536,
+              "selected_writes": 65536
+            },
+            "qsort_ns": [
+              981000,
+              985000,
+              970000,
+              948000,
+              935000,
+              942000,
+              942000
+            ],
+            "tapas_ns": [
+              135000,
+              131000,
+              125000,
+              121000,
+              131000,
+              123000,
+              128000
+            ],
+            "validated_qsort_ns": [
+              975000,
+              1032000,
+              1013000,
+              979000,
+              1027000,
+              976000,
+              993000
+            ],
+            "validation_ns": [
+              56000,
+              65000,
+              61000,
+              61000,
+              59000,
+              58000,
+              56000
+            ]
+          }
+        }
+      ],
+      "samples_ns": {
+        "baseline": [
+          122000,
+          121000,
+          120000,
+          119000,
+          119000,
+          120000,
+          122000
+        ],
+        "candidate": [
+          135000,
+          131000,
+          125000,
+          121000,
+          131000,
+          123000,
+          128000
+        ]
+      },
+      "baseline_median_ns": 120000,
+      "candidate_median_ns": 128000,
+      "paired_ratio_median": 1.0491803278688525,
+      "paired_ratio_iqr": [
+        1.025,
+        1.1008403361344539
+      ]
+    },
+    {
+      "type": "int",
+      "pattern": "equal",
+      "size": 8192,
+      "rounds": [
+        {
+          "baseline": {
+            "value_bytes": 16,
+            "size": 8192,
+            "pattern": 3,
+            "float": 0,
+            "batches": 8,
+            "comparisons": {
+              "qsort": 8203,
+              "tapas": 8191
+            },
+            "partition_control": {
+              "single_comparisons": 8191,
+              "single_writes": 0,
+              "selected_writes": 0
+            },
+            "qsort_ns": [
+              147000,
+              148000,
+              148000,
+              148000,
+              148000,
+              160000,
+              159000
+            ],
+            "tapas_ns": [
+              92000,
+              92000,
+              92000,
+              92000,
+              92000,
+              102000,
+              100000
+            ],
+            "validated_qsort_ns": [
+              189000,
+              189000,
+              190000,
+              189000,
+              189000,
+              197000,
+              203000
+            ],
+            "validation_ns": [
+              64000,
+              64000,
+              65000,
+              65000,
+              65000,
+              75000,
+              70000
+            ]
+          },
+          "candidate": {
+            "value_bytes": 16,
+            "size": 8192,
+            "pattern": 3,
+            "float": 0,
+            "batches": 8,
+            "comparisons": {
+              "qsort": 8203,
+              "tapas": 8191
+            },
+            "partition_control": {
+              "single_comparisons": 8191,
+              "single_writes": 0,
+              "selected_writes": 0
+            },
+            "qsort_ns": [
+              147000,
+              148000,
+              148000,
+              148000,
+              147000,
+              148000,
+              148000
+            ],
+            "tapas_ns": [
+              90000,
+              92000,
+              92000,
+              92000,
+              91000,
+              91000,
+              92000
+            ],
+            "validated_qsort_ns": [
+              188000,
+              189000,
+              189000,
+              189000,
+              188000,
+              190000,
+              203000
+            ],
+            "validation_ns": [
+              65000,
+              65000,
+              65000,
+              65000,
+              66000,
+              65000,
+              66000
+            ]
+          }
+        }
+      ],
+      "samples_ns": {
+        "baseline": [
+          92000,
+          92000,
+          92000,
+          92000,
+          92000,
+          102000,
+          100000
+        ],
+        "candidate": [
+          90000,
+          92000,
+          92000,
+          92000,
+          91000,
+          91000,
+          92000
+        ]
+      },
+      "baseline_median_ns": 92000,
+      "candidate_median_ns": 92000,
+      "paired_ratio_median": 0.9891304347826086,
+      "paired_ratio_iqr": [
+        0.92,
+        1.0
+      ]
+    },
+    {
+      "type": "int",
+      "pattern": "equal",
+      "size": 65536,
+      "rounds": [
+        {
+          "baseline": {
+            "value_bytes": 16,
+            "size": 65536,
+            "pattern": 3,
+            "float": 0,
+            "batches": 1,
+            "comparisons": {
+              "qsort": 65547,
+              "tapas": 65535
+            },
+            "partition_control": {
+              "single_comparisons": 65535,
+              "single_writes": 0,
+              "selected_writes": 0
+            },
+            "qsort_ns": [
+              138000,
+              138000,
+              137000,
+              138000,
+              142000,
+              143000,
+              142000
+            ],
+            "tapas_ns": [
+              82000,
+              81000,
+              81000,
+              82000,
+              82000,
+              85000,
+              85000
+            ],
+            "validated_qsort_ns": [
+              179000,
+              178000,
+              179000,
+              179000,
+              185000,
+              190000,
+              186000
+            ],
+            "validation_ns": [
+              56000,
+              57000,
+              55000,
+              55000,
+              59000,
+              59000,
+              60000
+            ]
+          },
+          "candidate": {
+            "value_bytes": 16,
+            "size": 65536,
+            "pattern": 3,
+            "float": 0,
+            "batches": 1,
+            "comparisons": {
+              "qsort": 65547,
+              "tapas": 65535
+            },
+            "partition_control": {
+              "single_comparisons": 65535,
+              "single_writes": 0,
+              "selected_writes": 0
+            },
+            "qsort_ns": [
+              137000,
+              143000,
+              137000,
+              139000,
+              137000,
+              137000,
+              138000
+            ],
+            "tapas_ns": [
+              81000,
+              88000,
+              82000,
+              81000,
+              82000,
+              81000,
+              81000
+            ],
+            "validated_qsort_ns": [
+              179000,
+              179000,
+              178000,
+              180000,
+              179000,
+              179000,
+              178000
+            ],
+            "validation_ns": [
+              56000,
+              55000,
+              59000,
+              55000,
+              56000,
+              56000,
+              55000
+            ]
+          }
+        }
+      ],
+      "samples_ns": {
+        "baseline": [
+          82000,
+          81000,
+          81000,
+          82000,
+          82000,
+          85000,
+          85000
+        ],
+        "candidate": [
+          81000,
+          88000,
+          82000,
+          81000,
+          82000,
+          81000,
+          81000
+        ]
+      },
+      "baseline_median_ns": 82000,
+      "candidate_median_ns": 81000,
+      "paired_ratio_median": 0.9878048780487805,
+      "paired_ratio_iqr": [
+        0.9529411764705882,
+        1.0123456790123457
+      ]
+    },
+    {
+      "type": "int",
+      "pattern": "few_unique",
+      "size": 8192,
+      "rounds": [
+        {
+          "baseline": {
+            "value_bytes": 16,
+            "size": 8192,
+            "pattern": 4,
+            "float": 0,
+            "batches": 8,
+            "comparisons": {
+              "qsort": 26712,
+              "tapas": 23675
+            },
+            "partition_control": {
+              "single_comparisons": 23656,
+              "single_writes": 30712,
+              "selected_writes": 30712
+            },
+            "qsort_ns": [
+              485000,
+              482000,
+              519000,
+              464000,
+              463000,
+              463000,
+              464000
+            ],
+            "tapas_ns": [
+              248000,
+              269000,
+              244000,
+              236000,
+              238000,
+              233000,
+              233000
+            ],
+            "validated_qsort_ns": [
+              529000,
+              525000,
+              516000,
+              506000,
+              507000,
+              511000,
+              505000
+            ],
+            "validation_ns": [
+              68000,
+              67000,
+              75000,
+              67000,
+              66000,
+              65000,
+              66000
+            ]
+          },
+          "candidate": {
+            "value_bytes": 16,
+            "size": 8192,
+            "pattern": 4,
+            "float": 0,
+            "batches": 8,
+            "comparisons": {
+              "qsort": 26712,
+              "tapas": 23675
+            },
+            "partition_control": {
+              "single_comparisons": 23656,
+              "single_writes": 30712,
+              "selected_writes": 30712
+            },
+            "qsort_ns": [
+              485000,
+              483000,
+              466000,
+              467000,
+              473000,
+              472000,
+              476000
+            ],
+            "tapas_ns": [
+              241000,
+              237000,
+              233000,
+              248000,
+              240000,
+              233000,
+              233000
+            ],
+            "validated_qsort_ns": [
+              533000,
+              528000,
+              509000,
+              570000,
+              522000,
+              521000,
+              514000
+            ],
+            "validation_ns": [
+              68000,
+              68000,
+              65000,
+              72000,
+              66000,
+              65000,
+              66000
+            ]
+          }
+        }
+      ],
+      "samples_ns": {
+        "baseline": [
+          248000,
+          269000,
+          244000,
+          236000,
+          238000,
+          233000,
+          233000
+        ],
+        "candidate": [
+          241000,
+          237000,
+          233000,
+          248000,
+          240000,
+          233000,
+          233000
+        ]
+      },
+      "baseline_median_ns": 238000,
+      "candidate_median_ns": 237000,
+      "paired_ratio_median": 1.0,
+      "paired_ratio_iqr": [
+        0.9549180327868853,
+        1.0084033613445378
+      ]
+    },
+    {
+      "type": "int",
+      "pattern": "few_unique",
+      "size": 65536,
+      "rounds": [
+        {
+          "baseline": {
+            "value_bytes": 16,
+            "size": 65536,
+            "pattern": 4,
+            "float": 0,
+            "batches": 1,
+            "comparisons": {
+              "qsort": 213080,
+              "tapas": 180360
+            },
+            "partition_control": {
+              "single_comparisons": 180328,
+              "single_writes": 229358,
+              "selected_writes": 229358
+            },
+            "qsort_ns": [
+              496000,
+              496000,
+              494000,
+              497000,
+              520000,
+              507000,
+              499000
+            ],
+            "tapas_ns": [
+              223000,
+              221000,
+              222000,
+              233000,
+              243000,
+              224000,
+              223000
+            ],
+            "validated_qsort_ns": [
+              540000,
+              538000,
+              536000,
+              557000,
+              572000,
+              562000,
+              540000
+            ],
+            "validation_ns": [
+              56000,
+              55000,
+              56000,
+              66000,
+              59000,
+              60000,
+              57000
+            ]
+          },
+          "candidate": {
+            "value_bytes": 16,
+            "size": 65536,
+            "pattern": 4,
+            "float": 0,
+            "batches": 1,
+            "comparisons": {
+              "qsort": 213080,
+              "tapas": 180360
+            },
+            "partition_control": {
+              "single_comparisons": 180328,
+              "single_writes": 229358,
+              "selected_writes": 229358
+            },
+            "qsort_ns": [
+              495000,
+              495000,
+              518000,
+              515000,
+              508000,
+              500000,
+              497000
+            ],
+            "tapas_ns": [
+              227000,
+              221000,
+              229000,
+              254000,
+              233000,
+              221000,
+              219000
+            ],
+            "validated_qsort_ns": [
+              547000,
+              538000,
+              560000,
+              600000,
+              566000,
+              543000,
+              539000
+            ],
+            "validation_ns": [
+              58000,
+              56000,
+              57000,
+              65000,
+              60000,
+              57000,
+              56000
+            ]
+          }
+        }
+      ],
+      "samples_ns": {
+        "baseline": [
+          223000,
+          221000,
+          222000,
+          233000,
+          243000,
+          224000,
+          223000
+        ],
+        "candidate": [
+          227000,
+          221000,
+          229000,
+          254000,
+          233000,
+          221000,
+          219000
+        ]
+      },
+      "baseline_median_ns": 223000,
+      "candidate_median_ns": 227000,
+      "paired_ratio_median": 1.0,
+      "paired_ratio_iqr": [
+        0.9820627802690582,
+        1.0315315315315314
+      ]
+    },
+    {
+      "type": "int",
+      "pattern": "nearly_sorted",
+      "size": 8192,
+      "rounds": [
+        {
+          "baseline": {
+            "value_bytes": 16,
+            "size": 8192,
+            "pattern": 5,
+            "float": 0,
+            "batches": 8,
+            "comparisons": {
+              "qsort": 24596,
+              "tapas": 13653
+            },
+            "partition_control": {
+              "single_comparisons": 13653,
+              "single_writes": 10922,
+              "selected_writes": 10922
+            },
+            "qsort_ns": [
+              281000,
+              279000,
+              276000,
+              278000,
+              268000,
+              267000,
+              267000
+            ],
+            "tapas_ns": [
+              157000,
+              155000,
+              155000,
+              155000,
+              153000,
+              149000,
+              150000
+            ],
+            "validated_qsort_ns": [
+              327000,
+              320000,
+              319000,
+              318000,
+              311000,
+              307000,
+              343000
+            ],
+            "validation_ns": [
+              69000,
+              68000,
+              68000,
+              67000,
+              65000,
+              66000,
+              65000
+            ]
+          },
+          "candidate": {
+            "value_bytes": 16,
+            "size": 8192,
+            "pattern": 5,
+            "float": 0,
+            "batches": 8,
+            "comparisons": {
+              "qsort": 24596,
+              "tapas": 13653
+            },
+            "partition_control": {
+              "single_comparisons": 13653,
+              "single_writes": 10922,
+              "selected_writes": 10922
+            },
+            "qsort_ns": [
+              266000,
+              267000,
+              268000,
+              274000,
+              267000,
+              277000,
+              276000
+            ],
+            "tapas_ns": [
+              148000,
+              149000,
+              148000,
+              148000,
+              149000,
+              153000,
+              154000
+            ],
+            "validated_qsort_ns": [
+              307000,
+              307000,
+              307000,
+              308000,
+              308000,
+              310000,
+              320000
+            ],
+            "validation_ns": [
+              64000,
+              64000,
+              64000,
+              64000,
+              64000,
+              68000,
+              68000
+            ]
+          }
+        }
+      ],
+      "samples_ns": {
+        "baseline": [
+          157000,
+          155000,
+          155000,
+          155000,
+          153000,
+          149000,
+          150000
+        ],
+        "candidate": [
+          148000,
+          149000,
+          148000,
+          148000,
+          149000,
+          153000,
+          154000
+        ]
+      },
+      "baseline_median_ns": 155000,
+      "candidate_median_ns": 149000,
+      "paired_ratio_median": 0.9612903225806452,
+      "paired_ratio_iqr": [
+        0.9548387096774194,
+        1.0266666666666666
+      ]
+    },
+    {
+      "type": "int",
+      "pattern": "nearly_sorted",
+      "size": 65536,
+      "rounds": [
+        {
+          "baseline": {
+            "value_bytes": 16,
+            "size": 65536,
+            "pattern": 5,
+            "float": 0,
+            "batches": 1,
+            "comparisons": {
+              "qsort": 196628,
+              "tapas": 109225
+            },
+            "partition_control": {
+              "single_comparisons": 109225,
+              "single_writes": 87379,
+              "selected_writes": 87379
+            },
+            "qsort_ns": [
+              271000,
+              264000,
+              260000,
+              262000,
+              261000,
+              260000,
+              260000
+            ],
+            "tapas_ns": [
+              140000,
+              146000,
+              140000,
+              140000,
+              139000,
+              139000,
+              139000
+            ],
+            "validated_qsort_ns": [
+              302000,
+              324000,
+              301000,
+              301000,
+              303000,
+              301000,
+              301000
+            ],
+            "validation_ns": [
+              66000,
+              60000,
+              58000,
+              55000,
+              56000,
+              56000,
+              56000
+            ]
+          },
+          "candidate": {
+            "value_bytes": 16,
+            "size": 65536,
+            "pattern": 5,
+            "float": 0,
+            "batches": 1,
+            "comparisons": {
+              "qsort": 196628,
+              "tapas": 109225
+            },
+            "partition_control": {
+              "single_comparisons": 109225,
+              "single_writes": 87379,
+              "selected_writes": 87379
+            },
+            "qsort_ns": [
+              262000,
+              260000,
+              261000,
+              260000,
+              264000,
+              265000,
+              261000
+            ],
+            "tapas_ns": [
+              140000,
+              140000,
+              140000,
+              141000,
+              140000,
+              156000,
+              140000
+            ],
+            "validated_qsort_ns": [
+              301000,
+              302000,
+              302000,
+              301000,
+              301000,
+              303000,
+              302000
+            ],
+            "validation_ns": [
+              55000,
+              57000,
+              55000,
+              57000,
+              56000,
+              56000,
+              58000
+            ]
+          }
+        }
+      ],
+      "samples_ns": {
+        "baseline": [
+          140000,
+          146000,
+          140000,
+          140000,
+          139000,
+          139000,
+          139000
+        ],
+        "candidate": [
+          140000,
+          140000,
+          140000,
+          141000,
+          140000,
+          156000,
+          140000
+        ]
+      },
+      "baseline_median_ns": 140000,
+      "candidate_median_ns": 140000,
+      "paired_ratio_median": 1.0071428571428571,
+      "paired_ratio_iqr": [
+        1.0,
+        1.0071942446043165
+      ]
+    },
+    {
+      "type": "int",
+      "pattern": "organ_pipe",
+      "size": 8192,
+      "rounds": [
+        {
+          "baseline": {
+            "value_bytes": 16,
+            "size": 8192,
+            "pattern": 6,
+            "float": 0,
+            "batches": 8,
+            "comparisons": {
+              "qsort": 106719,
+              "tapas": 135791
+            },
+            "partition_control": {
+              "single_comparisons": 135379,
+              "single_writes": 195632,
+              "selected_writes": 90972
+            },
+            "qsort_ns": [
+              1917000,
+              1931000,
+              1928000,
+              1913000,
+              1969000,
+              1929000,
+              2084000
+            ],
+            "tapas_ns": [
+              1330000,
+              1319000,
+              1291000,
+              1278000,
+              1344000,
+              1337000,
+              1360000
+            ],
+            "validated_qsort_ns": [
+              2014000,
+              2070000,
+              1970000,
+              1961000,
+              2050000,
+              1966000,
+              1993000
+            ],
+            "validation_ns": [
+              64000,
+              65000,
+              66000,
+              67000,
+              70000,
+              65000,
+              67000
+            ]
+          },
+          "candidate": {
+            "value_bytes": 16,
+            "size": 8192,
+            "pattern": 6,
+            "float": 0,
+            "batches": 8,
+            "comparisons": {
+              "qsort": 106719,
+              "tapas": 146773
+            },
+            "partition_control": {
+              "single_comparisons": 135379,
+              "single_writes": 195632,
+              "selected_writes": 92252
+            },
+            "qsort_ns": [
+              1961000,
+              2031000,
+              1935000,
+              1928000,
+              1955000,
+              1912000,
+              1929000
+            ],
+            "tapas_ns": [
+              1061000,
+              1118000,
+              1061000,
+              1085000,
+              1141000,
+              1047000,
+              1065000
+            ],
+            "validated_qsort_ns": [
+              1969000,
+              2031000,
+              1968000,
+              2108000,
+              1999000,
+              1945000,
+              1954000
+            ],
+            "validation_ns": [
+              65000,
+              67000,
+              65000,
+              68000,
+              66000,
+              65000,
+              65000
+            ]
+          }
+        }
+      ],
+      "samples_ns": {
+        "baseline": [
+          1330000,
+          1319000,
+          1291000,
+          1278000,
+          1344000,
+          1337000,
+          1360000
+        ],
+        "candidate": [
+          1061000,
+          1118000,
+          1061000,
+          1085000,
+          1141000,
+          1047000,
+          1065000
+        ]
+      },
+      "baseline_median_ns": 1330000,
+      "candidate_median_ns": 1065000,
+      "paired_ratio_median": 0.8218435321456236,
+      "paired_ratio_iqr": [
+        0.7830964846671653,
+        0.8489583333333334
+      ]
+    },
+    {
+      "type": "int",
+      "pattern": "organ_pipe",
+      "size": 65536,
+      "rounds": [
+        {
+          "baseline": {
+            "value_bytes": 16,
+            "size": 65536,
+            "pattern": 6,
+            "float": 0,
+            "batches": 1,
+            "comparisons": {
+              "qsort": 1064307,
+              "tapas": 1320517
+            },
+            "partition_control": {
+              "single_comparisons": 1281120,
+              "single_writes": 1936286,
+              "selected_writes": 867439
+            },
+            "qsort_ns": [
+              2383000,
+              2333000,
+              2345000,
+              2324000,
+              2324000,
+              2319000,
+              2409000
+            ],
+            "tapas_ns": [
+              1624000,
+              1645000,
+              1639000,
+              1622000,
+              1708000,
+              1620000,
+              1713000
+            ],
+            "validated_qsort_ns": [
+              2374000,
+              2485000,
+              2388000,
+              2460000,
+              2380000,
+              2363000,
+              2387000
+            ],
+            "validation_ns": [
+              56000,
+              59000,
+              56000,
+              60000,
+              59000,
+              56000,
+              56000
+            ]
+          },
+          "candidate": {
+            "value_bytes": 16,
+            "size": 65536,
+            "pattern": 6,
+            "float": 0,
+            "batches": 1,
+            "comparisons": {
+              "qsort": 1064307,
+              "tapas": 1397704
+            },
+            "partition_control": {
+              "single_comparisons": 1281120,
+              "single_writes": 1936286,
+              "selected_writes": 866820
+            },
+            "qsort_ns": [
+              2418000,
+              2447000,
+              2430000,
+              2407000,
+              2412000,
+              2549000,
+              2458000
+            ],
+            "tapas_ns": [
+              1313000,
+              1395000,
+              1366000,
+              1403000,
+              1380000,
+              1437000,
+              1408000
+            ],
+            "validated_qsort_ns": [
+              2470000,
+              2426000,
+              2475000,
+              2686000,
+              2484000,
+              2495000,
+              2486000
+            ],
+            "validation_ns": [
+              63000,
+              67000,
+              60000,
+              66000,
+              59000,
+              67000,
+              65000
+            ]
+          }
+        }
+      ],
+      "samples_ns": {
+        "baseline": [
+          1624000,
+          1645000,
+          1639000,
+          1622000,
+          1708000,
+          1620000,
+          1713000
+        ],
+        "candidate": [
+          1313000,
+          1395000,
+          1366000,
+          1403000,
+          1380000,
+          1437000,
+          1408000
+        ]
+      },
+      "baseline_median_ns": 1639000,
+      "candidate_median_ns": 1395000,
+      "paired_ratio_median": 0.8334350213544844,
+      "paired_ratio_iqr": [
+        0.8084975369458128,
+        0.8649815043156597
+      ]
+    },
+    {
+      "type": "int",
+      "pattern": "shuffled_few",
+      "size": 8192,
+      "rounds": [
+        {
+          "baseline": {
+            "value_bytes": 16,
+            "size": 8192,
+            "pattern": 7,
+            "float": 0,
+            "batches": 8,
+            "comparisons": {
+              "qsort": 21661,
+              "tapas": 21740
+            },
+            "partition_control": {
+              "single_comparisons": 21725,
+              "single_writes": 26846,
+              "selected_writes": 26846
+            },
+            "qsort_ns": [
+              758000,
+              752000,
+              755000,
+              766000,
+              754000,
+              749000,
+              771000
+            ],
+            "tapas_ns": [
+              686000,
+              627000,
+              630000,
+              622000,
+              621000,
+              622000,
+              644000
+            ],
+            "validated_qsort_ns": [
+              830000,
+              793000,
+              791000,
+              790000,
+              791000,
+              789000,
+              823000
+            ],
+            "validation_ns": [
+              67000,
+              66000,
+              66000,
+              67000,
+              66000,
+              66000,
+              66000
+            ]
+          },
+          "candidate": {
+            "value_bytes": 16,
+            "size": 8192,
+            "pattern": 7,
+            "float": 0,
+            "batches": 8,
+            "comparisons": {
+              "qsort": 21661,
+              "tapas": 21740
+            },
+            "partition_control": {
+              "single_comparisons": 21725,
+              "single_writes": 26846,
+              "selected_writes": 26846
+            },
+            "qsort_ns": [
+              762000,
+              759000,
+              760000,
+              772000,
+              736000,
+              700000,
+              699000
+            ],
+            "tapas_ns": [
+              649000,
+              654000,
+              650000,
+              761000,
+              661000,
+              639000,
+              608000
+            ],
+            "validated_qsort_ns": [
+              802000,
+              799000,
+              799000,
+              866000,
+              855000,
+              741000,
+              736000
+            ],
+            "validation_ns": [
+              65000,
+              66000,
+              66000,
+              68000,
+              68000,
+              65000,
+              65000
+            ]
+          }
+        }
+      ],
+      "samples_ns": {
+        "baseline": [
+          686000,
+          627000,
+          630000,
+          622000,
+          621000,
+          622000,
+          644000
+        ],
+        "candidate": [
+          649000,
+          654000,
+          650000,
+          761000,
+          661000,
+          639000,
+          608000
+        ]
+      },
+      "baseline_median_ns": 627000,
+      "candidate_median_ns": 650000,
+      "paired_ratio_median": 1.0317460317460319,
+      "paired_ratio_iqr": [
+        0.9460641399416909,
+        1.0644122383252819
+      ]
+    },
+    {
+      "type": "int",
+      "pattern": "shuffled_few",
+      "size": 65536,
+      "rounds": [
+        {
+          "baseline": {
+            "value_bytes": 16,
+            "size": 65536,
+            "pattern": 7,
+            "float": 0,
+            "batches": 1,
+            "comparisons": {
+              "qsort": 180446,
+              "tapas": 188595
+            },
+            "partition_control": {
+              "single_comparisons": 188579,
+              "single_writes": 245878,
+              "selected_writes": 245878
+            },
+            "qsort_ns": [
+              852000,
+              880000,
+              889000,
+              838000,
+              902000,
+              894000,
+              870000
+            ],
+            "tapas_ns": [
+              682000,
+              726000,
+              719000,
+              681000,
+              692000,
+              705000,
+              694000
+            ],
+            "validated_qsort_ns": [
+              893000,
+              923000,
+              894000,
+              917000,
+              1002000,
+              944000,
+              891000
+            ],
+            "validation_ns": [
+              60000,
+              62000,
+              72000,
+              60000,
+              69000,
+              66000,
+              62000
+            ]
+          },
+          "candidate": {
+            "value_bytes": 16,
+            "size": 65536,
+            "pattern": 7,
+            "float": 0,
+            "batches": 1,
+            "comparisons": {
+              "qsort": 180446,
+              "tapas": 188595
+            },
+            "partition_control": {
+              "single_comparisons": 188579,
+              "single_writes": 245878,
+              "selected_writes": 245878
+            },
+            "qsort_ns": [
+              842000,
+              841000,
+              882000,
+              893000,
+              842000,
+              843000,
+              870000
+            ],
+            "tapas_ns": [
+              674000,
+              694000,
+              778000,
+              683000,
+              675000,
+              685000,
+              695000
+            ],
+            "validated_qsort_ns": [
+              876000,
+              890000,
+              960000,
+              892000,
+              889000,
+              889000,
+              933000
+            ],
+            "validation_ns": [
+              56000,
+              56000,
+              62000,
+              59000,
+              56000,
+              56000,
+              59000
+            ]
+          }
+        }
+      ],
+      "samples_ns": {
+        "baseline": [
+          682000,
+          726000,
+          719000,
+          681000,
+          692000,
+          705000,
+          694000
+        ],
+        "candidate": [
+          674000,
+          694000,
+          778000,
+          683000,
+          675000,
+          685000,
+          695000
+        ]
+      },
+      "baseline_median_ns": 694000,
+      "candidate_median_ns": 685000,
+      "paired_ratio_median": 0.9882697947214076,
+      "paired_ratio_iqr": [
+        0.9716312056737588,
+        1.0029368575624082
+      ]
+    },
+    {
+      "type": "int",
+      "pattern": "skewed",
+      "size": 8192,
+      "rounds": [
+        {
+          "baseline": {
+            "value_bytes": 16,
+            "size": 8192,
+            "pattern": 8,
+            "float": 0,
+            "batches": 8,
+            "comparisons": {
+              "qsort": 9420,
+              "tapas": 9419
+            },
+            "partition_control": {
+              "single_comparisons": 9396,
+              "single_writes": 2196,
+              "selected_writes": 2196
+            },
+            "qsort_ns": [
+              185000,
+              185000,
+              186000,
+              185000,
+              185000,
+              195000,
+              184000
+            ],
+            "tapas_ns": [
+              140000,
+              141000,
+              140000,
+              142000,
+              140000,
+              152000,
+              141000
+            ],
+            "validated_qsort_ns": [
+              225000,
+              226000,
+              227000,
+              226000,
+              226000,
+              233000,
+              225000
+            ],
+            "validation_ns": [
+              65000,
+              65000,
+              65000,
+              65000,
+              65000,
+              65000,
+              68000
+            ]
+          },
+          "candidate": {
+            "value_bytes": 16,
+            "size": 8192,
+            "pattern": 8,
+            "float": 0,
+            "batches": 8,
+            "comparisons": {
+              "qsort": 9420,
+              "tapas": 9419
+            },
+            "partition_control": {
+              "single_comparisons": 9396,
+              "single_writes": 2196,
+              "selected_writes": 2196
+            },
+            "qsort_ns": [
+              185000,
+              186000,
+              185000,
+              190000,
+              192000,
+              194000,
+              193000
+            ],
+            "tapas_ns": [
+              134000,
+              134000,
+              135000,
+              134000,
+              143000,
+              141000,
+              139000
+            ],
+            "validated_qsort_ns": [
+              226000,
+              225000,
+              232000,
+              239000,
+              240000,
+              234000,
+              234000
+            ],
+            "validation_ns": [
+              65000,
+              65000,
+              65000,
+              69000,
+              70000,
+              69000,
+              68000
+            ]
+          }
+        }
+      ],
+      "samples_ns": {
+        "baseline": [
+          140000,
+          141000,
+          140000,
+          142000,
+          140000,
+          152000,
+          141000
+        ],
+        "candidate": [
+          134000,
+          134000,
+          135000,
+          134000,
+          143000,
+          141000,
+          139000
+        ]
+      },
+      "baseline_median_ns": 141000,
+      "candidate_median_ns": 135000,
+      "paired_ratio_median": 0.9571428571428572,
+      "paired_ratio_iqr": [
+        0.9436619718309859,
+        0.9858156028368794
+      ]
+    },
+    {
+      "type": "int",
+      "pattern": "skewed",
+      "size": 65536,
+      "rounds": [
+        {
+          "baseline": {
+            "value_bytes": 16,
+            "size": 65536,
+            "pattern": 8,
+            "float": 0,
+            "batches": 1,
+            "comparisons": {
+              "qsort": 74557,
+              "tapas": 74657
+            },
+            "partition_control": {
+              "single_comparisons": 74638,
+              "single_writes": 17890,
+              "selected_writes": 17890
+            },
+            "qsort_ns": [
+              194000,
+              191000,
+              194000,
+              190000,
+              191000,
+              188000,
+              197000
+            ],
+            "tapas_ns": [
+              160000,
+              156000,
+              152000,
+              160000,
+              150000,
+              151000,
+              157000
+            ],
+            "validated_qsort_ns": [
+              241000,
+              232000,
+              234000,
+              234000,
+              234000,
+              230000,
+              243000
+            ],
+            "validation_ns": [
+              55000,
+              57000,
+              55000,
+              57000,
+              56000,
+              55000,
+              59000
+            ]
+          },
+          "candidate": {
+            "value_bytes": 16,
+            "size": 65536,
+            "pattern": 8,
+            "float": 0,
+            "batches": 1,
+            "comparisons": {
+              "qsort": 74557,
+              "tapas": 74657
+            },
+            "partition_control": {
+              "single_comparisons": 74638,
+              "single_writes": 17890,
+              "selected_writes": 17890
+            },
+            "qsort_ns": [
+              214000,
+              192000,
+              195000,
+              191000,
+              191000,
+              191000,
+              202000
+            ],
+            "tapas_ns": [
+              159000,
+              162000,
+              158000,
+              152000,
+              149000,
+              155000,
+              149000
+            ],
+            "validated_qsort_ns": [
+              255000,
+              237000,
+              235000,
+              232000,
+              234000,
+              231000,
+              232000
+            ],
+            "validation_ns": [
+              60000,
+              56000,
+              55000,
+              55000,
+              56000,
+              57000,
+              61000
+            ]
+          }
+        }
+      ],
+      "samples_ns": {
+        "baseline": [
+          160000,
+          156000,
+          152000,
+          160000,
+          150000,
+          151000,
+          157000
+        ],
+        "candidate": [
+          159000,
+          162000,
+          158000,
+          152000,
+          149000,
+          155000,
+          149000
+        ]
+      },
+      "baseline_median_ns": 156000,
+      "candidate_median_ns": 155000,
+      "paired_ratio_median": 0.99375,
+      "paired_ratio_iqr": [
+        0.95,
+        1.0384615384615385
+      ]
+    },
+    {
+      "type": "int",
+      "pattern": "period_7",
+      "size": 8192,
+      "rounds": [
+        {
+          "baseline": {
+            "value_bytes": 16,
+            "size": 8192,
+            "pattern": 9,
+            "float": 0,
+            "batches": 8,
+            "comparisons": {
+              "qsort": 19971,
+              "tapas": 21180
+            },
+            "partition_control": {
+              "single_comparisons": 21156,
+              "single_writes": 25736,
+              "selected_writes": 25736
+            },
+            "qsort_ns": [
+              364000,
+              364000,
+              364000,
+              366000,
+              376000,
+              376000,
+              414000
+            ],
+            "tapas_ns": [
+              219000,
+              219000,
+              219000,
+              222000,
+              219000,
+              228000,
+              245000
+            ],
+            "validated_qsort_ns": [
+              404000,
+              404000,
+              404000,
+              405000,
+              404000,
+              419000,
+              435000
+            ],
+            "validation_ns": [
+              66000,
+              65000,
+              64000,
+              65000,
+              65000,
+              68000,
+              108000
+            ]
+          },
+          "candidate": {
+            "value_bytes": 16,
+            "size": 8192,
+            "pattern": 9,
+            "float": 0,
+            "batches": 8,
+            "comparisons": {
+              "qsort": 19971,
+              "tapas": 21180
+            },
+            "partition_control": {
+              "single_comparisons": 21156,
+              "single_writes": 25736,
+              "selected_writes": 25736
+            },
+            "qsort_ns": [
+              364000,
+              363000,
+              377000,
+              378000,
+              364000,
+              378000,
+              363000
+            ],
+            "tapas_ns": [
+              218000,
+              218000,
+              227000,
+              227000,
+              218000,
+              219000,
+              222000
+            ],
+            "validated_qsort_ns": [
+              426000,
+              415000,
+              421000,
+              413000,
+              405000,
+              407000,
+              405000
+            ],
+            "validation_ns": [
+              68000,
+              65000,
+              66000,
+              66000,
+              64000,
+              67000,
+              65000
+            ]
+          }
+        }
+      ],
+      "samples_ns": {
+        "baseline": [
+          219000,
+          219000,
+          219000,
+          222000,
+          219000,
+          228000,
+          245000
+        ],
+        "candidate": [
+          218000,
+          218000,
+          227000,
+          227000,
+          218000,
+          219000,
+          222000
+        ]
+      },
+      "baseline_median_ns": 219000,
+      "candidate_median_ns": 219000,
+      "paired_ratio_median": 0.9954337899543378,
+      "paired_ratio_iqr": [
+        0.9605263157894737,
+        1.0225225225225225
+      ]
+    },
+    {
+      "type": "int",
+      "pattern": "period_7",
+      "size": 65536,
+      "rounds": [
+        {
+          "baseline": {
+            "value_bytes": 16,
+            "size": 65536,
+            "pattern": 9,
+            "float": 0,
+            "batches": 1,
+            "comparisons": {
+              "qsort": 177963,
+              "tapas": 168623
+            },
+            "partition_control": {
+              "single_comparisons": 168612,
+              "single_writes": 205960,
+              "selected_writes": 205960
+            },
+            "qsort_ns": [
+              410000,
+              409000,
+              409000,
+              411000,
+              422000,
+              411000,
+              410000
+            ],
+            "tapas_ns": [
+              208000,
+              209000,
+              207000,
+              208000,
+              208000,
+              207000,
+              208000
+            ],
+            "validated_qsort_ns": [
+              451000,
+              451000,
+              451000,
+              452000,
+              451000,
+              454000,
+              452000
+            ],
+            "validation_ns": [
+              56000,
+              56000,
+              56000,
+              56000,
+              57000,
+              58000,
+              57000
+            ]
+          },
+          "candidate": {
+            "value_bytes": 16,
+            "size": 65536,
+            "pattern": 9,
+            "float": 0,
+            "batches": 1,
+            "comparisons": {
+              "qsort": 177963,
+              "tapas": 168623
+            },
+            "partition_control": {
+              "single_comparisons": 168612,
+              "single_writes": 205960,
+              "selected_writes": 205960
+            },
+            "qsort_ns": [
+              409000,
+              410000,
+              409000,
+              410000,
+              411000,
+              422000,
+              425000
+            ],
+            "tapas_ns": [
+              207000,
+              207000,
+              215000,
+              207000,
+              213000,
+              216000,
+              216000
+            ],
+            "validated_qsort_ns": [
+              450000,
+              451000,
+              451000,
+              451000,
+              450000,
+              451000,
+              474000
+            ],
+            "validation_ns": [
+              56000,
+              56000,
+              57000,
+              57000,
+              57000,
+              55000,
+              59000
+            ]
+          }
+        }
+      ],
+      "samples_ns": {
+        "baseline": [
+          208000,
+          209000,
+          207000,
+          208000,
+          208000,
+          207000,
+          208000
+        ],
+        "candidate": [
+          207000,
+          207000,
+          215000,
+          207000,
+          213000,
+          216000,
+          216000
+        ]
+      },
+      "baseline_median_ns": 208000,
+      "candidate_median_ns": 213000,
+      "paired_ratio_median": 1.0240384615384615,
+      "paired_ratio_iqr": [
+        0.9951923076923077,
+        1.038647342995169
+      ]
+    },
+    {
+      "type": "int",
+      "pattern": "period_31",
+      "size": 8192,
+      "rounds": [
+        {
+          "baseline": {
+            "value_bytes": 16,
+            "size": 8192,
+            "pattern": 10,
+            "float": 0,
+            "batches": 8,
+            "comparisons": {
+              "qsort": 41022,
+              "tapas": 41480
+            },
+            "partition_control": {
+              "single_comparisons": 40823,
+              "single_writes": 64358,
+              "selected_writes": 52808
+            },
+            "qsort_ns": [
+              936000,
+              921000,
+              928000,
+              921000,
+              921000,
+              1025000,
+              918000
+            ],
+            "tapas_ns": [
+              619000,
+              609000,
+              607000,
+              606000,
+              606000,
+              626000,
+              586000
+            ],
+            "validated_qsort_ns": [
+              976000,
+              967000,
+              962000,
+              962000,
+              962000,
+              988000,
+              950000
+            ],
+            "validation_ns": [
+              66000,
+              66000,
+              65000,
+              64000,
+              66000,
+              66000,
+              68000
+            ]
+          },
+          "candidate": {
+            "value_bytes": 16,
+            "size": 8192,
+            "pattern": 10,
+            "float": 0,
+            "batches": 8,
+            "comparisons": {
+              "qsort": 41022,
+              "tapas": 40082
+            },
+            "partition_control": {
+              "single_comparisons": 40823,
+              "single_writes": 64358,
+              "selected_writes": 48734
+            },
+            "qsort_ns": [
+              888000,
+              907000,
+              980000,
+              925000,
+              939000,
+              922000,
+              931000
+            ],
+            "tapas_ns": [
+              589000,
+              610000,
+              662000,
+              592000,
+              589000,
+              603000,
+              588000
+            ],
+            "validated_qsort_ns": [
+              932000,
+              932000,
+              979000,
+              967000,
+              966000,
+              973000,
+              965000
+            ],
+            "validation_ns": [
+              64000,
+              65000,
+              67000,
+              65000,
+              66000,
+              66000,
+              68000
+            ]
+          }
+        }
+      ],
+      "samples_ns": {
+        "baseline": [
+          619000,
+          609000,
+          607000,
+          606000,
+          606000,
+          626000,
+          586000
+        ],
+        "candidate": [
+          589000,
+          610000,
+          662000,
+          592000,
+          589000,
+          603000,
+          588000
+        ]
+      },
+      "baseline_median_ns": 607000,
+      "candidate_median_ns": 592000,
+      "paired_ratio_median": 0.976897689768977,
+      "paired_ratio_iqr": [
+        0.963258785942492,
+        1.0034129692832765
+      ]
+    },
+    {
+      "type": "int",
+      "pattern": "period_31",
+      "size": 65536,
+      "rounds": [
+        {
+          "baseline": {
+            "value_bytes": 16,
+            "size": 65536,
+            "pattern": 10,
+            "float": 0,
+            "batches": 1,
+            "comparisons": {
+              "qsort": 296295,
+              "tapas": 292221
+            },
+            "partition_control": {
+              "single_comparisons": 292146,
+              "single_writes": 452292,
+              "selected_writes": 452292
+            },
+            "qsort_ns": [
+              911000,
+              911000,
+              946000,
+              913000,
+              970000,
+              916000,
+              909000
+            ],
+            "tapas_ns": [
+              625000,
+              624000,
+              628000,
+              638000,
+              649000,
+              628000,
+              625000
+            ],
+            "validated_qsort_ns": [
+              950000,
+              954000,
+              951000,
+              1011000,
+              999000,
+              960000,
+              954000
+            ],
+            "validation_ns": [
+              56000,
+              57000,
+              56000,
+              62000,
+              59000,
+              57000,
+              57000
+            ]
+          },
+          "candidate": {
+            "value_bytes": 16,
+            "size": 65536,
+            "pattern": 10,
+            "float": 0,
+            "batches": 1,
+            "comparisons": {
+              "qsort": 296295,
+              "tapas": 292221
+            },
+            "partition_control": {
+              "single_comparisons": 292146,
+              "single_writes": 452292,
+              "selected_writes": 452292
+            },
+            "qsort_ns": [
+              919000,
+              922000,
+              914000,
+              921000,
+              915000,
+              956000,
+              983000
+            ],
+            "tapas_ns": [
+              668000,
+              622000,
+              621000,
+              633000,
+              620000,
+              643000,
+              676000
+            ],
+            "validated_qsort_ns": [
+              1000000,
+              959000,
+              968000,
+              959000,
+              958000,
+              963000,
+              974000
+            ],
+            "validation_ns": [
+              57000,
+              57000,
+              56000,
+              56000,
+              56000,
+              59000,
+              59000
+            ]
+          }
+        }
+      ],
+      "samples_ns": {
+        "baseline": [
+          625000,
+          624000,
+          628000,
+          638000,
+          649000,
+          628000,
+          625000
+        ],
+        "candidate": [
+          668000,
+          622000,
+          621000,
+          633000,
+          620000,
+          643000,
+          676000
+        ]
+      },
+      "baseline_median_ns": 628000,
+      "candidate_median_ns": 633000,
+      "paired_ratio_median": 0.9967948717948718,
+      "paired_ratio_iqr": [
+        0.9888535031847133,
+        1.0688
+      ]
+    },
+    {
+      "type": "float",
+      "pattern": "random",
+      "size": 8192,
+      "rounds": [
+        {
+          "baseline": {
+            "value_bytes": 16,
+            "size": 8192,
+            "pattern": 0,
+            "float": 1,
+            "batches": 8,
+            "comparisons": {
+              "qsort": 111151,
+              "tapas": 113492
+            },
+            "partition_control": {
+              "single_comparisons": 113492,
+              "single_writes": 151087,
+              "selected_writes": 151087
+            },
+            "qsort_ns": [
+              4334000,
+              4303000,
+              4291000,
+              4207000,
+              4335000,
+              4203000,
+              4257000
+            ],
+            "tapas_ns": [
+              3656000,
+              3885000,
+              3641000,
+              3628000,
+              3615000,
+              3652000,
+              3794000
+            ],
+            "validated_qsort_ns": [
+              4280000,
+              4357000,
+              4281000,
+              4310000,
+              4422000,
+              4272000,
+              4391000
+            ],
+            "validation_ns": [
+              75000,
+              74000,
+              74000,
+              74000,
+              80000,
+              74000,
+              74000
+            ]
+          },
+          "candidate": {
+            "value_bytes": 16,
+            "size": 8192,
+            "pattern": 0,
+            "float": 1,
+            "batches": 8,
+            "comparisons": {
+              "qsort": 111151,
+              "tapas": 126900
+            },
+            "partition_control": {
+              "single_comparisons": 113492,
+              "single_writes": 151087,
+              "selected_writes": 66777
+            },
+            "qsort_ns": [
+              4401000,
+              4350000,
+              4214000,
+              4386000,
+              4358000,
+              4225000,
+              4319000
+            ],
+            "tapas_ns": [
+              3086000,
+              3148000,
+              3086000,
+              3075000,
+              3160000,
+              3173000,
+              3099000
+            ],
+            "validated_qsort_ns": [
+              4360000,
+              4425000,
+              4271000,
+              4259000,
+              4359000,
+              4281000,
+              4276000
+            ],
+            "validation_ns": [
+              73000,
+              80000,
+              74000,
+              74000,
+              75000,
+              73000,
+              76000
+            ]
+          }
+        }
+      ],
+      "samples_ns": {
+        "baseline": [
+          3656000,
+          3885000,
+          3641000,
+          3628000,
+          3615000,
+          3652000,
+          3794000
+        ],
+        "candidate": [
+          3086000,
+          3148000,
+          3086000,
+          3075000,
+          3160000,
+          3173000,
+          3099000
+        ]
+      },
+      "baseline_median_ns": 3652000,
+      "candidate_median_ns": 3099000,
+      "paired_ratio_median": 0.8475693490799231,
+      "paired_ratio_iqr": [
+        0.8168160253031101,
+        0.8688389923329682
+      ]
+    },
+    {
+      "type": "float",
+      "pattern": "random",
+      "size": 65536,
+      "rounds": [
+        {
+          "baseline": {
+            "value_bytes": 16,
+            "size": 65536,
+            "pattern": 0,
+            "float": 1,
+            "batches": 1,
+            "comparisons": {
+              "qsort": 1077285,
+              "tapas": 1110876
+            },
+            "partition_control": {
+              "single_comparisons": 1110876,
+              "single_writes": 1536638,
+              "selected_writes": 1536638
+            },
+            "qsort_ns": [
+              5495000,
+              5487000,
+              5459000,
+              5428000,
+              5547000,
+              5548000,
+              5463000
+            ],
+            "tapas_ns": [
+              5011000,
+              5158000,
+              4978000,
+              4994000,
+              5011000,
+              5014000,
+              5033000
+            ],
+            "validated_qsort_ns": [
+              5636000,
+              5521000,
+              5626000,
+              5621000,
+              5482000,
+              5528000,
+              5630000
+            ],
+            "validation_ns": [
+              64000,
+              71000,
+              67000,
+              68000,
+              70000,
+              68000,
+              68000
+            ]
+          },
+          "candidate": {
+            "value_bytes": 16,
+            "size": 65536,
+            "pattern": 0,
+            "float": 1,
+            "batches": 1,
+            "comparisons": {
+              "qsort": 1077285,
+              "tapas": 1235346
+            },
+            "partition_control": {
+              "single_comparisons": 1110876,
+              "single_writes": 1536638,
+              "selected_writes": 627919
+            },
+            "qsort_ns": [
+              5446000,
+              5614000,
+              5443000,
+              5467000,
+              5646000,
+              5576000,
+              5407000
+            ],
+            "tapas_ns": [
+              4241000,
+              4211000,
+              4248000,
+              4258000,
+              4173000,
+              4223000,
+              4103000
+            ],
+            "validated_qsort_ns": [
+              5538000,
+              5521000,
+              5877000,
+              5788000,
+              5641000,
+              5546000,
+              5593000
+            ],
+            "validation_ns": [
+              67000,
+              65000,
+              71000,
+              70000,
+              67000,
+              70000,
+              68000
+            ]
+          }
+        }
+      ],
+      "samples_ns": {
+        "baseline": [
+          5011000,
+          5158000,
+          4978000,
+          4994000,
+          5011000,
+          5014000,
+          5033000
+        ],
+        "candidate": [
+          4241000,
+          4211000,
+          4248000,
+          4258000,
+          4173000,
+          4223000,
+          4103000
+        ]
+      },
+      "baseline_median_ns": 5011000,
+      "candidate_median_ns": 4223000,
+      "paired_ratio_median": 0.8422417231751097,
+      "paired_ratio_iqr": [
+        0.8164017060876309,
+        0.8526231477773328
+      ]
+    },
+    {
+      "type": "float",
+      "pattern": "sorted",
+      "size": 8192,
+      "rounds": [
+        {
+          "baseline": {
+            "value_bytes": 16,
+            "size": 8192,
+            "pattern": 1,
+            "float": 1,
+            "batches": 8,
+            "comparisons": {
+              "qsort": 16391,
+              "tapas": 8191
+            },
+            "partition_control": {
+              "single_comparisons": 8191,
+              "single_writes": 0,
+              "selected_writes": 0
+            },
+            "qsort_ns": [
+              185000,
+              185000,
+              185000,
+              186000,
+              185000,
+              185000,
+              186000
+            ],
+            "tapas_ns": [
+              135000,
+              134000,
+              135000,
+              135000,
+              135000,
+              136000,
+              135000
+            ],
+            "validated_qsort_ns": [
+              238000,
+              237000,
+              237000,
+              237000,
+              238000,
+              238000,
+              238000
+            ],
+            "validation_ns": [
+              74000,
+              74000,
+              73000,
+              74000,
+              73000,
+              74000,
+              73000
+            ]
+          },
+          "candidate": {
+            "value_bytes": 16,
+            "size": 8192,
+            "pattern": 1,
+            "float": 1,
+            "batches": 8,
+            "comparisons": {
+              "qsort": 16391,
+              "tapas": 8191
+            },
+            "partition_control": {
+              "single_comparisons": 8191,
+              "single_writes": 0,
+              "selected_writes": 0
+            },
+            "qsort_ns": [
+              185000,
+              185000,
+              186000,
+              194000,
+              209000,
+              193000,
+              191000
+            ],
+            "tapas_ns": [
+              135000,
+              136000,
+              135000,
+              143000,
+              146000,
+              140000,
+              141000
+            ],
+            "validated_qsort_ns": [
+              237000,
+              237000,
+              254000,
+              253000,
+              256000,
+              249000,
+              245000
+            ],
+            "validation_ns": [
+              73000,
+              73000,
+              73000,
+              79000,
+              80000,
+              77000,
+              76000
+            ]
+          }
+        }
+      ],
+      "samples_ns": {
+        "baseline": [
+          135000,
+          134000,
+          135000,
+          135000,
+          135000,
+          136000,
+          135000
+        ],
+        "candidate": [
+          135000,
+          136000,
+          135000,
+          143000,
+          146000,
+          140000,
+          141000
+        ]
+      },
+      "baseline_median_ns": 135000,
+      "candidate_median_ns": 140000,
+      "paired_ratio_median": 1.0294117647058822,
+      "paired_ratio_iqr": [
+        1.0,
+        1.0592592592592593
+      ]
+    },
+    {
+      "type": "float",
+      "pattern": "sorted",
+      "size": 65536,
+      "rounds": [
+        {
+          "baseline": {
+            "value_bytes": 16,
+            "size": 65536,
+            "pattern": 1,
+            "float": 1,
+            "batches": 1,
+            "comparisons": {
+              "qsort": 131079,
+              "tapas": 65535
+            },
+            "partition_control": {
+              "single_comparisons": 65535,
+              "single_writes": 0,
+              "selected_writes": 0
+            },
+            "qsort_ns": [
+              178000,
+              184000,
+              185000,
+              187000,
+              186000,
+              187000,
+              184000
+            ],
+            "tapas_ns": [
+              124000,
+              130000,
+              130000,
+              131000,
+              133000,
+              132000,
+              132000
+            ],
+            "validated_qsort_ns": [
+              228000,
+              232000,
+              238000,
+              238000,
+              242000,
+              235000,
+              239000
+            ],
+            "validation_ns": [
+              64000,
+              68000,
+              64000,
+              72000,
+              69000,
+              68000,
+              68000
+            ]
+          },
+          "candidate": {
+            "value_bytes": 16,
+            "size": 65536,
+            "pattern": 1,
+            "float": 1,
+            "batches": 1,
+            "comparisons": {
+              "qsort": 131079,
+              "tapas": 65535
+            },
+            "partition_control": {
+              "single_comparisons": 65535,
+              "single_writes": 0,
+              "selected_writes": 0
+            },
+            "qsort_ns": [
+              179000,
+              178000,
+              178000,
+              179000,
+              178000,
+              179000,
+              178000
+            ],
+            "tapas_ns": [
+              129000,
+              126000,
+              126000,
+              125000,
+              125000,
+              126000,
+              126000
+            ],
+            "validated_qsort_ns": [
+              226000,
+              227000,
+              228000,
+              228000,
+              224000,
+              231000,
+              228000
+            ],
+            "validation_ns": [
+              65000,
+              64000,
+              64000,
+              62000,
+              64000,
+              64000,
+              65000
+            ]
+          }
+        }
+      ],
+      "samples_ns": {
+        "baseline": [
+          124000,
+          130000,
+          130000,
+          131000,
+          133000,
+          132000,
+          132000
+        ],
+        "candidate": [
+          129000,
+          126000,
+          126000,
+          125000,
+          125000,
+          126000,
+          126000
+        ]
+      },
+      "baseline_median_ns": 131000,
+      "candidate_median_ns": 126000,
+      "paired_ratio_median": 0.9545454545454546,
+      "paired_ratio_iqr": [
+        0.9541984732824428,
+        0.9692307692307692
+      ]
+    },
+    {
+      "type": "float",
+      "pattern": "reverse",
+      "size": 8192,
+      "rounds": [
+        {
+          "baseline": {
+            "value_bytes": 16,
+            "size": 8192,
+            "pattern": 2,
+            "float": 1,
+            "batches": 8,
+            "comparisons": {
+              "qsort": 81297,
+              "tapas": 8191
+            },
+            "partition_control": {
+              "single_comparisons": 8191,
+              "single_writes": 8192,
+              "selected_writes": 8192
+            },
+            "qsort_ns": [
+              971000,
+              1019000,
+              984000,
+              1011000,
+              971000,
+              1020000,
+              1007000
+            ],
+            "tapas_ns": [
+              154000,
+              162000,
+              165000,
+              154000,
+              153000,
+              162000,
+              161000
+            ],
+            "validated_qsort_ns": [
+              1023000,
+              1070000,
+              1061000,
+              1022000,
+              1035000,
+              1060000,
+              1060000
+            ],
+            "validation_ns": [
+              74000,
+              81000,
+              77000,
+              74000,
+              74000,
+              78000,
+              78000
+            ]
+          },
+          "candidate": {
+            "value_bytes": 16,
+            "size": 8192,
+            "pattern": 2,
+            "float": 1,
+            "batches": 8,
+            "comparisons": {
+              "qsort": 81297,
+              "tapas": 8191
+            },
+            "partition_control": {
+              "single_comparisons": 8191,
+              "single_writes": 8192,
+              "selected_writes": 8192
+            },
+            "qsort_ns": [
+              972000,
+              976000,
+              971000,
+              971000,
+              970000,
+              986000,
+              985000
+            ],
+            "tapas_ns": [
+              154000,
+              156000,
+              157000,
+              154000,
+              154000,
+              158000,
+              161000
+            ],
+            "validated_qsort_ns": [
+              1022000,
+              1022000,
+              1022000,
+              1023000,
+              1021000,
+              1023000,
+              1059000
+            ],
+            "validation_ns": [
+              74000,
+              74000,
+              74000,
+              74000,
+              74000,
+              73000,
+              74000
+            ]
+          }
+        }
+      ],
+      "samples_ns": {
+        "baseline": [
+          154000,
+          162000,
+          165000,
+          154000,
+          153000,
+          162000,
+          161000
+        ],
+        "candidate": [
+          154000,
+          156000,
+          157000,
+          154000,
+          154000,
+          158000,
+          161000
+        ]
+      },
+      "baseline_median_ns": 161000,
+      "candidate_median_ns": 156000,
+      "paired_ratio_median": 1.0,
+      "paired_ratio_iqr": [
+        0.9629629629629629,
+        1.0
+      ]
+    },
+    {
+      "type": "float",
+      "pattern": "reverse",
+      "size": 65536,
+      "rounds": [
+        {
+          "baseline": {
+            "value_bytes": 16,
+            "size": 65536,
+            "pattern": 2,
+            "float": 1,
+            "batches": 1,
+            "comparisons": {
+              "qsort": 654901,
+              "tapas": 65535
+            },
+            "partition_control": {
+              "single_comparisons": 65535,
+              "single_writes": 65536,
+              "selected_writes": 65536
+            },
+            "qsort_ns": [
+              1012000,
+              994000,
+              1006000,
+              983000,
+              967000,
+              1003000,
+              1003000
+            ],
+            "tapas_ns": [
+              168000,
+              159000,
+              169000,
+              160000,
+              153000,
+              166000,
+              165000
+            ],
+            "validated_qsort_ns": [
+              1166000,
+              1059000,
+              1204000,
+              1024000,
+              1026000,
+              1057000,
+              1061000
+            ],
+            "validation_ns": [
+              79000,
+              74000,
+              69000,
+              74000,
+              70000,
+              77000,
+              74000
+            ]
+          },
+          "candidate": {
+            "value_bytes": 16,
+            "size": 65536,
+            "pattern": 2,
+            "float": 1,
+            "batches": 1,
+            "comparisons": {
+              "qsort": 654901,
+              "tapas": 65535
+            },
+            "partition_control": {
+              "single_comparisons": 65535,
+              "single_writes": 65536,
+              "selected_writes": 65536
+            },
+            "qsort_ns": [
+              995000,
+              1003000,
+              1293000,
+              1009000,
+              967000,
+              966000,
+              967000
+            ],
+            "tapas_ns": [
+              153000,
+              189000,
+              207000,
+              165000,
+              160000,
+              158000,
+              154000
+            ],
+            "validated_qsort_ns": [
+              1020000,
+              1071000,
+              1068000,
+              1077000,
+              1035000,
+              1022000,
+              1032000
+            ],
+            "validation_ns": [
+              68000,
+              73000,
+              103000,
+              75000,
+              70000,
+              68000,
+              69000
+            ]
+          }
+        }
+      ],
+      "samples_ns": {
+        "baseline": [
+          168000,
+          159000,
+          169000,
+          160000,
+          153000,
+          166000,
+          165000
+        ],
+        "candidate": [
+          153000,
+          189000,
+          207000,
+          165000,
+          160000,
+          158000,
+          154000
+        ]
+      },
+      "baseline_median_ns": 165000,
+      "candidate_median_ns": 160000,
+      "paired_ratio_median": 1.03125,
+      "paired_ratio_iqr": [
+        0.9333333333333333,
+        1.1886792452830188
+      ]
+    },
+    {
+      "type": "float",
+      "pattern": "equal",
+      "size": 8192,
+      "rounds": [
+        {
+          "baseline": {
+            "value_bytes": 16,
+            "size": 8192,
+            "pattern": 3,
+            "float": 1,
+            "batches": 8,
+            "comparisons": {
+              "qsort": 8203,
+              "tapas": 8191
+            },
+            "partition_control": {
+              "single_comparisons": 8191,
+              "single_writes": 0,
+              "selected_writes": 0
+            },
+            "qsort_ns": [
+              396000,
+              379000,
+              217000,
+              164000,
+              392000,
+              383000,
+              183000
+            ],
+            "tapas_ns": [
+              115000,
+              305000,
+              125000,
+              115000,
+              285000,
+              118000,
+              305000
+            ],
+            "validated_qsort_ns": [
+              324000,
+              508000,
+              258000,
+              237000,
+              481000,
+              525000,
+              533000
+            ],
+            "validation_ns": [
+              146000,
+              94000,
+              167000,
+              130000,
+              150000,
+              159000,
+              120000
+            ]
+          },
+          "candidate": {
+            "value_bytes": 16,
+            "size": 8192,
+            "pattern": 3,
+            "float": 1,
+            "batches": 8,
+            "comparisons": {
+              "qsort": 8203,
+              "tapas": 8191
+            },
+            "partition_control": {
+              "single_comparisons": 8191,
+              "single_writes": 0,
+              "selected_writes": 0
+            },
+            "qsort_ns": [
+              159000,
+              159000,
+              160000,
+              161000,
+              159000,
+              342000,
+              168000
+            ],
+            "tapas_ns": [
+              116000,
+              116000,
+              115000,
+              116000,
+              114000,
+              145000,
+              116000
+            ],
+            "validated_qsort_ns": [
+              212000,
+              214000,
+              212000,
+              212000,
+              212000,
+              213000,
+              213000
+            ],
+            "validation_ns": [
+              82000,
+              80000,
+              80000,
+              81000,
+              79000,
+              83000,
+              94000
+            ]
+          }
+        }
+      ],
+      "samples_ns": {
+        "baseline": [
+          115000,
+          305000,
+          125000,
+          115000,
+          285000,
+          118000,
+          305000
+        ],
+        "candidate": [
+          116000,
+          116000,
+          115000,
+          116000,
+          114000,
+          145000,
+          116000
+        ]
+      },
+      "baseline_median_ns": 125000,
+      "candidate_median_ns": 116000,
+      "paired_ratio_median": 0.92,
+      "paired_ratio_iqr": [
+        0.380327868852459,
+        1.008695652173913
+      ]
+    },
+    {
+      "type": "float",
+      "pattern": "equal",
+      "size": 65536,
+      "rounds": [
+        {
+          "baseline": {
+            "value_bytes": 16,
+            "size": 65536,
+            "pattern": 3,
+            "float": 1,
+            "batches": 1,
+            "comparisons": {
+              "qsort": 65547,
+              "tapas": 65535
+            },
+            "partition_control": {
+              "single_comparisons": 65535,
+              "single_writes": 0,
+              "selected_writes": 0
+            },
+            "qsort_ns": [
+              149000,
+              148000,
+              148000,
+              151000,
+              143000,
+              142000,
+              143000
+            ],
+            "tapas_ns": [
+              104000,
+              104000,
+              105000,
+              104000,
+              102000,
+              100000,
+              100000
+            ],
+            "validated_qsort_ns": [
+              202000,
+              200000,
+              201000,
+              219000,
+              197000,
+              193000,
+              193000
+            ],
+            "validation_ns": [
+              67000,
+              67000,
+              69000,
+              69000,
+              66000,
+              67000,
+              65000
+            ]
+          },
+          "candidate": {
+            "value_bytes": 16,
+            "size": 65536,
+            "pattern": 3,
+            "float": 1,
+            "batches": 1,
+            "comparisons": {
+              "qsort": 65547,
+              "tapas": 65535
+            },
+            "partition_control": {
+              "single_comparisons": 65535,
+              "single_writes": 0,
+              "selected_writes": 0
+            },
+            "qsort_ns": [
+              149000,
+              147000,
+              143000,
+              151000,
+              142000,
+              143000,
+              144000
+            ],
+            "tapas_ns": [
+              106000,
+              102000,
+              99000,
+              104000,
+              100000,
+              103000,
+              101000
+            ],
+            "validated_qsort_ns": [
+              211000,
+              203000,
+              201000,
+              196000,
+              193000,
+              194000,
+              192000
+            ],
+            "validation_ns": [
+              76000,
+              81000,
+              69000,
+              71000,
+              70000,
+              67000,
+              69000
+            ]
+          }
+        }
+      ],
+      "samples_ns": {
+        "baseline": [
+          104000,
+          104000,
+          105000,
+          104000,
+          102000,
+          100000,
+          100000
+        ],
+        "candidate": [
+          106000,
+          102000,
+          99000,
+          104000,
+          100000,
+          103000,
+          101000
+        ]
+      },
+      "baseline_median_ns": 104000,
+      "candidate_median_ns": 102000,
+      "paired_ratio_median": 1.0,
+      "paired_ratio_iqr": [
+        0.9803921568627451,
+        1.0192307692307692
+      ]
+    },
+    {
+      "type": "float",
+      "pattern": "few_unique",
+      "size": 8192,
+      "rounds": [
+        {
+          "baseline": {
+            "value_bytes": 16,
+            "size": 8192,
+            "pattern": 4,
+            "float": 1,
+            "batches": 8,
+            "comparisons": {
+              "qsort": 26712,
+              "tapas": 23656
+            },
+            "partition_control": {
+              "single_comparisons": 23656,
+              "single_writes": 30712,
+              "selected_writes": 30712
+            },
+            "qsort_ns": [
+              490000,
+              491000,
+              483000,
+              482000,
+              487000,
+              471000,
+              477000
+            ],
+            "tapas_ns": [
+              249000,
+              240000,
+              237000,
+              256000,
+              253000,
+              233000,
+              233000
+            ],
+            "validated_qsort_ns": [
+              570000,
+              541000,
+              537000,
+              592000,
+              569000,
+              526000,
+              524000
+            ],
+            "validation_ns": [
+              77000,
+              78000,
+              76000,
+              79000,
+              79000,
+              73000,
+              74000
+            ]
+          },
+          "candidate": {
+            "value_bytes": 16,
+            "size": 8192,
+            "pattern": 4,
+            "float": 1,
+            "batches": 8,
+            "comparisons": {
+              "qsort": 26712,
+              "tapas": 23675
+            },
+            "partition_control": {
+              "single_comparisons": 23656,
+              "single_writes": 30712,
+              "selected_writes": 30712
+            },
+            "qsort_ns": [
+              490000,
+              522000,
+              489000,
+              484000,
+              498000,
+              470000,
+              466000
+            ],
+            "tapas_ns": [
+              240000,
+              250000,
+              240000,
+              232000,
+              232000,
+              233000,
+              232000
+            ],
+            "validated_qsort_ns": [
+              538000,
+              635000,
+              541000,
+              540000,
+              536000,
+              544000,
+              517000
+            ],
+            "validation_ns": [
+              73000,
+              78000,
+              77000,
+              73000,
+              76000,
+              86000,
+              73000
+            ]
+          }
+        }
+      ],
+      "samples_ns": {
+        "baseline": [
+          249000,
+          240000,
+          237000,
+          256000,
+          253000,
+          233000,
+          233000
+        ],
+        "candidate": [
+          240000,
+          250000,
+          240000,
+          232000,
+          232000,
+          233000,
+          232000
+        ]
+      },
+      "baseline_median_ns": 240000,
+      "candidate_median_ns": 233000,
+      "paired_ratio_median": 0.9957081545064378,
+      "paired_ratio_iqr": [
+        0.9169960474308301,
+        1.0126582278481013
+      ]
+    },
+    {
+      "type": "float",
+      "pattern": "few_unique",
+      "size": 65536,
+      "rounds": [
+        {
+          "baseline": {
+            "value_bytes": 16,
+            "size": 65536,
+            "pattern": 4,
+            "float": 1,
+            "batches": 1,
+            "comparisons": {
+              "qsort": 213080,
+              "tapas": 180328
+            },
+            "partition_control": {
+              "single_comparisons": 180328,
+              "single_writes": 229358,
+              "selected_writes": 229358
+            },
+            "qsort_ns": [
+              575000,
+              529000,
+              539000,
+              516000,
+              544000,
+              556000,
+              515000
+            ],
+            "tapas_ns": [
+              222000,
+              235000,
+              223000,
+              229000,
+              230000,
+              222000,
+              219000
+            ],
+            "validated_qsort_ns": [
+              613000,
+              602000,
+              564000,
+              566000,
+              602000,
+              618000,
+              576000
+            ],
+            "validation_ns": [
+              71000,
+              84000,
+              74000,
+              77000,
+              71000,
+              76000,
+              69000
+            ]
+          },
+          "candidate": {
+            "value_bytes": 16,
+            "size": 65536,
+            "pattern": 4,
+            "float": 1,
+            "batches": 1,
+            "comparisons": {
+              "qsort": 213080,
+              "tapas": 180360
+            },
+            "partition_control": {
+              "single_comparisons": 180328,
+              "single_writes": 229358,
+              "selected_writes": 229358
+            },
+            "qsort_ns": [
+              540000,
+              531000,
+              512000,
+              532000,
+              530000,
+              531000,
+              545000
+            ],
+            "tapas_ns": [
+              239000,
+              223000,
+              218000,
+              228000,
+              224000,
+              230000,
+              227000
+            ],
+            "validated_qsort_ns": [
+              605000,
+              592000,
+              580000,
+              602000,
+              585000,
+              585000,
+              586000
+            ],
+            "validation_ns": [
+              78000,
+              76000,
+              66000,
+              69000,
+              67000,
+              68000,
+              64000
+            ]
+          }
+        }
+      ],
+      "samples_ns": {
+        "baseline": [
+          222000,
+          235000,
+          223000,
+          229000,
+          230000,
+          222000,
+          219000
+        ],
+        "candidate": [
+          239000,
+          223000,
+          218000,
+          228000,
+          224000,
+          230000,
+          227000
+        ]
+      },
+      "baseline_median_ns": 223000,
+      "candidate_median_ns": 227000,
+      "paired_ratio_median": 0.9956331877729258,
+      "paired_ratio_iqr": [
+        0.9739130434782609,
+        1.0365296803652968
+      ]
+    },
+    {
+      "type": "float",
+      "pattern": "nearly_sorted",
+      "size": 8192,
+      "rounds": [
+        {
+          "baseline": {
+            "value_bytes": 16,
+            "size": 8192,
+            "pattern": 5,
+            "float": 1,
+            "batches": 8,
+            "comparisons": {
+              "qsort": 24596,
+              "tapas": 13653
+            },
+            "partition_control": {
+              "single_comparisons": 13653,
+              "single_writes": 10922,
+              "selected_writes": 10922
+            },
+            "qsort_ns": [
+              267000,
+              267000,
+              269000,
+              280000,
+              301000,
+              287000,
+              286000
+            ],
+            "tapas_ns": [
+              165000,
+              166000,
+              166000,
+              172000,
+              177000,
+              178000,
+              172000
+            ],
+            "validated_qsort_ns": [
+              317000,
+              317000,
+              323000,
+              329000,
+              342000,
+              340000,
+              328000
+            ],
+            "validation_ns": [
+              73000,
+              75000,
+              74000,
+              83000,
+              80000,
+              80000,
+              80000
+            ]
+          },
+          "candidate": {
+            "value_bytes": 16,
+            "size": 8192,
+            "pattern": 5,
+            "float": 1,
+            "batches": 8,
+            "comparisons": {
+              "qsort": 24596,
+              "tapas": 13653
+            },
+            "partition_control": {
+              "single_comparisons": 13653,
+              "single_writes": 10922,
+              "selected_writes": 10922
+            },
+            "qsort_ns": [
+              276000,
+              278000,
+              277000,
+              301000,
+              281000,
+              266000,
+              266000
+            ],
+            "tapas_ns": [
+              175000,
+              170000,
+              176000,
+              177000,
+              177000,
+              164000,
+              163000
+            ],
+            "validated_qsort_ns": [
+              327000,
+              327000,
+              332000,
+              338000,
+              334000,
+              321000,
+              316000
+            ],
+            "validation_ns": [
+              77000,
+              76000,
+              76000,
+              78000,
+              77000,
+              74000,
+              73000
+            ]
+          }
+        }
+      ],
+      "samples_ns": {
+        "baseline": [
+          165000,
+          166000,
+          166000,
+          172000,
+          177000,
+          178000,
+          172000
+        ],
+        "candidate": [
+          175000,
+          170000,
+          176000,
+          177000,
+          177000,
+          164000,
+          163000
+        ]
+      },
+      "baseline_median_ns": 172000,
+      "candidate_median_ns": 175000,
+      "paired_ratio_median": 1.0240963855421688,
+      "paired_ratio_iqr": [
+        0.9476744186046512,
+        1.0602409638554218
+      ]
+    },
+    {
+      "type": "float",
+      "pattern": "nearly_sorted",
+      "size": 65536,
+      "rounds": [
+        {
+          "baseline": {
+            "value_bytes": 16,
+            "size": 65536,
+            "pattern": 5,
+            "float": 1,
+            "batches": 1,
+            "comparisons": {
+              "qsort": 196628,
+              "tapas": 109225
+            },
+            "partition_control": {
+              "single_comparisons": 109225,
+              "single_writes": 87379,
+              "selected_writes": 87379
+            },
+            "qsort_ns": [
+              261000,
+              260000,
+              260000,
+              261000,
+              261000,
+              260000,
+              269000
+            ],
+            "tapas_ns": [
+              156000,
+              154000,
+              155000,
+              156000,
+              163000,
+              156000,
+              162000
+            ],
+            "validated_qsort_ns": [
+              310000,
+              311000,
+              311000,
+              308000,
+              319000,
+              308000,
+              325000
+            ],
+            "validation_ns": [
+              65000,
+              64000,
+              64000,
+              66000,
+              67000,
+              64000,
+              68000
+            ]
+          },
+          "candidate": {
+            "value_bytes": 16,
+            "size": 65536,
+            "pattern": 5,
+            "float": 1,
+            "batches": 1,
+            "comparisons": {
+              "qsort": 196628,
+              "tapas": 109225
+            },
+            "partition_control": {
+              "single_comparisons": 109225,
+              "single_writes": 87379,
+              "selected_writes": 87379
+            },
+            "qsort_ns": [
+              269000,
+              272000,
+              275000,
+              277000,
+              266000,
+              264000,
+              270000
+            ],
+            "tapas_ns": [
+              155000,
+              166000,
+              163000,
+              167000,
+              155000,
+              156000,
+              157000
+            ],
+            "validated_qsort_ns": [
+              334000,
+              322000,
+              330000,
+              311000,
+              311000,
+              310000,
+              311000
+            ],
+            "validation_ns": [
+              68000,
+              69000,
+              71000,
+              67000,
+              65000,
+              66000,
+              65000
+            ]
+          }
+        }
+      ],
+      "samples_ns": {
+        "baseline": [
+          156000,
+          154000,
+          155000,
+          156000,
+          163000,
+          156000,
+          162000
+        ],
+        "candidate": [
+          155000,
+          166000,
+          163000,
+          167000,
+          155000,
+          156000,
+          157000
+        ]
+      },
+      "baseline_median_ns": 156000,
+      "candidate_median_ns": 157000,
+      "paired_ratio_median": 1.0,
+      "paired_ratio_iqr": [
+        0.9691358024691358,
+        1.0705128205128205
+      ]
+    },
+    {
+      "type": "float",
+      "pattern": "organ_pipe",
+      "size": 8192,
+      "rounds": [
+        {
+          "baseline": {
+            "value_bytes": 16,
+            "size": 8192,
+            "pattern": 6,
+            "float": 1,
+            "batches": 8,
+            "comparisons": {
+              "qsort": 106719,
+              "tapas": 135379
+            },
+            "partition_control": {
+              "single_comparisons": 135379,
+              "single_writes": 195632,
+              "selected_writes": 195632
+            },
+            "qsort_ns": [
+              2050000,
+              2289000,
+              1991000,
+              2126000,
+              1977000,
+              2119000,
+              2025000
+            ],
+            "tapas_ns": [
+              1742000,
+              1687000,
+              1846000,
+              1771000,
+              1631000,
+              1681000,
+              1636000
+            ],
+            "validated_qsort_ns": [
+              2122000,
+              2111000,
+              2240000,
+              2105000,
+              2046000,
+              2217000,
+              2036000
+            ],
+            "validation_ns": [
+              77000,
+              82000,
+              73000,
+              75000,
+              75000,
+              82000,
+              75000
+            ]
+          },
+          "candidate": {
+            "value_bytes": 16,
+            "size": 8192,
+            "pattern": 6,
+            "float": 1,
+            "batches": 8,
+            "comparisons": {
+              "qsort": 106719,
+              "tapas": 146773
+            },
+            "partition_control": {
+              "single_comparisons": 135379,
+              "single_writes": 195632,
+              "selected_writes": 92252
+            },
+            "qsort_ns": [
+              2203000,
+              2072000,
+              2173000,
+              1993000,
+              1970000,
+              2068000,
+              2099000
+            ],
+            "tapas_ns": [
+              1235000,
+              1287000,
+              1325000,
+              1198000,
+              1179000,
+              1221000,
+              1283000
+            ],
+            "validated_qsort_ns": [
+              2127000,
+              2322000,
+              2061000,
+              2044000,
+              2038000,
+              2172000,
+              2057000
+            ],
+            "validation_ns": [
+              76000,
+              80000,
+              75000,
+              75000,
+              75000,
+              80000,
+              79000
+            ]
+          }
+        }
+      ],
+      "samples_ns": {
+        "baseline": [
+          1742000,
+          1687000,
+          1846000,
+          1771000,
+          1631000,
+          1681000,
+          1636000
+        ],
+        "candidate": [
+          1235000,
+          1287000,
+          1325000,
+          1198000,
+          1179000,
+          1221000,
+          1283000
+        ]
+      },
+      "baseline_median_ns": 1687000,
+      "candidate_median_ns": 1235000,
+      "paired_ratio_median": 0.7228694052728387,
+      "paired_ratio_iqr": [
+        0.7089552238805971,
+        0.7628927089508002
+      ]
+    },
+    {
+      "type": "float",
+      "pattern": "organ_pipe",
+      "size": 65536,
+      "rounds": [
+        {
+          "baseline": {
+            "value_bytes": 16,
+            "size": 65536,
+            "pattern": 6,
+            "float": 1,
+            "batches": 1,
+            "comparisons": {
+              "qsort": 1064307,
+              "tapas": 1281120
+            },
+            "partition_control": {
+              "single_comparisons": 1281120,
+              "single_writes": 1936286,
+              "selected_writes": 1936286
+            },
+            "qsort_ns": [
+              2727000,
+              2600000,
+              2724000,
+              2643000,
+              2514000,
+              2555000,
+              2532000
+            ],
+            "tapas_ns": [
+              2260000,
+              2043000,
+              2024000,
+              2309000,
+              2040000,
+              2115000,
+              2093000
+            ],
+            "validated_qsort_ns": [
+              2677000,
+              2600000,
+              2567000,
+              2555000,
+              2578000,
+              2506000,
+              2835000
+            ],
+            "validation_ns": [
+              76000,
+              79000,
+              69000,
+              69000,
+              68000,
+              75000,
+              70000
+            ]
+          },
+          "candidate": {
+            "value_bytes": 16,
+            "size": 65536,
+            "pattern": 6,
+            "float": 1,
+            "batches": 1,
+            "comparisons": {
+              "qsort": 1064307,
+              "tapas": 1397704
+            },
+            "partition_control": {
+              "single_comparisons": 1281120,
+              "single_writes": 1936286,
+              "selected_writes": 866820
+            },
+            "qsort_ns": [
+              2524000,
+              2590000,
+              2509000,
+              2502000,
+              2616000,
+              2431000,
+              2524000
+            ],
+            "tapas_ns": [
+              1608000,
+              1560000,
+              1530000,
+              1537000,
+              1559000,
+              1538000,
+              1546000
+            ],
+            "validated_qsort_ns": [
+              2608000,
+              3071000,
+              2560000,
+              2909000,
+              2558000,
+              2543000,
+              2529000
+            ],
+            "validation_ns": [
+              73000,
+              78000,
+              68000,
+              73000,
+              102000,
+              68000,
+              70000
+            ]
+          }
+        }
+      ],
+      "samples_ns": {
+        "baseline": [
+          2260000,
+          2043000,
+          2024000,
+          2309000,
+          2040000,
+          2115000,
+          2093000
+        ],
+        "candidate": [
+          1608000,
+          1560000,
+          1530000,
+          1537000,
+          1559000,
+          1538000,
+          1546000
+        ]
+      },
+      "baseline_median_ns": 2093000,
+      "candidate_median_ns": 1546000,
+      "paired_ratio_median": 0.7386526516961299,
+      "paired_ratio_iqr": [
+        0.7115044247787611,
+        0.7635829662261381
+      ]
+    },
+    {
+      "type": "float",
+      "pattern": "shuffled_few",
+      "size": 8192,
+      "rounds": [
+        {
+          "baseline": {
+            "value_bytes": 16,
+            "size": 8192,
+            "pattern": 7,
+            "float": 1,
+            "batches": 8,
+            "comparisons": {
+              "qsort": 21661,
+              "tapas": 21725
+            },
+            "partition_control": {
+              "single_comparisons": 21725,
+              "single_writes": 26846,
+              "selected_writes": 26846
+            },
+            "qsort_ns": [
+              794000,
+              871000,
+              878000,
+              786000,
+              815000,
+              821000,
+              820000
+            ],
+            "tapas_ns": [
+              700000,
+              889000,
+              709000,
+              678000,
+              686000,
+              708000,
+              693000
+            ],
+            "validated_qsort_ns": [
+              842000,
+              976000,
+              874000,
+              836000,
+              840000,
+              865000,
+              846000
+            ],
+            "validation_ns": [
+              74000,
+              77000,
+              77000,
+              73000,
+              77000,
+              79000,
+              76000
+            ]
+          },
+          "candidate": {
+            "value_bytes": 16,
+            "size": 8192,
+            "pattern": 7,
+            "float": 1,
+            "batches": 8,
+            "comparisons": {
+              "qsort": 21661,
+              "tapas": 21740
+            },
+            "partition_control": {
+              "single_comparisons": 21725,
+              "single_writes": 26846,
+              "selected_writes": 26846
+            },
+            "qsort_ns": [
+              838000,
+              846000,
+              954000,
+              825000,
+              938000,
+              792000,
+              822000
+            ],
+            "tapas_ns": [
+              696000,
+              895000,
+              735000,
+              703000,
+              851000,
+              791000,
+              740000
+            ],
+            "validated_qsort_ns": [
+              890000,
+              887000,
+              881000,
+              873000,
+              981000,
+              1036000,
+              845000
+            ],
+            "validation_ns": [
+              78000,
+              76000,
+              78000,
+              73000,
+              80000,
+              74000,
+              77000
+            ]
+          }
+        }
+      ],
+      "samples_ns": {
+        "baseline": [
+          700000,
+          889000,
+          709000,
+          678000,
+          686000,
+          708000,
+          693000
+        ],
+        "candidate": [
+          696000,
+          895000,
+          735000,
+          703000,
+          851000,
+          791000,
+          740000
+        ]
+      },
+      "baseline_median_ns": 700000,
+      "candidate_median_ns": 740000,
+      "paired_ratio_median": 1.036873156342183,
+      "paired_ratio_iqr": [
+        1.0067491563554556,
+        1.1172316384180792
+      ]
+    },
+    {
+      "type": "float",
+      "pattern": "shuffled_few",
+      "size": 65536,
+      "rounds": [
+        {
+          "baseline": {
+            "value_bytes": 16,
+            "size": 65536,
+            "pattern": 7,
+            "float": 1,
+            "batches": 1,
+            "comparisons": {
+              "qsort": 180446,
+              "tapas": 188579
+            },
+            "partition_control": {
+              "single_comparisons": 188579,
+              "single_writes": 245878,
+              "selected_writes": 245878
+            },
+            "qsort_ns": [
+              1014000,
+              959000,
+              953000,
+              961000,
+              959000,
+              996000,
+              1004000
+            ],
+            "tapas_ns": [
+              878000,
+              848000,
+              840000,
+              847000,
+              828000,
+              880000,
+              905000
+            ],
+            "validated_qsort_ns": [
+              1122000,
+              1024000,
+              1009000,
+              1005000,
+              1111000,
+              1022000,
+              1087000
+            ],
+            "validation_ns": [
+              81000,
+              66000,
+              64000,
+              65000,
+              93000,
+              70000,
+              70000
+            ]
+          },
+          "candidate": {
+            "value_bytes": 16,
+            "size": 65536,
+            "pattern": 7,
+            "float": 1,
+            "batches": 1,
+            "comparisons": {
+              "qsort": 180446,
+              "tapas": 188595
+            },
+            "partition_control": {
+              "single_comparisons": 188579,
+              "single_writes": 245878,
+              "selected_writes": 245878
+            },
+            "qsort_ns": [
+              992000,
+              991000,
+              1025000,
+              1075000,
+              1003000,
+              1029000,
+              955000
+            ],
+            "tapas_ns": [
+              908000,
+              881000,
+              898000,
+              909000,
+              852000,
+              881000,
+              846000
+            ],
+            "validated_qsort_ns": [
+              1055000,
+              1091000,
+              1492000,
+              1069000,
+              1059000,
+              1064000,
+              1021000
+            ],
+            "validation_ns": [
+              68000,
+              70000,
+              73000,
+              69000,
+              90000,
+              79000,
+              69000
+            ]
+          }
+        }
+      ],
+      "samples_ns": {
+        "baseline": [
+          878000,
+          848000,
+          840000,
+          847000,
+          828000,
+          880000,
+          905000
+        ],
+        "candidate": [
+          908000,
+          881000,
+          898000,
+          909000,
+          852000,
+          881000,
+          846000
+        ]
+      },
+      "baseline_median_ns": 848000,
+      "candidate_median_ns": 881000,
+      "paired_ratio_median": 1.0341685649202734,
+      "paired_ratio_iqr": [
+        1.0011363636363637,
+        1.069047619047619
+      ]
+    },
+    {
+      "type": "float",
+      "pattern": "skewed",
+      "size": 8192,
+      "rounds": [
+        {
+          "baseline": {
+            "value_bytes": 16,
+            "size": 8192,
+            "pattern": 8,
+            "float": 1,
+            "batches": 8,
+            "comparisons": {
+              "qsort": 9420,
+              "tapas": 9396
+            },
+            "partition_control": {
+              "single_comparisons": 9396,
+              "single_writes": 2196,
+              "selected_writes": 2196
+            },
+            "qsort_ns": [
+              205000,
+              202000,
+              197000,
+              197000,
+              197000,
+              196000,
+              202000
+            ],
+            "tapas_ns": [
+              163000,
+              144000,
+              140000,
+              139000,
+              139000,
+              139000,
+              139000
+            ],
+            "validated_qsort_ns": [
+              256000,
+              260000,
+              248000,
+              248000,
+              248000,
+              248000,
+              248000
+            ],
+            "validation_ns": [
+              82000,
+              80000,
+              80000,
+              77000,
+              79000,
+              77000,
+              81000
+            ]
+          },
+          "candidate": {
+            "value_bytes": 16,
+            "size": 8192,
+            "pattern": 8,
+            "float": 1,
+            "batches": 8,
+            "comparisons": {
+              "qsort": 9420,
+              "tapas": 9419
+            },
+            "partition_control": {
+              "single_comparisons": 9396,
+              "single_writes": 2196,
+              "selected_writes": 2196
+            },
+            "qsort_ns": [
+              224000,
+              424000,
+              255000,
+              197000,
+              195000,
+              196000,
+              195000
+            ],
+            "tapas_ns": [
+              153000,
+              154000,
+              172000,
+              150000,
+              147000,
+              143000,
+              151000
+            ],
+            "validated_qsort_ns": [
+              257000,
+              333000,
+              256000,
+              262000,
+              262000,
+              247000,
+              252000
+            ],
+            "validation_ns": [
+              80000,
+              175000,
+              82000,
+              78000,
+              83000,
+              81000,
+              78000
+            ]
+          }
+        }
+      ],
+      "samples_ns": {
+        "baseline": [
+          163000,
+          144000,
+          140000,
+          139000,
+          139000,
+          139000,
+          139000
+        ],
+        "candidate": [
+          153000,
+          154000,
+          172000,
+          150000,
+          147000,
+          143000,
+          151000
+        ]
+      },
+      "baseline_median_ns": 139000,
+      "candidate_median_ns": 151000,
+      "paired_ratio_median": 1.0694444444444444,
+      "paired_ratio_iqr": [
+        1.0287769784172662,
+        1.0863309352517985
+      ]
+    },
+    {
+      "type": "float",
+      "pattern": "skewed",
+      "size": 65536,
+      "rounds": [
+        {
+          "baseline": {
+            "value_bytes": 16,
+            "size": 65536,
+            "pattern": 8,
+            "float": 1,
+            "batches": 1,
+            "comparisons": {
+              "qsort": 74557,
+              "tapas": 74638
+            },
+            "partition_control": {
+              "single_comparisons": 74638,
+              "single_writes": 17890,
+              "selected_writes": 17890
+            },
+            "qsort_ns": [
+              495000,
+              217000,
+              205000,
+              198000,
+              196000,
+              193000,
+              199000
+            ],
+            "tapas_ns": [
+              187000,
+              187000,
+              189000,
+              170000,
+              165000,
+              164000,
+              162000
+            ],
+            "validated_qsort_ns": [
+              272000,
+              276000,
+              252000,
+              246000,
+              247000,
+              243000,
+              247000
+            ],
+            "validation_ns": [
+              78000,
+              74000,
+              72000,
+              65000,
+              64000,
+              65000,
+              64000
+            ]
+          },
+          "candidate": {
+            "value_bytes": 16,
+            "size": 65536,
+            "pattern": 8,
+            "float": 1,
+            "batches": 1,
+            "comparisons": {
+              "qsort": 74557,
+              "tapas": 74657
+            },
+            "partition_control": {
+              "single_comparisons": 74638,
+              "single_writes": 17890,
+              "selected_writes": 17890
+            },
+            "qsort_ns": [
+              245000,
+              227000,
+              213000,
+              204000,
+              195000,
+              195000,
+              197000
+            ],
+            "tapas_ns": [
+              193000,
+              198000,
+              189000,
+              179000,
+              168000,
+              165000,
+              163000
+            ],
+            "validated_qsort_ns": [
+              290000,
+              281000,
+              254000,
+              252000,
+              247000,
+              243000,
+              246000
+            ],
+            "validation_ns": [
+              73000,
+              72000,
+              71000,
+              67000,
+              64000,
+              65000,
+              64000
+            ]
+          }
+        }
+      ],
+      "samples_ns": {
+        "baseline": [
+          187000,
+          187000,
+          189000,
+          170000,
+          165000,
+          164000,
+          162000
+        ],
+        "candidate": [
+          193000,
+          198000,
+          189000,
+          179000,
+          168000,
+          165000,
+          163000
+        ]
+      },
+      "baseline_median_ns": 170000,
+      "candidate_median_ns": 179000,
+      "paired_ratio_median": 1.018181818181818,
+      "paired_ratio_iqr": [
+        1.0060975609756098,
+        1.0529411764705883
+      ]
+    },
+    {
+      "type": "float",
+      "pattern": "period_7",
+      "size": 8192,
+      "rounds": [
+        {
+          "baseline": {
+            "value_bytes": 16,
+            "size": 8192,
+            "pattern": 9,
+            "float": 1,
+            "batches": 8,
+            "comparisons": {
+              "qsort": 19971,
+              "tapas": 21156
+            },
+            "partition_control": {
+              "single_comparisons": 21156,
+              "single_writes": 25736,
+              "selected_writes": 25736
+            },
+            "qsort_ns": [
+              364000,
+              369000,
+              378000,
+              377000,
+              384000,
+              378000,
+              394000
+            ],
+            "tapas_ns": [
+              217000,
+              223000,
+              222000,
+              223000,
+              228000,
+              223000,
+              223000
+            ],
+            "validated_qsort_ns": [
+              414000,
+              413000,
+              429000,
+              442000,
+              435000,
+              429000,
+              429000
+            ],
+            "validation_ns": [
+              73000,
+              73000,
+              76000,
+              81000,
+              76000,
+              78000,
+              77000
+            ]
+          },
+          "candidate": {
+            "value_bytes": 16,
+            "size": 8192,
+            "pattern": 9,
+            "float": 1,
+            "batches": 8,
+            "comparisons": {
+              "qsort": 19971,
+              "tapas": 21180
+            },
+            "partition_control": {
+              "single_comparisons": 21156,
+              "single_writes": 25736,
+              "selected_writes": 25736
+            },
+            "qsort_ns": [
+              365000,
+              367000,
+              366000,
+              365000,
+              381000,
+              422000,
+              389000
+            ],
+            "tapas_ns": [
+              215000,
+              215000,
+              215000,
+              215000,
+              223000,
+              245000,
+              235000
+            ],
+            "validated_qsort_ns": [
+              414000,
+              415000,
+              414000,
+              427000,
+              440000,
+              445000,
+              446000
+            ],
+            "validation_ns": [
+              74000,
+              74000,
+              74000,
+              74000,
+              80000,
+              81000,
+              77000
+            ]
+          }
+        }
+      ],
+      "samples_ns": {
+        "baseline": [
+          217000,
+          223000,
+          222000,
+          223000,
+          228000,
+          223000,
+          223000
+        ],
+        "candidate": [
+          215000,
+          215000,
+          215000,
+          215000,
+          223000,
+          245000,
+          235000
+        ]
+      },
+      "baseline_median_ns": 223000,
+      "candidate_median_ns": 215000,
+      "paired_ratio_median": 0.9780701754385965,
+      "paired_ratio_iqr": [
+        0.9641255605381166,
+        1.053811659192825
+      ]
+    },
+    {
+      "type": "float",
+      "pattern": "period_7",
+      "size": 65536,
+      "rounds": [
+        {
+          "baseline": {
+            "value_bytes": 16,
+            "size": 65536,
+            "pattern": 9,
+            "float": 1,
+            "batches": 1,
+            "comparisons": {
+              "qsort": 177963,
+              "tapas": 168612
+            },
+            "partition_control": {
+              "single_comparisons": 168612,
+              "single_writes": 205960,
+              "selected_writes": 205960
+            },
+            "qsort_ns": [
+              434000,
+              428000,
+              441000,
+              439000,
+              422000,
+              415000,
+              430000
+            ],
+            "tapas_ns": [
+              220000,
+              222000,
+              215000,
+              217000,
+              213000,
+              215000,
+              224000
+            ],
+            "validated_qsort_ns": [
+              529000,
+              489000,
+              487000,
+              490000,
+              491000,
+              466000,
+              501000
+            ],
+            "validation_ns": [
+              71000,
+              69000,
+              70000,
+              70000,
+              75000,
+              65000,
+              73000
+            ]
+          },
+          "candidate": {
+            "value_bytes": 16,
+            "size": 65536,
+            "pattern": 9,
+            "float": 1,
+            "batches": 1,
+            "comparisons": {
+              "qsort": 177963,
+              "tapas": 168623
+            },
+            "partition_control": {
+              "single_comparisons": 168612,
+              "single_writes": 205960,
+              "selected_writes": 205960
+            },
+            "qsort_ns": [
+              435000,
+              449000,
+              486000,
+              513000,
+              432000,
+              441000,
+              432000
+            ],
+            "tapas_ns": [
+              214000,
+              226000,
+              247000,
+              233000,
+              222000,
+              217000,
+              221000
+            ],
+            "validated_qsort_ns": [
+              487000,
+              506000,
+              840000,
+              514000,
+              487000,
+              482000,
+              489000
+            ],
+            "validation_ns": [
+              67000,
+              71000,
+              71000,
+              73000,
+              68000,
+              67000,
+              72000
+            ]
+          }
+        }
+      ],
+      "samples_ns": {
+        "baseline": [
+          220000,
+          222000,
+          215000,
+          217000,
+          213000,
+          215000,
+          224000
+        ],
+        "candidate": [
+          214000,
+          226000,
+          247000,
+          233000,
+          222000,
+          217000,
+          221000
+        ]
+      },
+      "baseline_median_ns": 217000,
+      "candidate_median_ns": 222000,
+      "paired_ratio_median": 1.018018018018018,
+      "paired_ratio_iqr": [
+        0.9866071428571429,
+        1.0737327188940091
+      ]
+    },
+    {
+      "type": "float",
+      "pattern": "period_31",
+      "size": 8192,
+      "rounds": [
+        {
+          "baseline": {
+            "value_bytes": 16,
+            "size": 8192,
+            "pattern": 10,
+            "float": 1,
+            "batches": 8,
+            "comparisons": {
+              "qsort": 41022,
+              "tapas": 40823
+            },
+            "partition_control": {
+              "single_comparisons": 40823,
+              "single_writes": 64358,
+              "selected_writes": 64358
+            },
+            "qsort_ns": [
+              1118000,
+              999000,
+              1070000,
+              1034000,
+              993000,
+              1028000,
+              1035000
+            ],
+            "tapas_ns": [
+              733000,
+              780000,
+              824000,
+              795000,
+              741000,
+              762000,
+              744000
+            ],
+            "validated_qsort_ns": [
+              1402000,
+              1082000,
+              1082000,
+              1098000,
+              1047000,
+              1066000,
+              1079000
+            ],
+            "validation_ns": [
+              84000,
+              80000,
+              85000,
+              74000,
+              75000,
+              80000,
+              79000
+            ]
+          },
+          "candidate": {
+            "value_bytes": 16,
+            "size": 8192,
+            "pattern": 10,
+            "float": 1,
+            "batches": 8,
+            "comparisons": {
+              "qsort": 41022,
+              "tapas": 40082
+            },
+            "partition_control": {
+              "single_comparisons": 40823,
+              "single_writes": 64358,
+              "selected_writes": 48734
+            },
+            "qsort_ns": [
+              956000,
+              955000,
+              956000,
+              954000,
+              1027000,
+              987000,
+              988000
+            ],
+            "tapas_ns": [
+              651000,
+              649000,
+              646000,
+              643000,
+              807000,
+              708000,
+              669000
+            ],
+            "validated_qsort_ns": [
+              1017000,
+              1004000,
+              1016000,
+              1026000,
+              1152000,
+              1041000,
+              1039000
+            ],
+            "validation_ns": [
+              73000,
+              73000,
+              74000,
+              80000,
+              80000,
+              76000,
+              76000
+            ]
+          }
+        }
+      ],
+      "samples_ns": {
+        "baseline": [
+          733000,
+          780000,
+          824000,
+          795000,
+          741000,
+          762000,
+          744000
+        ],
+        "candidate": [
+          651000,
+          649000,
+          646000,
+          643000,
+          807000,
+          708000,
+          669000
+        ]
+      },
+      "baseline_median_ns": 762000,
+      "candidate_median_ns": 651000,
+      "paired_ratio_median": 0.888130968622101,
+      "paired_ratio_iqr": [
+        0.8088050314465409,
+        0.9291338582677166
+      ]
+    },
+    {
+      "type": "float",
+      "pattern": "period_31",
+      "size": 65536,
+      "rounds": [
+        {
+          "baseline": {
+            "value_bytes": 16,
+            "size": 65536,
+            "pattern": 10,
+            "float": 1,
+            "batches": 1,
+            "comparisons": {
+              "qsort": 296295,
+              "tapas": 292146
+            },
+            "partition_control": {
+              "single_comparisons": 292146,
+              "single_writes": 452292,
+              "selected_writes": 452292
+            },
+            "qsort_ns": [
+              1050000,
+              1025000,
+              1038000,
+              1003000,
+              1047000,
+              1040000,
+              1011000
+            ],
+            "tapas_ns": [
+              762000,
+              763000,
+              729000,
+              753000,
+              727000,
+              745000,
+              752000
+            ],
+            "validated_qsort_ns": [
+              1145000,
+              1065000,
+              1047000,
+              1067000,
+              1091000,
+              1140000,
+              1077000
+            ],
+            "validation_ns": [
+              72000,
+              67000,
+              78000,
+              74000,
+              102000,
+              72000,
+              67000
+            ]
+          },
+          "candidate": {
+            "value_bytes": 16,
+            "size": 65536,
+            "pattern": 10,
+            "float": 1,
+            "batches": 1,
+            "comparisons": {
+              "qsort": 296295,
+              "tapas": 292221
+            },
+            "partition_control": {
+              "single_comparisons": 292146,
+              "single_writes": 452292,
+              "selected_writes": 452292
+            },
+            "qsort_ns": [
+              1058000,
+              1035000,
+              1037000,
+              1077000,
+              1045000,
+              1065000,
+              1031000
+            ],
+            "tapas_ns": [
+              757000,
+              764000,
+              930000,
+              748000,
+              735000,
+              772000,
+              741000
+            ],
+            "validated_qsort_ns": [
+              1095000,
+              1090000,
+              1137000,
+              1053000,
+              1093000,
+              1158000,
+              1088000
+            ],
+            "validation_ns": [
+              75000,
+              70000,
+              72000,
+              71000,
+              70000,
+              75000,
+              72000
+            ]
+          }
+        }
+      ],
+      "samples_ns": {
+        "baseline": [
+          762000,
+          763000,
+          729000,
+          753000,
+          727000,
+          745000,
+          752000
+        ],
+        "candidate": [
+          757000,
+          764000,
+          930000,
+          748000,
+          735000,
+          772000,
+          741000
+        ]
+      },
+      "baseline_median_ns": 752000,
+      "candidate_median_ns": 757000,
+      "paired_ratio_median": 1.001310615989515,
+      "paired_ratio_iqr": [
+        0.9933598937583001,
+        1.036241610738255
+      ]
+    }
+  ]
+}

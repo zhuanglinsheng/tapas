@@ -1,0 +1,485 @@
+{
+  "date": "2026-10-17T17:12:19.507060+00:00",
+  "system": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+  "runtime": "/opt/homebrew/Cellar/lua/5.5.1/bin/lua",
+  "runtime_sha256": "83ea84efb4f7692a4452cfedf9325cc1f342edc6cf0d50b262add4eab1b75bea",
+  "lua": "Lua 5.5.1  Copyright (C) 1994-2026 Lua.org, PUC-Rio",
+  "runs": 7,
+  "rounds": 2,
+  "warmups_per_round": 1,
+  "selection": "all candidates",
+  "rows": [
+    {
+      "case": "merge_sort",
+      "variant": "local_table_move",
+      "sources": {
+        "baseline": "local function merge_sort(values)\n    local n = #values\n    if n <= 1 then\n        return values\n    end\n\n    local middle = n // 2\n    local left_slice = table.move(values, 1, middle, 1, {})\n    local right_slice = table.move(values, middle + 1, n, 1, {})\n    local left = merge_sort(left_slice)\n    local right = merge_sort(right_slice)\n    local merged = {}\n    local i = 1\n    local j = 1\n    local k = 0\n\n    local left_size, right_size = #left, #right\n    while i <= left_size and j <= right_size do\n        k = k + 1\n        if left[i] <= right[j] then\n            merged[k] = left[i]\n            i = i + 1\n        else\n            merged[k] = right[j]\n            j = j + 1\n        end\n    end\n    table.move(left, i, left_size, k + 1, merged)\n    k = k + left_size - i + 1\n    table.move(right, j, right_size, k + 1, merged)\n    return merged\nend\n\nlocal values = {}\nfor index = 0, 4095 do\n    values[index + 1] = (index * 73 + 19) % 1009\nend\n\nlocal started = os.clock()\nlocal sorted_values = merge_sort(values)\nlocal checksum = 0\nfor index = 1, #sorted_values do\n    checksum = checksum + sorted_values[index] * index\nend\nlocal elapsed = math.floor((os.clock() - started) * 1e9 + 0.5)\n\nprint(checksum)\nprint(elapsed)\n",
+        "candidate": "local move = table.move\nlocal function merge_sort(values)\n    local n = #values\n    if n <= 1 then\n        return values\n    end\n\n    local middle = n // 2\n    local left_slice = move(values, 1, middle, 1, {})\n    local right_slice = move(values, middle + 1, n, 1, {})\n    local left = merge_sort(left_slice)\n    local right = merge_sort(right_slice)\n    local merged = {}\n    local i = 1\n    local j = 1\n    local k = 0\n\n    local left_size, right_size = #left, #right\n    while i <= left_size and j <= right_size do\n        k = k + 1\n        if left[i] <= right[j] then\n            merged[k] = left[i]\n            i = i + 1\n        else\n            merged[k] = right[j]\n            j = j + 1\n        end\n    end\n    move(left, i, left_size, k + 1, merged)\n    k = k + left_size - i + 1\n    move(right, j, right_size, k + 1, merged)\n    return merged\nend\n\nlocal values = {}\nfor index = 0, 4095 do\n    values[index + 1] = (index * 73 + 19) % 1009\nend\n\nlocal started = os.clock()\nlocal sorted_values = merge_sort(values)\nlocal checksum = 0\nfor index = 1, #sorted_values do\n    checksum = checksum + sorted_values[index] * index\nend\nlocal elapsed = math.floor((os.clock() - started) * 1e9 + 0.5)\n\nprint(checksum)\nprint(elapsed)\n"
+      },
+      "sources_sha256": {
+        "baseline": "d2e3ff9f40e8b98713cd397ce30358f86af1d4cdafde316b6707378a4d688587",
+        "candidate": "b32d37fe75479e4f94aac8c37c809248b9e70689d8650c76305fbf1a32e036a0"
+      },
+      "checksum": 5638402144,
+      "rounds": [
+        {
+          "samples_ns": {
+            "baseline": [
+              4513000,
+              4552000,
+              4488000,
+              4587000,
+              4446000,
+              4600000,
+              4486000
+            ],
+            "candidate": [
+              4515000,
+              4366000,
+              4423000,
+              4377000,
+              4474000,
+              4326000,
+              4522000
+            ]
+          },
+          "baseline_median_ns": 4513000,
+          "candidate_median_ns": 4423000,
+          "paired_ratio_median": 0.9855169340463458,
+          "paired_ratio_iqr": [
+            0.9542184434270765,
+            1.00629779577148
+          ]
+        },
+        {
+          "samples_ns": {
+            "baseline": [
+              4592000,
+              4516000,
+              4613000,
+              4720000,
+              4638000,
+              4483000,
+              4426000
+            ],
+            "candidate": [
+              4340000,
+              4324000,
+              4478000,
+              4384000,
+              4333000,
+              4328000,
+              4711000
+            ]
+          },
+          "baseline_median_ns": 4592000,
+          "candidate_median_ns": 4340000,
+          "paired_ratio_median": 0.9574844995571302,
+          "paired_ratio_iqr": [
+            0.9342388960758948,
+            0.9707348796878387
+          ]
+        }
+      ],
+      "round_ratio_medians": [
+        0.9855169340463458,
+        0.9574844995571302
+      ],
+      "samples_ns": {
+        "baseline": [
+          4513000,
+          4552000,
+          4488000,
+          4587000,
+          4446000,
+          4600000,
+          4486000,
+          4592000,
+          4516000,
+          4613000,
+          4720000,
+          4638000,
+          4483000,
+          4426000
+        ],
+        "candidate": [
+          4515000,
+          4366000,
+          4423000,
+          4377000,
+          4474000,
+          4326000,
+          4522000,
+          4340000,
+          4324000,
+          4478000,
+          4384000,
+          4333000,
+          4328000,
+          4711000
+        ]
+      },
+      "baseline_median_ns": 4534000,
+      "candidate_median_ns": 4380500,
+      "paired_ratio_median": 0.9622818893637239,
+      "paired_ratio_iqr": [
+        0.943950159066808,
+        1.00190682208712
+      ]
+    },
+    {
+      "case": "merge_sort",
+      "variant": "shared_scratch",
+      "sources": {
+        "baseline": "local function merge_sort(values)\n    local n = #values\n    if n <= 1 then\n        return values\n    end\n\n    local middle = n // 2\n    local left_slice = table.move(values, 1, middle, 1, {})\n    local right_slice = table.move(values, middle + 1, n, 1, {})\n    local left = merge_sort(left_slice)\n    local right = merge_sort(right_slice)\n    local merged = {}\n    local i = 1\n    local j = 1\n    local k = 0\n\n    local left_size, right_size = #left, #right\n    while i <= left_size and j <= right_size do\n        k = k + 1\n        if left[i] <= right[j] then\n            merged[k] = left[i]\n            i = i + 1\n        else\n            merged[k] = right[j]\n            j = j + 1\n        end\n    end\n    table.move(left, i, left_size, k + 1, merged)\n    k = k + left_size - i + 1\n    table.move(right, j, right_size, k + 1, merged)\n    return merged\nend\n\nlocal values = {}\nfor index = 0, 4095 do\n    values[index + 1] = (index * 73 + 19) % 1009\nend\n\nlocal started = os.clock()\nlocal sorted_values = merge_sort(values)\nlocal checksum = 0\nfor index = 1, #sorted_values do\n    checksum = checksum + sorted_values[index] * index\nend\nlocal elapsed = math.floor((os.clock() - started) * 1e9 + 0.5)\n\nprint(checksum)\nprint(elapsed)\n",
+        "candidate": "local move = table.move\n\nlocal function merge_range(values, scratch, first, last)\n    if first >= last then return end\n    local middle = (first + last) // 2\n    merge_range(values, scratch, first, middle)\n    merge_range(values, scratch, middle + 1, last)\n    move(values, first, last, first, scratch)\n    local i, j, out = first, middle + 1, first\n    while i <= middle and j <= last do\n        if scratch[i] <= scratch[j] then\n            values[out] = scratch[i]\n            i = i + 1\n        else\n            values[out] = scratch[j]\n            j = j + 1\n        end\n        out = out + 1\n    end\n    if i <= middle then move(scratch, i, middle, out, values) end\n    if j <= last then move(scratch, j, last, out, values) end\nend\n\nlocal function merge_sort(values)\n    local n = #values\n    if n <= 1 then return values end\n    local result = move(values, 1, n, 1, {})\n    merge_range(result, {}, 1, n)\n    return result\nend\n\nlocal values = {}\nfor index = 0, 4095 do\n    values[index + 1] = (index * 73 + 19) % 1009\nend\n\nlocal started = os.clock()\nlocal sorted_values = merge_sort(values)\nlocal checksum = 0\nfor index = 1, #sorted_values do\n    checksum = checksum + sorted_values[index] * index\nend\nlocal elapsed = math.floor((os.clock() - started) * 1e9 + 0.5)\n\nprint(checksum)\nprint(elapsed)\n"
+      },
+      "sources_sha256": {
+        "baseline": "d2e3ff9f40e8b98713cd397ce30358f86af1d4cdafde316b6707378a4d688587",
+        "candidate": "d918cf49691b1a58dcfe5d7b92a4697072e71a8813ea115aabb96c5a3b0d4b43"
+      },
+      "checksum": 5638402144,
+      "rounds": [
+        {
+          "samples_ns": {
+            "baseline": [
+              4702000,
+              4769000,
+              4756000,
+              4692000,
+              4655000,
+              4467000,
+              4469000
+            ],
+            "candidate": [
+              1974000,
+              1947000,
+              1916000,
+              2153000,
+              1862000,
+              1953000,
+              1924000
+            ]
+          },
+          "baseline_median_ns": 4692000,
+          "candidate_median_ns": 1947000,
+          "paired_ratio_median": 0.41982135261590814,
+          "paired_ratio_iqr": [
+            0.4028595458368377,
+            0.43720617864338485
+          ]
+        },
+        {
+          "samples_ns": {
+            "baseline": [
+              4608000,
+              4728000,
+              4505000,
+              4444000,
+              4567000,
+              4458000,
+              4505000
+            ],
+            "candidate": [
+              1827000,
+              1828000,
+              1869000,
+              1889000,
+              1866000,
+              1855000,
+              1845000
+            ]
+          },
+          "baseline_median_ns": 4505000,
+          "candidate_median_ns": 1855000,
+          "paired_ratio_median": 0.4095449500554939,
+          "paired_ratio_iqr": [
+            0.396484375,
+            0.41610587707492147
+          ]
+        }
+      ],
+      "round_ratio_medians": [
+        0.41982135261590814,
+        0.4095449500554939
+      ],
+      "samples_ns": {
+        "baseline": [
+          4702000,
+          4769000,
+          4756000,
+          4692000,
+          4655000,
+          4467000,
+          4469000,
+          4608000,
+          4728000,
+          4505000,
+          4444000,
+          4567000,
+          4458000,
+          4505000
+        ],
+        "candidate": [
+          1974000,
+          1947000,
+          1916000,
+          2153000,
+          1862000,
+          1953000,
+          1924000,
+          1827000,
+          1828000,
+          1869000,
+          1889000,
+          1866000,
+          1855000,
+          1845000
+        ]
+      },
+      "baseline_median_ns": 4587500,
+      "candidate_median_ns": 1879000,
+      "paired_ratio_median": 0.41220865704772475,
+      "paired_ratio_iqr": [
+        0.4021446593776282,
+        0.42643097242147576
+      ]
+    },
+    {
+      "case": "optimize",
+      "variant": "cache_line_search_coordinates",
+      "sources": {
+        "baseline": "local function optimize(f, grad, start, tolerance, max_iterations)\n    local c1 = 0.0001\n    local rho = 0.5\n    local line_search = function(x, direction, fx)\n        local step = 1.0\n        local gnorm2 = direction[1] * direction[1] + direction[2] * direction[2]\n        while true do\n            local next = {x[1] + step * direction[1], x[2] + step * direction[2]}\n            if f(next) <= fx - c1 * step * gnorm2 then\n                return next\n            end\n            step = step * rho\n        end\n        return x\n    end\n    local x = {start[1], start[2]}\n    local iterations = 0\n    while iterations < max_iterations do\n        local g = grad(x)\n        local gnorm2 = g[1] * g[1] + g[2] * g[2]\n        if gnorm2 < tolerance then\n            break\n        end\n        x = line_search(x, {0.0 - g[1], 0.0 - g[2]}, f(x))\n        iterations = iterations + 1\n    end\n    return iterations\nend\n\nlocal rosenbrock = function(x)\n    local a = 1.0 - x[1]\n    local b = x[2] - x[1] * x[1]\n    return a * a + 100.0 * b * b\nend\n\nlocal rosenbrock_grad = function(x)\n    local a = 1.0 - x[1]\n    local b = x[2] - x[1] * x[1]\n    return {0.0 - 2.0 * a - 400.0 * x[1] * b, 200.0 * b}\nend\n\nlocal started = os.clock()\nlocal result = optimize(rosenbrock, rosenbrock_grad, {-1.2, 1.0}, 0.00000001, 100000)\nlocal elapsed = math.floor((os.clock() - started) * 1e9 + 0.5)\n\nprint(result)\nprint(elapsed)\n",
+        "candidate": "local function optimize(f, grad, start, tolerance, max_iterations)\n    local c1 = 0.0001\n    local rho = 0.5\n    local line_search = function(x, direction, fx)\n        local x1, x2 = x[1], x[2]\n        local d1, d2 = direction[1], direction[2]\n        local step = 1.0\n        local gnorm2 = d1 * d1 + d2 * d2\n        while true do\n            local next = {x1 + step * d1, x2 + step * d2}\n            if f(next) <= fx - c1 * step * gnorm2 then\n                return next\n            end\n            step = step * rho\n        end\n        return x\n    end\n    local x = {start[1], start[2]}\n    local iterations = 0\n    while iterations < max_iterations do\n        local g = grad(x)\n        local gnorm2 = g[1] * g[1] + g[2] * g[2]\n        if gnorm2 < tolerance then\n            break\n        end\n        x = line_search(x, {0.0 - g[1], 0.0 - g[2]}, f(x))\n        iterations = iterations + 1\n    end\n    return iterations\nend\n\nlocal rosenbrock = function(x)\n    local a = 1.0 - x[1]\n    local b = x[2] - x[1] * x[1]\n    return a * a + 100.0 * b * b\nend\n\nlocal rosenbrock_grad = function(x)\n    local a = 1.0 - x[1]\n    local b = x[2] - x[1] * x[1]\n    return {0.0 - 2.0 * a - 400.0 * x[1] * b, 200.0 * b}\nend\n\nlocal started = os.clock()\nlocal result = optimize(rosenbrock, rosenbrock_grad, {-1.2, 1.0}, 0.00000001, 100000)\nlocal elapsed = math.floor((os.clock() - started) * 1e9 + 0.5)\n\nprint(result)\nprint(elapsed)\n"
+      },
+      "sources_sha256": {
+        "baseline": "ff92003635a36c6bd417f2dcae4aa98dfbf3ee175870d56444fd1c7ff8cedd5a",
+        "candidate": "55aafa40e0756c55df41374136c0a2d0768efa01acc94ed45be21d0259c4e8fa"
+      },
+      "checksum": 8058,
+      "rounds": [
+        {
+          "samples_ns": {
+            "baseline": [
+              14596000,
+              14700000,
+              13995000,
+              14113000,
+              14036000,
+              13929000,
+              14710000
+            ],
+            "candidate": [
+              13723000,
+              13312000,
+              13513000,
+              13620000,
+              13380000,
+              13573000,
+              13389000
+            ]
+          },
+          "baseline_median_ns": 14113000,
+          "candidate_median_ns": 13513000,
+          "paired_ratio_median": 0.9532630379025363,
+          "paired_ratio_iqr": [
+            0.9101971447994561,
+            0.9655591282600929
+          ]
+        },
+        {
+          "samples_ns": {
+            "baseline": [
+              13912000,
+              13886000,
+              14565000,
+              14040000,
+              14028000,
+              14072000,
+              13997000
+            ],
+            "candidate": [
+              13516000,
+              13587000,
+              13883000,
+              13727000,
+              13527000,
+              13649000,
+              13520000
+            ]
+          },
+          "baseline_median_ns": 14028000,
+          "candidate_median_ns": 13587000,
+          "paired_ratio_median": 0.9699403069926095,
+          "paired_ratio_iqr": [
+            0.9642857142857143,
+            0.9777065527065527
+          ]
+        }
+      ],
+      "round_ratio_medians": [
+        0.9532630379025363,
+        0.9699403069926095
+      ],
+      "samples_ns": {
+        "baseline": [
+          14596000,
+          14700000,
+          13995000,
+          14113000,
+          14036000,
+          13929000,
+          14710000,
+          13912000,
+          13886000,
+          14565000,
+          14040000,
+          14028000,
+          14072000,
+          13997000
+        ],
+        "candidate": [
+          13723000,
+          13312000,
+          13513000,
+          13620000,
+          13380000,
+          13573000,
+          13389000,
+          13516000,
+          13587000,
+          13883000,
+          13727000,
+          13527000,
+          13649000,
+          13520000
+        ]
+      },
+      "baseline_median_ns": 14038000,
+      "candidate_median_ns": 13550000,
+      "paired_ratio_median": 0.9653133981837558,
+      "paired_ratio_iqr": [
+        0.9499288386220397,
+        0.9722619768759921
+      ]
+    },
+    {
+      "case": "optimize",
+      "variant": "reuse_line_search_trial",
+      "sources": {
+        "baseline": "local function optimize(f, grad, start, tolerance, max_iterations)\n    local c1 = 0.0001\n    local rho = 0.5\n    local line_search = function(x, direction, fx)\n        local step = 1.0\n        local gnorm2 = direction[1] * direction[1] + direction[2] * direction[2]\n        while true do\n            local next = {x[1] + step * direction[1], x[2] + step * direction[2]}\n            if f(next) <= fx - c1 * step * gnorm2 then\n                return next\n            end\n            step = step * rho\n        end\n        return x\n    end\n    local x = {start[1], start[2]}\n    local iterations = 0\n    while iterations < max_iterations do\n        local g = grad(x)\n        local gnorm2 = g[1] * g[1] + g[2] * g[2]\n        if gnorm2 < tolerance then\n            break\n        end\n        x = line_search(x, {0.0 - g[1], 0.0 - g[2]}, f(x))\n        iterations = iterations + 1\n    end\n    return iterations\nend\n\nlocal rosenbrock = function(x)\n    local a = 1.0 - x[1]\n    local b = x[2] - x[1] * x[1]\n    return a * a + 100.0 * b * b\nend\n\nlocal rosenbrock_grad = function(x)\n    local a = 1.0 - x[1]\n    local b = x[2] - x[1] * x[1]\n    return {0.0 - 2.0 * a - 400.0 * x[1] * b, 200.0 * b}\nend\n\nlocal started = os.clock()\nlocal result = optimize(rosenbrock, rosenbrock_grad, {-1.2, 1.0}, 0.00000001, 100000)\nlocal elapsed = math.floor((os.clock() - started) * 1e9 + 0.5)\n\nprint(result)\nprint(elapsed)\n",
+        "candidate": "local function optimize(f, grad, start, tolerance, max_iterations)\n    local c1 = 0.0001\n    local rho = 0.5\n    local line_search = function(x, direction, fx)\n        local x1, x2 = x[1], x[2]\n        local d1, d2 = direction[1], direction[2]\n        local step = 1.0\n        local gnorm2 = d1 * d1 + d2 * d2\n        local next = {}\n        while true do\n            next[1], next[2] = x1 + step * d1, x2 + step * d2\n            if f(next) <= fx - c1 * step * gnorm2 then\n                return next\n            end\n            step = step * rho\n        end\n        return x\n    end\n    local x = {start[1], start[2]}\n    local iterations = 0\n    while iterations < max_iterations do\n        local g = grad(x)\n        local gnorm2 = g[1] * g[1] + g[2] * g[2]\n        if gnorm2 < tolerance then\n            break\n        end\n        x = line_search(x, {0.0 - g[1], 0.0 - g[2]}, f(x))\n        iterations = iterations + 1\n    end\n    return iterations\nend\n\nlocal rosenbrock = function(x)\n    local a = 1.0 - x[1]\n    local b = x[2] - x[1] * x[1]\n    return a * a + 100.0 * b * b\nend\n\nlocal rosenbrock_grad = function(x)\n    local a = 1.0 - x[1]\n    local b = x[2] - x[1] * x[1]\n    return {0.0 - 2.0 * a - 400.0 * x[1] * b, 200.0 * b}\nend\n\nlocal started = os.clock()\nlocal result = optimize(rosenbrock, rosenbrock_grad, {-1.2, 1.0}, 0.00000001, 100000)\nlocal elapsed = math.floor((os.clock() - started) * 1e9 + 0.5)\n\nprint(result)\nprint(elapsed)\n"
+      },
+      "sources_sha256": {
+        "baseline": "ff92003635a36c6bd417f2dcae4aa98dfbf3ee175870d56444fd1c7ff8cedd5a",
+        "candidate": "bdad566c4fc784aba98e01370c0e5e4ccba8800963b7ab157e5e3f8efa67ed05"
+      },
+      "checksum": 8058,
+      "rounds": [
+        {
+          "samples_ns": {
+            "baseline": [
+              14004000,
+              14037000,
+              13878000,
+              14196000,
+              13876000,
+              14337000,
+              17482000
+            ],
+            "candidate": [
+              9549000,
+              9535000,
+              9528000,
+              9425000,
+              9391000,
+              9744000,
+              10340000
+            ]
+          },
+          "baseline_median_ns": 14037000,
+          "candidate_median_ns": 9535000,
+          "paired_ratio_median": 0.6792761986179383,
+          "paired_ratio_iqr": [
+            0.6639194139194139,
+            0.6818766066838047
+          ]
+        },
+        {
+          "samples_ns": {
+            "baseline": [
+              14193000,
+              14569000,
+              14722000,
+              14888000,
+              14597000,
+              14341000,
+              14123000
+            ],
+            "candidate": [
+              9393000,
+              9411000,
+              9884000,
+              9971000,
+              9325000,
+              9778000,
+              9405000
+            ]
+          },
+          "baseline_median_ns": 14569000,
+          "candidate_median_ns": 9411000,
+          "paired_ratio_median": 0.6659349996459676,
+          "paired_ratio_iqr": [
+            0.6459606012766834,
+            0.6713761717157994
+          ]
+        }
+      ],
+      "round_ratio_medians": [
+        0.6792761986179383,
+        0.6659349996459676
+      ],
+      "samples_ns": {
+        "baseline": [
+          14004000,
+          14037000,
+          13878000,
+          14196000,
+          13876000,
+          14337000,
+          17482000,
+          14193000,
+          14569000,
+          14722000,
+          14888000,
+          14597000,
+          14341000,
+          14123000
+        ],
+        "candidate": [
+          9549000,
+          9535000,
+          9528000,
+          9425000,
+          9391000,
+          9744000,
+          10340000,
+          9393000,
+          9411000,
+          9884000,
+          9971000,
+          9325000,
+          9778000,
+          9405000
+        ]
+      },
+      "baseline_median_ns": 14266500,
+      "candidate_median_ns": 9531500,
+      "paired_ratio_median": 0.6705550928433914,
+      "paired_ratio_iqr": [
+        0.6578439867173953,
+        0.6801854068946522
+      ]
+    }
+  ]
+}

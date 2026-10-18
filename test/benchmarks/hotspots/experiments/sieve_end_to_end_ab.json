@@ -1,0 +1,839 @@
+{
+  "baseline": {
+    "path": "/tmp/tapas-next-baseline/tapas",
+    "sha256": "b026c1defa442d43c39564627a4bb2ada8d2ca1f420da0e1919b962adf0d5d47",
+    "version": "Tapas 0.1.0 Copyright (C) 2020-2026",
+    "build_config": null
+  },
+  "candidate": {
+    "path": "/Users/zhuanglinsheng/Documents/Github/tapas/build-release/bin/tapas",
+    "sha256": "a8c2cacbec518d2cd2369e4630f79d6e1674d0740af4bd061ab34d032e60d449",
+    "version": "Tapas 0.1.0 Copyright (C) 2020-2026",
+    "build_config": [
+      "CMAKE_BUILD_TYPE:STRING=Release",
+      "CMAKE_C_COMPILER:FILEPATH=/usr/bin/cc",
+      "CMAKE_C_FLAGS:STRING=",
+      "CMAKE_C_FLAGS_RELEASE:STRING=-O3 -DNDEBUG",
+      "CMAKE_EXE_LINKER_FLAGS:STRING=",
+      "TAPAS_ENABLE_IPO:BOOL=ON"
+    ]
+  },
+  "rows": [
+    {
+      "size": 20000,
+      "repetitions": 1,
+      "checksum": 2262,
+      "sources": {
+        "baseline": "function primes_up_to(limit)\n{\n    let is_prime = replicate([true], limit + 1)\n    is_prime[0] = false\n    is_prime[1] = false\n\n    let candidate = 2\n    while (candidate * candidate <= limit) {\n        if (is_prime[candidate]) {\n            fill(is_prime, false, iter(candidate * candidate, candidate, limit + 1))\n        }\n        candidate = candidate + 1\n    }\n\n    return count(is_prime, true)\n}\n\nlet started = clock_ns()\nvar result = 0\nfor (let repetition in 0 to 1) { result = result + primes_up_to(20000) }\nprint(result)\nprint(clock_ns() - started)\n",
+        "candidate": "function primes_up_to(limit)\n{\n    let is_prime = dense::flat(array(1, limit + 1, true))\n    is_prime[0] = false\n    is_prime[1] = false\n    fill(is_prime, false, iter(4, 2, limit + 1))\n    for (let candidate in iter(3, 2, math::isqrt(limit) + 1)) {\n        if (is_prime[candidate]) {\n            fill(is_prime, false, iter(candidate * candidate, candidate, limit + 1))\n        }\n    }\n    return count(is_prime, true)\n}\n\nlet started = clock_ns()\nvar result = 0\nfor (let repetition in 0 to 1) { result = result + primes_up_to(20000) }\nprint(result)\nprint(clock_ns() - started)\n"
+      },
+      "rounds": [
+        {
+          "checksum": 2262,
+          "samples_ns": {
+            "baseline": [
+              103000,
+              92000,
+              96000,
+              91000,
+              102000,
+              87000,
+              99000,
+              93000,
+              91000,
+              97000,
+              99000
+            ],
+            "candidate": [
+              44000,
+              44000,
+              47000,
+              44000,
+              43000,
+              42000,
+              45000,
+              42000,
+              44000,
+              43000,
+              43000
+            ]
+          },
+          "baseline_median_ns": 96000,
+          "candidate_median_ns": 44000,
+          "paired_ratio_median": 0.45454545454545453,
+          "paired_ratio_iqr": [
+            0.43434343434343436,
+            0.4835164835164835
+          ]
+        },
+        {
+          "checksum": 2262,
+          "samples_ns": {
+            "baseline": [
+              92000,
+              92000,
+              96000,
+              105000,
+              96000,
+              91000,
+              90000,
+              89000,
+              95000,
+              91000,
+              84000
+            ],
+            "candidate": [
+              42000,
+              44000,
+              49000,
+              45000,
+              45000,
+              43000,
+              47000,
+              42000,
+              46000,
+              42000,
+              42000
+            ]
+          },
+          "baseline_median_ns": 92000,
+          "candidate_median_ns": 44000,
+          "paired_ratio_median": 0.4725274725274725,
+          "paired_ratio_iqr": [
+            0.46153846153846156,
+            0.5
+          ]
+        },
+        {
+          "checksum": 2262,
+          "samples_ns": {
+            "baseline": [
+              100000,
+              96000,
+              95000,
+              89000,
+              89000,
+              87000,
+              94000,
+              96000,
+              87000,
+              89000,
+              90000
+            ],
+            "candidate": [
+              42000,
+              44000,
+              37000,
+              44000,
+              36000,
+              44000,
+              41000,
+              47000,
+              39000,
+              40000,
+              42000
+            ]
+          },
+          "baseline_median_ns": 90000,
+          "candidate_median_ns": 42000,
+          "paired_ratio_median": 0.449438202247191,
+          "paired_ratio_iqr": [
+            0.42,
+            0.4895833333333333
+          ]
+        }
+      ],
+      "samples_ns": {
+        "baseline": [
+          103000,
+          92000,
+          96000,
+          91000,
+          102000,
+          87000,
+          99000,
+          93000,
+          91000,
+          97000,
+          99000,
+          92000,
+          92000,
+          96000,
+          105000,
+          96000,
+          91000,
+          90000,
+          89000,
+          95000,
+          91000,
+          84000,
+          100000,
+          96000,
+          95000,
+          89000,
+          89000,
+          87000,
+          94000,
+          96000,
+          87000,
+          89000,
+          90000
+        ],
+        "candidate": [
+          44000,
+          44000,
+          47000,
+          44000,
+          43000,
+          42000,
+          45000,
+          42000,
+          44000,
+          43000,
+          43000,
+          42000,
+          44000,
+          49000,
+          45000,
+          45000,
+          43000,
+          47000,
+          42000,
+          46000,
+          42000,
+          42000,
+          42000,
+          44000,
+          37000,
+          44000,
+          36000,
+          44000,
+          41000,
+          47000,
+          39000,
+          40000,
+          42000
+        ]
+      },
+      "baseline_median_ns": 92000,
+      "candidate_median_ns": 43000,
+      "paired_ratio_median": 0.4666666666666667,
+      "paired_ratio_iqr": [
+        0.4397345909190612,
+        0.4838635049161365
+      ]
+    },
+    {
+      "size": 20000,
+      "repetitions": 64,
+      "checksum": 144768,
+      "sources": {
+        "baseline": "function primes_up_to(limit)\n{\n    let is_prime = replicate([true], limit + 1)\n    is_prime[0] = false\n    is_prime[1] = false\n\n    let candidate = 2\n    while (candidate * candidate <= limit) {\n        if (is_prime[candidate]) {\n            fill(is_prime, false, iter(candidate * candidate, candidate, limit + 1))\n        }\n        candidate = candidate + 1\n    }\n\n    return count(is_prime, true)\n}\n\nlet started = clock_ns()\nvar result = 0\nfor (let repetition in 0 to 64) { result = result + primes_up_to(20000) }\nprint(result)\nprint(clock_ns() - started)\n",
+        "candidate": "function primes_up_to(limit)\n{\n    let is_prime = dense::flat(array(1, limit + 1, true))\n    is_prime[0] = false\n    is_prime[1] = false\n    fill(is_prime, false, iter(4, 2, limit + 1))\n    for (let candidate in iter(3, 2, math::isqrt(limit) + 1)) {\n        if (is_prime[candidate]) {\n            fill(is_prime, false, iter(candidate * candidate, candidate, limit + 1))\n        }\n    }\n    return count(is_prime, true)\n}\n\nlet started = clock_ns()\nvar result = 0\nfor (let repetition in 0 to 64) { result = result + primes_up_to(20000) }\nprint(result)\nprint(clock_ns() - started)\n"
+      },
+      "rounds": [
+        {
+          "checksum": 144768,
+          "samples_ns": {
+            "baseline": [
+              3365000,
+              3336000,
+              3386000,
+              3331000,
+              3405000,
+              3480000,
+              3317000,
+              3434000,
+              3432000,
+              3304000,
+              3432000
+            ],
+            "candidate": [
+              1678000,
+              1613000,
+              1652000,
+              1691000,
+              1631000,
+              1620000,
+              1622000,
+              1676000,
+              1609000,
+              1706000,
+              1705000
+            ]
+          },
+          "baseline_median_ns": 3386000,
+          "candidate_median_ns": 1652000,
+          "paired_ratio_median": 0.48806057076295867,
+          "paired_ratio_iqr": [
+            0.4790014684287812,
+            0.4986627043090639
+          ]
+        },
+        {
+          "checksum": 144768,
+          "samples_ns": {
+            "baseline": [
+              3309000,
+              3344000,
+              3207000,
+              3213000,
+              3276000,
+              3218000,
+              3214000,
+              3217000,
+              3320000,
+              3288000,
+              3208000
+            ],
+            "candidate": [
+              1611000,
+              1646000,
+              1578000,
+              1657000,
+              1567000,
+              1553000,
+              1626000,
+              1570000,
+              1559000,
+              1555000,
+              1615000
+            ]
+          },
+          "baseline_median_ns": 3218000,
+          "candidate_median_ns": 1578000,
+          "paired_ratio_median": 0.48803232825613924,
+          "paired_ratio_iqr": [
+            0.47832722832722835,
+            0.503428927680798
+          ]
+        },
+        {
+          "checksum": 144768,
+          "samples_ns": {
+            "baseline": [
+              3219000,
+              3293000,
+              3765000,
+              3381000,
+              3318000,
+              3365000,
+              3329000,
+              3479000,
+              3493000,
+              3409000,
+              3452000
+            ],
+            "candidate": [
+              1588000,
+              1620000,
+              1601000,
+              1589000,
+              1612000,
+              1658000,
+              1649000,
+              1718000,
+              1618000,
+              1708000,
+              1622000
+            ]
+          },
+          "baseline_median_ns": 3381000,
+          "candidate_median_ns": 1620000,
+          "paired_ratio_median": 0.49195262678408747,
+          "paired_ratio_iqr": [
+            0.4698725376593279,
+            0.49382006323656225
+          ]
+        }
+      ],
+      "samples_ns": {
+        "baseline": [
+          3365000,
+          3336000,
+          3386000,
+          3331000,
+          3405000,
+          3480000,
+          3317000,
+          3434000,
+          3432000,
+          3304000,
+          3432000,
+          3309000,
+          3344000,
+          3207000,
+          3213000,
+          3276000,
+          3218000,
+          3214000,
+          3217000,
+          3320000,
+          3288000,
+          3208000,
+          3219000,
+          3293000,
+          3765000,
+          3381000,
+          3318000,
+          3365000,
+          3329000,
+          3479000,
+          3493000,
+          3409000,
+          3452000
+        ],
+        "candidate": [
+          1678000,
+          1613000,
+          1652000,
+          1691000,
+          1631000,
+          1620000,
+          1622000,
+          1676000,
+          1609000,
+          1706000,
+          1705000,
+          1611000,
+          1646000,
+          1578000,
+          1657000,
+          1567000,
+          1553000,
+          1626000,
+          1570000,
+          1559000,
+          1555000,
+          1615000,
+          1588000,
+          1620000,
+          1601000,
+          1589000,
+          1612000,
+          1658000,
+          1649000,
+          1718000,
+          1618000,
+          1708000,
+          1622000
+        ]
+      },
+      "baseline_median_ns": 3331000,
+      "candidate_median_ns": 1620000,
+      "paired_ratio_median": 0.48806057076295867,
+      "paired_ratio_iqr": [
+        0.4756295509032735,
+        0.4960694094630712
+      ]
+    },
+    {
+      "size": 200000,
+      "repetitions": 1,
+      "checksum": 17984,
+      "sources": {
+        "baseline": "function primes_up_to(limit)\n{\n    let is_prime = replicate([true], limit + 1)\n    is_prime[0] = false\n    is_prime[1] = false\n\n    let candidate = 2\n    while (candidate * candidate <= limit) {\n        if (is_prime[candidate]) {\n            fill(is_prime, false, iter(candidate * candidate, candidate, limit + 1))\n        }\n        candidate = candidate + 1\n    }\n\n    return count(is_prime, true)\n}\n\nlet started = clock_ns()\nvar result = 0\nfor (let repetition in 0 to 1) { result = result + primes_up_to(200000) }\nprint(result)\nprint(clock_ns() - started)\n",
+        "candidate": "function primes_up_to(limit)\n{\n    let is_prime = dense::flat(array(1, limit + 1, true))\n    is_prime[0] = false\n    is_prime[1] = false\n    fill(is_prime, false, iter(4, 2, limit + 1))\n    for (let candidate in iter(3, 2, math::isqrt(limit) + 1)) {\n        if (is_prime[candidate]) {\n            fill(is_prime, false, iter(candidate * candidate, candidate, limit + 1))\n        }\n    }\n    return count(is_prime, true)\n}\n\nlet started = clock_ns()\nvar result = 0\nfor (let repetition in 0 to 1) { result = result + primes_up_to(200000) }\nprint(result)\nprint(clock_ns() - started)\n"
+      },
+      "rounds": [
+        {
+          "checksum": 17984,
+          "samples_ns": {
+            "baseline": [
+              771000,
+              788000,
+              775000,
+              835000,
+              766000,
+              1095000,
+              759000,
+              783000,
+              808000,
+              764000,
+              759000
+            ],
+            "candidate": [
+              269000,
+              261000,
+              250000,
+              277000,
+              245000,
+              254000,
+              239000,
+              258000,
+              253000,
+              259000,
+              238000
+            ]
+          },
+          "baseline_median_ns": 775000,
+          "candidate_median_ns": 254000,
+          "paired_ratio_median": 0.3225806451612903,
+          "paired_ratio_iqr": [
+            0.31357048748353095,
+            0.3317365269461078
+          ]
+        },
+        {
+          "checksum": 17984,
+          "samples_ns": {
+            "baseline": [
+              774000,
+              793000,
+              797000,
+              866000,
+              769000,
+              783000,
+              718000,
+              778000,
+              864000,
+              820000,
+              770000
+            ],
+            "candidate": [
+              240000,
+              249000,
+              252000,
+              242000,
+              282000,
+              256000,
+              307000,
+              262000,
+              244000,
+              231000,
+              238000
+            ]
+          },
+          "baseline_median_ns": 783000,
+          "candidate_median_ns": 249000,
+          "paired_ratio_median": 0.31399747793190413,
+          "paired_ratio_iqr": [
+            0.2824074074074074,
+            0.33676092544987146
+          ]
+        },
+        {
+          "checksum": 17984,
+          "samples_ns": {
+            "baseline": [
+              781000,
+              766000,
+              736000,
+              757000,
+              731000,
+              770000,
+              773000,
+              789000,
+              760000,
+              770000,
+              835000
+            ],
+            "candidate": [
+              246000,
+              250000,
+              244000,
+              261000,
+              263000,
+              248000,
+              243000,
+              240000,
+              229000,
+              235000,
+              246000
+            ]
+          },
+          "baseline_median_ns": 770000,
+          "candidate_median_ns": 246000,
+          "paired_ratio_median": 0.31498079385403327,
+          "paired_ratio_iqr": [
+            0.3041825095057034,
+            0.33152173913043476
+          ]
+        }
+      ],
+      "samples_ns": {
+        "baseline": [
+          771000,
+          788000,
+          775000,
+          835000,
+          766000,
+          1095000,
+          759000,
+          783000,
+          808000,
+          764000,
+          759000,
+          774000,
+          793000,
+          797000,
+          866000,
+          769000,
+          783000,
+          718000,
+          778000,
+          864000,
+          820000,
+          770000,
+          781000,
+          766000,
+          736000,
+          757000,
+          731000,
+          770000,
+          773000,
+          789000,
+          760000,
+          770000,
+          835000
+        ],
+        "candidate": [
+          269000,
+          261000,
+          250000,
+          277000,
+          245000,
+          254000,
+          239000,
+          258000,
+          253000,
+          259000,
+          238000,
+          240000,
+          249000,
+          252000,
+          242000,
+          282000,
+          256000,
+          307000,
+          262000,
+          244000,
+          231000,
+          238000,
+          246000,
+          250000,
+          244000,
+          261000,
+          263000,
+          248000,
+          243000,
+          240000,
+          229000,
+          235000,
+          246000
+        ]
+      },
+      "baseline_median_ns": 774000,
+      "candidate_median_ns": 249000,
+      "paired_ratio_median": 0.3161856963613551,
+      "paired_ratio_iqr": [
+        0.30714285714285716,
+        0.33162913303827124
+      ]
+    },
+    {
+      "size": 200000,
+      "repetitions": 64,
+      "checksum": 1150976,
+      "sources": {
+        "baseline": "function primes_up_to(limit)\n{\n    let is_prime = replicate([true], limit + 1)\n    is_prime[0] = false\n    is_prime[1] = false\n\n    let candidate = 2\n    while (candidate * candidate <= limit) {\n        if (is_prime[candidate]) {\n            fill(is_prime, false, iter(candidate * candidate, candidate, limit + 1))\n        }\n        candidate = candidate + 1\n    }\n\n    return count(is_prime, true)\n}\n\nlet started = clock_ns()\nvar result = 0\nfor (let repetition in 0 to 64) { result = result + primes_up_to(200000) }\nprint(result)\nprint(clock_ns() - started)\n",
+        "candidate": "function primes_up_to(limit)\n{\n    let is_prime = dense::flat(array(1, limit + 1, true))\n    is_prime[0] = false\n    is_prime[1] = false\n    fill(is_prime, false, iter(4, 2, limit + 1))\n    for (let candidate in iter(3, 2, math::isqrt(limit) + 1)) {\n        if (is_prime[candidate]) {\n            fill(is_prime, false, iter(candidate * candidate, candidate, limit + 1))\n        }\n    }\n    return count(is_prime, true)\n}\n\nlet started = clock_ns()\nvar result = 0\nfor (let repetition in 0 to 64) { result = result + primes_up_to(200000) }\nprint(result)\nprint(clock_ns() - started)\n"
+      },
+      "rounds": [
+        {
+          "checksum": 1150976,
+          "samples_ns": {
+            "baseline": [
+              33709000,
+              33881000,
+              33325000,
+              32488000,
+              32347000,
+              32565000,
+              33789000,
+              34102000,
+              33347000,
+              32539000,
+              32660000
+            ],
+            "candidate": [
+              16304000,
+              16002000,
+              16477000,
+              15991000,
+              15868000,
+              16232000,
+              16408000,
+              16564000,
+              16525000,
+              16031000,
+              15080000
+            ]
+          },
+          "baseline_median_ns": 33325000,
+          "candidate_median_ns": 16232000,
+          "paired_ratio_median": 0.49055553838068444,
+          "paired_ratio_iqr": [
+            0.48366904980865644,
+            0.49443360840210054
+          ]
+        },
+        {
+          "checksum": 1150976,
+          "samples_ns": {
+            "baseline": [
+              32578000,
+              32490000,
+              32222000,
+              32516000,
+              32513000,
+              32374000,
+              32204000,
+              32437000,
+              32555000,
+              32492000,
+              33081000
+            ],
+            "candidate": [
+              15844000,
+              15788000,
+              15972000,
+              15661000,
+              15328000,
+              16032000,
+              16042000,
+              16143000,
+              15922000,
+              15689000,
+              15085000
+            ]
+          },
+          "baseline_median_ns": 32492000,
+          "candidate_median_ns": 15844000,
+          "paired_ratio_median": 0.4863404751672908,
+          "paired_ratio_iqr": [
+            0.48163980809447654,
+            0.4956861771460493
+          ]
+        },
+        {
+          "checksum": 1150976,
+          "samples_ns": {
+            "baseline": [
+              32248000,
+              35414000,
+              32345000,
+              32256000,
+              32236000,
+              32496000,
+              32253000,
+              32171000,
+              32396000,
+              32767000,
+              32534000
+            ],
+            "candidate": [
+              15618000,
+              15894000,
+              15965000,
+              16027000,
+              15787000,
+              15788000,
+              15704000,
+              15898000,
+              16018000,
+              16210000,
+              16392000
+            ]
+          },
+          "baseline_median_ns": 32345000,
+          "candidate_median_ns": 15898000,
+          "paired_ratio_median": 0.4935847889936621,
+          "paired_ratio_iqr": [
+            0.48584441161989167,
+            0.49470503860591447
+          ]
+        }
+      ],
+      "samples_ns": {
+        "baseline": [
+          33709000,
+          33881000,
+          33325000,
+          32488000,
+          32347000,
+          32565000,
+          33789000,
+          34102000,
+          33347000,
+          32539000,
+          32660000,
+          32578000,
+          32490000,
+          32222000,
+          32516000,
+          32513000,
+          32374000,
+          32204000,
+          32437000,
+          32555000,
+          32492000,
+          33081000,
+          32248000,
+          35414000,
+          32345000,
+          32256000,
+          32236000,
+          32496000,
+          32253000,
+          32171000,
+          32396000,
+          32767000,
+          32534000
+        ],
+        "candidate": [
+          16304000,
+          16002000,
+          16477000,
+          15991000,
+          15868000,
+          16232000,
+          16408000,
+          16564000,
+          16525000,
+          16031000,
+          15080000,
+          15844000,
+          15788000,
+          15972000,
+          15661000,
+          15328000,
+          16032000,
+          16042000,
+          16143000,
+          15922000,
+          15689000,
+          15085000,
+          15618000,
+          15894000,
+          15965000,
+          16027000,
+          15787000,
+          15788000,
+          15704000,
+          15898000,
+          16018000,
+          16210000,
+          16392000
+        ]
+      },
+      "baseline_median_ns": 32513000,
+      "candidate_median_ns": 15972000,
+      "paired_ratio_median": 0.48973197667204366,
+      "paired_ratio_iqr": [
+        0.4839890771246209,
+        0.4949586229663908
+      ]
+    }
+  ]
+}

@@ -1,0 +1,430 @@
+{
+  "date": "2026-10-17T11:13:38.158896+00:00",
+  "python": "3.14.2 (main, Oct  9 2026, 23:40:19) [Clang 21.0.0 (clang-2100.3.34.2)]",
+  "runtimes": {
+    "py": {
+      "path": "/Users/zhuanglinsheng/.pyenv/versions/3.14.2/bin/python3.14",
+      "sha256": "949f8c2df0cc762cbdaa66889b2bf70d5234c2e7ed902db1eebca50f2ba94e2d"
+    },
+    "tap": {
+      "path": "/Users/zhuanglinsheng/Documents/Github/tapas/build-release/bin/tapas",
+      "sha256": "80d8465438372b58270f8201cdc5cd9cfc244cee0b5d50ba5ff1da75470072c4"
+    }
+  },
+  "runs": 7,
+  "rounds": 3,
+  "warmups_per_round": 1,
+  "note": "Diagnostic source variations only. Baselines remain unchanged; sieve CPU samples normalized per invocation. Ratios are candidate/baseline in the same language, not Tapas/Python.",
+  "rows": [
+    {
+      "name": "huffman_python_str_counts",
+      "algorithm": "huffman",
+      "language": "py",
+      "repetitions_per_sample": 1,
+      "checksum": 120000,
+      "sources": {
+        "baseline": "import time\nfrom collections import Counter\n\nSYMBOLS = \"abcdefgh\"\n\n\ndef huffman_total(text):\n    freq = Counter(text)\n    # Fixed symbol order makes ties in the minimum scan deterministic.\n    nodes = [(freq[ch], ch) for ch in SYMBOLS if ch in freq]\n\n    def find_min():\n        best = -1\n        for i, node in enumerate(nodes):\n            if best < 0 or node[0] < nodes[best][0]:\n                best = i\n        return best\n\n    while len(nodes) > 1:\n        first = find_min()\n        left = nodes.pop(first)\n        second = find_min()\n        right = nodes.pop(second)\n        nodes.append((left[0] + right[0], (left, right)))\n\n    def total_length(node, depth):\n        if isinstance(node[1], str):\n            return node[0] * depth\n        return (total_length(node[1][0], depth + 1) +\n                total_length(node[1][1], depth + 1))\n\n    return total_length(nodes[0], 0)\n\n\nseed = 42\nchars = []\nfor _ in range(40000):\n    seed = (seed * 1103515245 + 12345) % 2147483648\n    chars.append(SYMBOLS[seed % 8])\ntext = \"\".join(chars)\n\ndef bench():\n    started = time.process_time_ns()\n    result = huffman_total(text)\n    elapsed = time.process_time_ns() - started\n\n    print(result)\n    print(elapsed)\n\n\nif __name__ == \"__main__\":\n    bench()\n",
+        "candidate": "import time\nfrom collections import Counter\n\nSYMBOLS = \"abcdefgh\"\n\n\ndef huffman_total(text):\n    freq = {ch: occurrences for ch in SYMBOLS\n            if (occurrences := text.count(ch))}\n    # Fixed symbol order makes ties in the minimum scan deterministic.\n    nodes = [(freq[ch], ch) for ch in SYMBOLS if ch in freq]\n\n    def find_min():\n        best = -1\n        for i, node in enumerate(nodes):\n            if best < 0 or node[0] < nodes[best][0]:\n                best = i\n        return best\n\n    while len(nodes) > 1:\n        first = find_min()\n        left = nodes.pop(first)\n        second = find_min()\n        right = nodes.pop(second)\n        nodes.append((left[0] + right[0], (left, right)))\n\n    def total_length(node, depth):\n        if isinstance(node[1], str):\n            return node[0] * depth\n        return (total_length(node[1][0], depth + 1) +\n                total_length(node[1][1], depth + 1))\n\n    return total_length(nodes[0], 0)\n\n\nseed = 42\nchars = []\nfor _ in range(40000):\n    seed = (seed * 1103515245 + 12345) % 2147483648\n    chars.append(SYMBOLS[seed % 8])\ntext = \"\".join(chars)\n\ndef bench():\n    started = time.process_time_ns()\n    result = huffman_total(text)\n    elapsed = time.process_time_ns() - started\n\n    print(result)\n    print(elapsed)\n\n\nif __name__ == \"__main__\":\n    bench()\n"
+      },
+      "rounds": [
+        {
+          "samples_ns": {
+            "baseline": [
+              1106000.0,
+              1083000.0,
+              1069000.0,
+              1085000.0,
+              1121000.0,
+              1149000.0,
+              1188000.0
+            ],
+            "candidate": [
+              74000.0,
+              81000.0,
+              84000.0,
+              77000.0,
+              73000.0,
+              70000.0,
+              73000.0
+            ]
+          },
+          "baseline_median_ns": 1106000,
+          "candidate_median_ns": 74000,
+          "paired_ratio_median": 0.06690777576853527,
+          "paired_ratio_iqr": [
+            0.061447811447811446,
+            0.07479224376731301
+          ]
+        },
+        {
+          "samples_ns": {
+            "baseline": [
+              1232000.0,
+              1237000.0,
+              1169000.0,
+              1204000.0,
+              1172000.0,
+              1303000.0,
+              1245000.0
+            ],
+            "candidate": [
+              74000.0,
+              81000.0,
+              76000.0,
+              74000.0,
+              77000.0,
+              74000.0,
+              81000.0
+            ]
+          },
+          "baseline_median_ns": 1232000,
+          "candidate_median_ns": 76000,
+          "paired_ratio_median": 0.06501283147989735,
+          "paired_ratio_iqr": [
+            0.060064935064935064,
+            0.06548100242522231
+          ]
+        },
+        {
+          "samples_ns": {
+            "baseline": [
+              1475000.0,
+              1132000.0,
+              1174000.0,
+              1335000.0,
+              1151000.0,
+              1137000.0,
+              1606000.0
+            ],
+            "candidate": [
+              84000.0,
+              78000.0,
+              81000.0,
+              89000.0,
+              76000.0,
+              95000.0,
+              73000.0
+            ]
+          },
+          "baseline_median_ns": 1174000,
+          "candidate_median_ns": 81000,
+          "paired_ratio_median": 0.06666666666666667,
+          "paired_ratio_iqr": [
+            0.05694915254237288,
+            0.06899488926746167
+          ]
+        }
+      ],
+      "round_ratio_medians": [
+        0.06690777576853527,
+        0.06501283147989735,
+        0.06666666666666667
+      ],
+      "samples_ns": {
+        "baseline": [
+          1106000.0,
+          1083000.0,
+          1069000.0,
+          1085000.0,
+          1121000.0,
+          1149000.0,
+          1188000.0,
+          1232000.0,
+          1237000.0,
+          1169000.0,
+          1204000.0,
+          1172000.0,
+          1303000.0,
+          1245000.0,
+          1475000.0,
+          1132000.0,
+          1174000.0,
+          1335000.0,
+          1151000.0,
+          1137000.0,
+          1606000.0
+        ],
+        "candidate": [
+          74000.0,
+          81000.0,
+          84000.0,
+          77000.0,
+          73000.0,
+          70000.0,
+          73000.0,
+          74000.0,
+          81000.0,
+          76000.0,
+          74000.0,
+          77000.0,
+          74000.0,
+          81000.0,
+          84000.0,
+          78000.0,
+          81000.0,
+          89000.0,
+          76000.0,
+          95000.0,
+          73000.0
+        ]
+      },
+      "baseline_median_ns": 1172000,
+      "candidate_median_ns": 77000,
+      "paired_ratio_median": 0.06548100242522231,
+      "paired_ratio_iqr": [
+        0.06118517639405367,
+        0.06894974145351881
+      ]
+    },
+    {
+      "name": "huffman_tapas_native_counts",
+      "algorithm": "huffman",
+      "language": "tap",
+      "repetitions_per_sample": 1,
+      "checksum": 120000,
+      "sources": {
+        "baseline": "function frequency_less(a, b)\n{\n    return a[0] < b[0]\n}\n\nfunction total_length(node, depth)\n{\n    if (types::matches(node[1], types::String)) {\n        return node[0] * depth\n    }\n    let children = node[1]\n    return this(children[0], depth + 1) + this(children[1], depth + 1)\n}\n\nfunction huffman_total(text)\n{\n    let freq = {}\n    for (let ch in text) {\n        freq[ch] = idx_or(freq, ch, 0) + 1\n    }\n\n    // Fixed symbol order keeps initial heap entries reproducible.\n    let nodes = []\n    for (let i in 0 to 8) {\n        let ch = 'abcdefgh'[i]\n        if (ch in freq) {\n            nodes.append(freq[ch] : ch)\n        }\n    }\n\n    heap::heapify(nodes, frequency_less)\n    while (nodes.len() > 1) {\n        let left = heap::pop(nodes, frequency_less)\n        let right = heap::pop(nodes, frequency_less)\n        heap::push(nodes, (left[0] + right[0]) : (left : right), frequency_less)\n    }\n\n    return total_length(nodes[0], 0) + 0\n}\n\nlet chars = []\nlet seed = 42\nfor (let index in 0 to 40000) {\n    seed = (seed * 1103515245 + 12345) % 2147483648\n    chars.append('abcdefgh'[seed % 8])\n}\nlet text = join(chars, '')\n\nlet started = clock_ns()\nlet result = huffman_total(text)\nlet elapsed = clock_ns() - started\n\nprint(result)\nprint(elapsed)\n",
+        "candidate": "function frequency_less(a, b)\n{\n    return a[0] < b[0]\n}\n\nfunction total_length(node, depth)\n{\n    if (types::matches(node[1], types::String)) {\n        return node[0] * depth\n    }\n    let children = node[1]\n    return this(children[0], depth + 1) + this(children[1], depth + 1)\n}\n\nfunction huffman_total(text)\n{\n    let freq = {}\n    for (let ch in 'abcdefgh') {\n        let occurrences = count(text, ch)\n        if (occurrences > 0) { freq[ch] = occurrences }\n    }\n\n    // Fixed symbol order keeps initial heap entries reproducible.\n    let nodes = []\n    for (let i in 0 to 8) {\n        let ch = 'abcdefgh'[i]\n        if (ch in freq) {\n            nodes.append(freq[ch] : ch)\n        }\n    }\n\n    heap::heapify(nodes, frequency_less)\n    while (nodes.len() > 1) {\n        let left = heap::pop(nodes, frequency_less)\n        let right = heap::pop(nodes, frequency_less)\n        heap::push(nodes, (left[0] + right[0]) : (left : right), frequency_less)\n    }\n\n    return total_length(nodes[0], 0) + 0\n}\n\nlet chars = []\nlet seed = 42\nfor (let index in 0 to 40000) {\n    seed = (seed * 1103515245 + 12345) % 2147483648\n    chars.append('abcdefgh'[seed % 8])\n}\nlet text = join(chars, '')\n\nlet started = clock_ns()\nlet result = huffman_total(text)\nlet elapsed = clock_ns() - started\n\nprint(result)\nprint(elapsed)\n"
+      },
+      "rounds": [
+        {
+          "samples_ns": {
+            "baseline": [
+              2091000.0,
+              2084000.0,
+              2027000.0,
+              2047000.0,
+              2013000.0,
+              2052000.0,
+              2117000.0
+            ],
+            "candidate": [
+              87000.0,
+              73000.0,
+              75000.0,
+              73000.0,
+              73000.0,
+              76000.0,
+              80000.0
+            ]
+          },
+          "baseline_median_ns": 2052000,
+          "candidate_median_ns": 75000,
+          "paired_ratio_median": 0.0370004933399112,
+          "paired_ratio_iqr": [
+            0.0356619443087445,
+            0.03778932451582428
+          ]
+        },
+        {
+          "samples_ns": {
+            "baseline": [
+              2006000.0,
+              2011000.0,
+              2021000.0,
+              2027000.0,
+              2062000.0,
+              2005000.0,
+              2081000.0
+            ],
+            "candidate": [
+              79000.0,
+              75000.0,
+              78000.0,
+              77000.0,
+              73000.0,
+              72000.0,
+              77000.0
+            ]
+          },
+          "baseline_median_ns": 2021000,
+          "candidate_median_ns": 77000,
+          "paired_ratio_median": 0.037294878170064646,
+          "paired_ratio_iqr": [
+            0.035910224438902745,
+            0.03859475507174666
+          ]
+        },
+        {
+          "samples_ns": {
+            "baseline": [
+              2091000.0,
+              2052000.0,
+              2183000.0,
+              2098000.0,
+              2172000.0,
+              2104000.0,
+              2158000.0
+            ],
+            "candidate": [
+              112000.0,
+              80000.0,
+              80000.0,
+              88000.0,
+              82000.0,
+              84000.0,
+              77000.0
+            ]
+          },
+          "baseline_median_ns": 2104000,
+          "candidate_median_ns": 82000,
+          "paired_ratio_median": 0.03898635477582846,
+          "paired_ratio_iqr": [
+            0.03664681630783326,
+            0.04194470924690181
+          ]
+        }
+      ],
+      "round_ratio_medians": [
+        0.0370004933399112,
+        0.037294878170064646,
+        0.03898635477582846
+      ],
+      "samples_ns": {
+        "baseline": [
+          2091000.0,
+          2084000.0,
+          2027000.0,
+          2047000.0,
+          2013000.0,
+          2052000.0,
+          2117000.0,
+          2006000.0,
+          2011000.0,
+          2021000.0,
+          2027000.0,
+          2062000.0,
+          2005000.0,
+          2081000.0,
+          2091000.0,
+          2052000.0,
+          2183000.0,
+          2098000.0,
+          2172000.0,
+          2104000.0,
+          2158000.0
+        ],
+        "candidate": [
+          87000.0,
+          73000.0,
+          75000.0,
+          73000.0,
+          73000.0,
+          76000.0,
+          80000.0,
+          79000.0,
+          75000.0,
+          78000.0,
+          77000.0,
+          73000.0,
+          72000.0,
+          77000.0,
+          112000.0,
+          80000.0,
+          80000.0,
+          88000.0,
+          82000.0,
+          84000.0,
+          77000.0
+        ]
+      },
+      "baseline_median_ns": 2062000,
+      "candidate_median_ns": 77000,
+      "paired_ratio_median": 0.037294878170064646,
+      "paired_ratio_iqr": [
+        0.03608725330241212,
+        0.03918410460625919
+      ]
+    }
+  ],
+  "small_input_checks": [
+    {
+      "case": "huffman_python_str_counts",
+      "variant": "baseline",
+      "inputs": [
+        "a",
+        "ab",
+        "aaabb",
+        "abcd",
+        "aceggg",
+        "abcdefgh",
+        "aaaaaaaabbbccd"
+      ],
+      "weighted_lengths": [
+        0,
+        2,
+        5,
+        8,
+        11,
+        24,
+        23
+      ]
+    },
+    {
+      "case": "huffman_python_str_counts",
+      "variant": "candidate",
+      "inputs": [
+        "a",
+        "ab",
+        "aaabb",
+        "abcd",
+        "aceggg",
+        "abcdefgh",
+        "aaaaaaaabbbccd"
+      ],
+      "weighted_lengths": [
+        0,
+        2,
+        5,
+        8,
+        11,
+        24,
+        23
+      ]
+    },
+    {
+      "case": "huffman_tapas_native_counts",
+      "variant": "baseline",
+      "inputs": [
+        "a",
+        "ab",
+        "aaabb",
+        "abcd",
+        "aceggg",
+        "abcdefgh",
+        "aaaaaaaabbbccd"
+      ],
+      "weighted_lengths": [
+        0,
+        2,
+        5,
+        8,
+        11,
+        24,
+        23
+      ]
+    },
+    {
+      "case": "huffman_tapas_native_counts",
+      "variant": "candidate",
+      "inputs": [
+        "a",
+        "ab",
+        "aaabb",
+        "abcd",
+        "aceggg",
+        "abcdefgh",
+        "aaaaaaaabbbccd"
+      ],
+      "weighted_lengths": [
+        0,
+        2,
+        5,
+        8,
+        11,
+        24,
+        23
+      ]
+    }
+  ]
+}

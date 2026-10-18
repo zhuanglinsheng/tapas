@@ -1,0 +1,341 @@
+{
+  "date": "2026-10-17T16:30:04.929768+00:00",
+  "runtime": {
+    "path": "/private/tmp/tapas-value-paths/tapas-final",
+    "sha256": "fa7b0ec89ed71d51d49d4ae9bd03746af7b646491026849b2f8266569ffd2ce1",
+    "version": "Tapas 0.2.1 Copyright (C) 2020-2026",
+    "build_config": null
+  },
+  "sources": {
+    "baseline": {
+      "path": "/private/tmp/tapas-value-paths/lcs_direct.tap",
+      "sha256": "5342294fecac28b70659605edb14164dbc64df1a8b1dad79392e891902768976",
+      "source": "function lcs_length(left, right)\n{\n    let row_size = right.len() + 1\n    let previous = replicate([0], row_size)\n    let current = replicate([0], row_size)\n    let above = 0\n\n    for (let i in 1 to (left.len() + 1)) {\n        current[0] = 0\n        let diagonal = 0\n        let preceding = 0\n        for (let j in 1 to row_size) {\n            above = previous[j]\n            if (left[i - 1] == right[j - 1]) {\n                preceding = diagonal + 1\n            } elif (above > preceding) {\n                preceding = above\n            }\n            current[j] = preceding\n            diagonal = above\n        }\n        let temporary = previous\n        previous = current\n        current = temporary\n    }\n    return previous[row_size - 1] + 0\n}\n\nlet left = 'DYNAMICPROGRAMMINGALGORITHMSANDDATASTRUCTURESARECENTRALTOVIRTUALMACHINEBENCHMARKS'\nlet right = 'ALGORITHMSFORDYNAMICLANGUAGESUSEPROGRAMSTRUCTUREANDRUNTIMEDATATOMEASUREPERFORMANCE'\n\nlet started = clock_ns()\nlet result = 0\nfor (let repetition in 0 to 40) {\n    result = result + lcs_length(left, right)\n}\nlet elapsed = clock_ns() - started\n\nprint(result)\nprint(elapsed)\n"
+    },
+    "candidate": {
+      "path": "/Users/zhuanglinsheng/Documents/Github/tapas/test/benchmarks/longest_common_subsequence.tap",
+      "sha256": "9cd5bcd55d1e7712d14101da067571056b086983686db93d709cbc195acc67ee",
+      "source": "function lcs_length(left, right)\n{\n    let row_size = right.len() + 1\n    let previous = replicate([0], row_size)\n    let current = replicate([0], row_size)\n\n    for (let i in 1 to (left.len() + 1)) {\n        let character = left[i - 1]\n        current[0] = 0\n        let diagonal = 0\n        let preceding = 0\n        for (let j in 1 to row_size) {\n            let above = previous[j]\n            if (character == right[j - 1]) {\n                preceding = diagonal + 1\n            } elif (above > preceding) {\n                preceding = above\n            }\n            current[j] = preceding\n            diagonal = above\n        }\n        let temporary = previous\n        previous = current\n        current = temporary\n    }\n    return previous[row_size - 1] + 0\n}\n\nlet left = 'DYNAMICPROGRAMMINGALGORITHMSANDDATASTRUCTURESARECENTRALTOVIRTUALMACHINEBENCHMARKS'\nlet right = 'ALGORITHMSFORDYNAMICLANGUAGESUSEPROGRAMSTRUCTUREANDRUNTIMEDATATOMEASUREPERFORMANCE'\n\nlet started = clock_ns()\nlet result = 0\nfor (let repetition in 0 to 40) {\n    result = result + lcs_length(left, right)\n}\nlet elapsed = clock_ns() - started\n\nprint(result)\nprint(elapsed)\n"
+    }
+  },
+  "checksum": 1480,
+  "runs": 11,
+  "rounds": [
+    {
+      "samples_ns": {
+        "baseline": [
+          12983000,
+          12640000,
+          12505000,
+          12617000,
+          12574000,
+          12474000,
+          12380000,
+          12579000,
+          12441000,
+          12704000,
+          12470000
+        ],
+        "candidate": [
+          12744000,
+          12492000,
+          12442000,
+          12535000,
+          12495000,
+          12420000,
+          12670000,
+          12273000,
+          12556000,
+          12300000,
+          12385000
+        ]
+      },
+      "baseline_median_ns": 12574000,
+      "candidate_median_ns": 12492000,
+      "paired_ratio_median": 0.9935008322105097,
+      "paired_ratio_iqr": [
+        0.98159131171532,
+        0.9956709956709957
+      ]
+    },
+    {
+      "samples_ns": {
+        "baseline": [
+          12497000,
+          12518000,
+          12592000,
+          12484000,
+          12579000,
+          12395000,
+          12651000,
+          12548000,
+          12644000,
+          12855000,
+          12780000
+        ],
+        "candidate": [
+          12343000,
+          12277000,
+          12232000,
+          12456000,
+          12214000,
+          12475000,
+          12470000,
+          12322000,
+          12288000,
+          12376000,
+          12352000
+        ]
+      },
+      "baseline_median_ns": 12579000,
+      "candidate_median_ns": 12343000,
+      "paired_ratio_median": 0.980747723278479,
+      "paired_ratio_iqr": [
+        0.9709833850067573,
+        0.9876770424901976
+      ]
+    },
+    {
+      "samples_ns": {
+        "baseline": [
+          12486000,
+          12429000,
+          12567000,
+          12552000,
+          12707000,
+          12472000,
+          12554000,
+          12624000,
+          12412000,
+          12467000,
+          12650000
+        ],
+        "candidate": [
+          12404000,
+          12309000,
+          12471000,
+          12346000,
+          12241000,
+          12435000,
+          12214000,
+          12342000,
+          12331000,
+          12282000,
+          12436000
+        ]
+      },
+      "baseline_median_ns": 12552000,
+      "candidate_median_ns": 12342000,
+      "paired_ratio_median": 0.9851608245768829,
+      "paired_ratio_iqr": [
+        0.9776615969581749,
+        0.9934326445619094
+      ]
+    },
+    {
+      "samples_ns": {
+        "baseline": [
+          12364000,
+          12599000,
+          12528000,
+          12449000,
+          12463000,
+          12524000,
+          12398000,
+          12351000,
+          12367000,
+          12644000,
+          12482000
+        ],
+        "candidate": [
+          12228000,
+          12254000,
+          12288000,
+          12286000,
+          12422000,
+          12220000,
+          12303000,
+          12237000,
+          12402000,
+          12185000,
+          12302000
+        ]
+      },
+      "baseline_median_ns": 12463000,
+      "candidate_median_ns": 12286000,
+      "paired_ratio_median": 0.986906578841674,
+      "paired_ratio_iqr": [
+        0.9757266049185563,
+        0.9923374737860945
+      ]
+    },
+    {
+      "samples_ns": {
+        "baseline": [
+          12499000,
+          12660000,
+          12486000,
+          12613000,
+          12546000,
+          12421000,
+          12562000,
+          12367000,
+          12676000,
+          12564000,
+          12433000
+        ],
+        "candidate": [
+          12442000,
+          12626000,
+          12739000,
+          12279000,
+          12550000,
+          12278000,
+          12248000,
+          12470000,
+          12294000,
+          12516000,
+          12487000
+        ]
+      },
+      "baseline_median_ns": 12546000,
+      "candidate_median_ns": 12470000,
+      "paired_ratio_median": 0.9961795606494747,
+      "paired_ratio_iqr": [
+        0.9750039802579207,
+        1.0043432799806966
+      ]
+    }
+  ],
+  "warmups_per_round": 1,
+  "round_ratio_medians": [
+    0.9935008322105097,
+    0.980747723278479,
+    0.9851608245768829,
+    0.986906578841674,
+    0.9961795606494747
+  ],
+  "samples_ns": {
+    "baseline": [
+      12983000,
+      12640000,
+      12505000,
+      12617000,
+      12574000,
+      12474000,
+      12380000,
+      12579000,
+      12441000,
+      12704000,
+      12470000,
+      12497000,
+      12518000,
+      12592000,
+      12484000,
+      12579000,
+      12395000,
+      12651000,
+      12548000,
+      12644000,
+      12855000,
+      12780000,
+      12486000,
+      12429000,
+      12567000,
+      12552000,
+      12707000,
+      12472000,
+      12554000,
+      12624000,
+      12412000,
+      12467000,
+      12650000,
+      12364000,
+      12599000,
+      12528000,
+      12449000,
+      12463000,
+      12524000,
+      12398000,
+      12351000,
+      12367000,
+      12644000,
+      12482000,
+      12499000,
+      12660000,
+      12486000,
+      12613000,
+      12546000,
+      12421000,
+      12562000,
+      12367000,
+      12676000,
+      12564000,
+      12433000
+    ],
+    "candidate": [
+      12744000,
+      12492000,
+      12442000,
+      12535000,
+      12495000,
+      12420000,
+      12670000,
+      12273000,
+      12556000,
+      12300000,
+      12385000,
+      12343000,
+      12277000,
+      12232000,
+      12456000,
+      12214000,
+      12475000,
+      12470000,
+      12322000,
+      12288000,
+      12376000,
+      12352000,
+      12404000,
+      12309000,
+      12471000,
+      12346000,
+      12241000,
+      12435000,
+      12214000,
+      12342000,
+      12331000,
+      12282000,
+      12436000,
+      12228000,
+      12254000,
+      12288000,
+      12286000,
+      12422000,
+      12220000,
+      12303000,
+      12237000,
+      12402000,
+      12185000,
+      12302000,
+      12442000,
+      12626000,
+      12739000,
+      12279000,
+      12550000,
+      12278000,
+      12248000,
+      12470000,
+      12294000,
+      12516000,
+      12487000
+    ]
+  },
+  "baseline_median_ns": 12528000,
+  "candidate_median_ns": 12346000,
+  "paired_ratio_median": 0.9882911392405064,
+  "paired_ratio_iqr": [
+    0.9756737419508705,
+    0.9956709956709957
+  ]
+}

@@ -1,0 +1,39 @@
+src/stdlib/builtins/bulk.c:70:3: remark: loop not vectorized [-Rpass-missed=loop-vectorize]
+   70 |                 while (tcompo_next(indices, &position, &key)) {
+      |                 ^
+src/stdlib/builtins/bulk.c:25:3: remark: loop not vectorized [-Rpass-missed=loop-vectorize]
+   25 |                 for (size_t remaining = checked.count; remaining; remaining--) {
+      |                 ^
+src/stdlib/builtins/bulk.c:34:2: remark: loop not vectorized [-Rpass-missed=loop-vectorize]
+   34 |         while (step > 0 ? index < range->end : index > range->end) {
+      |         ^
+src/stdlib/builtins/bulk.c:36:20: remark: loop not vectorized [-Rpass-missed=loop-vectorize]
+   36 |                 if (position < 0 || position >= length)
+      |                                  ^
+src/stdlib/builtins/bulk.c:34:2: remark: loop not vectorized [-Rpass-missed=loop-vectorize]
+   34 |         while (step > 0 ? index < range->end : index > range->end) {
+      |         ^
+src/stdlib/builtins/bulk.c:36:20: remark: loop not vectorized [-Rpass-missed=loop-vectorize]
+   36 |                 if (position < 0 || position >= length)
+      |                                  ^
+src/stdlib/builtins/bulk.c:154:3: remark: loop not vectorized [-Rpass-missed=loop-vectorize]
+  154 |                 while (tcompo_next(values, &position, &item)) {
+      |                 ^
+src/stdlib/builtins/bulk.c:133:2: remark: vectorized loop (vectorization width: 16, interleaved count: 2) [-Rpass=loop-vectorize]
+  133 |         for (size_t i = 0; i < length; i++)
+      |         ^
+src/stdlib/builtins/bulk.c:110:3: remark: the cost-model indicates that vectorization is not beneficial [-Rpass-missed=loop-vectorize]
+  110 |                 for (uint_count i = 0; i < list->items.len; i++) {
+      |                 ^
+src/stdlib/builtins/bulk.c:110:3: remark: the cost-model indicates that interleaving is not beneficial [-Rpass-missed=loop-vectorize]
+src/stdlib/builtins/bulk.c:105:3: remark: the cost-model indicates that vectorization is not beneficial [-Rpass-missed=loop-vectorize]
+  105 |                 for (uint_count i = 0; i < list->items.len; i++) {
+      |                 ^
+src/stdlib/builtins/bulk.c:105:3: remark: the cost-model indicates that interleaving is not beneficial [-Rpass-missed=loop-vectorize]
+src/stdlib/builtins/bulk.c:100:3: remark: the cost-model indicates that vectorization is not beneficial [-Rpass-missed=loop-vectorize]
+  100 |                 for (uint_count i = 0; i < list->items.len; i++) {
+      |                 ^
+src/stdlib/builtins/bulk.c:100:3: remark: the cost-model indicates that interleaving is not beneficial [-Rpass-missed=loop-vectorize]
+src/stdlib/builtins/bulk.c:115:3: remark: loop not vectorized [-Rpass-missed=loop-vectorize]
+  115 |                 for (uint_count i = 0; i < list->items.len; i++)
+      |                 ^

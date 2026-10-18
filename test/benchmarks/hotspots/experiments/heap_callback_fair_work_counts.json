@@ -1,0 +1,24 @@
+{
+  "date": "2026-10-17T17:00:03.245796+00:00",
+  "method": "Independent instrumented runs; elapsed times discarded. Counts describe complete heap tasks, not identical heap algorithms.",
+  "records": {
+    "tap": {
+      "comparisons": 155520,
+      "checksum": 348023040,
+      "original_source_sha256": "8130546cbb277b8947c3a3a30a9cfdd95ce84d35e07c805a980ab6a64b0f0dd7",
+      "instrumented_source": "var comparisons = 0\nfunction priority_less(a, b) {\n    comparisons = comparisons + 1\n    return a[0] < b[0]\n}\nfunction bench(repetitions, values)\n{\n    let started = clock_ns()\n    var checksum = 0\n    for (let repetition in 0 to repetitions) {\n        let queue = copy(values)\n        heap::heapify(queue, priority_less)\n        for (let position in 0 to len(values)) {\n            checksum = checksum + heap::pop(queue, priority_less)[0] * (position + 1)\n        }\n    }\n    let elapsed = clock_ns() - started\n    print(checksum)\n    print(elapsed)\n}\nlet values = []\nfor (let i in 0 to 256) { values.append([(i * 73 + 19) % 1009 - 500, i]) }\nbench(64, values)\n\nprint(comparisons)\n"
+    },
+    "py": {
+      "comparisons": 137728,
+      "checksum": 348023040,
+      "original_source_sha256": "e213b5bc094195bb3c6d2171615da0f0a3a5c3d47d6d8a6f33ee9a54dbc292bc",
+      "instrumented_source": "comparisons = 0\nimport heapq\nimport time\n\n\nclass PriorityRecord:\n    __slots__ = ('priority', 'payload')\n\n    def __init__(self, record):\n        self.priority, self.payload = record\n\n    def __lt__(self, other):\n        global comparisons\n        comparisons += 1\n        return self.priority < other.priority\n\n\ndef bench(repetitions, values):\n    # Records are input setup, outside the timed copy/build/pop task.\n    values = list(map(PriorityRecord, values))\n    started = time.process_time_ns()\n    checksum = 0\n    for _ in range(repetitions):\n        queue = values.copy()\n        heapq.heapify(queue)\n        for position in range(1, len(values) + 1):\n            checksum += heapq.heappop(queue).priority * position\n    elapsed = time.process_time_ns() - started\n    print(checksum)\n    print(elapsed)\n\n\nif __name__ == '__main__':\n    bench(64, [((i * 73 + 19) % 1009 - 500, i) for i in range(256)])\n\nprint(comparisons)\n"
+    },
+    "lua": {
+      "comparisons": 139520,
+      "checksum": 348023040,
+      "original_source_sha256": "ba97758eb2e1cf253cdadfaeac2550099724019a57689c74b139a635b3f64176",
+      "instrumented_source": "local comparisons = 0\nlocal function less(a, b)\n    comparisons = comparisons + 1\n    return a[1] < b[1]\nend\nlocal function sift_down(queue, parent, size)\n    local replacement = queue[parent]\n    while parent * 2 <= size do\n        local child = parent * 2\n        if child < size and less(queue[child + 1], queue[child]) then child = child + 1 end\n        if not less(queue[child], replacement) then break end\n        queue[parent] = queue[child]\n        parent = child\n    end\n    queue[parent] = replacement\nend\nlocal function pop(queue)\n    local result = queue[1]\n    local replacement = table.remove(queue)\n    local size = #queue\n    if size > 0 then\n        local parent = 1\n        while parent * 2 <= size do\n            local child = parent * 2\n            if child < size and less(queue[child + 1], queue[child]) then child = child + 1 end\n            queue[parent] = queue[child]\n            parent = child\n        end\n        while parent > 1 do\n            local previous = parent // 2\n            if not less(replacement, queue[previous]) then break end\n            queue[parent] = queue[previous]\n            parent = previous\n        end\n        queue[parent] = replacement\n    end\n    return result\nend\nlocal function bench(repetitions, values)\n    local started = os.clock()\n    local checksum = 0\n    for _ = 1, repetitions do\n        local queue = table.move(values, 1, #values, 1, {})\n        for parent = #queue // 2, 1, -1 do sift_down(queue, parent, #queue) end\n        for position = 1, #values do checksum = checksum + pop(queue)[1] * position end\n    end\n    local elapsed = math.floor((os.clock() - started) * 1e9 + 0.5)\n    print(checksum)\n    print(elapsed)\nend\nlocal values = {}\nfor i = 0, 255 do values[#values + 1] = {(i * 73 + 19) % 1009 - 500, i} end\nbench(64, values)\n\nprint(comparisons)\n"
+    }
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "tap": "function primes_up_to(limit)\n{\n    let is_prime = replicate([true], limit + 1)\n    is_prime[0] = false\n    is_prime[1] = false\n\n    let candidate = 2\n    while (candidate * candidate <= limit) {\n        if (is_prime[candidate]) {\n            let multiple = candidate * candidate\n            while (multiple <= limit) {\n                is_prime[multiple] = false\n                multiple = multiple + candidate\n            }\n        }\n        candidate = candidate + 1\n    }\n\n    let count = 0\n    for (let value in 2 to (limit + 1)) {\n        if (is_prime[value]) {\n            count = count + 1\n        }\n    }\n    return count + 0\n}\n\nlet started = clock_ns()\nlet result = primes_up_to(20000)\n\nlet elapsed = clock_ns() - started\nprint(result)\nprint(elapsed)\n",
+  "python": {
+    "source": "import math\nimport time\n\n\ndef primes_up_to(limit):\n    is_prime = bytearray(b\"\\x01\") * (limit + 1)\n    is_prime[:2] = b\"\\x00\\x00\"\n    for candidate in range(2, math.isqrt(limit) + 1):\n        if is_prime[candidate]:\n            start = candidate * candidate\n            is_prime[start::candidate] = bytes((limit - start) // candidate + 1)\n    return sum(is_prime)\n\n\ndef bench():\n    started = time.process_time_ns()\n    result = primes_up_to(20_000)\n\n    elapsed = time.process_time_ns() - started\n    print(result)\n    print(elapsed)\n\n\nif __name__ == \"__main__\":\n    bench()\n",
+    "sha256": "2f183356c628b5c430c5ac741f06c338e3dfd94d552e8863e7614383b75740ca"
+  }
+}

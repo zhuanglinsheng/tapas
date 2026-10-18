@@ -1,0 +1,354 @@
+{
+  "runs": 9,
+  "rounds": 3,
+  "rows": [
+    {
+      "language": "py",
+      "baseline_source": "import time\n\n\ndef bench(repetitions, values):\n    started = time.process_time_ns()\n    checksum = 0\n    for _ in range(repetitions):\n        ordered = values.copy()\n        ordered.sort()\n        for position, value in enumerate(ordered, 1):\n            checksum += value * position\n    print(checksum)\n    print(time.process_time_ns() - started)\n\n\nif __name__ == '__main__':\n    values = []\n    seed = 42\n    for _ in range(4096):\n        seed = (seed * 1103515245 + 12345) % 2147483648\n        values.append(seed % 2000001 - 1000000)\n    bench(16, values)\n",
+      "candidate_source": "import time\n\n\ndef bench(repetitions, values):\n    started = time.process_time_ns()\n    checksum = 0\n    for _ in range(repetitions):\n        ordered = values.copy()\n        ordered.sort()\n        checksum += sum(value * position for position, value in enumerate(ordered, 1))\n    print(checksum)\n    print(time.process_time_ns() - started)\n\n\nif __name__ == '__main__':\n    values = []\n    seed = 42\n    for _ in range(4096):\n        seed = (seed * 1103515245 + 12345) % 2147483648\n        values.append(seed % 2000001 - 1000000)\n    bench(16, values)\n",
+      "rounds": [
+        {
+          "samples_ns": {
+            "baseline": [
+              8346000,
+              8127000,
+              8049000,
+              8589000,
+              8037000,
+              8066000,
+              8111000,
+              8041000,
+              8071000
+            ],
+            "candidate": [
+              8023000,
+              7925000,
+              8070000,
+              8329000,
+              7973000,
+              7945000,
+              7965000,
+              7999000,
+              8057000
+            ]
+          },
+          "baseline_median_ns": 8071000,
+          "candidate_median_ns": 7999000,
+          "paired_ratio_median": 0.984998760228118,
+          "paired_ratio_iqr": [
+            0.97243665129035,
+            0.9965210818406491
+          ]
+        },
+        {
+          "samples_ns": {
+            "baseline": [
+              8187000,
+              8467000,
+              8377000,
+              8126000,
+              8061000,
+              8015000,
+              8119000,
+              8119000,
+              8097000
+            ],
+            "candidate": [
+              7847000,
+              7875000,
+              7853000,
+              7923000,
+              7968000,
+              7873000,
+              7836000,
+              7818000,
+              8234000
+            ]
+          },
+          "baseline_median_ns": 8119000,
+          "candidate_median_ns": 7873000,
+          "paired_ratio_median": 0.9651434905776574,
+          "paired_ratio_iqr": [
+            0.947959259985554,
+            0.9853730944096493
+          ]
+        },
+        {
+          "samples_ns": {
+            "baseline": [
+              8234000,
+              8224000,
+              8280000,
+              8085000,
+              8449000,
+              8185000,
+              8099000,
+              8026000,
+              8169000
+            ],
+            "candidate": [
+              7879000,
+              7866000,
+              7877000,
+              7873000,
+              8389000,
+              7853000,
+              7952000,
+              7965000,
+              7801000
+            ]
+          },
+          "baseline_median_ns": 8185000,
+          "candidate_median_ns": 7877000,
+          "paired_ratio_median": 0.9594379963347587,
+          "paired_ratio_iqr": [
+            0.9557102590318434,
+            0.9871246560174678
+          ]
+        }
+      ],
+      "samples_ns": {
+        "baseline": [
+          8346000,
+          8127000,
+          8049000,
+          8589000,
+          8037000,
+          8066000,
+          8111000,
+          8041000,
+          8071000,
+          8187000,
+          8467000,
+          8377000,
+          8126000,
+          8061000,
+          8015000,
+          8119000,
+          8119000,
+          8097000,
+          8234000,
+          8224000,
+          8280000,
+          8085000,
+          8449000,
+          8185000,
+          8099000,
+          8026000,
+          8169000
+        ],
+        "candidate": [
+          8023000,
+          7925000,
+          8070000,
+          8329000,
+          7973000,
+          7945000,
+          7965000,
+          7999000,
+          8057000,
+          7847000,
+          7875000,
+          7853000,
+          7923000,
+          7968000,
+          7873000,
+          7836000,
+          7818000,
+          8234000,
+          7879000,
+          7866000,
+          7877000,
+          7873000,
+          8389000,
+          7853000,
+          7952000,
+          7965000,
+          7801000
+        ]
+      },
+      "baseline_median_ns": 8119000,
+      "candidate_median_ns": 7925000,
+      "paired_ratio_median": 0.9750184592665518,
+      "paired_ratio_iqr": [
+        0.9584707463051179,
+        0.9920368296628095
+      ],
+      "retained": true
+    },
+    {
+      "language": "lua",
+      "baseline_source": "local function bench(repetitions, values)\n    local started = os.clock()\n    local checksum = 0\n    for _ = 1, repetitions do\n        local ordered = table.move(values, 1, #values, 1, {})\n        table.sort(ordered)\n        for position, value in ipairs(ordered) do checksum = checksum + value * position end\n    end\n    print(checksum)\n    print(math.floor((os.clock() - started) * 1e9 + 0.5))\nend\n\nlocal values = {}\nlocal seed = 42\nfor _ = 1, 4096 do\n    seed = (seed * 1103515245 + 12345) % 2147483648\n    values[#values + 1] = seed % 2000001 - 1000000\nend\nbench(16, values)\n",
+      "candidate_source": "local function bench(repetitions, values)\n    local started = os.clock()\n    local checksum = 0\n    for _ = 1, repetitions do\n        local ordered = table.move(values, 1, #values, 1, {})\n        table.sort(ordered)\n        for position = 1, #ordered do checksum = checksum + ordered[position] * position end\n    end\n    print(checksum)\n    print(math.floor((os.clock() - started) * 1e9 + 0.5))\nend\n\nlocal values = {}\nlocal seed = 42\nfor _ = 1, 4096 do\n    seed = (seed * 1103515245 + 12345) % 2147483648\n    values[#values + 1] = seed % 2000001 - 1000000\nend\nbench(16, values)\n",
+      "rounds": [
+        {
+          "samples_ns": {
+            "baseline": [
+              19722000,
+              19731000,
+              19480000,
+              19826000,
+              19550000,
+              19418000,
+              19769000,
+              19542000,
+              19346000
+            ],
+            "candidate": [
+              18504000,
+              18679000,
+              18556000,
+              18270000,
+              18436000,
+              18483000,
+              18281000,
+              18492000,
+              18385000
+            ]
+          },
+          "baseline_median_ns": 19550000,
+          "candidate_median_ns": 18483000,
+          "paired_ratio_median": 0.9462695732268959,
+          "paired_ratio_iqr": [
+            0.9314860982652035,
+            0.951087224397655
+          ]
+        },
+        {
+          "samples_ns": {
+            "baseline": [
+              19602000,
+              19744000,
+              19443000,
+              19508000,
+              19584000,
+              19571000,
+              20106000,
+              19664000,
+              19544000
+            ],
+            "candidate": [
+              18717000,
+              18426000,
+              18576000,
+              18444000,
+              18566000,
+              18683000,
+              18669000,
+              18293000,
+              18423000
+            ]
+          },
+          "baseline_median_ns": 19584000,
+          "candidate_median_ns": 18566000,
+          "paired_ratio_median": 0.9454582735288087,
+          "paired_ratio_iqr": [
+            0.9317621124024619,
+            0.9547391447059788
+          ]
+        },
+        {
+          "samples_ns": {
+            "baseline": [
+              19393000,
+              19645000,
+              20318000,
+              19902000,
+              19511000,
+              19688000,
+              20367000,
+              19703000,
+              19805000
+            ],
+            "candidate": [
+              18557000,
+              18361000,
+              19043000,
+              18252000,
+              18664000,
+              19034000,
+              19364000,
+              18460000,
+              18560000
+            ]
+          },
+          "baseline_median_ns": 19703000,
+          "candidate_median_ns": 18560000,
+          "paired_ratio_median": 0.937247760606359,
+          "paired_ratio_iqr": [
+            0.9357765089512577,
+            0.9567401264955385
+          ]
+        }
+      ],
+      "samples_ns": {
+        "baseline": [
+          19722000,
+          19731000,
+          19480000,
+          19826000,
+          19550000,
+          19418000,
+          19769000,
+          19542000,
+          19346000,
+          19602000,
+          19744000,
+          19443000,
+          19508000,
+          19584000,
+          19571000,
+          20106000,
+          19664000,
+          19544000,
+          19393000,
+          19645000,
+          20318000,
+          19902000,
+          19511000,
+          19688000,
+          20367000,
+          19703000,
+          19805000
+        ],
+        "candidate": [
+          18504000,
+          18679000,
+          18556000,
+          18270000,
+          18436000,
+          18483000,
+          18281000,
+          18492000,
+          18385000,
+          18717000,
+          18426000,
+          18576000,
+          18444000,
+          18566000,
+          18683000,
+          18669000,
+          18293000,
+          18423000,
+          18557000,
+          18361000,
+          19043000,
+          18252000,
+          18664000,
+          19034000,
+          19364000,
+          18460000,
+          18560000
+        ]
+      },
+      "baseline_median_ns": 19645000,
+      "candidate_median_ns": 18504000,
+      "paired_ratio_median": 0.9454582735288087,
+      "paired_ratio_iqr": [
+        0.9346398574700941,
+        0.9525667351129363
+      ],
+      "retained": true
+    }
+  ]
+}

@@ -1,0 +1,348 @@
+{
+  "date": "2026-10-17T16:40:26.986556+00:00",
+  "runtime": {
+    "path": "/Users/zhuanglinsheng/Documents/Github/tapas/build-release/bin/tapas",
+    "sha256": "fa7b0ec89ed71d51d49d4ae9bd03746af7b646491026849b2f8266569ffd2ce1",
+    "version": "Tapas 0.2.1 Copyright (C) 2020-2026",
+    "build_config": [
+      "CMAKE_BUILD_TYPE:STRING=Release",
+      "CMAKE_C_COMPILER:FILEPATH=/usr/bin/cc",
+      "CMAKE_C_FLAGS:STRING=",
+      "CMAKE_C_FLAGS_RELEASE:STRING=-O3 -DNDEBUG",
+      "CMAKE_EXE_LINKER_FLAGS:STRING=",
+      "TAPAS_ENABLE_IPO:BOOL=ON"
+    ]
+  },
+  "sources": {
+    "baseline": {
+      "path": "/private/tmp/tapas-nbody-analysis/baseline.tap",
+      "sha256": "ccddd921a563d3796dbeb3cced8d9bfc59f029b56761d6ae033833702721935a",
+      "source": "var pi = 3.141592653589793\nvar solar_mass = 4.0 * pi * pi\nvar days_per_year = 365.24\n\nlet Body = types::make_type(\n    'x' : types::Float,\n    'y' : types::Float,\n    'z' : types::Float,\n    'vx' : types::Float,\n    'vy' : types::Float,\n    'vz' : types::Float,\n    'mass' : types::Float,\n)\n\nfunction advance(bodies, dt)\n{\n    let count = len(bodies)\n    for (let i in 0 to count) {\n        let bi = bodies[i]\n        for (let j in i + 1 to count) {\n            let bj = bodies[j]\n            let dx = bi::x - bj::x\n            let dy = bi::y - bj::y\n            let dz = bi::z - bj::z\n            let d2 = dx * dx + dy * dy + dz * dz\n            let mag = dt / (d2 * math::sqrt(d2))\n            let mi = bi::mass * mag\n            let mj = bj::mass * mag\n            bi['vx'] = bi::vx - dx * mj\n            bi['vy'] = bi::vy - dy * mj\n            bi['vz'] = bi::vz - dz * mj\n            bj['vx'] = bj::vx + dx * mi\n            bj['vy'] = bj::vy + dy * mi\n            bj['vz'] = bj::vz + dz * mi\n        }\n    }\n    for (let i in 0 to count) {\n        let b = bodies[i]\n        b['x'] = b::x + dt * b::vx\n        b['y'] = b::y + dt * b::vy\n        b['z'] = b::z + dt * b::vz\n    }\n}\n\nfunction energy(bodies)\n{\n    var e = 0.0\n    let count = len(bodies)\n    for (let i in 0 to count) {\n        let bi = bodies[i]\n        e = e + 0.5 * bi::mass * (bi::vx * bi::vx + bi::vy * bi::vy + bi::vz * bi::vz)\n        for (let j in i + 1 to count) {\n            let bj = bodies[j]\n            let dx = bi::x - bj::x\n            let dy = bi::y - bj::y\n            let dz = bi::z - bj::z\n            e = e - bi::mass * bj::mass / math::sqrt(dx * dx + dy * dy + dz * dz)\n        }\n    }\n    return e + 0.0\n}\n\nfunction offset_momentum(bodies)\n{\n    var px = 0.0\n    var py = 0.0\n    var pz = 0.0\n    for (let b in bodies) {\n        px = px + b::vx * b::mass\n        py = py + b::vy * b::mass\n        pz = pz + b::vz * b::mass\n    }\n    let sun = bodies[0]\n    sun['vx'] = (0.0 - px) / solar_mass\n    sun['vy'] = (0.0 - py) / solar_mass\n    sun['vz'] = (0.0 - pz) / solar_mass\n}\n\nlet sun: Body = {\n    x = 0.0,\n    y = 0.0,\n    z = 0.0,\n    vx = 0.0,\n    vy = 0.0,\n    vz = 0.0,\n    mass = solar_mass,\n}\n\nlet jupiter: Body = {\n    x = 4.84143144246472090e+00,\n    y = -1.16032004402742839e+00,\n    z = -1.03622044471123109e-01,\n    vx = 1.66007664274403694e-03 * days_per_year,\n    vy = 7.69901118419740425e-03 * days_per_year,\n    vz = -6.90460016972063023e-05 * days_per_year,\n    mass = 9.54791938424326609e-04 * solar_mass,\n}\n\nlet saturn: Body = {\n    x = 8.34336671824457987e+00,\n    y = 4.12479856412430479e+00,\n    z = -4.03523417114321381e-01,\n    vx = -2.76742510726862411e-03 * days_per_year,\n    vy = 4.99852801234917238e-03 * days_per_year,\n    vz = 2.30417297573763929e-05 * days_per_year,\n    mass = 2.85885980666130812e-04 * solar_mass,\n}\n\nlet uranus: Body = {\n    x = 1.28943695621391310e+01,\n    y = -1.51111514016986312e+01,\n    z = -2.23307578892655734e-01,\n    vx = 2.96460137564761618e-03 * days_per_year,\n    vy = 2.37847173959480950e-03 * days_per_year,\n    vz = -2.96589568540237556e-05 * days_per_year,\n    mass = 4.36624404335156298e-05 * solar_mass,\n}\n\nlet neptune: Body = {\n    x = 1.53796971148509165e+01,\n    y = -2.59193146099879641e+01,\n    z = 1.79258772950371181e-01,\n    vx = 2.68067772490389322e-03 * days_per_year,\n    vy = 1.62824170038242295e-03 * days_per_year,\n    vz = -9.51592254519715870e-05 * days_per_year,\n    mass = 5.15138902046611451e-05 * solar_mass,\n}\n\nlet bodies = [sun, jupiter, saturn, uranus, neptune]\nlet steps = 5000\n\noffset_momentum(bodies)\nlet started = clock_ns()\nfor (let step in 0 to steps) {\n    advance(bodies, 0.01)\n}\nlet result = int((energy(bodies) + 200.0) * 1000000000.0)\nlet elapsed = clock_ns() - started\n\nprint(result)\nprint(elapsed)\n"
+    },
+    "candidate": {
+      "path": "/private/tmp/tapas-nbody-analysis/cached_sqrt.tap",
+      "sha256": "02768fd8e8f2a6d2d78462674c8e4bcb6b2ce0b8ea079b0a1a7ff92788704814",
+      "source": "var pi = 3.141592653589793\nvar solar_mass = 4.0 * pi * pi\nvar days_per_year = 365.24\n\nlet Body = types::make_type(\n    'x' : types::Float,\n    'y' : types::Float,\n    'z' : types::Float,\n    'vx' : types::Float,\n    'vy' : types::Float,\n    'vz' : types::Float,\n    'mass' : types::Float,\n)\n\nfunction advance(bodies, dt)\n{\n    let sqrt = math::sqrt\n    let count = len(bodies)\n    for (let i in 0 to count) {\n        let bi = bodies[i]\n        for (let j in i + 1 to count) {\n            let bj = bodies[j]\n            let dx = bi::x - bj::x\n            let dy = bi::y - bj::y\n            let dz = bi::z - bj::z\n            let d2 = dx * dx + dy * dy + dz * dz\n            let mag = dt / (d2 * sqrt(d2))\n            let mi = bi::mass * mag\n            let mj = bj::mass * mag\n            bi['vx'] = bi::vx - dx * mj\n            bi['vy'] = bi::vy - dy * mj\n            bi['vz'] = bi::vz - dz * mj\n            bj['vx'] = bj::vx + dx * mi\n            bj['vy'] = bj::vy + dy * mi\n            bj['vz'] = bj::vz + dz * mi\n        }\n    }\n    for (let i in 0 to count) {\n        let b = bodies[i]\n        b['x'] = b::x + dt * b::vx\n        b['y'] = b::y + dt * b::vy\n        b['z'] = b::z + dt * b::vz\n    }\n}\n\nfunction energy(bodies)\n{\n    let sqrt = math::sqrt\n    var e = 0.0\n    let count = len(bodies)\n    for (let i in 0 to count) {\n        let bi = bodies[i]\n        e = e + 0.5 * bi::mass * (bi::vx * bi::vx + bi::vy * bi::vy + bi::vz * bi::vz)\n        for (let j in i + 1 to count) {\n            let bj = bodies[j]\n            let dx = bi::x - bj::x\n            let dy = bi::y - bj::y\n            let dz = bi::z - bj::z\n            e = e - bi::mass * bj::mass / sqrt(dx * dx + dy * dy + dz * dz)\n        }\n    }\n    return e + 0.0\n}\n\nfunction offset_momentum(bodies)\n{\n    var px = 0.0\n    var py = 0.0\n    var pz = 0.0\n    for (let b in bodies) {\n        px = px + b::vx * b::mass\n        py = py + b::vy * b::mass\n        pz = pz + b::vz * b::mass\n    }\n    let sun = bodies[0]\n    sun['vx'] = (0.0 - px) / solar_mass\n    sun['vy'] = (0.0 - py) / solar_mass\n    sun['vz'] = (0.0 - pz) / solar_mass\n}\n\nlet sun: Body = {\n    x = 0.0,\n    y = 0.0,\n    z = 0.0,\n    vx = 0.0,\n    vy = 0.0,\n    vz = 0.0,\n    mass = solar_mass,\n}\n\nlet jupiter: Body = {\n    x = 4.84143144246472090e+00,\n    y = -1.16032004402742839e+00,\n    z = -1.03622044471123109e-01,\n    vx = 1.66007664274403694e-03 * days_per_year,\n    vy = 7.69901118419740425e-03 * days_per_year,\n    vz = -6.90460016972063023e-05 * days_per_year,\n    mass = 9.54791938424326609e-04 * solar_mass,\n}\n\nlet saturn: Body = {\n    x = 8.34336671824457987e+00,\n    y = 4.12479856412430479e+00,\n    z = -4.03523417114321381e-01,\n    vx = -2.76742510726862411e-03 * days_per_year,\n    vy = 4.99852801234917238e-03 * days_per_year,\n    vz = 2.30417297573763929e-05 * days_per_year,\n    mass = 2.85885980666130812e-04 * solar_mass,\n}\n\nlet uranus: Body = {\n    x = 1.28943695621391310e+01,\n    y = -1.51111514016986312e+01,\n    z = -2.23307578892655734e-01,\n    vx = 2.96460137564761618e-03 * days_per_year,\n    vy = 2.37847173959480950e-03 * days_per_year,\n    vz = -2.96589568540237556e-05 * days_per_year,\n    mass = 4.36624404335156298e-05 * solar_mass,\n}\n\nlet neptune: Body = {\n    x = 1.53796971148509165e+01,\n    y = -2.59193146099879641e+01,\n    z = 1.79258772950371181e-01,\n    vx = 2.68067772490389322e-03 * days_per_year,\n    vy = 1.62824170038242295e-03 * days_per_year,\n    vz = -9.51592254519715870e-05 * days_per_year,\n    mass = 5.15138902046611451e-05 * solar_mass,\n}\n\nlet bodies = [sun, jupiter, saturn, uranus, neptune]\nlet steps = 5000\n\noffset_momentum(bodies)\nlet started = clock_ns()\nfor (let step in 0 to steps) {\n    advance(bodies, 0.01)\n}\nlet result = int((energy(bodies) + 200.0) * 1000000000.0)\nlet elapsed = clock_ns() - started\n\nprint(result)\nprint(elapsed)\n"
+    }
+  },
+  "checksum": 199830979999,
+  "runs": 11,
+  "rounds": [
+    {
+      "samples_ns": {
+        "baseline": [
+          24684000,
+          25258000,
+          24825000,
+          24814000,
+          24504000,
+          24529000,
+          25164000,
+          24963000,
+          24856000,
+          24849000,
+          25505000
+        ],
+        "candidate": [
+          22840000,
+          24091000,
+          24023000,
+          23965000,
+          23314000,
+          23813000,
+          23850000,
+          24008000,
+          24231000,
+          23603000,
+          23737000
+        ]
+      },
+      "baseline_median_ns": 24849000,
+      "candidate_median_ns": 23850000,
+      "paired_ratio_median": 0.9537968168501069,
+      "paired_ratio_iqr": [
+        0.9477825464949928,
+        0.9676938569989929
+      ]
+    },
+    {
+      "samples_ns": {
+        "baseline": [
+          25482000,
+          24770000,
+          24895000,
+          24775000,
+          25040000,
+          24247000,
+          24604000,
+          24799000,
+          24445000,
+          24348000,
+          24741000
+        ],
+        "candidate": [
+          23726000,
+          24053000,
+          23780000,
+          23656000,
+          23422000,
+          23209000,
+          22940000,
+          23479000,
+          23305000,
+          23455000,
+          24164000
+        ]
+      },
+      "baseline_median_ns": 24770000,
+      "candidate_median_ns": 23479000,
+      "paired_ratio_median": 0.9548335015136226,
+      "paired_ratio_iqr": [
+        0.9353833865814697,
+        0.9633234762608839
+      ]
+    },
+    {
+      "samples_ns": {
+        "baseline": [
+          25289000,
+          25976000,
+          27174000,
+          26089000,
+          28001000,
+          24580000,
+          24339000,
+          24724000,
+          24713000,
+          27079000,
+          23930000
+        ],
+        "candidate": [
+          24159000,
+          26029000,
+          27812000,
+          28126000,
+          25834000,
+          23598000,
+          23587000,
+          23659000,
+          23517000,
+          24275000,
+          23529000
+        ]
+      },
+      "baseline_median_ns": 25289000,
+      "candidate_median_ns": 24159000,
+      "paired_ratio_median": 0.9600488201790073,
+      "paired_ratio_iqr": [
+        0.9516044187269858,
+        1.0020403449337851
+      ]
+    },
+    {
+      "samples_ns": {
+        "baseline": [
+          25270000,
+          25010000,
+          24446000,
+          24838000,
+          24153000,
+          23865000,
+          24038000,
+          24131000,
+          23684000,
+          24431000,
+          24975000
+        ],
+        "candidate": [
+          23600000,
+          23648000,
+          23742000,
+          23406000,
+          22953000,
+          23358000,
+          22627000,
+          23154000,
+          22816000,
+          22788000,
+          23778000
+        ]
+      },
+      "baseline_median_ns": 24431000,
+      "candidate_median_ns": 23358000,
+      "paired_ratio_median": 0.9503167308408893,
+      "paired_ratio_iqr": [
+        0.9413012729844413,
+        0.9633507853403142
+      ]
+    },
+    {
+      "samples_ns": {
+        "baseline": [
+          25056000,
+          24944000,
+          24598000,
+          24641000,
+          24494000,
+          24769000,
+          25418000,
+          24301000,
+          24183000,
+          23764000,
+          24061000
+        ],
+        "candidate": [
+          24377000,
+          23431000,
+          23460000,
+          23664000,
+          23763000,
+          23749000,
+          24353000,
+          22694000,
+          22886000,
+          22761000,
+          22875000
+        ]
+      },
+      "baseline_median_ns": 24598000,
+      "candidate_median_ns": 23460000,
+      "paired_ratio_median": 0.9577933007911126,
+      "paired_ratio_iqr": [
+        0.9463672828019684,
+        0.9603506351203279
+      ]
+    }
+  ],
+  "warmups_per_round": 1,
+  "round_ratio_medians": [
+    0.9537968168501069,
+    0.9548335015136226,
+    0.9600488201790073,
+    0.9503167308408893,
+    0.9577933007911126
+  ],
+  "samples_ns": {
+    "baseline": [
+      24684000,
+      25258000,
+      24825000,
+      24814000,
+      24504000,
+      24529000,
+      25164000,
+      24963000,
+      24856000,
+      24849000,
+      25505000,
+      25482000,
+      24770000,
+      24895000,
+      24775000,
+      25040000,
+      24247000,
+      24604000,
+      24799000,
+      24445000,
+      24348000,
+      24741000,
+      25289000,
+      25976000,
+      27174000,
+      26089000,
+      28001000,
+      24580000,
+      24339000,
+      24724000,
+      24713000,
+      27079000,
+      23930000,
+      25270000,
+      25010000,
+      24446000,
+      24838000,
+      24153000,
+      23865000,
+      24038000,
+      24131000,
+      23684000,
+      24431000,
+      24975000,
+      25056000,
+      24944000,
+      24598000,
+      24641000,
+      24494000,
+      24769000,
+      25418000,
+      24301000,
+      24183000,
+      23764000,
+      24061000
+    ],
+    "candidate": [
+      22840000,
+      24091000,
+      24023000,
+      23965000,
+      23314000,
+      23813000,
+      23850000,
+      24008000,
+      24231000,
+      23603000,
+      23737000,
+      23726000,
+      24053000,
+      23780000,
+      23656000,
+      23422000,
+      23209000,
+      22940000,
+      23479000,
+      23305000,
+      23455000,
+      24164000,
+      24159000,
+      26029000,
+      27812000,
+      28126000,
+      25834000,
+      23598000,
+      23587000,
+      23659000,
+      23517000,
+      24275000,
+      23529000,
+      23600000,
+      23648000,
+      23742000,
+      23406000,
+      22953000,
+      23358000,
+      22627000,
+      23154000,
+      22816000,
+      22788000,
+      23778000,
+      24377000,
+      23431000,
+      23460000,
+      23664000,
+      23763000,
+      23749000,
+      24353000,
+      22694000,
+      22886000,
+      22761000,
+      22875000
+    ]
+  },
+  "baseline_median_ns": 24769000,
+  "candidate_median_ns": 23648000,
+  "paired_ratio_median": 0.9552118899377385,
+  "paired_ratio_iqr": [
+    0.9455417832866854,
+    0.9676938569989929
+  ]
+}

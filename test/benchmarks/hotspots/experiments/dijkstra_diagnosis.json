@@ -1,0 +1,790 @@
+{
+  "date": "2026-10-17T10:50:21.876765+00:00",
+  "python": "3.14.2 (main, Oct  9 2026, 23:40:19) [Clang 21.0.0 (clang-2100.3.34.2)]",
+  "work_counts": {
+    "tapas_distance_only": {
+      "comparisons": 100624,
+      "pops": 7436,
+      "pushes": 7420,
+      "expansions": 4000,
+      "edges": 28000
+    },
+    "tapas_lex": {
+      "comparisons": 103388,
+      "pops": 7452,
+      "pushes": 7436,
+      "expansions": 4000,
+      "edges": 28000
+    },
+    "python_distance_only": {
+      "pops": 7428,
+      "pushes": 7412,
+      "expansions": 4000,
+      "edges": 28000,
+      "comparisons": 68292
+    },
+    "python_lex": {
+      "pops": 7452,
+      "pushes": 7436,
+      "expansions": 4000,
+      "edges": 28000,
+      "comparisons": 70232
+    }
+  },
+  "counting_source": "from pathlib import Path\nimport subprocess,sys,inspect,json\nfolder=Path('/tmp/tapas-dijkstra-diag-dir').read_text();folder=Path(folder)\ncounts={}\nfor tie in (False,True):\n text=(folder/('tie_order.tap' if tie else 'baseline.tap')).read_text()\n text=\"var stats = {'comparisons': 0, 'pops': 0, 'pushes': 0, 'expansions': 0, 'edges': 0}\\n\"+text.replace('    return a[0]',\"    stats['comparisons'] = stats['comparisons'] + 1\\n    return a[0]\",1)\n for old,new in [('        let current = heap::pop',\"        stats['pops'] = stats['pops'] + 1\\n        let current = heap::pop\"),('            for (let edge',\"            stats['expansions'] = stats['expansions'] + 1\\n            for (let edge\"),('                let target',\"                stats['edges'] = stats['edges'] + 1\\n                let target\"),('                    heap::push',\"                    stats['pushes'] = stats['pushes'] + 1\\n                    heap::push\")]:text=text.replace(old,new,1)\n text+=\"\\nfor (let key in ['comparisons', 'pops', 'pushes', 'expansions', 'edges']) { print(stats[key]) }\\n\"\n p=folder/('stats_tie.tap' if tie else 'stats.tap');p.write_text(text)\n r=subprocess.run([str(Path('build-release/bin/tapas').resolve()),'-ce',str(p)],capture_output=True,text=True,check=True)\n values=list(map(int,r.stdout.splitlines()))\n counts['tapas_lex' if tie else 'tapas_distance_only']=dict(zip(['comparisons','pops','pushes','expansions','edges'],values[2:]))\nsys.path.insert(0,'test/benchmarks');import dijkstra as py\nfor tie in (False,True):\n counter={'pops':0,'pushes':0,'expansions':0,'edges':0}\n class Entry(tuple):\n  def __lt__(self,other):return self[0]<other[0]\n def pop(q):counter['pops']+=1;return origpop(q)\n def push(q,item):counter['pushes']+=1;origpush(q,item if tie else Entry(item))\n origpop,origpush=py.heappop,py.heappush\n source=inspect.getsource(py.dijkstra).replace('    queue = [(0, source)]','    queue = [(0, source)]' if tie else '    queue = [Entry((0, source))]')\n source=source.replace('        for target, weight',\"        counter['expansions'] += 1\\n        for target, weight\").replace('            alternative',\"            counter['edges'] += 1\\n            alternative\",1)\n ns=vars(py).copy();ns.update(counter=counter,Entry=Entry,heappop=pop,heappush=push);exec(source,ns)\n for _ in range(py.rounds):\n  for start in py.sources:ns['dijkstra'](py.graph,start,py.size)\n counts['python_lex' if tie else 'python_distance_only']=counter\nprint(json.dumps(counts,indent=2));print('heap implementation:',py.heappop.__module__)\n(folder/'work_counts.json').write_text(json.dumps(counts,indent=2)+'\\n')\n",
+  "timed_source_ab": {
+    "tie_order": {
+      "date": "2026-10-17T10:47:35.381122+00:00",
+      "runtime": {
+        "path": "/Users/zhuanglinsheng/Documents/Github/tapas/build-release/bin/tapas",
+        "sha256": "2c543424a5884d5a647a99e8cf7b3134d170920aa714813705e4ae0d1e00dc1a",
+        "version": "Tapas 0.1.0 Copyright (C) 2020-2026",
+        "build_config": [
+          "CMAKE_BUILD_TYPE:STRING=Release",
+          "CMAKE_C_COMPILER:FILEPATH=/usr/bin/cc",
+          "CMAKE_C_FLAGS:STRING=",
+          "CMAKE_C_FLAGS_RELEASE:STRING=-O3 -DNDEBUG",
+          "CMAKE_EXE_LINKER_FLAGS:STRING=",
+          "TAPAS_ENABLE_IPO:BOOL=ON"
+        ]
+      },
+      "sources": {
+        "baseline": {
+          "path": "/private/var/folders/7g/nxmw_wbs1nsfwhdcb7s3zrtc0000gn/T/tapas-dijkstra-diagnosis-i1bvar_s/baseline.tap",
+          "sha256": "ec8d478f5d54db25151f9896bcfd439ddcdda4883ce7d4e47012f4ec0754df7e",
+          "source": "function distance_less(a, b)\n{\n    return a[0] < b[0]\n}\n\nfunction dijkstra(graph, source, size)\n{\n    let dist = replicate([1000000000000], size)\n    dist[source] = 0\n    let queue = [[0, source]]\n    while (len(queue) > 0) {\n        let current = heap::pop(queue, distance_less)\n        let distance = current[0]\n        let vertex = current[1]\n        if (distance == dist[vertex] and vertex in graph) {\n            for (let edge in graph[vertex]) {\n                let target = edge[0]\n                let alt = distance + edge[1]\n                if (alt < dist[target]) {\n                    dist[target] = alt\n                    heap::push(queue, [alt, target], distance_less)\n                }\n            }\n        }\n    }\n    return copy(dist)\n}\n\nlet size = 250\nlet degree = 6\nlet graph = {}\nfor (let i in 0 to size) {\n    let edges = []\n    edges.append([(i + 1) % size, 1])\n    for (let k in 0 to degree) {\n        let j = (i * 7 + k * 13 + 3) % size\n        let w = (i * 5 + k * 11 + 7) % 19 + 1\n        edges.append([j, w])\n    }\n    graph[i] = edges\n}\nlet sources = [0, size / 4, size / 2, size * 3 / 4]\nlet rounds = 4\n\nlet started = clock_ns()\nvar checksum = 0\nfor (let round in 0 to rounds) {\n    for (let s in 0 to len(sources)) {\n        let dist = dijkstra(graph, sources[s], size)\n        for (let i in 0 to size) {\n            checksum = checksum + dist[i]\n        }\n    }\n}\nlet elapsed = clock_ns() - started\n\nprint(checksum)\nprint(elapsed)\n"
+        },
+        "candidate": {
+          "path": "/private/var/folders/7g/nxmw_wbs1nsfwhdcb7s3zrtc0000gn/T/tapas-dijkstra-diagnosis-i1bvar_s/tie_order.tap",
+          "sha256": "468f22fa1d566aa4bd824c57ef1b0c480a403f364c7552eb295683b5bf24fd3a",
+          "source": "function distance_less(a, b)\n{\n    return a[0] < b[0] or (a[0] == b[0] and a[1] < b[1])\n}\n\nfunction dijkstra(graph, source, size)\n{\n    let dist = replicate([1000000000000], size)\n    dist[source] = 0\n    let queue = [[0, source]]\n    while (len(queue) > 0) {\n        let current = heap::pop(queue, distance_less)\n        let distance = current[0]\n        let vertex = current[1]\n        if (distance == dist[vertex] and vertex in graph) {\n            for (let edge in graph[vertex]) {\n                let target = edge[0]\n                let alt = distance + edge[1]\n                if (alt < dist[target]) {\n                    dist[target] = alt\n                    heap::push(queue, [alt, target], distance_less)\n                }\n            }\n        }\n    }\n    return copy(dist)\n}\n\nlet size = 250\nlet degree = 6\nlet graph = {}\nfor (let i in 0 to size) {\n    let edges = []\n    edges.append([(i + 1) % size, 1])\n    for (let k in 0 to degree) {\n        let j = (i * 7 + k * 13 + 3) % size\n        let w = (i * 5 + k * 11 + 7) % 19 + 1\n        edges.append([j, w])\n    }\n    graph[i] = edges\n}\nlet sources = [0, size / 4, size / 2, size * 3 / 4]\nlet rounds = 4\n\nlet started = clock_ns()\nvar checksum = 0\nfor (let round in 0 to rounds) {\n    for (let s in 0 to len(sources)) {\n        let dist = dijkstra(graph, sources[s], size)\n        for (let i in 0 to size) {\n            checksum = checksum + dist[i]\n        }\n    }\n}\nlet elapsed = clock_ns() - started\n\nprint(checksum)\nprint(elapsed)\n"
+        }
+      },
+      "checksum": 40796,
+      "runs": 7,
+      "rounds": [
+        {
+          "samples_ns": {
+            "baseline": [
+              8011000,
+              7933000,
+              8668000,
+              8568000,
+              8431000,
+              9555000,
+              8475000
+            ],
+            "candidate": [
+              10160000,
+              10532000,
+              10387000,
+              11342000,
+              10718000,
+              13128000,
+              10757000
+            ]
+          },
+          "baseline_median_ns": 8475000,
+          "candidate_median_ns": 10718000,
+          "paired_ratio_median": 1.271260823152651,
+          "paired_ratio_iqr": [
+            1.2682561477967795,
+            1.3276188075129207
+          ]
+        },
+        {
+          "samples_ns": {
+            "baseline": [
+              8359000,
+              8436000,
+              8015000,
+              8849000,
+              8520000,
+              9399000,
+              8747000
+            ],
+            "candidate": [
+              10672000,
+              10380000,
+              10452000,
+              10617000,
+              11403000,
+              10897000,
+              11082000
+            ]
+          },
+          "baseline_median_ns": 8520000,
+          "candidate_median_ns": 10672000,
+          "paired_ratio_median": 1.2669486681147821,
+          "paired_ratio_iqr": [
+            1.1997965871849927,
+            1.3040548970679975
+          ]
+        },
+        {
+          "samples_ns": {
+            "baseline": [
+              8884000,
+              8392000,
+              8690000,
+              8278000,
+              8162000,
+              7998000,
+              8574000
+            ],
+            "candidate": [
+              10634000,
+              10923000,
+              11012000,
+              10463000,
+              10438000,
+              10098000,
+              10345000
+            ]
+          },
+          "baseline_median_ns": 8392000,
+          "candidate_median_ns": 10463000,
+          "paired_ratio_median": 1.263952645566562,
+          "paired_ratio_iqr": [
+            1.2065547002565897,
+            1.2788532222494486
+          ]
+        }
+      ],
+      "warmups_per_round": 1,
+      "round_ratio_medians": [
+        1.271260823152651,
+        1.2669486681147821,
+        1.263952645566562
+      ],
+      "samples_ns": {
+        "baseline": [
+          8011000,
+          7933000,
+          8668000,
+          8568000,
+          8431000,
+          9555000,
+          8475000,
+          8359000,
+          8436000,
+          8015000,
+          8849000,
+          8520000,
+          9399000,
+          8747000,
+          8884000,
+          8392000,
+          8690000,
+          8278000,
+          8162000,
+          7998000,
+          8574000
+        ],
+        "candidate": [
+          10160000,
+          10532000,
+          10387000,
+          11342000,
+          10718000,
+          13128000,
+          10757000,
+          10672000,
+          10380000,
+          10452000,
+          10617000,
+          11403000,
+          10897000,
+          11082000,
+          10634000,
+          10923000,
+          11012000,
+          10463000,
+          10438000,
+          10098000,
+          10345000
+        ]
+      },
+      "baseline_median_ns": 8475000,
+      "candidate_median_ns": 10634000,
+      "paired_ratio_median": 1.2682561477967795,
+      "paired_ratio_iqr": [
+        1.2184978337698311,
+        1.3028258279429596
+      ]
+    },
+    "pair_records": {
+      "date": "2026-10-17T10:48:14.955768+00:00",
+      "runtime": {
+        "path": "/Users/zhuanglinsheng/Documents/Github/tapas/build-release/bin/tapas",
+        "sha256": "2c543424a5884d5a647a99e8cf7b3134d170920aa714813705e4ae0d1e00dc1a",
+        "version": "Tapas 0.1.0 Copyright (C) 2020-2026",
+        "build_config": [
+          "CMAKE_BUILD_TYPE:STRING=Release",
+          "CMAKE_C_COMPILER:FILEPATH=/usr/bin/cc",
+          "CMAKE_C_FLAGS:STRING=",
+          "CMAKE_C_FLAGS_RELEASE:STRING=-O3 -DNDEBUG",
+          "CMAKE_EXE_LINKER_FLAGS:STRING=",
+          "TAPAS_ENABLE_IPO:BOOL=ON"
+        ]
+      },
+      "sources": {
+        "baseline": {
+          "path": "/private/var/folders/7g/nxmw_wbs1nsfwhdcb7s3zrtc0000gn/T/tapas-dijkstra-diagnosis-i1bvar_s/baseline.tap",
+          "sha256": "ec8d478f5d54db25151f9896bcfd439ddcdda4883ce7d4e47012f4ec0754df7e",
+          "source": "function distance_less(a, b)\n{\n    return a[0] < b[0]\n}\n\nfunction dijkstra(graph, source, size)\n{\n    let dist = replicate([1000000000000], size)\n    dist[source] = 0\n    let queue = [[0, source]]\n    while (len(queue) > 0) {\n        let current = heap::pop(queue, distance_less)\n        let distance = current[0]\n        let vertex = current[1]\n        if (distance == dist[vertex] and vertex in graph) {\n            for (let edge in graph[vertex]) {\n                let target = edge[0]\n                let alt = distance + edge[1]\n                if (alt < dist[target]) {\n                    dist[target] = alt\n                    heap::push(queue, [alt, target], distance_less)\n                }\n            }\n        }\n    }\n    return copy(dist)\n}\n\nlet size = 250\nlet degree = 6\nlet graph = {}\nfor (let i in 0 to size) {\n    let edges = []\n    edges.append([(i + 1) % size, 1])\n    for (let k in 0 to degree) {\n        let j = (i * 7 + k * 13 + 3) % size\n        let w = (i * 5 + k * 11 + 7) % 19 + 1\n        edges.append([j, w])\n    }\n    graph[i] = edges\n}\nlet sources = [0, size / 4, size / 2, size * 3 / 4]\nlet rounds = 4\n\nlet started = clock_ns()\nvar checksum = 0\nfor (let round in 0 to rounds) {\n    for (let s in 0 to len(sources)) {\n        let dist = dijkstra(graph, sources[s], size)\n        for (let i in 0 to size) {\n            checksum = checksum + dist[i]\n        }\n    }\n}\nlet elapsed = clock_ns() - started\n\nprint(checksum)\nprint(elapsed)\n"
+        },
+        "candidate": {
+          "path": "/private/var/folders/7g/nxmw_wbs1nsfwhdcb7s3zrtc0000gn/T/tapas-dijkstra-diagnosis-i1bvar_s/pair_records.tap",
+          "sha256": "16a8df8f53e868b22b52cdf03d8491ba8af3b48e5347de3d44cca03c4e054f51",
+          "source": "function distance_less(a, b)\n{\n    return a[0] < b[0]\n}\n\nfunction dijkstra(graph, source, size)\n{\n    let dist = replicate([1000000000000], size)\n    dist[source] = 0\n    let queue = [0 : source]\n    while (len(queue) > 0) {\n        let current = heap::pop(queue, distance_less)\n        let distance = current[0]\n        let vertex = current[1]\n        if (distance == dist[vertex] and vertex in graph) {\n            for (let edge in graph[vertex]) {\n                let target = edge[0]\n                let alt = distance + edge[1]\n                if (alt < dist[target]) {\n                    dist[target] = alt\n                    heap::push(queue, alt : target, distance_less)\n                }\n            }\n        }\n    }\n    return copy(dist)\n}\n\nlet size = 250\nlet degree = 6\nlet graph = {}\nfor (let i in 0 to size) {\n    let edges = []\n    edges.append([(i + 1) % size, 1])\n    for (let k in 0 to degree) {\n        let j = (i * 7 + k * 13 + 3) % size\n        let w = (i * 5 + k * 11 + 7) % 19 + 1\n        edges.append([j, w])\n    }\n    graph[i] = edges\n}\nlet sources = [0, size / 4, size / 2, size * 3 / 4]\nlet rounds = 4\n\nlet started = clock_ns()\nvar checksum = 0\nfor (let round in 0 to rounds) {\n    for (let s in 0 to len(sources)) {\n        let dist = dijkstra(graph, sources[s], size)\n        for (let i in 0 to size) {\n            checksum = checksum + dist[i]\n        }\n    }\n}\nlet elapsed = clock_ns() - started\n\nprint(checksum)\nprint(elapsed)\n"
+        }
+      },
+      "checksum": 40796,
+      "runs": 7,
+      "rounds": [
+        {
+          "samples_ns": {
+            "baseline": [
+              7893000,
+              8111000,
+              8136000,
+              7922000,
+              8107000,
+              8456000,
+              8049000
+            ],
+            "candidate": [
+              10364000,
+              10446000,
+              10340000,
+              10244000,
+              10185000,
+              10247000,
+              10152000
+            ]
+          },
+          "baseline_median_ns": 8107000,
+          "candidate_median_ns": 10247000,
+          "paired_ratio_median": 1.2708947885939037,
+          "paired_ratio_iqr": [
+            1.2563216972986309,
+            1.2931078010603383
+          ]
+        },
+        {
+          "samples_ns": {
+            "baseline": [
+              8226000,
+              8071000,
+              8051000,
+              8136000,
+              8060000,
+              8015000,
+              8027000
+            ],
+            "candidate": [
+              10291000,
+              10571000,
+              10372000,
+              10315000,
+              10061000,
+              10190000,
+              10120000
+            ]
+          },
+          "baseline_median_ns": 8060000,
+          "candidate_median_ns": 10291000,
+          "paired_ratio_median": 1.2678220255653885,
+          "paired_ratio_iqr": [
+            1.25103330902018,
+            1.2882871692957396
+          ]
+        },
+        {
+          "samples_ns": {
+            "baseline": [
+              8808000,
+              8448000,
+              9069000,
+              13813000,
+              8746000,
+              9117000,
+              8360000
+            ],
+            "candidate": [
+              10545000,
+              10692000,
+              10557000,
+              16363000,
+              15345000,
+              11193000,
+              10986000
+            ]
+          },
+          "baseline_median_ns": 8808000,
+          "candidate_median_ns": 10986000,
+          "paired_ratio_median": 1.2277064823955248,
+          "paired_ratio_iqr": [
+            1.1846087019474407,
+            1.3141148325358851
+          ]
+        }
+      ],
+      "warmups_per_round": 1,
+      "round_ratio_medians": [
+        1.2708947885939037,
+        1.2678220255653885,
+        1.2277064823955248
+      ],
+      "samples_ns": {
+        "baseline": [
+          7893000,
+          8111000,
+          8136000,
+          7922000,
+          8107000,
+          8456000,
+          8049000,
+          8226000,
+          8071000,
+          8051000,
+          8136000,
+          8060000,
+          8015000,
+          8027000,
+          8808000,
+          8448000,
+          9069000,
+          13813000,
+          8746000,
+          9117000,
+          8360000
+        ],
+        "candidate": [
+          10364000,
+          10446000,
+          10340000,
+          10244000,
+          10185000,
+          10247000,
+          10152000,
+          10291000,
+          10571000,
+          10372000,
+          10315000,
+          10061000,
+          10190000,
+          10120000,
+          10545000,
+          10692000,
+          10557000,
+          16363000,
+          15345000,
+          11193000,
+          10986000
+        ]
+      },
+      "baseline_median_ns": 8136000,
+      "candidate_median_ns": 10364000,
+      "paired_ratio_median": 1.265625,
+      "paired_ratio_iqr": [
+        1.237984754845405,
+        1.2906974851780388
+      ]
+    },
+    "one_lookup_shared": {
+      "date": "2026-10-17T10:48:15.708479+00:00",
+      "runtime": {
+        "path": "/Users/zhuanglinsheng/Documents/Github/tapas/build-release/bin/tapas",
+        "sha256": "2c543424a5884d5a647a99e8cf7b3134d170920aa714813705e4ae0d1e00dc1a",
+        "version": "Tapas 0.1.0 Copyright (C) 2020-2026",
+        "build_config": [
+          "CMAKE_BUILD_TYPE:STRING=Release",
+          "CMAKE_C_COMPILER:FILEPATH=/usr/bin/cc",
+          "CMAKE_C_FLAGS:STRING=",
+          "CMAKE_C_FLAGS_RELEASE:STRING=-O3 -DNDEBUG",
+          "CMAKE_EXE_LINKER_FLAGS:STRING=",
+          "TAPAS_ENABLE_IPO:BOOL=ON"
+        ]
+      },
+      "sources": {
+        "baseline": {
+          "path": "/private/var/folders/7g/nxmw_wbs1nsfwhdcb7s3zrtc0000gn/T/tapas-dijkstra-diagnosis-i1bvar_s/baseline.tap",
+          "sha256": "ec8d478f5d54db25151f9896bcfd439ddcdda4883ce7d4e47012f4ec0754df7e",
+          "source": "function distance_less(a, b)\n{\n    return a[0] < b[0]\n}\n\nfunction dijkstra(graph, source, size)\n{\n    let dist = replicate([1000000000000], size)\n    dist[source] = 0\n    let queue = [[0, source]]\n    while (len(queue) > 0) {\n        let current = heap::pop(queue, distance_less)\n        let distance = current[0]\n        let vertex = current[1]\n        if (distance == dist[vertex] and vertex in graph) {\n            for (let edge in graph[vertex]) {\n                let target = edge[0]\n                let alt = distance + edge[1]\n                if (alt < dist[target]) {\n                    dist[target] = alt\n                    heap::push(queue, [alt, target], distance_less)\n                }\n            }\n        }\n    }\n    return copy(dist)\n}\n\nlet size = 250\nlet degree = 6\nlet graph = {}\nfor (let i in 0 to size) {\n    let edges = []\n    edges.append([(i + 1) % size, 1])\n    for (let k in 0 to degree) {\n        let j = (i * 7 + k * 13 + 3) % size\n        let w = (i * 5 + k * 11 + 7) % 19 + 1\n        edges.append([j, w])\n    }\n    graph[i] = edges\n}\nlet sources = [0, size / 4, size / 2, size * 3 / 4]\nlet rounds = 4\n\nlet started = clock_ns()\nvar checksum = 0\nfor (let round in 0 to rounds) {\n    for (let s in 0 to len(sources)) {\n        let dist = dijkstra(graph, sources[s], size)\n        for (let i in 0 to size) {\n            checksum = checksum + dist[i]\n        }\n    }\n}\nlet elapsed = clock_ns() - started\n\nprint(checksum)\nprint(elapsed)\n"
+        },
+        "candidate": {
+          "path": "/private/var/folders/7g/nxmw_wbs1nsfwhdcb7s3zrtc0000gn/T/tapas-dijkstra-diagnosis-i1bvar_s/one_lookup_shared.tap",
+          "sha256": "20cff17a71ca26c855c20250bbe3ef42eb797da48d7751d33abede916950dea3",
+          "source": "function distance_less(a, b)\n{\n    return a[0] < b[0]\n}\n\nfunction dijkstra(graph, source, size)\n{\n    let dist = replicate([1000000000000], size)\n    dist[source] = 0\n    let empty_edges = []\n    let queue = [[0, source]]\n    while (len(queue) > 0) {\n        let current = heap::pop(queue, distance_less)\n        let distance = current[0]\n        let vertex = current[1]\n        if (distance == dist[vertex] ) {\n            for (let edge in idx_or(graph, vertex, empty_edges)) {\n                let target = edge[0]\n                let alt = distance + edge[1]\n                if (alt < dist[target]) {\n                    dist[target] = alt\n                    heap::push(queue, [alt, target], distance_less)\n                }\n            }\n        }\n    }\n    return copy(dist)\n}\n\nlet size = 250\nlet degree = 6\nlet graph = {}\nfor (let i in 0 to size) {\n    let edges = []\n    edges.append([(i + 1) % size, 1])\n    for (let k in 0 to degree) {\n        let j = (i * 7 + k * 13 + 3) % size\n        let w = (i * 5 + k * 11 + 7) % 19 + 1\n        edges.append([j, w])\n    }\n    graph[i] = edges\n}\nlet sources = [0, size / 4, size / 2, size * 3 / 4]\nlet rounds = 4\n\nlet started = clock_ns()\nvar checksum = 0\nfor (let round in 0 to rounds) {\n    for (let s in 0 to len(sources)) {\n        let dist = dijkstra(graph, sources[s], size)\n        for (let i in 0 to size) {\n            checksum = checksum + dist[i]\n        }\n    }\n}\nlet elapsed = clock_ns() - started\n\nprint(checksum)\nprint(elapsed)\n"
+        }
+      },
+      "checksum": 40796,
+      "runs": 7,
+      "rounds": [
+        {
+          "samples_ns": {
+            "baseline": [
+              9536000,
+              9718000,
+              8497000,
+              9031000,
+              8060000,
+              8215000,
+              8517000
+            ],
+            "candidate": [
+              9853000,
+              9615000,
+              8780000,
+              8320000,
+              8528000,
+              8242000,
+              8266000
+            ]
+          },
+          "baseline_median_ns": 8517000,
+          "candidate_median_ns": 8528000,
+          "paired_ratio_median": 1.003286670724285,
+          "paired_ratio_iqr": [
+            0.9705295291769402,
+            1.0333058726609392
+          ]
+        },
+        {
+          "samples_ns": {
+            "baseline": [
+              9038000,
+              9220000,
+              8491000,
+              8455000,
+              8693000,
+              9176000,
+              8338000
+            ],
+            "candidate": [
+              9330000,
+              8619000,
+              8747000,
+              8123000,
+              9077000,
+              8315000,
+              8478000
+            ]
+          },
+          "baseline_median_ns": 8693000,
+          "candidate_median_ns": 8619000,
+          "paired_ratio_median": 1.0167905972655313,
+          "paired_ratio_iqr": [
+            0.9348156182212581,
+            1.0323080327506085
+          ]
+        },
+        {
+          "samples_ns": {
+            "baseline": [
+              8090000,
+              8164000,
+              8221000,
+              8272000,
+              8076000,
+              8219000,
+              8293000
+            ],
+            "candidate": [
+              7847000,
+              8064000,
+              7810000,
+              8111000,
+              8479000,
+              7980000,
+              8261000
+            ]
+          },
+          "baseline_median_ns": 8219000,
+          "candidate_median_ns": 8064000,
+          "paired_ratio_median": 0.980536750483559,
+          "paired_ratio_iqr": [
+            0.9699629171817058,
+            0.9961413240081997
+          ]
+        }
+      ],
+      "warmups_per_round": 1,
+      "round_ratio_medians": [
+        1.003286670724285,
+        1.0167905972655313,
+        0.980536750483559
+      ],
+      "samples_ns": {
+        "baseline": [
+          9536000,
+          9718000,
+          8497000,
+          9031000,
+          8060000,
+          8215000,
+          8517000,
+          9038000,
+          9220000,
+          8491000,
+          8455000,
+          8693000,
+          9176000,
+          8338000,
+          8090000,
+          8164000,
+          8221000,
+          8272000,
+          8076000,
+          8219000,
+          8293000
+        ],
+        "candidate": [
+          9853000,
+          9615000,
+          8780000,
+          8320000,
+          8528000,
+          8242000,
+          8266000,
+          9330000,
+          8619000,
+          8747000,
+          8123000,
+          9077000,
+          8315000,
+          8478000,
+          7847000,
+          8064000,
+          7810000,
+          8111000,
+          8479000,
+          7980000,
+          8261000
+        ]
+      },
+      "baseline_median_ns": 8455000,
+      "candidate_median_ns": 8320000,
+      "paired_ratio_median": 0.9894011113397818,
+      "paired_ratio_iqr": [
+        0.9653481055453177,
+        1.0327752412075188
+      ]
+    },
+    "heap_callback": {
+      "date": "2026-10-17T10:48:16.472186+00:00",
+      "runtime": {
+        "path": "/Users/zhuanglinsheng/Documents/Github/tapas/build-release/bin/tapas",
+        "sha256": "2c543424a5884d5a647a99e8cf7b3134d170920aa714813705e4ae0d1e00dc1a",
+        "version": "Tapas 0.1.0 Copyright (C) 2020-2026",
+        "build_config": [
+          "CMAKE_BUILD_TYPE:STRING=Release",
+          "CMAKE_C_COMPILER:FILEPATH=/usr/bin/cc",
+          "CMAKE_C_FLAGS:STRING=",
+          "CMAKE_C_FLAGS_RELEASE:STRING=-O3 -DNDEBUG",
+          "CMAKE_EXE_LINKER_FLAGS:STRING=",
+          "TAPAS_ENABLE_IPO:BOOL=ON"
+        ]
+      },
+      "sources": {
+        "baseline": {
+          "path": "/private/var/folders/7g/nxmw_wbs1nsfwhdcb7s3zrtc0000gn/T/tapas-dijkstra-diagnosis-i1bvar_s/heap_default.tap",
+          "sha256": "7bd6e789627abd6a5a06fb586eadc1776fefbaa7a06f033c390b5378620477c9",
+          "source": "function numeric_less(a, b) { return a < b }\nfunction run_heap()\n{\n    var checksum = 0\n    for (let repetition in 0 to 20) {\n        let queue = []\n        for (let i in 0 to 1000) { heap::push(queue, (i * 73 + 19) % 1009) }\n        while (len(queue) > 0) { checksum = checksum + heap::pop(queue) }\n    }\n    return checksum + 0\n}\nlet started = clock_ns()\nlet result = run_heap()\nlet elapsed = clock_ns() - started\nprint(result)\nprint(elapsed)\n"
+        },
+        "candidate": {
+          "path": "/private/var/folders/7g/nxmw_wbs1nsfwhdcb7s3zrtc0000gn/T/tapas-dijkstra-diagnosis-i1bvar_s/heap_callback.tap",
+          "sha256": "7dda730fdbee2622cb3d4852c12d7efe393426ac177a26f46cb35d6180f4c165",
+          "source": "function numeric_less(a, b) { return a < b }\nfunction run_heap()\n{\n    var checksum = 0\n    for (let repetition in 0 to 20) {\n        let queue = []\n        for (let i in 0 to 1000) { heap::push(queue, (i * 73 + 19) % 1009, numeric_less) }\n        while (len(queue) > 0) { checksum = checksum + heap::pop(queue, numeric_less) }\n    }\n    return checksum + 0\n}\nlet started = clock_ns()\nlet result = run_heap()\nlet elapsed = clock_ns() - started\nprint(result)\nprint(elapsed)\n"
+        }
+      },
+      "checksum": 10051380,
+      "runs": 7,
+      "rounds": [
+        {
+          "samples_ns": {
+            "baseline": [
+              3618000,
+              3718000,
+              3740000,
+              3603000,
+              3484000,
+              3624000,
+              3526000
+            ],
+            "candidate": [
+              16404000,
+              16336000,
+              16767000,
+              16608000,
+              16503000,
+              16808000,
+              16419000
+            ]
+          },
+          "baseline_median_ns": 3618000,
+          "candidate_median_ns": 16503000,
+          "paired_ratio_median": 4.609492089925062,
+          "paired_ratio_iqr": [
+            4.483155080213904,
+            4.65655133295519
+          ]
+        },
+        {
+          "samples_ns": {
+            "baseline": [
+              3604000,
+              3635000,
+              3648000,
+              3736000,
+              3631000,
+              3704000,
+              3748000
+            ],
+            "candidate": [
+              16129000,
+              16393000,
+              16659000,
+              16639000,
+              16604000,
+              16648000,
+              16698000
+            ]
+          },
+          "baseline_median_ns": 3648000,
+          "candidate_median_ns": 16639000,
+          "paired_ratio_median": 4.494600431965443,
+          "paired_ratio_iqr": [
+            4.455176093916756,
+            4.566611842105263
+          ]
+        },
+        {
+          "samples_ns": {
+            "baseline": [
+              3537000,
+              3617000,
+              3797000,
+              3485000,
+              3462000,
+              3531000,
+              3665000
+            ],
+            "candidate": [
+              16352000,
+              16353000,
+              16301000,
+              16020000,
+              16071000,
+              16527000,
+              16801000
+            ]
+          },
+          "baseline_median_ns": 3537000,
+          "candidate_median_ns": 16352000,
+          "paired_ratio_median": 4.596843615494978,
+          "paired_ratio_iqr": [
+            4.521150124412497,
+            4.6421143847487
+          ]
+        }
+      ],
+      "warmups_per_round": 1,
+      "round_ratio_medians": [
+        4.609492089925062,
+        4.494600431965443,
+        4.596843615494978
+      ],
+      "samples_ns": {
+        "baseline": [
+          3618000,
+          3718000,
+          3740000,
+          3603000,
+          3484000,
+          3624000,
+          3526000,
+          3604000,
+          3635000,
+          3648000,
+          3736000,
+          3631000,
+          3704000,
+          3748000,
+          3537000,
+          3617000,
+          3797000,
+          3485000,
+          3462000,
+          3531000,
+          3665000
+        ],
+        "candidate": [
+          16404000,
+          16336000,
+          16767000,
+          16608000,
+          16503000,
+          16808000,
+          16419000,
+          16129000,
+          16393000,
+          16659000,
+          16639000,
+          16604000,
+          16648000,
+          16698000,
+          16352000,
+          16353000,
+          16301000,
+          16020000,
+          16071000,
+          16527000,
+          16801000
+        ]
+      },
+      "baseline_median_ns": 3624000,
+      "candidate_median_ns": 16503000,
+      "paired_ratio_median": 4.566611842105263,
+      "paired_ratio_iqr": [
+        4.479230148320049,
+        4.630548019330184
+      ]
+    }
+  },
+  "latest_cross_language_samples": {
+    "checksum": 40796,
+    "tapas": [
+      8393000,
+      8256000,
+      8434000,
+      8456000,
+      8174000,
+      8452000,
+      8758000
+    ],
+    "python": [
+      3374000,
+      3300000,
+      3390000,
+      3324000,
+      3506000,
+      3303000,
+      3349000
+    ],
+    "lua": [
+      6065000,
+      6088000,
+      5915000,
+      6126000,
+      5925000,
+      6146000,
+      6106000
+    ]
+  },
+  "current_tapas_source_sha256": "ec8d478f5d54db25151f9896bcfd439ddcdda4883ce7d4e47012f4ec0754df7e",
+  "current_python_source_sha256": "b82625f5cc32502aae3696dd14e5a5fda054be58b57d2ba51c2cd48bc6e7c773",
+  "comparison_count_method": "Python counts comparisons with a tuple subclass preserving distance-only or native tuple lexicographic ordering. These instrumented runs count work only; their wall/CPU times are not compared."
+}
