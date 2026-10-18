@@ -1,5 +1,6 @@
+-- false marks a leaf; every internal node is a fresh table.
 local function tree_size(node)
-    if #node == 0 then
+    if not node then
         return 1
     end
     return 1 + tree_size(node[1]) + tree_size(node[2])
@@ -7,7 +8,7 @@ end
 
 local function make_tree(depth)
     if depth == 0 then
-        return {}
+        return false
     end
     return { make_tree(depth - 1), make_tree(depth - 1) }
 end
@@ -15,7 +16,7 @@ end
 local function bench(n)
     local started = os.clock()
     local result = 0
-    local tree = {}
+    local tree = false
     for r = 1, n do
         tree = make_tree(10)
         result = result + #tree

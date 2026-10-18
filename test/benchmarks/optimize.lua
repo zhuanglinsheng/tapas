@@ -2,10 +2,13 @@ local function optimize(f, grad, start, tolerance, max_iterations)
     local c1 = 0.0001
     local rho = 0.5
     local line_search = function(x, direction, fx)
+        local x1, x2 = x[1], x[2]
+        local d1, d2 = direction[1], direction[2]
         local step = 1.0
-        local gnorm2 = direction[1] * direction[1] + direction[2] * direction[2]
+        local gnorm2 = d1 * d1 + d2 * d2
+        local next = {}
         while true do
-            local next = {x[1] + step * direction[1], x[2] + step * direction[2]}
+            next[1], next[2] = x1 + step * d1, x2 + step * d2
             if f(next) <= fx - c1 * step * gnorm2 then
                 return next
             end

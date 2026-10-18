@@ -3,7 +3,7 @@ import time
 
 def merge_sort(values):
     if len(values) <= 1:
-        return values.copy()
+        return values
 
     middle = len(values) // 2
     left = merge_sort(values[:middle])
@@ -12,7 +12,9 @@ def merge_sort(values):
     i = 0
     j = 0
 
-    while i < len(left) and j < len(right):
+    left_size = len(left)
+    right_size = len(right)
+    while i < left_size and j < right_size:
         if left[i] <= right[j]:
             merged.append(left[i])
             i += 1

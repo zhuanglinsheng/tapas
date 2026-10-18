@@ -1,8 +1,9 @@
 function kmp_search(text, pattern)
 {
-    let pi = replicate([0], pattern.len())
+    let pattern_size = pattern.len()
+    let pi = replicate([0], pattern_size)
     let j = 0
-    for (let i in 1 to pattern.len()) {
+    for (let i in 1 to pattern_size) {
         while (j > 0 and pattern[i] != pattern[j]) {
             j = pi[j - 1]
         }
@@ -21,8 +22,8 @@ function kmp_search(text, pattern)
         if (text[i] == pattern[j]) {
             j = j + 1
         }
-        if (j == pattern.len()) {
-            total = total + i - pattern.len() + 1
+        if (j == pattern_size) {
+            total = total + i - pattern_size + 1
             j = pi[j - 1]
         }
     }
@@ -30,7 +31,7 @@ function kmp_search(text, pattern)
 }
 
 let text_parts = replicate(['ABCABABCAB'], 500)
-let text = join(text_parts, '')
+let text = strings::join(text_parts, '')
 let pattern = 'ABCAB'
 let rounds = 60
 

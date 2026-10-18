@@ -5,6 +5,7 @@ local function fannkuch(n)
         perm1[i] = i - 1
         count[i] = 0
     end
+    local perm = {}
     local checksum = 0
     local maxflips = 0
     local r = n
@@ -14,7 +15,6 @@ local function fannkuch(n)
             r = r - 1
         end
 
-        local perm = {}
         for i = 1, n do
             perm[i] = perm1[i]
         end

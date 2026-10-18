@@ -14,9 +14,15 @@ end
 
 local function count_kmers(sequence, k)
     local counts = {}
-    for i = 1, #sequence - k + 1 do
-        local key = sub(sequence, i, i + k - 1)
-        counts[key] = (counts[key] or 0) + 1
+    if k == 1 then
+        for key in sequence:gmatch(".") do
+            counts[key] = (counts[key] or 0) + 1
+        end
+    else
+        for i = 1, #sequence - k + 1 do
+            local key = sub(sequence, i, i + k - 1)
+            counts[key] = (counts[key] or 0) + 1
+        end
     end
     return counts
 end

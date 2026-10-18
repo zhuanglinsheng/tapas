@@ -12,14 +12,16 @@ local function bench(n, right)
     local result = 0
     for r = 0, n - 1 do
         local ch = byte("ABCD", r % 4 + 1)
+        local diagonal, preceding = 0, 0
         for j = 1, 16 do
+            local above = previous[j]
             if ch == byte(right, j) then
-                current[j] = previous[j - 1] + 1
-            elseif previous[j] >= current[j - 1] then
-                current[j] = previous[j]
-            else
-                current[j] = current[j - 1]
+                preceding = diagonal + 1
+            elseif above > preceding then
+                preceding = above
             end
+            current[j] = preceding
+            diagonal = above
         end
         result = result + current[16]
     end

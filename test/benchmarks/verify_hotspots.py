@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check actual DP rows and complete histograms against independent oracles."""
+"""Check complete DP rows, histograms and heap output against independent oracles."""
 import argparse
 from collections import Counter
 import hashlib
@@ -120,6 +120,191 @@ def verify(tapas, lua='lua'):
     return results
 
 
+def verify_heap(tapas, lua='lua'):
+    commands = {'tap': [str(Path(tapas).resolve())], 'py': [sys.executable], 'lua': [lua]}
+    results = []
+    inputs = ([], [1], [4, -3, 4, 0], list(range(17)), list(range(17, 0, -1)), [7] * 32)
+    with tempfile.TemporaryDirectory(prefix='tapas-heap-check-') as scratch:
+        for index, values in enumerate(inputs):
+            expected = sorted(values)
+            expected = expected + [sum(position * value for position, value in enumerate(expected, 1))]
+            for extension, command in commands.items():
+                original = HERE / 'hotspots' / ('heap_callback.' + extension)
+                source = original.read_text()
+                if extension == 'tap':
+                    source = source.replace('bench(64, values)', f'bench(1, {[[v, i] for i, v in enumerate(values)]})')
+                    source = source.replace(
+                        'checksum = checksum + heap::pop(queue, priority_less)[0] * (position + 1)',
+                        'let value = heap::pop(queue, priority_less)[0]\n'
+                        '            print(value)\n'
+                        '            checksum = checksum + value * (position + 1)')
+                elif extension == 'py':
+                    source = source.replace(
+                        'bench(64, [((i * 73 + 19) % 1009 - 500, i) for i in range(256)])',
+                        f'bench(1, {[(v, i) for i, v in enumerate(values)]})')
+                    source = source.replace('checksum += heapq.heappop(queue).priority * position',
+                        'value = heapq.heappop(queue).priority\n'
+                        '            print(value)\n'
+                        '            checksum += value * position')
+                else:
+                    literal = '{' + ', '.join('{' + f'{v}, {i}' + '}' for i, v in enumerate(values)) + '}'
+                    source = source.replace('bench(64, values)', f'bench(1, {literal})')
+                    source = source.replace('checksum = checksum + pop(queue)[1] * position',
+                        'local value = pop(queue)[1]; print(value); checksum = checksum + value * position')
+                path = Path(scratch) / f'heap_{index}.{extension}'
+                path.write_text(source)
+                actual = list(map(int, subprocess.check_output(
+                    [*command, str(path)], text=True, timeout=120).splitlines()))
+                if actual[:-1] != expected or actual[-1] < 0:
+                    raise RuntimeError(f'heap_callback/{extension}: wrong sorted output')
+                results.append({'case': 'heap_callback', 'language': extension,
+                                'input': values, 'matched': False,
+                                'values_checked': len(expected),
+                                'source_sha256': hashlib.sha256(original.read_bytes()).hexdigest()})
+    return results
+
+
+def verify_heap_payloads(tapas, lua='lua'):
+    """Tied priorities must not compare opaque payloads or lose records."""
+    commands = {'tap': [str(Path(tapas).resolve())], 'py': [sys.executable], 'lua': [lua]}
+    results = []
+    inputs = ([], [0], [2, -1, 2, 0, -1], [7] * 8)
+    with tempfile.TemporaryDirectory(prefix='tapas-heap-payload-check-') as scratch:
+        for index, priorities in enumerate(inputs):
+            expected = sorted(priorities)
+            checksum = sum(position * value for position, value in enumerate(expected, 1))
+            records = [[value, {'id': i}] for i, value in enumerate(priorities)]
+            expected_records = Counter((value, i) for i, value in enumerate(priorities))
+            for extension, command in commands.items():
+                original = HERE / 'hotspots' / ('heap_callback.' + extension)
+                source = original.read_text()
+                if extension == 'tap':
+                    source = source.replace('bench(64, values)', f'bench(1, {records!r})')
+                    source = source.replace(
+                        'checksum = checksum + heap::pop(queue, priority_less)[0] * (position + 1)',
+                        'let item = heap::pop(queue, priority_less)\n'
+                        '            print(item[0])\n'
+                        '            print(item[1]::id)\n'
+                        '            checksum = checksum + item[0] * (position + 1)')
+                elif extension == 'py':
+                    source = source.replace(
+                        'bench(64, [((i * 73 + 19) % 1009 - 500, i) for i in range(256)])',
+                        f'bench(1, {records!r})')
+                    source = source.replace(
+                        'checksum += heapq.heappop(queue).priority * position',
+                        'item = heapq.heappop(queue)\n'
+                        '            print(item.priority)\n'
+                        "            print(item.payload['id'])\n"
+                        '            checksum += item.priority * position')
+                else:
+                    literal = '{' + ', '.join(
+                        '{' + f'{value}, {{id = {i}}}' + '}'
+                        for i, value in enumerate(priorities)) + '}'
+                    source = source.replace('bench(64, values)', f'bench(1, {literal})')
+                    source = source.replace(
+                        'checksum = checksum + pop(queue)[1] * position',
+                        'local item = pop(queue); print(item[1]); print(item[2].id); '
+                        'checksum = checksum + item[1] * position')
+                path = Path(scratch) / f'heap_payload_{index}.{extension}'
+                path.write_text(source)
+                actual = list(map(int, subprocess.check_output(
+                    [*command, str(path)], text=True, timeout=120).splitlines()))
+                pairs = list(zip(actual[:-2:2], actual[1:-2:2]))
+                if (len(actual) != 2 * len(priorities) + 2 or
+                        [value for value, _ in pairs] != expected or
+                        Counter(pairs) != expected_records or
+                        actual[-2] != checksum or actual[-1] < 0):
+                    raise RuntimeError(f'heap_callback/{extension}: wrong priority/payload output')
+                results.append({'case': 'heap_callback_payload', 'language': extension,
+                                'input': priorities, 'values_checked': len(actual) - 1,
+                                'source_sha256': hashlib.sha256(original.read_bytes()).hexdigest()})
+    return results
+
+
+def verify_heap_order(tapas, lua='lua'):
+    """Check entire records, including deliberately reversed equal-priority ties."""
+    commands = {'tap': [str(Path(tapas).resolve())], 'py': [sys.executable], 'lua': [lua]}
+    inputs = ([], [(1, 4)], [(7, 3), (7, 1), (7, 2)],
+              [(2, 9), (-1, 5), (2, 0), (-1, 2), (2, 0)],
+              [(i % 3, 31 - i) for i in range(32)])
+    results = []
+    with tempfile.TemporaryDirectory(prefix='tapas-heap-order-check-') as scratch:
+        for index, records in enumerate(inputs):
+            ordered = sorted(records)
+            expected = [item for record in ordered for item in record]
+            expected.append(sum(position * record[0] for position, record in enumerate(ordered, 1)))
+            for extension, command in commands.items():
+                original = HERE / 'hotspots' / ('heap_order.' + extension)
+                source = original.read_text()
+                if extension == 'tap':
+                    source = source.replace('bench(64, values)', f'bench(1, {[list(r) for r in records]})')
+                    source = source.replace(
+                        'checksum = checksum + heap::pop(queue)[0] * (position + 1)',
+                        'let value = heap::pop(queue)\n'
+                        '            print(value[0])\n            print(value[1])\n'
+                        '            checksum = checksum + value[0] * (position + 1)')
+                elif extension == 'py':
+                    source = source.replace(
+                        'bench(64, [((i * 73 + 19) % 31 - 15, i) for i in range(256)])',
+                        f'bench(1, {records!r})')
+                    source = source.replace('checksum += heapq.heappop(queue)[0] * position',
+                        'value = heapq.heappop(queue)\n'
+                        '            print(value[0])\n            print(value[1])\n'
+                        '            checksum += value[0] * position')
+                else:
+                    literal = '{' + ', '.join('{' + f'{a}, {b}' + '}' for a, b in records) + '}'
+                    source = source.replace('bench(64, values)', f'bench(1, {literal})')
+                    source = source.replace('checksum = checksum + pop(queue)[1] * position',
+                        'local value = pop(queue); print(value[1]); print(value[2]); '
+                        'checksum = checksum + value[1] * position')
+                path = Path(scratch) / f'heap_order_{index}.{extension}'
+                path.write_text(source)
+                actual = list(map(int, subprocess.check_output(
+                    [*command, str(path)], text=True, timeout=120).splitlines()))
+                if actual[:-1] != expected or actual[-1] < 0:
+                    raise RuntimeError(f'heap_order/{extension}: wrong complete records: {actual}')
+                results.append({'case': 'heap_order', 'language': extension,
+                                'input': records, 'values_checked': len(expected),
+                                'source_sha256': hashlib.sha256(original.read_bytes()).hexdigest()})
+    return results
+
+
+def verify_list_sort(tapas, lua='lua'):
+    commands = {'tap': [str(Path(tapas).resolve())], 'py': [sys.executable], 'lua': [lua]}
+    inputs = ([], [3], [4, -3, 4, 0], list(range(17)), list(range(17, 0, -1)))
+    results = []
+    with tempfile.TemporaryDirectory(prefix='tapas-sort-check-') as scratch:
+        for index, values in enumerate(inputs):
+            ordered = sorted(values)
+            expected = ordered + [sum(i * value for i, value in enumerate(ordered, 1))]
+            for extension, command in commands.items():
+                original = HERE / 'hotspots' / ('list_sort.' + extension)
+                source = original.read_text()
+                if extension == 'tap':
+                    source = source.replace('bench(16, values)', f'bench(1, {values})')
+                    source = source.replace('        sort(ordered)',
+                        '        sort(ordered)\n        for (let value in ordered) { print(value) }')
+                elif extension == 'py':
+                    source = source.replace('bench(16, values)', f'bench(1, {values})')
+                    source = source.replace('        ordered.sort()',
+                        '        ordered.sort()\n        for value in ordered:\n            print(value)')
+                else:
+                    literal = '{' + ', '.join(map(str, values)) + '}'
+                    source = source.replace('bench(16, values)', f'bench(1, {literal})')
+                    source = source.replace('        table.sort(ordered)',
+                        '        table.sort(ordered)\n        for _, value in ipairs(ordered) do print(value) end')
+                path = Path(scratch) / f'sort_{index}.{extension}'
+                path.write_text(source)
+                actual = list(map(int, subprocess.check_output(
+                    [*command, str(path)], text=True, timeout=120).splitlines()))
+                if actual[:-1] != expected or actual[-1] < 0:
+                    raise RuntimeError(f'list_sort/{extension}: wrong complete sorted output')
+                results.append({'case': 'list_sort', 'language': extension,
+                                'input': values, 'values_checked': len(expected),
+                                'source_sha256': hashlib.sha256(original.read_bytes()).hexdigest()})
+    return results
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('tapas', type=Path)
@@ -127,13 +312,17 @@ def main():
     parser.add_argument('--json', type=Path, default=HERE / 'hotspots/kernel_checks.json')
     args = parser.parse_args()
     checks = verify(args.tapas, args.lua)
+    checks.extend(verify_heap(args.tapas, args.lua))
+    checks.extend(verify_heap_payloads(args.tapas, args.lua))
+    checks.extend(verify_heap_order(args.tapas, args.lua))
+    checks.extend(verify_list_sort(args.tapas, args.lua))
     args.json.parent.mkdir(parents=True, exist_ok=True)
     args.json.write_text(json.dumps({
         'tapas_sha256': hashlib.sha256(args.tapas.read_bytes()).hexdigest(),
         'verifier_sha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
         'checks': checks,
     }, indent=2) + '\n')
-    print(f'{len(checks)} complete-row/histogram probes passed')
+    print(f'{len(checks)} complete-row/histogram/heap probes passed')
     return 0
 
 

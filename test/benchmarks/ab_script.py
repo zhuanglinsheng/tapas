@@ -9,6 +9,7 @@ import platform
 import random
 import statistics
 import subprocess
+import tempfile
 from pathlib import Path
 
 from compare_script import (ALGORITHM_BENCHMARKS, BENCHMARKS, HERE,
@@ -20,8 +21,14 @@ def digest(path: Path) -> str:
 
 
 def execute(binary: Path, source: Path) -> tuple[int, int]:
-    result = subprocess.run([str(binary), str(source)], check=True,
-                            capture_output=True, text=True, timeout=120)
+    # Automatic bytecode caches are rooted in the working directory. A fresh
+    # directory ensures each runtime compiles its own source, even when both
+    # executables have the same public version and cache timestamps overlap.
+    # The benchmark's internal timer excludes compilation and startup.
+    with tempfile.TemporaryDirectory(prefix='tapas-ab-') as working_directory:
+        result = subprocess.run([str(binary.resolve()), str(source.resolve())],
+                                cwd=working_directory, check=True,
+                                capture_output=True, text=True, timeout=120)
     lines = result.stdout.splitlines()
     if len(lines) != 2:
         raise RuntimeError(f"unexpected output from {binary} {source}: {result.stdout!r}")
@@ -107,7 +114,7 @@ def write_markdown(path: Path, report: dict) -> None:
         f"Each runtime gets one discarded warm-up and {report['runs']} measured runs per case "
         f"in each of {report.get('rounds', 1)} rounds. "
         'Fresh processes run sequentially in alternating A/B order. Times are internal process CPU times; '
-        'startup and compilation are excluded. Every checksum must agree across both runtimes and all runs.', '',
+        'startup and compilation are excluded. Each execution uses a fresh working directory to isolate automatic bytecode caches. Every checksum must agree across both runtimes and all runs.', '',
         'Successive rounds reverse the first runtime and shuffle case order with a recorded seed. '
         'Round medians expose between-round variation. For an A/A noise control, pass the same binary twice.', '',
         'B/A is the median of paired time ratios; below 1 means the candidate is faster. '
@@ -184,6 +191,7 @@ def main() -> int:
             raise RuntimeError(f'{label} binary changed during the comparison')
     report = {
         'date': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        'cache_policy': 'fresh working directory for each execution',
         'system': platform.platform(), 'architecture': platform.machine(),
         'runs': args.runs, 'warmups': 1, 'rounds': args.rounds,
         'first': args.first, 'seed': args.seed, 'round_orders': round_orders,

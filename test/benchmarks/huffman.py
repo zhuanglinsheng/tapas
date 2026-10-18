@@ -1,11 +1,15 @@
 import time
-from collections import Counter
 
 SYMBOLS = "abcdefgh"
 
 
 def huffman_total(text):
-    freq = Counter(text)
+    freq = {}
+    for ch in SYMBOLS:
+        occurrences = text.count(ch)
+        if occurrences:
+            freq[ch] = occurrences
+
     # Fixed symbol order makes ties in the minimum scan deterministic.
     nodes = [(freq[ch], ch) for ch in SYMBOLS if ch in freq]
 

@@ -1,15 +1,10 @@
-function distance_less(a, b)
-{
-    return a[0] < b[0]
-}
-
 function dijkstra(graph, source, size)
 {
     let dist = replicate([1000000000000], size)
     dist[source] = 0
     let queue = [[0, source]]
     while (len(queue) > 0) {
-        let current = heap::pop(queue, distance_less)
+        let current = heap::pop(queue)
         let distance = current[0]
         let vertex = current[1]
         if (distance == dist[vertex] and vertex in graph) {
@@ -18,7 +13,7 @@ function dijkstra(graph, source, size)
                 let alt = distance + edge[1]
                 if (alt < dist[target]) {
                     dist[target] = alt
-                    heap::push(queue, [alt, target], distance_less)
+                    heap::push(queue, [alt, target])
                 }
             }
         }

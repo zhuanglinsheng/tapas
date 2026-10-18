@@ -1,12 +1,15 @@
+-- false marks a leaf; every internal node is a fresh table.
 local function make_tree(depth)
     if depth == 0 then
-        return {}
+        return false
     end
-    return { make_tree(depth - 1), make_tree(depth - 1) }
+    local left = make_tree(depth - 1)
+    local right = make_tree(depth - 1)
+    return { left, right }
 end
 
 local function checksum(node)
-    if #node == 0 then
+    if not node then
         return 1
     end
     return 1 + checksum(node[1]) + checksum(node[2])

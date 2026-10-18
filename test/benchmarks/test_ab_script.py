@@ -72,6 +72,24 @@ class RuntimeComparisonTests(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError, 'source changed'):
                     ab_script.measure(Path('/a'), Path('/b'), source, 3)
 
+    def test_each_execution_has_an_isolated_bytecode_cache(self):
+        directories = []
+
+        def run(command, **options):
+            directory = Path(options['cwd'])
+            self.assertTrue(directory.is_dir())
+            self.assertTrue(all(Path(value).is_absolute() for value in command))
+            self.assertFalse((directory / '__tapas_build__').exists())
+            (directory / '__tapas_build__').mkdir()
+            directories.append(directory)
+            return SimpleNamespace(stdout='42\n100\n')
+
+        with patch.object(ab_script.subprocess, 'run', side_effect=run):
+            self.assertEqual(ab_script.execute(Path('/a'), Path('/source')), (42, 100))
+            self.assertEqual(ab_script.execute(Path('/b'), Path('/source')), (42, 100))
+        self.assertNotEqual(*directories)
+        self.assertTrue(all(not directory.exists() for directory in directories))
+
     def test_nonpositive_timer_is_rejected(self):
         with patch.object(ab_script.subprocess, 'run',
                           return_value=SimpleNamespace(stdout='42\n0\n')):

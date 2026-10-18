@@ -12,8 +12,10 @@ end
 
 local function heap_pop(queue)
     local root = queue[1]
-    local last = table.remove(queue)
     local size = #queue
+    local last = queue[size]
+    queue[size] = nil
+    size = size - 1
     if size > 0 then
         local index = 1
         while index * 2 <= size do
@@ -41,7 +43,9 @@ local function dijkstra(graph, source, size)
         local entry = heap_pop(queue)
         local distance, vertex = entry[1], entry[2]
         if distance == dist[vertex] then
-            for _, edge in ipairs(graph[vertex] or {}) do
+            local edges = graph[vertex]
+            for edge_index = 1, edges and #edges or 0 do
+                local edge = edges[edge_index]
                 local target = edge[1]
                 local alternative = distance + edge[2]
                 if alternative < dist[target] then

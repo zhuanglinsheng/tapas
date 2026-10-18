@@ -8,10 +8,14 @@ function bench(n, right)
     let result = 0
     for (let r in 0 to n) {
         let ch = 'ABCD'[r % 4]
+        let diagonal = 0
+        let preceding = 0
         for (let j in 1 to 17) {
-            if (ch == right[j - 1]) { current[j] = previous[j - 1] + 1 }
-            elif (previous[j] >= current[j - 1]) { current[j] = previous[j] }
-            else { current[j] = current[j - 1] }
+            let above = previous[j]
+            if (ch == right[j - 1]) { preceding = diagonal + 1 }
+            elif (above > preceding) { preceding = above }
+            current[j] = preceding
+            diagonal = above
         }
         result = result + current[16]
     }

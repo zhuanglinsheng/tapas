@@ -80,8 +80,7 @@ class BenchmarkReportTests(unittest.TestCase):
                                   return_value=SimpleNamespace(stdout='Tapas test\n')), \
                      patch.object(comparison.platform, 'platform', return_value='Test system'):
                     comparison.write_markdown(report, Path('/unused/tapas'),
-                                              'Lua test', 3, rows, language,
-                                              matched={'string_count': (10000, 0.1)})
+                                              'Lua test', 3, rows, language)
                 text = report.read_text()
                 table_rows = [line for line in text.splitlines() if line.startswith('| `') and line.count('|') >= 8]
                 self.assertEqual(len(table_rows), len(comparison.BENCHMARKS))
@@ -93,7 +92,11 @@ class BenchmarkReportTests(unittest.TestCase):
                     for link in re.findall(r'\]\(([^)]+)\)', line):
                         self.assertTrue((report.parent / link).is_file(), link)
                 self.assertIn('Tapas/Python **0.500×**', text)
-                self.assertIn('10.0 µs', text)
+                self.assertTrue(all(line.count('|') == 8 for line in table_rows))
+                self.assertNotIn('测量内容', text)
+                self.assertNotIn('Measured workload', text)
+                self.assertNotIn('Python 结构对照', text)
+                self.assertNotIn('Python structural controls', text)
                 self.assertIn('AUDIT.md', text)
                 self.assertNotIn('综合性能目标：', text)
                 self.assertNotIn('Algorithm target:', text)

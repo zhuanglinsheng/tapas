@@ -4,16 +4,13 @@ local function primes_up_to(limit)
         is_prime[value] = value >= 2
     end
 
-    local candidate = 2
-    while candidate * candidate <= limit do
+    for multiple = 4, limit, 2 do is_prime[multiple] = false end
+    for candidate = 3, math.floor(math.sqrt(limit)), 2 do
         if is_prime[candidate] then
-            local multiple = candidate * candidate
-            while multiple <= limit do
+            for multiple = candidate * candidate, limit, candidate do
                 is_prime[multiple] = false
-                multiple = multiple + candidate
             end
         end
-        candidate = candidate + 1
     end
 
     local count = 0

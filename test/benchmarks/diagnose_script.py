@@ -100,7 +100,7 @@ def ablations(directory):
                 'left = list(left)\nright = list(right)\n\ndef bench():')],
     })
     add('binary_fresh_lists', 'binary_trees', {'py': [
-        ('return ()', 'return []'),
+        ('return False', 'return []'),
         ('return (make_tree(depth - 1), make_tree(depth - 1))',
          'return [make_tree(depth - 1), make_tree(depth - 1)]'),
     ]})
@@ -109,21 +109,19 @@ def ablations(directory):
         ('let placed = positions[previous]', 'placed = positions[previous]'),
         ('let distance = row - previous', 'distance = row - previous'),
     ]})
-    add('sudoku_for', 'sudoku', {
-        'tap': [('let k = 0\n                while (k < 9)', 'for (let k in 0 to 9)'),
-                ('                    k = k + 1\n', '')],
-        # Python already uses a for loop; its unchanged source is the control.
-        'py': [],
+    add('sudoku_scan_prefix', 'sudoku', {
+        'tap': [('let index = start', 'let index = 0')],
+        'py': [('grid.index(0, start)', 'grid.index(0)')],
     })
-    add('merge_cached_lengths', 'merge_sort', {
-        'tap': [('    while (i < left.len() and j < right.len()) {',
-                 '    let nl = left.len()\n    let nr = right.len()\n'
-                 '    while (i < nl and j < nr) {'),
-                ('while (i < left.len())', 'while (i < nl)'),
-                ('while (j < right.len())', 'while (j < nr)')],
-        'py': [('    while i < len(left) and j < len(right):',
-                '    nl = len(left)\n    nr = len(right)\n'
-                '    while i < nl and j < nr:')],
+    add('merge_uncached_lengths', 'merge_sort', {
+        'tap': [('    let left_size = left.len()\n    let right_size = right.len()\n', ''),
+                ('while (i < left_size and j < right_size)',
+                 'while (i < left.len() and j < right.len())'),
+                ('while (i < left_size)', 'while (i < left.len())'),
+                ('while (j < right_size)', 'while (j < right.len())')],
+        'py': [('    left_size = len(left)\n    right_size = len(right)\n', ''),
+               ('while i < left_size and j < right_size:',
+                'while i < len(left) and j < len(right):')],
     })
     add('record_list_storage', 'record_update', {'tap': [
         ("let Body = types::make_type('x': types::Float, 'vx': types::Float)\n"

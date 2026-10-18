@@ -121,8 +121,8 @@
   },
   "dp_row": {
     "kind": "kernel",
-    "zh": "有效 LCS 状态上的单行更新",
-    "en": "one LCS row update from a valid predecessor row",
+    "zh": "有效 LCS 状态上的单行更新；缓存左侧与左上值",
+    "en": "one LCS row update with cached left and diagonal cells",
     "python_matched": true
   },
   "record_update": {
@@ -151,8 +151,8 @@
   },
   "tree_build": {
     "kind": "representation",
-    "zh": "递归构造只读树及生命周期",
-    "en": "recursive read-only tree construction and lifetimes",
+    "zh": "只读树构造与释放；不可变叶标记及新建内部节点",
+    "en": "read-only trees with immutable leaf markers and fresh internal nodes",
     "python_matched": true
   },
   "while_search": {
@@ -160,5 +160,23 @@
     "zh": "首个匹配位置的线性搜索",
     "en": "linear search for the first matching position",
     "python_matched": true
+  },
+  "heap_callback": {
+    "kind": "kernel",
+    "zh": "二叉堆反复调用语言级优先级比较；只比较首项，payload 不参与排序",
+    "en": "binary heap with language-level priority callbacks; payloads are excluded from ordering",
+    "python_matched": false
+  },
+  "heap_order": {
+    "kind": "task",
+    "zh": "List 字典序默认堆；重复优先级、复制、建堆与有序出堆",
+    "en": "default lexicographic record heaps with duplicate priorities, copying, heapify and ordered draining",
+    "python_matched": false
+  },
+  "list_sort": {
+    "kind": "task",
+    "zh": "List 内建排序；含复制、排序和加权归约",
+    "en": "builtin List sorting including copying and weighted reduction",
+    "python_matched": false
   }
 }

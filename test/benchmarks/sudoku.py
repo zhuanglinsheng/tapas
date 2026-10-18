@@ -1,9 +1,9 @@
 import time
 
 
-def solve_board(grid):
+def solve_from(grid, start):
     try:
-        index = grid.index(0)
+        index = grid.index(0, start)
     except ValueError:
         return True
     row = (index // 9) * 9
@@ -16,11 +16,14 @@ def solve_board(grid):
                 break
         else:
             grid[index] = digit
-            if solve_board(grid):
+            if solve_from(grid, index + 1):
                 return True
     grid[index] = 0
     return False
 
+
+def solve_board(grid):
+    return solve_from(grid, 0)
 
 puzzle = [
     1, 0, 0, 0, 0, 7, 0, 9, 0,

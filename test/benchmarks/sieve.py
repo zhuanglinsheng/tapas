@@ -5,11 +5,12 @@ import time
 def primes_up_to(limit):
     is_prime = bytearray(b"\x01") * (limit + 1)
     is_prime[:2] = b"\x00\x00"
-    for candidate in range(2, math.isqrt(limit) + 1):
+    is_prime[4::2] = bytes((limit - 4) // 2 + 1)
+    for candidate in range(3, math.isqrt(limit) + 1, 2):
         if is_prime[candidate]:
             start = candidate * candidate
             is_prime[start::candidate] = bytes((limit - start) // candidate + 1)
-    return sum(is_prime)
+    return is_prime.count(1)
 
 
 def bench():

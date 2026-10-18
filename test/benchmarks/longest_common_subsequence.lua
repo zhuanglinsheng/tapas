@@ -3,6 +3,8 @@ local byte = string.byte
 local function lcs_length(left, right)
     local left_length = #left
     local right_length = #right
+    local right_bytes = {}
+    for index = 1, right_length do right_bytes[index] = byte(right, index) end
     local previous = {}
     local current = {}
     for index = 0, right_length do
@@ -13,14 +15,16 @@ local function lcs_length(left, right)
     for i = 1, left_length do
         current[0] = 0
         local ch = byte(left, i)
+        local diagonal, preceding = 0, 0
         for j = 1, right_length do
-            if ch == byte(right, j) then
-                current[j] = previous[j - 1] + 1
-            elseif previous[j] >= current[j - 1] then
-                current[j] = previous[j]
-            else
-                current[j] = current[j - 1]
+            local above = previous[j]
+            if ch == right_bytes[j] then
+                preceding = diagonal + 1
+            elseif above > preceding then
+                preceding = above
             end
+            current[j] = preceding
+            diagonal = above
         end
         previous, current = current, previous
     end

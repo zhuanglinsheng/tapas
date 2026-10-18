@@ -1,18 +1,17 @@
+// false marks a leaf; every internal node is a fresh List.
 // Build and release fresh immutable-use trees; inspect the final full tree.
 function tree_size(node)
 {
-    if (node.len() == 0) { return 1 }
+    if (node == false) { return 1 }
     return 1 + this(node[0]) + this(node[1])
 }
 
 function make_tree(depth)
 {
     if (depth == 0) {
-        return []
+        return false
     }
-    let left = this(depth - 1)
-    let right = this(depth - 1)
-    return [left, right]
+    return [this(depth - 1), this(depth - 1)]
 }
 
 
@@ -20,7 +19,7 @@ function bench(n)
 {
     let started = clock_ns()
     let result = 0
-    let tree = []
+    let tree = false
     for (let r in 0 to n) {
         tree = make_tree(10)
         result = result + tree.len()

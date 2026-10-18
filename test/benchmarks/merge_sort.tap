@@ -1,17 +1,19 @@
 function merge_sort(values)
 {
     if (values.len() <= 1) {
-        return values.copy()
+        return values
     }
 
     let middle = values.len() / 2
     let left = this(values[:middle])
     let right = this(values[middle:])
-    let merged = []
+    let left_size = left.len()
+    let right_size = right.len()
+    var merged = []
     let i = 0
     let j = 0
 
-    while (i < left.len() and j < right.len()) {
+    while (i < left_size and j < right_size) {
         if (left[i] <= right[j]) {
             merged.append(left[i])
             i = i + 1
@@ -20,15 +22,15 @@ function merge_sort(values)
             j = j + 1
         }
     }
-    while (i < left.len()) {
+    while (i < left_size) {
         merged.append(left[i])
         i = i + 1
     }
-    while (j < right.len()) {
+    while (j < right_size) {
         merged.append(right[j])
         j = j + 1
     }
-    return merged.copy()
+    return merged
 }
 
 let values = []

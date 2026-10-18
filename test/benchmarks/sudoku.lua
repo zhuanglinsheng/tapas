@@ -1,5 +1,5 @@
-local function solve_board(grid)
-    for slot = 1, 81 do
+local function solve_from(grid, start)
+    for slot = start, 81 do
         if grid[slot] == 0 then
             local index = slot - 1
             local row = (index // 9) * 9 + 1
@@ -8,15 +8,23 @@ local function solve_board(grid)
             for digit = 1, 9 do
                 local valid = true
                 for k = 0, 8 do
-                    if grid[row + k] == digit or grid[column + k * 9] == digit or
-                            grid[box + (k // 3) * 9 + k % 3] == digit then
+                    if grid[row + k] == digit or grid[column + k * 9] == digit then
                         valid = false
                         break
                     end
                 end
                 if valid then
+                    for box_row = box, box + 18, 9 do
+                        if grid[box_row] == digit or grid[box_row + 1] == digit or
+                                grid[box_row + 2] == digit then
+                            valid = false
+                            break
+                        end
+                    end
+                end
+                if valid then
                     grid[slot] = digit
-                    if solve_board(grid) then
+                    if solve_from(grid, slot + 1) then
                         return true
                     end
                 end
@@ -28,6 +36,10 @@ local function solve_board(grid)
     return true
 end
 
+
+local function solve_board(grid)
+    return solve_from(grid, 1)
+end
 
 local puzzle = {
     1, 0, 0, 0, 0, 7, 0, 9, 0,

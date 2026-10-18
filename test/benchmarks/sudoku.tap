@@ -1,16 +1,14 @@
-function solve_board(grid)
+function solve_from(grid, start)
 {
-    let index = 0
+    let index = start
     while (index < 81) {
         if (grid[index] == 0) {
             let row = (index / 9) * 9
             let column = index % 9
             let box = (index / 27) * 27 + (column / 3) * 3
-            let digit = 1
-            while (digit < 10) {
+            for (let digit in 1 to 10) {
                 let valid = true
-                let k = 0
-                while (k < 9) {
+                for (let k in 0 to 9) {
                     if (grid[row + k] == digit or grid[column + k * 9] == digit) {
                         valid = false
                         break
@@ -19,15 +17,13 @@ function solve_board(grid)
                         valid = false
                         break
                     }
-                    k = k + 1
                 }
                 if (valid) {
                     grid[index] = digit
-                    if (this(grid)) {
+                    if (this(grid, index + 1)) {
                         return true
                     }
                 }
-                digit = digit + 1
             }
             grid[index] = 0
             return false
@@ -35,6 +31,11 @@ function solve_board(grid)
         index = index + 1
     }
     return true
+}
+
+function solve_board(grid)
+{
+    return solve_from(grid, 0)
 }
 
 let puzzle = [

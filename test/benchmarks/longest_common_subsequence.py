@@ -7,13 +7,15 @@ def lcs_length(left, right):
 
     for ch in left:
         current[0] = 0
+        diagonal = preceding = 0
         for j, other in enumerate(right, 1):
+            above = previous[j]
             if ch == other:
-                current[j] = previous[j - 1] + 1
-            elif previous[j] >= current[j - 1]:
-                current[j] = previous[j]
-            else:
-                current[j] = current[j - 1]
+                preceding = diagonal + 1
+            elif above > preceding:
+                preceding = above
+            current[j] = preceding
+            diagonal = above
         previous, current = current, previous
     return previous[len(right)]
 

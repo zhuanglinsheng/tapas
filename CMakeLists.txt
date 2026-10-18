@@ -416,6 +416,14 @@ if(BUILD_TESTING)
     tapas_enable_test_assertions(test_sort)
     add_test(NAME sort COMMAND test_sort)
 
+    add_executable(benchmark_iterator EXCLUDE_FROM_ALL test/benchmarks/native_iterator.c)
+    target_link_libraries(benchmark_iterator PRIVATE tapas_stdlib)
+    tapas_enable_test_assertions(benchmark_iterator)
+
+    add_executable(benchmark_sort EXCLUDE_FROM_ALL test/benchmarks/native_sort.c)
+    target_link_libraries(benchmark_sort PRIVATE tapas_stdlib)
+    tapas_enable_test_assertions(benchmark_sort)
+
 	add_executable(test_finite test/unit/test_finite.c)
 	target_link_libraries(test_finite PRIVATE tapas_stdlib)
 	tapas_enable_test_assertions(test_finite)

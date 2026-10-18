@@ -1,9 +1,10 @@
+# False marks a leaf; every internal node is a fresh tuple.
 import time
 
 
 def make_tree(depth):
     if depth == 0:
-        return ()
+        return False
     return (make_tree(depth - 1), make_tree(depth - 1))
 
 

@@ -132,6 +132,35 @@ async function main() {
     assert.ok(matches(grammar.repository.types.patterns.slice(1), packageName),
       `${packageName} is missing from TextMate namespaces`);
   connection.notify('initialized', {});
+  // The editor must accept the real sieve source and package-owned capabilities.
+  const sieveUri = pathToFileURL(path.join(workspace, 'sieve.tap')).toString();
+  const sieveDiagnostics = new Promise((resolve) => {
+    connection.onNotification('textDocument/publishDiagnostics', (params) => {
+      if (params.uri === sieveUri) resolve(params);
+    });
+  });
+  connection.notify('textDocument/didOpen', {
+    textDocument: {
+      uri: sieveUri, languageId: 'tapas', version: 1,
+      text: fs.readFileSync(path.resolve(__dirname, '..', '..', '..',
+        'test', 'benchmarks', 'sieve.tap'), 'utf8'),
+    },
+  });
+  const sieveReport = await Promise.race([
+    sieveDiagnostics,
+    new Promise((_, reject) => setTimeout(
+      () => reject(new Error('sieve diagnostics notification timed out')), 2000)),
+  ]);
+  assert.deepStrictEqual(sieveReport.diagnostics, []);
+  const sieveHover = await connection.request('textDocument/hover', {
+    textDocument: { uri: sieveUri }, position: { line: 2, character: 10 },
+  });
+  assert.match(sieveHover.contents.value, /is_prime: dense::FlatView/);
+  connection.notify('textDocument/didClose', { textDocument: { uri: sieveUri } });
+  connection.onNotification('textDocument/publishDiagnostics', (params) => {
+    if (params.uri === 'file:///vscode.tap') resolveDiagnostics(params);
+  });
+
   connection.notify('textDocument/didOpen', {
     textDocument: {
       uri: 'file:///vscode.tap', languageId: 'tapas', version: 1,

@@ -9,13 +9,15 @@ def matched(n, right):
     result = 0
     for r in range(n):
         ch = 'ABCD'[r % 4]
+        diagonal = preceding = 0
         for j in range(1, 17):
+            above = previous[j]
             if ch == right[j - 1]:
-                current[j] = previous[j - 1] + 1
-            elif previous[j] >= current[j - 1]:
-                current[j] = previous[j]
-            else:
-                current[j] = current[j - 1]
+                preceding = diagonal + 1
+            elif above > preceding:
+                preceding = above
+            current[j] = preceding
+            diagonal = above
         result += current[16]
     return result + sum(value * j for j, value in enumerate(current))
 
@@ -26,13 +28,15 @@ def optimized(n, right):
     result = 0
     for r in range(n):
         ch = 'ABCD'[r % 4]
+        diagonal = preceding = 0
         for j, other in enumerate(right, 1):
+            above = previous[j]
             if ch == other:
-                current[j] = previous[j - 1] + 1
-            elif previous[j] >= current[j - 1]:
-                current[j] = previous[j]
-            else:
-                current[j] = current[j - 1]
+                preceding = diagonal + 1
+            elif above > preceding:
+                preceding = above
+            current[j] = preceding
+            diagonal = above
         result += current[16]
     return result + sum(value * j for j, value in enumerate(current))
 

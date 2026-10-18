@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 """Check full benchmark checksums and small cross-language kernel results."""
 import argparse
+from collections import Counter
 import hashlib
+import heapq
 import json
+from math import isqrt
 import re
 import subprocess
 import sys
@@ -45,14 +48,18 @@ def main():
         'for n in [0, 1, 2, 8, 12]: print(fibonacci(n))',
         'for (let n in [0, 1, 2, 8, 12]) { print(fibonacci(n)) }',
         'for _, n in ipairs({0, 1, 2, 8, 12}) do print(fibonacci(n)) end')
-    add('sieve', [1, 2, 4, 25],
-        'for n in [2, 3, 10, 97]: print(primes_up_to(n))',
-        'for (let n in [2, 3, 10, 97]) { print(primes_up_to(n)) }',
-        'for _, n in ipairs({2, 3, 10, 97}) do print(primes_up_to(n)) end')
-    add('merge_sort', [0, 1, 7, 5, -2, 0, 3, 3, 8],
-        'for xs in [[], [7], [3, -2, 3, 0, 8]]:\n ys = merge_sort(xs)\n print(len(ys))\n for y in ys: print(y)',
-        'for (let xs in [[], [7], [3, -2, 3, 0, 8]]) { let ys = merge_sort(xs)\n print(len(ys))\n for (let y in ys) { print(y) } }',
-        'for _, xs in ipairs({{}, {7}, {3, -2, 3, 0, 8}}) do local ys = merge_sort(xs)\n print(#ys)\n for _, y in ipairs(ys) do print(y) end end')
+    sieve_limits = [2, 3, 4, 9, 10, 25, 49, 97, 121, 169, 997]
+    prime_counts = [sum(all(n % divisor for divisor in range(2, isqrt(n) + 1))
+                        for n in range(2, limit + 1)) for limit in sieve_limits]
+    lua_limits = '{' + ', '.join(map(str, sieve_limits)) + '}'
+    add('sieve', prime_counts,
+        f'for n in {sieve_limits!r}: print(primes_up_to(n))',
+        f'for (let n in {sieve_limits!r}) {{ print(primes_up_to(n)) }}',
+        f'for _, n in ipairs({lua_limits}) do print(primes_up_to(n)) end')
+    add('merge_sort', [0, 1, 7, 7, 5, -2, 0, 3, 3, 8, 3, -2, 3, 0, 8],
+        'for xs in [[], [7], [3, -2, 3, 0, 8]]:\n ys = merge_sort(xs)\n print(len(ys))\n for y in ys: print(y)\n for x in xs: print(x)',
+        'for (let xs in [[], [7], [3, -2, 3, 0, 8]]) { let ys = merge_sort(xs)\n print(len(ys))\n for (let y in ys) { print(y) }\n for (let x in xs) { print(x) } }',
+        'for _, xs in ipairs({{}, {7}, {3, -2, 3, 0, 8}}) do local ys = merge_sort(xs)\n print(#ys)\n for _, y in ipairs(ys) do print(y) end\n for _, x in ipairs(xs) do print(x) end end')
     add('n_queens', [1, 1, 0, 2, 10],
         'for n in [0, 1, 2, 4, 5]: print(count_queens([-1] * n, 0, n))',
         'for (let n in [0, 1, 2, 4, 5]) { print(count_queens(replicate([-1], n), 0, n)) }',
@@ -73,10 +80,22 @@ def main():
         'for d in range(6): print(checksum(make_tree(d)))',
         'for (let d in 0 to 6) { print(checksum(make_tree(d))) }',
         'for d = 0, 5 do print(checksum(make_tree(d))) end')
-    add('huffman', [2, 5, 8],
-        'for text in ["ab", "aaabb", "abcd"]: print(huffman_total(text))',
-        "for (let text in ['ab', 'aaabb', 'abcd']) { print(huffman_total(text)) }",
-        'for _, text in ipairs({"ab", "aaabb", "abcd"}) do print(huffman_total(text)) end')
+    huffman_texts = ['a', 'ab', 'aaabb', 'abcd', 'aceggg', 'abcdefgh', 'aaaaaaaabbbccd']
+    huffman_costs = []
+    for text in huffman_texts:
+        weights = list(Counter(text).values())
+        heapq.heapify(weights)
+        cost = 0
+        while len(weights) > 1:
+            weight = heapq.heappop(weights) + heapq.heappop(weights)
+            cost += weight
+            heapq.heappush(weights, weight)
+        huffman_costs.append(cost)
+    lua_texts = '{' + ', '.join(repr(text) for text in huffman_texts) + '}'
+    add('huffman', huffman_costs,
+        f'for text in {huffman_texts!r}: print(huffman_total(text))',
+        f'for (let text in {huffman_texts!r}) {{ print(huffman_total(text)) }}',
+        f'for _, text in ipairs({lua_texts}) do print(huffman_total(text)) end')
     add('fannkuch', [0, 2, 8],
         'for n in [1, 2, 3]: print(fannkuch(n))',
         'for (let n in [1, 2, 3]) { print(fannkuch(n)) }',
@@ -130,10 +149,15 @@ def main():
     board = solved.copy()
     for index in [0, 40, 80]:
         board[index] = 0
-    add('sudoku', [1, *solved],
-        f'board = {board!r}\nprint(int(solve_board(board)))\nfor value in board: print(value)',
-        f'let board = {board!r}\nif (solve_board(board)) {{ print(1) }} else {{ print(0) }}\nfor (let value in board) {{ print(value) }}',
-        'local board = {' + ', '.join(map(str, board)) + '}\nprint(solve_board(board) and 1 or 0)\nfor _, value in ipairs(board) do print(value) end')
+    unsolvable = solved.copy()
+    unsolvable[0], unsolvable[1] = 0, 1
+    add('sudoku', [1, *solved, 1, 0, *unsolvable],
+        f'board = {board!r}\nprint(int(solve_board(board)))\nfor value in board: print(value)\n'
+        f'print(int(solve_board({solved!r})))\nboard = {unsolvable!r}\nprint(int(solve_board(board)))\nfor value in board: print(value)',
+        f'let board = {board!r}\nif (solve_board(board)) {{ print(1) }} else {{ print(0) }}\nfor (let value in board) {{ print(value) }}\n'
+        f'if (solve_board({solved!r})) {{ print(1) }} else {{ print(0) }}\nboard = {unsolvable!r}\nif (solve_board(board)) {{ print(1) }} else {{ print(0) }}\nfor (let value in board) {{ print(value) }}',
+        'local board = {' + ', '.join(map(str, board)) + '}\nprint(solve_board(board) and 1 or 0)\nfor _, value in ipairs(board) do print(value) end\n'
+        'print(solve_board({' + ', '.join(map(str, solved)) + '}) and 1 or 0)\nboard = {' + ', '.join(map(str, unsolvable)) + '}\nprint(solve_board(board) and 1 or 0)\nfor _, value in ipairs(board) do print(value) end')
     with tempfile.TemporaryDirectory(prefix='tapas-semantics-') as directory:
         for name, expected, trailers in probes:
             for extension, command in commands.items():

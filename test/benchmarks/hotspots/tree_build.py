@@ -1,3 +1,4 @@
+# Default trees use False leaves and fresh tuples; --matched keeps fresh Lists.
 import sys
 import time
 
@@ -9,7 +10,7 @@ def make_list_tree(depth):
 
 def make_tuple_tree(depth):
     if depth == 0:
-        return ()
+        return False
     return (make_tuple_tree(depth - 1), make_tuple_tree(depth - 1))
 
 

@@ -1,16 +1,15 @@
+// false marks a leaf; every internal node is a fresh List.
 function make_tree(depth)
 {
     if (depth == 0) {
-        return []
+        return false
     }
-    let left = this(depth - 1)
-    let right = this(depth - 1)
-    return [left, right]
+    return [this(depth - 1), this(depth - 1)]
 }
 
 function checksum(node)
 {
-    if (node.len() == 0) {
+    if (node == false) {
         return 1
     }
     return 1 + this(node[0]) + this(node[1])

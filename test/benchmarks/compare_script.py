@@ -45,6 +45,7 @@ BASIC_HOT_PATH_BENCHMARKS = (
     "list_copy",
     "list_from_iterable",
     "list_replicate",
+    "list_sort",
     "dict_insert",
     "dict_lookup",
     "dict_update",
@@ -80,16 +81,6 @@ BenchmarkRow = tuple[str, int, int, int | None, float, float | None]
 def algorithm_ratio(rows: list[BenchmarkRow]) -> float:
     ratios = {row[0]: row[4] for row in rows}
     return statistics.geometric_mean(ratios[name] for name in ALGORITHM_BENCHMARKS)
-
-
-def hotspot_description(name: str, language: str) -> str:
-    entry = HOT_PATH_CATALOG.get(name)
-    if entry is None:
-        return "待审查" if language == "zh" else "not yet reviewed"
-    if language == "zh":
-        kinds = {"kernel": "内核", "task": "任务", "representation": "表示", "semantics": "语义"}
-        return f"{kinds[entry['kind']]}：{entry['zh']}"
-    return f"{entry['kind']}: {entry['en']}"
 
 
 def build_configuration(tapas: Path) -> list[str] | None:
@@ -134,7 +125,6 @@ def write_markdown(
     runs: int,
     rows: list[BenchmarkRow],
     language: str,
-    matched: dict[str, tuple[int, float]] | None = None,
 ) -> None:
     tapas_version = subprocess.run(
         [str(tapas), "-v"], check=True, capture_output=True, text=True
@@ -160,12 +150,11 @@ def write_markdown(
         algorithm_description = "保留指定算法，允许各语言使用惯用容器和标准库批量操作；不要求逐行翻译。输入、重复次数、输出及计时边界保持等价。规则见 SEMANTICS.md。"
         hot_path_title = "基础热路径"
         hot_path_description = (
-            "本表自动收录 `hotspots/` 中全部 Tapas/Python 案例，包括基础 VM 操作、"
-            "综合算法提取的组合热点及负对照。Python 列运行各文件的默认实现；"
-            "新增诊断案例默认使用惯用优化写法；七组 Python 结构对照在下表单独列出。"
-            "缺少 Lua 实现时标为 —，不计入 Lua 几何平均；两种比值分别标注实际样本数。"
-            "`function_call_baseline` 与 `function_calls` 共享循环体，可估算直接调用净成本；"
-            "`function_callbacks` 增加高阶回调。"
+            "用于定位性能瓶颈：保留被测关键操作，在此约束内采用合理写法。"
+            "任务型结果提示能力缺口，同机制对照和运行时 A/B 用于归因；"
+            "例如 `heap_callback` 三语言均执行语言级比较回调，原生搜索与显式 while 的比值不能直接解释为循环成本。"
+            "诊断合同见 [SEMANTICS.md](SEMANTICS.md#热点合同)。"
+            "缺少 Lua 实现时标为 —，不计入 Lua 几何平均。"
         )
         group_mean = "本组几何平均数"
         usage_title = "## 用法"
@@ -190,7 +179,20 @@ def write_markdown(
             "运行：`python3.14 test/benchmarks/diagnose_script.py build-release/bin/tapas --algorithms --ablations --controls`。",
             "运行时优化另见 [实施说明](hotspots/OPTIMIZATION.md) 与 [A/B 结果](hotspots/AB_RESULTS.md)；使用 `ab_script.py BASELINE CANDIDATE --rounds 3 --runs 8` 对相同源码多轮交替测量，传入同一二进制可检查 A/A 噪声。",
             "PGO 的热点训练与构建步骤见实施说明；`profile_script.py` 会记录训练输入、二进制和 profile 的哈希。",
+            "List 字典序和默认堆的写法 A/B 见 [字典序实验](hotspots/LIST_ORDER.md)。",
             "原生 heap 包与 Dijkstra、Huffman 的写法 A/B 见 [heap 实验](hotspots/HEAP.md)；`source_ab_script.py` 比较同一运行时上的两份等价 Tapas 源码。",
+            "通用 fill/count 的 sieve 源码 A/B 与 Python count 写法选择见 [批量操作实验](hotspots/BULK.md)。",
+            "sort 与 libc qsort 的原生及运行时对照见 [排序优化](hotspots/SORT.md)。本轮逐项优化见 [紧凑序列与排序](hotspots/COMPACT_AND_SORT.md)。",
+            "代码结构整理、扩展能力校验与性能保留决策见 [代码整理验证](hotspots/CODE_CLEANUP.md)。",
+            "成员检查收益恢复与排序回退处理见 [性能恢复验证](hotspots/PERFORMANCE_RECOVERY.md)。",
+            "LCS 的当前写法、历史外移实验与源码 A/B 见 [LCS 写法优化](hotspots/LCS.md)。",
+            "字符比较、局部变量初始化优化及作用域清理实验见 [值路径优化](hotspots/VALUE_PATHS.md)。",
+            "通用堆策略与回调边界的独立 A/B 见 [通用堆优化](hotspots/HEAP_OPTIMIZATION.md)。",
+            "堆回调的测量合同、Python 写法选择与解释限制见 [公平性审查](hotspots/HEAP_CALLBACK.md)。",
+            "六项综合算法的剩余差距与语法、原生操作及对象表示的区分见 [剩余差距分析](hotspots/REMAINING_GAPS.md)。",
+            "现有语法与标准库下的候选写法及三语言源码 A/B 见 [惯用写法优化](hotspots/IDIOMATIC.md)。",
+            "Lua 的 16 项综合算法复核、候选源码与独立复测见 [Lua 写法审查](hotspots/LUA_AUDIT.md)；当前结果采用经验证保留的实现，不声称全局最优。",
+            "保留运行时或基准源码优化后，应使用最终构建同步重测并更新中英文 README、原始样本及校验记录。",
             ("性能门槛不属于常规测试，因为 CPU 负载、电源状态、编译器和 "
              "Python 版本都会影响结果；发布比较结果时应同时记录运行环境。"),
         )
@@ -225,13 +227,11 @@ def write_markdown(
         algorithm_description = "Keep the specified algorithm while allowing idiomatic containers and standard-library bulk operations. Inputs, repetitions, outputs, and timing boundaries are equivalent; line-by-line translations are not required. See SEMANTICS.md for the contracts."
         hot_path_title = "VM Hot Paths"
         hot_path_description = (
-            "This table automatically includes every Tapas/Python case in `hotspots/`: "
-            "basic VM operations, algorithm-derived composite workloads, and negative controls. "
-            "The Python column runs each file's default implementation; new diagnostic cases use "
-            "idiomatic optimized references. Seven Python structural controls are reported separately below. "
-            "Missing Lua implementations are shown as — and excluded from the Lua geometric mean; "
-            "each mean states its actual sample count. `function_call_baseline` and `function_calls` "
-            "share a loop body to estimate direct-call overhead; `function_callbacks` adds a callback layer."
+            "Diagnose bottlenecks by retaining the operations being measured and using reasonable implementations within that constraint. "
+            "Task results expose capability gaps; matched-mechanism controls and runtime A/B experiments support attribution. "
+            "For example, all heap_callback implementations execute language-level comparators; a native-search versus explicit-while ratio does not isolate loop cost. "
+            "See [SEMANTICS.md](SEMANTICS.md#热点合同) for the diagnostic contract. "
+            "Missing Lua implementations are shown as — and excluded from the Lua geometric mean."
         )
         group_mean = "The geometric mean ratio for this group"
         usage_title = "## Usage"
@@ -259,7 +259,20 @@ def write_markdown(
             "Run `python3.14 test/benchmarks/diagnose_script.py build-release/bin/tapas --algorithms --ablations --controls`.",
             "See the [implementation notes](hotspots/OPTIMIZATION.md) and [A/B results](hotspots/AB_RESULTS.md). Use `ab_script.py BASELINE CANDIDATE --rounds 3 --runs 8` for alternating rounds on identical sources; pass the same binary twice for an A/A noise control.",
             "See the implementation notes for hotspot-only PGO training and build commands; `profile_script.py` records training inputs, binary hashes, and the profile hash.",
+            "See [List ordering experiments](hotspots/LIST_ORDER.md) for native lexicographic heaps and source A/B results.",
             "See the [heap experiments](hotspots/HEAP.md) for Dijkstra and Huffman source A/B tests. `source_ab_script.py` compares two equivalent Tapas programs on the same runtime.",
+            "See the [bulk-operation experiments](hotspots/BULK.md) for sieve fill/count source A/B tests and the Python count reference choice.",
+            "See [sort experiments](hotspots/SORT.md) for native and runtime comparisons against libc qsort, and [compact sequences and sorting](hotspots/COMPACT_AND_SORT.md) for the latest optimization round.",
+            "See [code cleanup validation](hotspots/CODE_CLEANUP.md) for Type comparison, extension capability validation, and performance retention decisions.",
+            "See [performance recovery validation](hotspots/PERFORMANCE_RECOVERY.md) for restored membership gains and sorting regression analysis.",
+            "See [LCS source optimization](hotspots/LCS.md) for the current implementation, historical hoisting experiments, and source A/B results.",
+            "See [value-path optimization](hotspots/VALUE_PATHS.md) for generic character comparison and local initialization improvements, plus scope-cleanup experiments.",
+            "See [generic heap optimization](hotspots/HEAP_OPTIMIZATION.md) for heap strategy and callback-entry A/B experiments.",
+            "See [heap callback fairness](hotspots/HEAP_CALLBACK.md) for the contract, Python representation screening, and interpretation limits.",
+            "See [remaining algorithm gaps](hotspots/REMAINING_GAPS.md) for source A/B evidence separating syntax, native operations, and object representation in six complete algorithms.",
+            "See [idiomatic source optimization](hotspots/IDIOMATIC.md) for candidate implementations and source A/B tests across all three languages.",
+            "See the [Lua source audit](hotspots/LUA_AUDIT.md) for the 16-algorithm review, archived candidates, and independent confirmation; retained implementations are measured choices, not a claim of global optimality.",
+            "After retaining a runtime or benchmark-source optimization, remeasure the final build and update both README reports, raw samples, and validation records together.",
             ("Performance thresholds are not part of the regular test suite "
              "because CPU load, power settings, compiler version, and Python "
              "version affect the results; published comparisons should "
@@ -305,21 +318,14 @@ def write_markdown(
         ]
 
     def append_group(title: str, names: tuple[str, ...], description: str) -> None:
-        is_hotspot = names == HOT_PATH_BENCHMARKS
-        group_columns = columns
         separator_row = "| --- | --- | ---: | ---: | ---: | ---: | ---: |"
-        if is_hotspot:
-            label = "测量内容" if language == "zh" else "Measured workload"
-            source_label = "源码" if language == "zh" else "Source"
-            group_columns = columns.replace(f"| {source_label} |", f"| {label} | {source_label} |")
-            separator_row = "| --- | --- | --- | ---: | ---: | ---: | ---: | ---: |"
         lines.extend(
             [
                 f"### {title}",
                 "",
                 description,
                 "",
-                group_columns,
+                columns,
                 separator_row,
             ]
         )
@@ -338,11 +344,8 @@ def write_markdown(
                 sources += f" · [Lua]({source}.lua)"
             lua_time = format_micros(lua_ns) if lua_ns is not None else "—"
             lua_ratio = f"{ratio_lua:.3f}×" if ratio_lua is not None else "—"
-            purpose = ""
-            if is_hotspot:
-                purpose = f"{hotspot_description(name, language)} | "
             lines.append(
-                f"| `{name}` | {purpose}{sources} | {format_micros(tapas_ns)} | "
+                f"| `{name}` | {sources} | {format_micros(tapas_ns)} | "
                 f"{format_micros(python_ns)} | {lua_time} | "
                 f"{ratio_py:.3f}× | {lua_ratio} |"
             )
@@ -375,21 +378,6 @@ def write_markdown(
          f"Kernels, tasks, representations and semantic cases measure different layers; this group mean is not a pure VM score. See the [case audit]({audit_link})."),
         "",
     ])
-    if matched:
-        lines.extend([
-            "### Python 结构对照" if language == "zh" else "### Python structural controls",
-            "",
-            ("主表保留惯用默认写法；本表另测显式循环或常规对象表示。它有助于区分原生批量操作、迭代方式及对象布局的影响，但仍不等于单条 VM 指令成本。两种 Python 写法的输出必须一致；结构对照不计入任何几何平均。" if language == "zh" else
-             "The main table keeps idiomatic defaults. These additional explicit-loop or conventional-object controls expose bulk-operation, iteration and layout effects; they do not isolate a VM instruction cost. Both Python variants must agree. Controls are excluded from all geometric means."),
-            "",
-            "| 案例 | Python 默认 | Python 结构对照 | Tapas/默认 | Tapas/结构对照 |" if language == "zh" else
-            "| Case | Python default | Python structural control | Tapas/default | Tapas/control |",
-            "| --- | ---: | ---: | ---: | ---: |",
-        ])
-        for name, (duration, ratio) in matched.items():
-            row = rows_by_name[name]
-            lines.append(f"| `{name}` | {format_micros(row[2])} | {format_micros(duration)} | {row[4]:.3f}× | {ratio:.3f}× |")
-        lines.append("")
     lines.extend(
         [
             usage_title,
@@ -484,7 +472,6 @@ def main() -> int:
     python_ratios: list[float] = []
     lua_ratios: list[float] = []
     rows: list[BenchmarkRow] = []
-    matched_rows: dict[str, tuple[int, float]] = {}
     samples = {}
     sources = [HERE / benchmark_source(name).with_suffix(extension)
                for name in BENCHMARKS for extension in (".tap", ".py", ".lua")
@@ -520,8 +507,6 @@ def main() -> int:
             )
             if control_total != tapas_total:
                 raise RuntimeError(f"{name}: structural control has a different result")
-            duration = int(statistics.median(control_times))
-            matched_rows[name] = (duration, int(statistics.median(tapas_times)) / duration)
             samples[name]["python_matched"] = control_times
 
         tapas_median = int(statistics.median(tapas_times))
@@ -589,7 +574,6 @@ def main() -> int:
             args.runs,
             rows,
             markdown_language,
-            matched=matched_rows,
         )
         print(f"wrote Markdown report: {markdown}")
     if failed:
