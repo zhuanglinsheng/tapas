@@ -1,0 +1,41 @@
+// Draw quantity/stock; the solver supplies remaining stock as a witness.
+let Fulfilled = rule (quantity: Int, remaining: Int, stock: Int) {
+    quantity > 0
+    stock >= quantity
+    remaining == stock - quantity
+}
+
+let result = solve::sample(
+    Fulfilled, 12,
+    {'quantity': [1, 2, 3, 4], 'stock': [0, 1, 2, 3, 4]},
+    distributions = {
+        'quantity': finite::categorical([4.0, 3.0, 2.0, 1.0]),
+        'stock': finite::categorical([4.0, 3.0, 2.0, 1.0, 1.0]),
+    },
+    rng = random::generator(random::pcg32_xsh_rr, 41),
+    candidate_limit = 2000,
+    cache_limit = 2,
+    cache_policy = 'mass',
+    exploration = 'gain',
+    core_call_limit = 8,
+    discovery_horizon = 100,
+    events = true
+)
+assert(rule {
+    result::status == 'complete'
+    len(result::samples) == 12
+    result::cache_regions <= 2
+    result::core_calls <= 8
+    types::matches(result, solve::SampleResult)
+})
+
+for (let sample in result::samples) {
+    assert(Fulfilled(sample['quantity'], sample['remaining'], sample['stock']))
+}
+
+print('sampling controls: ', result::status)
+print('business calls: ', result::solver_calls, '; discovery calls: ', result::core_calls)
+print('cache hits: ', result::cache_hits, '; active regions: ', result::cache_regions)
+
+// Export with json::stringify(result::events); bindings reference Rule parameter
+// indices (quantity=0, stock=2), not the omitted witness parameter remaining=1.

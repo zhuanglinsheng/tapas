@@ -36,12 +36,32 @@ typedef struct {
 	uint8_t *bound;
 	size_t *coordinates;
 	size_t count;
+	long id;
 } sample_region;
+
+typedef struct {
+	double solver_seconds;
+	double mass_seconds;
+	double selection_seconds;
+} sample_timings;
+
+typedef enum { cache_mass, cache_fifo, cache_binding_count } sample_cache_policy;
+typedef enum { exploration_budget, exploration_gain, exploration_off } sample_exploration;
 
 typedef struct {
 	sample_region **items;
 	size_t count;
 	size_t capacity;
+	long limit;
+	sample_cache_policy policy;
+	const sample_dimension *dimensions;
+	size_t dimension_count;
+	const tfinite_distribution *joint_distribution;
+	double deadline;
+	tlist *events;
+	sample_timings *timings;
+	long candidate;
+	long next_id;
 } sample_cache;
 
 typedef struct {
@@ -119,6 +139,12 @@ typedef struct {
 	sample_generalization generalization;
 	sample_scheduler scheduler;
 	int trace;
+	long cache_limit;
+	sample_cache_policy cache_policy;
+	sample_exploration exploration;
+	long core_call_limit;
+	long discovery_horizon;
+	int events;
 } sample_options;
 
 static void *sample_calloc(size_t count, size_t size)
@@ -172,6 +198,53 @@ static void sample_string_field(tdict *dictionary, const char *name,
 	tobj_set_nil(&value);
 	tobj_set_compo(&value, (tcompo_v *)tstr_new(text));
 	sample_field(dictionary, name, &value);
+	tobj_try_clear(&value);
+}
+
+/* Bindings use Rule parameter indices and coordinates in the supplied domains.
+ * Event collection never draws randomness or affects the search policy. */
+static void sample_event(sample_cache *cache, const char *kind,
+			 const char *status, const char *reason, long region_id,
+			 const uint8_t *bound, const size_t *coordinates,
+			 size_t count, double seconds, double gain_bound)
+{
+	if (!cache->events)
+		return;
+	tdict *entry = tdict_new();
+	sample_string_field(entry, "kind", kind);
+	sample_string_field(entry, "status", status);
+	sample_string_field(entry, "reason", reason);
+	tobj value;
+	tobj_set_nil(&value);
+	tobj_set_int(&value, cache->candidate);
+	sample_field(entry, "candidate", &value);
+	tobj_set_int(&value, region_id);
+	sample_field(entry, "region_id", &value);
+	tobj_set_int(&value, (long)cache->count);
+	sample_field(entry, "cache_regions", &value);
+	tobj_set_float(&value, seconds);
+	sample_field(entry, "seconds", &value);
+	tobj_set_float(&value, !strcmp(kind, "cache_add") ? -1.0 : gain_bound);
+	sample_field(entry, "gain_bound", &value);
+	tobj_set_float(&value, !strcmp(kind, "cache_add") ? gain_bound : -1.0);
+	sample_field(entry, "uncovered_mass", &value);
+	tlist *bindings = tlist_new();
+	for (size_t i = 0; bound && i < count; i++) {
+		if (!bound[i]) continue;
+		tdict *binding = tdict_new();
+		tobj_set_int(&value, (long)cache->dimensions[i].parameter);
+		sample_field(binding, "parameter", &value);
+		tobj_set_int(&value, (long)coordinates[i]);
+		sample_field(binding, "coordinate", &value);
+		tobj_set_compo(&value, (tcompo_v *)binding);
+		tobj_vec_push(&bindings->items, &value);
+		tobj_try_clear(&value);
+	}
+	tobj_set_compo(&value, (tcompo_v *)bindings);
+	sample_field(entry, "bindings", &value);
+	tobj_try_clear(&value);
+	tobj_set_compo(&value, (tcompo_v *)entry);
+	tobj_vec_push(&cache->events->items, &value);
 	tobj_try_clear(&value);
 }
 
@@ -236,6 +309,7 @@ static void initialize_options(sample_options *options, long count)
 	options->fairness_interval = 4;
 	options->generalization = generalization_online_mass_core;
 	options->scheduler = scheduler_mass_fair;
+	options->core_call_limit = LONG_MAX;
 }
 
 static const char *require_string(const tobj *value, const char *message)
@@ -257,7 +331,13 @@ static void parse_options(sample_options *options, tobj *params,
 		option_fairness = 1u << 5,
 		option_generalization = 1u << 6,
 		option_scheduler = 1u << 7,
-		option_trace = 1u << 8
+		option_trace = 1u << 8,
+		option_cache_limit = 1u << 9,
+		option_cache_policy = 1u << 10,
+		option_exploration = 1u << 11,
+		option_core_limit = 1u << 12,
+		option_horizon = 1u << 13,
+		option_events = 1u << 14
 	};
 	unsigned seen = 0;
 	for (uint_regs i = 3; i < count; i++) {
@@ -362,6 +442,38 @@ static void parse_options(sample_options *options, tobj *params,
 				twarn(ErrRuntime_ParamsType, "solve::sample",
 				      "trace must be Bool");
 			options->trace = argument->val.v_tbool;
+		} else if (!strcmp(name, "cache_limit")) {
+			bit = option_cache_limit;
+			options->cache_limit = require_nonnegative_int(argument,
+				"cache_limit must be a nonnegative Int");
+		} else if (!strcmp(name, "cache_policy")) {
+			bit = option_cache_policy;
+			const char *mode = require_string(argument, "cache_policy must be String");
+			if (!strcmp(mode, "mass")) options->cache_policy = cache_mass;
+			else if (!strcmp(mode, "fifo")) options->cache_policy = cache_fifo;
+			else if (!strcmp(mode, "binding_count")) options->cache_policy = cache_binding_count;
+			else twarn(ErrRuntime_ParamsType, "solve::sample", "unknown cache_policy");
+		} else if (!strcmp(name, "exploration")) {
+			bit = option_exploration;
+			const char *mode = require_string(argument, "exploration must be String");
+			if (!strcmp(mode, "budget")) options->exploration = exploration_budget;
+			else if (!strcmp(mode, "gain")) options->exploration = exploration_gain;
+			else if (!strcmp(mode, "off")) options->exploration = exploration_off;
+			else twarn(ErrRuntime_ParamsType, "solve::sample", "unknown exploration");
+		} else if (!strcmp(name, "core_call_limit")) {
+			bit = option_core_limit;
+			options->core_call_limit = argument->type == tnil ? LONG_MAX :
+				require_nonnegative_int(argument,
+					"core_call_limit must be nil or a nonnegative Int");
+		} else if (!strcmp(name, "discovery_horizon")) {
+			bit = option_horizon;
+			options->discovery_horizon = require_nonnegative_int(argument,
+				"discovery_horizon must be a nonnegative Int");
+		} else if (!strcmp(name, "events")) {
+			bit = option_events;
+			if (argument->type != tbool)
+				twarn(ErrRuntime_ParamsType, "solve::sample", "events must be Bool");
+			options->events = argument->val.v_tbool;
 		} else {
 			twarn(ErrRuntime_ParamsType, "solve::sample",
 			      "unknown optional argument");
@@ -662,6 +774,32 @@ static int result_text(tdict *result, const char *field_name,
 	return 1;
 }
 
+static void tracked_hold(sample_cache *cache, tsolve_worker **worker,
+		const tobj *input, tobj *result, double deadline, int binding_core,
+		const char *kind, const uint8_t *bound, const size_t *coordinates,
+		size_t count)
+{
+	double started = monotonic_seconds();
+	if (binding_core)
+		sample_hold_binding_core(worker, input, result, deadline);
+	else
+		sample_hold(worker, input, result, deadline);
+	double seconds = monotonic_seconds() - started;
+	cache->timings->solver_seconds += seconds;
+	if (!cache->events) return;
+	tobj status, reason;
+	tobj_set_nil(&status);
+	tobj_set_nil(&reason);
+	const char *status_text = "", *reason_text = "";
+	if (!result_text((tdict *)result->val.v_tcompo, "status", &status, &status_text) ||
+	    !result_text((tdict *)result->val.v_tcompo, "reason", &reason, &reason_text))
+		twarn(ErrRuntime_Other, "solve::sample", "invalid tracked query result");
+	sample_event(cache, kind, status_text, reason_text, 0, bound, coordinates,
+		count, seconds, -1.0);
+	tobj_ddc_ref_clear(&reason);
+	tobj_ddc_ref_clear(&status);
+}
+
 static int witness_passes(tcompo_env *environment, const tobj *witness)
 {
 	tobj checked;
@@ -819,12 +957,30 @@ static void cache_push(sample_cache *cache, sample_region *region)
 	cache->items[cache->count++] = region;
 }
 
+static void cache_enforce_limit(sample_cache *cache);
+static double region_uncovered(sample_cache *cache, const uint8_t *bound,
+			       const size_t *coordinates, size_t count);
+
+static void cache_remove(sample_cache *cache, size_t index, const char *reason)
+{
+	sample_region *region = cache->items[index];
+	/* Log after removal so the reported size is the post-event active size. */
+	cache->items[index] = cache->items[--cache->count];
+	sample_event(cache, "cache_remove", "", reason, region->id,
+		region->bound, region->coordinates, region->count, 0.0, -1.0);
+	region_free(region);
+}
+
 static int cache_insert(sample_cache *cache, const uint8_t *bound,
 			const size_t *coordinates, size_t count)
 {
 	for (size_t i = 0; i < cache->count; i++)
-		if (region_subsumes(cache->items[i], bound, coordinates))
+		if (region_subsumes(cache->items[i], bound, coordinates)) {
+			sample_event(cache, "cache_skip", "", "subsumed", cache->items[i]->id,
+				bound, coordinates, count, 0.0, -1.0);
 			return 0;
+		}
+	double gained = cache->events ? region_uncovered(cache, bound, coordinates, count) : -1.0;
 	for (size_t i = 0; i < cache->count;) {
 		sample_region candidate = {
 			.bound = (uint8_t *)bound,
@@ -836,10 +992,14 @@ static int cache_insert(sample_cache *cache, const uint8_t *bound,
 			i++;
 			continue;
 		}
-		region_free(cache->items[i]);
-		cache->items[i] = cache->items[--cache->count];
+		cache_remove(cache, i, "subsumed");
 	}
-	cache_push(cache, region_new(bound, coordinates, count));
+	sample_region *region = region_new(bound, coordinates, count);
+	region->id = ++cache->next_id;
+	cache_push(cache, region);
+	sample_event(cache, "cache_add", "unsat", "certified", region->id,
+		bound, coordinates, count, 0.0, gained);
+	cache_enforce_limit(cache);
 	return 1;
 }
 
@@ -984,7 +1144,7 @@ static long double joint_uncovered_partition(
 	return mass;
 }
 
-static long double uncovered_mass(const sample_cache *cache,
+static long double uncovered_mass_impl(const sample_cache *cache,
 				   const sample_dimension *dimensions,
 				   const uint8_t *bound,
 				   const size_t *coordinates,
@@ -1019,6 +1179,88 @@ static long double uncovered_mass(const sample_cache *cache,
 	free(active);
 	free(processed);
 	return result < 0.0L ? 0.0L : result;
+}
+
+static long double uncovered_mass(const sample_cache *cache,
+		const sample_dimension *dimensions, const uint8_t *bound,
+		const size_t *coordinates, size_t dimension_count,
+		const tfinite_distribution *joint_distribution,
+		sample_mass_control *control)
+{
+	double started = monotonic_seconds();
+	long double mass = uncovered_mass_impl(cache, dimensions, bound,
+		coordinates, dimension_count, joint_distribution, control);
+	if (cache->timings)
+		cache->timings->mass_seconds += monotonic_seconds() - started;
+	return mass;
+}
+
+static double region_uncovered(sample_cache *cache, const uint8_t *bound,
+			       const size_t *coordinates, size_t count)
+{
+	sample_mass_control control = {.deadline = cache->deadline};
+	long double mass = uncovered_mass(cache, cache->dimensions, bound, coordinates,
+		count, cache->joint_distribution, &control);
+	return control.timed_out ? -1.0 : (double)mass;
+}
+
+/* Online one-insertion exchange, not a global optimum over discarded proofs.
+ * Remove the region with least unique mass in the k+1 current regions. Dropping
+ * the new region is always an option, so mass selection cannot reduce coverage
+ * (apart from floating point error). Ties retain the incumbent cache. */
+static void cache_enforce_limit(sample_cache *cache)
+{
+	if (!cache->limit || cache->count <= (size_t)cache->limit)
+		return;
+	double started = monotonic_seconds();
+	size_t remove = cache->count - 1;
+	const char *reason = "capacity_mass";
+	if (cache->policy == cache_mass) {
+		sample_region **items = sample_calloc(cache->count - 1, sizeof(*items));
+		sample_cache view = *cache;
+		view.items = items;
+		view.count--;
+		sample_mass_control control = {.deadline = cache->deadline};
+		long double least = 2.0L;
+		for (size_t position = cache->count; position > 0; position--) {
+			size_t i = position - 1, at = 0;
+			for (size_t j = 0; j < cache->count; j++)
+				if (j != i) items[at++] = cache->items[j];
+			sample_region *region = cache->items[i];
+			long double loss = uncovered_mass(&view, cache->dimensions,
+				region->bound, region->coordinates, region->count,
+				cache->joint_distribution, &control);
+			if (control.timed_out) {
+				/* An unfinished estimate must never decide an eviction. */
+				remove = cache->count - 1;
+				reason = "selection_timeout";
+				break;
+			}
+			if (loss < least) {
+				least = loss;
+				remove = i;
+			}
+		}
+		free(items);
+	} else if (cache->policy == cache_fifo) {
+		reason = "capacity_fifo";
+		for (size_t i = 0; i < cache->count; i++)
+			if (cache->items[i]->id < cache->items[remove]->id) remove = i;
+	} else {
+		reason = "capacity_binding_count";
+		size_t widest = 0;
+		for (size_t position = cache->count; position > 0; position--) {
+			size_t i = position - 1, width = 0;
+			for (size_t j = 0; j < cache->dimension_count; j++)
+				width += !!cache->items[i]->bound[j];
+			if (width > widest) { widest = width; remove = i; }
+		}
+	}
+	cache_remove(cache, remove, reason);
+	double seconds = monotonic_seconds() - started;
+	cache->timings->selection_seconds += seconds;
+	sample_event(cache, "cache_select", "", reason, 0, nullptr, nullptr, 0,
+		seconds, -1.0);
 }
 
 static sample_node *node_new(sample_nodes *nodes, sample_task *task,
@@ -1124,7 +1366,8 @@ static void prepare_node(sample_nodes *nodes, sample_cache *cache,
 	if (control->timed_out)
 		return;
 	if (priority <= 0.0L) {
-		node->closed = 1;
+		/* Bounded caches may evict this coverage later. Park the node. */
+		if (!cache->limit) node->closed = 1;
 		return;
 	}
 	size_t undecided = node_first_undecided(node);
@@ -1191,7 +1434,7 @@ static sample_node *scheduled_node(sample_nodes *nodes, sample_cache *cache,
 			return nullptr;
 		}
 		if (priority <= 0.0L) {
-			candidate->closed = 1;
+			if (!cache->limit) candidate->closed = 1;
 			continue;
 		}
 		size_t candidate_bindings = bound_count(candidate->included,
@@ -1233,7 +1476,8 @@ static int refinement_step(tsolve_worker **worker, trule *rule,
 	tobj_set_nil(&status);
 	tobj_set_nil(&reason);
 	tobj_set_compo(&input, (tcompo_v *)restricted);
-	sample_hold(worker, &input, &held, deadline);
+	tracked_hold(cache, worker, &input, &held, deadline, 0, "core_query",
+		bound, node->task->coordinates, node->task->count);
 	const char *status_text = nullptr;
 	const char *reason_text = nullptr;
 	if (!result_text((tdict *)held.val.v_tcompo, "status",
@@ -1273,7 +1517,7 @@ static int refinement_step(tsolve_worker **worker, trule *rule,
 	return successful ? 1 : -1;
 }
 
-static int query_bound(tsolve_worker **worker, trule *rule,
+static int query_bound(sample_cache *cache, tsolve_worker **worker, trule *rule,
 			 const sample_dimension *dimensions, sample_task *task,
 			 const uint8_t *bound, double deadline,
 			 sample_endpoint *outcome, char **failure_status,
@@ -1287,7 +1531,8 @@ static int query_bound(tsolve_worker **worker, trule *rule,
 	tobj_set_nil(&status);
 	tobj_set_nil(&reason);
 	tobj_set_compo(&input, (tcompo_v *)restricted);
-	sample_hold(worker, &input, &held, deadline);
+	tracked_hold(cache, worker, &input, &held, deadline, 0, "core_query",
+		bound, task->coordinates, task->count);
 	const char *status_text = nullptr;
 	const char *reason_text = nullptr;
 	if (!result_text((tdict *)held.val.v_tcompo, "status",
@@ -1429,7 +1674,7 @@ static int baseline_step(tsolve_worker **worker, trule *rule,
 			 char **failure_status, char **failure_reason)
 {
 	sample_endpoint outcome = endpoint_unknown;
-	int queried = query_bound(worker, rule, dimensions, task, bound,
+	int queried = query_bound(cache, worker, rule, dimensions, task, bound,
 		deadline, &outcome, failure_status, failure_reason);
 	if (queried < 0)
 		return queried;
@@ -1513,7 +1758,8 @@ static void sample_result(tobj *result, const char *status,
 			  const char *reason, tlist *samples,
 			  long candidates, long solver_calls,
 			  long core_calls, long cache_hits,
-			  long cache_regions, tlist *trace, double elapsed)
+			  long cache_regions, tlist *trace, tlist *events,
+			  const sample_timings *timings, double elapsed)
 {
 	tdict *dictionary = tdict_new();
 	sample_string_field(dictionary, "status", status);
@@ -1538,15 +1784,51 @@ static void sample_result(tobj *result, const char *status,
 	tobj_try_clear(&value);
 	tobj_set_float(&value, elapsed);
 	sample_field(dictionary, "elapsed", &value);
+	tobj_set_compo(&value, (tcompo_v *)events);
+	sample_field(dictionary, "events", &value);
+	tobj_try_clear(&value);
+	tdict *times = tdict_new();
+	tobj_set_float(&value, timings->solver_seconds);
+	sample_field(times, "solver_seconds", &value);
+	tobj_set_float(&value, timings->mass_seconds);
+	sample_field(times, "mass_seconds", &value);
+	tobj_set_float(&value, timings->selection_seconds);
+	sample_field(times, "selection_seconds", &value);
+	tobj_set_compo(&value, (tcompo_v *)times);
+	sample_field(dictionary, "timings", &value);
+	tobj_try_clear(&value);
 	tobj_set_compo(result, (tcompo_v *)dictionary);
+}
+
+static void exploration_pause(sample_cache *cache, const char **previous,
+			      const char *reason, double bound)
+{
+	if (!*previous || strcmp(*previous, reason))
+		sample_event(cache, "exploration_pause", "", reason, 0,
+			nullptr, nullptr, 0, 0.0, bound);
+	*previous = reason;
+}
+
+static long double remaining_horizon(const sample_options *options,
+		long requested, long accepted, long candidates)
+{
+	long double remaining = options->candidate_limit - candidates;
+	if (options->discovery_horizon) {
+		long double configured = (long double)options->discovery_horizon - candidates;
+		if (configured < remaining) remaining = configured;
+	} else if (accepted) {
+		long double estimated = (long double)(requested - accepted) * candidates / accepted;
+		if (estimated < remaining) remaining = estimated;
+	}
+	return remaining > 0.0L ? remaining : 0.0L;
 }
 
 void tsolve_sample(tsolve_worker **worker, tobj *params, uint_regs count,
 		   tobj *result, tcompo_env *environment)
 {
-	if (count < 3 || count > 12)
+	if (count < 3 || count > 18)
 		twarn(ErrRuntime_ParamsCtr, "solve::sample",
-		      "three positional arguments and up to nine named arguments required");
+		      "three positional arguments and up to fifteen named arguments required");
 	if (params[0].type != tcompo ||
 	    tobj_compo_type(&params[0]) != compo_trule)
 		twarn(ErrRuntime_ParamsType, "solve::sample", "Rule required");
@@ -1582,6 +1864,8 @@ void tsolve_sample(tsolve_worker **worker, tobj *params, uint_regs count,
 	}
 	tlist *samples = tlist_new();
 	tlist *trace = tlist_new();
+	tlist *events = tlist_new();
+	sample_timings timings = {0};
 	sample_cache cache = {0};
 	sample_tasks tasks = {0};
 	sample_nodes nodes = {0};
@@ -1591,9 +1875,18 @@ void tsolve_sample(tsolve_worker **worker, tobj *params, uint_regs count,
 	long cache_hits = 0;
 	const char *final_status = "complete";
 	char *final_reason = nullptr;
+	const char *pause_reason = nullptr;
 	double started = monotonic_seconds();
 	double deadline = options.time_limit < 0.0 ? -1.0 :
 		started + options.time_limit;
+	cache.limit = options.cache_limit;
+	cache.policy = options.cache_policy;
+	cache.dimensions = dimensions;
+	cache.dimension_count = dimension_count;
+	cache.joint_distribution = options.joint_distribution;
+	cache.deadline = deadline;
+	cache.events = options.events ? events : nullptr;
+	cache.timings = &timings;
 
 	while ((long)tlist_size(samples) < requested) {
 		const char *candidate_outcome = "cache_hit";
@@ -1640,6 +1933,7 @@ void tsolve_sample(tsolve_worker **worker, tobj *params, uint_regs count,
 				      "domain value does not match Rule parameter Type");
 		}
 		candidates++;
+		cache.candidate = candidates;
 		if (!cache_matches(&cache, coordinates)) {
 			trule *restricted = restricted_rule(rule, dimensions,
 				values, all_bound, dimension_count);
@@ -1652,11 +1946,8 @@ void tsolve_sample(tsolve_worker **worker, tobj *params, uint_regs count,
 			tobj_set_nil(&status);
 			tobj_set_nil(&reason);
 			tobj_set_compo(&input, (tcompo_v *)restricted);
-			if (use_binding_core)
-				sample_hold_binding_core(worker, &input, &held,
-					deadline);
-			else
-				sample_hold(worker, &input, &held, deadline);
+			tracked_hold(&cache, worker, &input, &held, deadline, use_binding_core,
+				"business_query", all_bound, coordinates, dimension_count);
 			solver_calls++;
 			const char *status_text = nullptr;
 			const char *reason_text = nullptr;
@@ -1715,27 +2006,24 @@ void tsolve_sample(tsolve_worker **worker, tobj *params, uint_regs count,
 				candidate_outcome = options.generalization ==
 					generalization_raw_core ? has_raw_core ?
 					"unsat_raw_core" : "unsat_raw_fallback" : "unsat";
-				if (options.generalization != generalization_none &&
-				    !task_exists(&tasks, coordinates, dimension_count)) {
-					sample_task *task = task_new(values,
-						coordinates, dimension_count);
+				if (options.generalization != generalization_none)
 					cache_insert(&cache, has_raw_core ? raw_bound : all_bound,
-						task->coordinates, dimension_count);
-					if (options.generalization ==
-					    generalization_online_mass_core) {
-						tasks_push(&tasks, task);
-						uint8_t *included = sample_calloc(
-							dimension_count, sizeof(*included));
+						coordinates, dimension_count);
+				/* Cache admission is independent of task deduplication: an
+				 * evicted proof can be relearned from a later failed input. */
+				if (options.exploration != exploration_off && options.core_call_limit &&
+				    !task_exists(&tasks, coordinates, dimension_count) &&
+				    (options.generalization == generalization_online_mass_core ||
+				     options.generalization == generalization_deletion_mus ||
+				     options.generalization == generalization_minimum_core)) {
+					sample_task *task = task_new(values, coordinates, dimension_count);
+					tasks_push(&tasks, task);
+					if (options.generalization == generalization_online_mass_core) {
+						uint8_t *included = sample_calloc(dimension_count, sizeof(*included));
 						node_new(&nodes, task, included, all_bound,
-							 endpoint_unknown, endpoint_unsat);
+							endpoint_unknown, endpoint_unsat);
 						free(included);
-					} else if (options.generalization ==
-						   generalization_deletion_mus ||
-						   options.generalization ==
-						   generalization_minimum_core)
-						tasks_push(&tasks, task);
-					else
-						task_free(task);
+					}
 				}
 				free(raw_bound);
 			} else {
@@ -1757,8 +2045,15 @@ void tsolve_sample(tsolve_worker **worker, tobj *params, uint_regs count,
 			tobj_try_clear(&held);
 			if (final_reason)
 				break;
-		} else
+		} else {
 			cache_hits++;
+			for (size_t i = 0; cache.events && i < cache.count; i++) {
+				if (!region_matches(cache.items[i], coordinates)) continue;
+				sample_event(&cache, "cache_hit", "unsat", "first_match",
+					cache.items[i]->id, all_bound, coordinates, dimension_count, 0.0, -1.0);
+				break;
+			}
+		}
 
 		if ((long)tlist_size(samples) >= requested) {
 			if (options.trace)
@@ -1788,9 +2083,19 @@ void tsolve_sample(tsolve_worker **worker, tobj *params, uint_regs count,
 			sqrtl((long double)candidates);
 		long budget = budget_value >= (long double)LONG_MAX ? LONG_MAX :
 			(long)floorl(budget_value);
+		if (budget > options.core_call_limit) budget = options.core_call_limit;
+		int can_refine = options.generalization == generalization_online_mass_core ||
+			options.generalization == generalization_deletion_mus ||
+			options.generalization == generalization_minimum_core;
+		if (can_refine && options.exploration == exploration_off)
+			exploration_pause(&cache, &pause_reason, "disabled", -1.0);
+		else if (can_refine && core_calls >= budget)
+			exploration_pause(&cache, &pause_reason,
+				core_calls >= options.core_call_limit ? "call_limit" : "sqrt_budget", -1.0);
 		while (options.generalization != generalization_none &&
 		       options.generalization != generalization_full &&
 		       options.generalization != generalization_raw_core &&
+		       options.exploration != exploration_off &&
 		       core_calls < budget && !deadline_reached(deadline)) {
 			int mass_timed_out = 0;
 			sample_node *node = nullptr;
@@ -1820,7 +2125,28 @@ void tsolve_sample(tsolve_worker **worker, tobj *params, uint_regs count,
 			}
 			if (!node && !task) {
 				free(task_bound);
+				exploration_pause(&cache, &pause_reason, "no_tasks", -1.0);
 				break;
+			}
+			if (options.exploration == exploration_gain) {
+				sample_mass_control control = {.deadline = deadline};
+				long double mass = uncovered_mass(&cache, dimensions,
+					node ? node->included : task_bound,
+					node ? node->task->coordinates : task->coordinates,
+					dimension_count, options.joint_distribution, &control);
+				long double benefit = remaining_horizon(&options, requested,
+					(long)tlist_size(samples), candidates) * mass;
+				if (control.timed_out || benefit <= 1.0L) {
+					free(task_bound);
+					exploration_pause(&cache, &pause_reason,
+						control.timed_out ? "time_limit" : "gain_bound", (double)benefit);
+					break;
+				}
+			}
+			if (pause_reason) {
+				sample_event(&cache, "exploration_resume", "", pause_reason,
+					0, nullptr, nullptr, 0, 0.0, -1.0);
+				pause_reason = nullptr;
 			}
 			char *failure_status = nullptr;
 			char *failure_reason = nullptr;
@@ -1832,6 +2158,9 @@ void tsolve_sample(tsolve_worker **worker, tobj *params, uint_regs count,
 			free(task_bound);
 			if (refined)
 				core_calls++;
+			if (core_calls >= budget)
+				exploration_pause(&cache, &pause_reason,
+					core_calls >= options.core_call_limit ? "call_limit" : "sqrt_budget", -1.0);
 			if (refined < 0) {
 				final_status = deadline_reached(deadline) ?
 					"incomplete" :
@@ -1856,10 +2185,12 @@ void tsolve_sample(tsolve_worker **worker, tobj *params, uint_regs count,
 				options.joint_distribution, deadline);
 	}
 
+	sample_event(&cache, "sample_end", final_status, final_reason ? final_reason : "",
+		0, nullptr, nullptr, 0, 0.0, -1.0);
 	double elapsed = monotonic_seconds() - started;
 	sample_result(result, final_status, final_reason, samples,
 		candidates, solver_calls, core_calls, cache_hits,
-		(long)cache.count, trace, elapsed);
+		(long)cache.count, trace, events, &timings, elapsed);
 	free(final_reason);
 	for (size_t i = 0; i < nodes.count; i++)
 		node_free(nodes.items[i]);
@@ -1886,26 +2217,27 @@ ttypeval *tsolve_sample_result_type(void)
 	const char *names[] = {
 		"status", "reason", "samples", "candidates",
 		"solver_calls", "core_calls", "cache_hits", "cache_regions",
-		"trace", "elapsed"
+		"trace", "elapsed", "events", "timings"
 	};
-	tstring *field_names[10];
-	ttype_field fields[10];
+	tstring *field_names[12];
+	ttype_field fields[12];
 	ttypeval *assignments = ttypeval_new_list(
 		ttypeval_builtin(tbuiltintype_dictionary));
 	ttypeval *traces = ttypeval_new_list(
 		ttypeval_builtin(tbuiltintype_dictionary));
-	for (size_t i = 0; i < 10; i++) {
+	for (size_t i = 0; i < 12; i++) {
 		field_names[i] = tstring_new(names[i]);
 		fields[i].name = field_names[i];
 		fields[i].type = i < 2 ?
 			ttypeval_builtin(tbuiltintype_string) :
 			i == 2 ? assignments :
-			i == 8 ? traces :
+			(i == 8 || i == 10) ? traces :
+			i == 11 ? ttypeval_builtin(tbuiltintype_dictionary) :
 			i == 9 ? ttypeval_builtin(tbuiltintype_float) :
 			ttypeval_builtin(tbuiltintype_int);
 	}
-	ttypeval *type = ttypeval_new_fields(fields, 10);
-	for (size_t i = 0; i < 10; i++)
+	ttypeval *type = ttypeval_new_fields(fields, 12);
+	for (size_t i = 0; i < 12; i++)
 		tstring_free(field_names[i]);
 	return type;
 }

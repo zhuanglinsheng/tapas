@@ -38,6 +38,8 @@ solve::SampleResult: Type
 | `cache_regions` | `Int` | 返回时缓存中未被其他区域包含的区域数 |
 | `trace` | `List[Dictionary]` | 启用 trace 时按候选记录的实验数据；默认是空列表 |
 | `elapsed` | `Float` | 本次调用的墙钟运行时间，单位为秒 |
+| `events` | `List[Dictionary]` | 启用 `events` 时的查询、缓存和探索状态事件；默认空列表 |
+| `timings` | `Dictionary` | `solver_seconds`、`mass_seconds`、`selection_seconds` 的墙钟计时 |
 
 ### 通用操作
 
@@ -67,7 +69,13 @@ solve::sample(
     fairness_interval: Int = 4,
     generalization: String = 'online_mass_core',
     scheduler: String = 'mass_fair',
-    trace: Bool = false
+    trace: Bool = false,
+    cache_limit: Int = 0,
+    cache_policy: String = 'mass',
+    exploration: String = 'budget',
+    core_call_limit: Int | Nil = nil,
+    discovery_horizon: Int = 0,
+    events: Bool = false
 ) -> solve::SampleResult
 ```
 
@@ -105,6 +113,53 @@ solve::sample(
 `SampleResult` 除样本和原有计数外，还返回 `cache_hits`、最终 `cache_regions` 与 `trace`。总 solver 调用数为 `solver_calls + core_calls`；`solver_calls` 只计原始候选查询，缓存命中不计入其中。
 
 `sample` 只将经过完整求解并确认存在合法补全的候选加入结果。只有可靠的 UNSAT 结论才能产生缓存区域；UNKNOWN、超时和不支持的规则不得当作 UNSAT 并跳过，而应结束本次调用并在结果中报告原因。失败候选创建可暂停、恢复的 `(I, J)` 分支搜索；每个已经查询并证明 UNSAT 的端点立即加入安全缓存，较大的安全区域会删除被其包含的旧缓存区域。分支、继承已知端点、零质量剪枝和缓存整理不消耗 solver 预算。第一版固定串行处理候选且 solver 使用单 worker，不提供 `workers` 参数。
+
+### 受限缓存
+
+`cache_limit` 是活动拒绝缓存的最大区域数，必须为非负 Int；`0` 表示无限制。每次插入仍先移除包含关系冗余，然后在超限时从当前 `k+1` 个区域中淘汰一条：
+
+- `cache_policy = 'mass'`：计算每条区域相对其他区域的独有先验概率质量，淘汰损失最小的一条；相同损失优先丢弃新区域。这是一次插入下的最优交换，不是对所有历史区域的全局最优选择，也不承诺最大覆盖的全局近似比。
+- `'fifo'`：淘汰插入最早的活动区域。
+- `'binding_count'`：淘汰绑定最多的区域；相同宽度优先丢弃新区域。
+
+质量选择不使用不完整的质量估计决定淘汰；若计算达到总时限，保留原缓存并丢弃新插入区域。正常完成时，`mass` 策略的总覆盖质量不下降（浮点误差除外），但区域并集仍可能改变。FIFO 和绑定数策略的覆盖质量可以下降。
+
+有限缓存下，因当前覆盖而无新增质量的搜索节点暂时停放，覆盖改变后可以重新调度；不能沿用无限缓存的永久零质量剪枝。重新出现的失败输入也可重新准入已淘汰区域，而不被任务去重挡住。已完成搜索不会被无限重启，有限缓存不承诺最终覆盖全部不可行输入。
+
+容量只限制活动拒绝区域数量；任务、搜索节点、采样结果和可选事件仍占用额外内存。没有保留一个无限区域池来重新做全局选择。
+
+### 探索暂停与预算
+
+`exploration = 'budget'` 保留原调度行为。`core_call_limit` 可额外指定整个调用的泛化查询总上限；默认不添加绝对上限。它与 `floor(β * sqrt(t))` 同时约束累计 `core_calls`。设为 `0` 时不执行额外泛化，但仍可使用 raw core 缓存。
+
+绝对上限限制的是发现成本；因为缓存轨迹也会变化，它不自动给出相对于 raw core 基线的总调用净损失上界。
+
+`exploration = 'off'` 禁用额外泛化和新泛化任务，不改变业务候选的产生、可行性查询或安全缓存准入。
+
+`exploration = 'gain'` 在预算内增加一个实验性门控：对调度器选中的任务，计算其可能扩张区域在当前缓存之外的质量上界 `m`，仅在 `H * m > 1` 时支付下一次验证查询。这个质量上界不保证区域真的 UNSAT，也不等于有限缓存交换后的净收益，因此不能保证整段探索回本。它暂停当前轮探索，而不是删除任务或结束采样；后续候选改变接受率估计、缓存或预算时仍可继续。
+
+`discovery_horizon > 0` 给出用于门控的预计候选总长度，每轮取剩余 `H = max(0, discovery_horizon - candidates)`，并截断到 `candidate_limit` 的剩余候选数。它不限制实际采样长度。默认 `0` 时，已有接受样本就按 `剩余样本数 * candidates / 已接受样本数` 估计剩余长度；尚无接受样本时使用剩余候选上限。门控不读取未来候选、不重采样，也不承诺该估计准确。
+
+### 事件和成本分析
+
+`events = true` 启用详细事件，独立于逐候选 `trace`。事件只在本次调用内有效，可通过 `json::stringify` 导出。主要事件为：
+
+| `kind` | 含义 |
+|---|---|
+| `business_query` / `core_query` | 实际执行的业务／泛化查询，含状态、原因、绑定与查询耗时；SAT 的失败探索同样记录 |
+| `cache_add` / `cache_remove` / `cache_skip` | 安全区域准入、移除或被已有区域包含；`region_id` 在调用内唯一 |
+| `cache_select` | 一次容量选择的耗时；淘汰原因包括 `capacity_mass`、`capacity_fifo`、`capacity_binding_count`、`selection_timeout` |
+| `cache_hit` | 被活动缓存直接拒绝的完整候选，引用第一个匹配区域的 ID；不解释为独占的因果收益 |
+| `exploration_pause` / `exploration_resume` | 探索状态变化，原因包括 `disabled`、`call_limit`、`sqrt_budget`、`gain_bound`、`no_tasks`、`time_limit` |
+| `sample_end` | 调用的最终状态与原因 |
+
+每条事件还有 `candidate`、`status`、`reason`、`cache_regions`、`seconds`、`gain_bound`、`uncovered_mass` 和 `bindings`。绑定以 `{parameter: Rule 形参的零基索引, coordinate: 该采样域的零基坐标}` 表示；未采样的 witness 不进入区域绑定。没有区域 ID 的事件用 `0`；非门控事件的 `gain_bound` 为 `-1`。
+
+`cache_add.uncovered_mass` 是插入前相对于当时整个活动缓存的新增质量，尚未扣除后续容量淘汰的损失；其他事件为 `-1`，质量计算中断也为 `-1`。插入和淘汰分别记录，因此 `cache_add.cache_regions` 可以短暂为 `k+1`；对候选的实际查询和逐候选 trace 始终使用容量至多为 `k` 的缓存。最终净收益应通过相同候选流的配对比较评估，不能简单累加各区域的命中次数。
+
+`timings.solver_seconds` 包含实际 solver 查询（包括 worker 首次启动），`mass_seconds` 包含精确质量计算，`selection_seconds` 包含容量选择及其质量计算。后两者有包含关系，不能三项相加当作总时间；`elapsed` 仍是整个采样循环的总计时。开启事件会额外计算准入质量并保留逐事件数据，有时间和内存开销。性能实验应单独运行关闭 `events` 和 `trace` 的配置；在没有时间中断的情况下，这些日志开关不改变候选随机流和搜索决策。
+
+可运行的受限缓存、探索控制和事件示例见 [sampling_controls.tap](../../../examples/solve/sampling_controls.tap)。
 
 例如：
 

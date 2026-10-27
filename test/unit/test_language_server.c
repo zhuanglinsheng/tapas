@@ -68,7 +68,9 @@ static void test_presentation_categories(void)
 	assert(strstr(tstring_cstr(description),
 		"generalization: String = 'online_mass_core'"));
 	assert(strstr(tstring_cstr(description),
-		"scheduler: String = 'mass_fair', trace: Bool = false)"));
+		"scheduler: String = 'mass_fair', trace: Bool = false, "));
+	assert(strstr(tstring_cstr(description),
+		"discovery_horizon: Int = 0, events: Bool = false)"));
 	tstring_free(description);
     tfrontend_free(&f);
 }

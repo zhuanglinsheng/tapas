@@ -988,11 +988,19 @@ distribution. Optional arguments must be passed by name:
 | `generalization` | `String` | `'online_mass_core'`; generalization strategy for infeasible candidates. |
 | `scheduler` | `String` | `'mass_fair'`; scheduling strategy for extra solver queries. |
 | `trace` | `Bool` | `false`; whether to record per-candidate statistics. |
+| `cache_limit` | `Int` | `0`; maximum active rejection regions, with 0 meaning unlimited. |
+| `cache_policy` | `String` | `'mass'`; evict by least unique prior mass, or use `'fifo'` / `'binding_count'`. |
+| `exploration` | `String` | `'budget'`; existing budget scheduling, experimental `'gain'` gating, or `'off'`. |
+| `core_call_limit` | `Int \| Nil` | `nil`; optional absolute cap on extra solver queries; 0 disables extra queries. |
+| `discovery_horizon` | `Int` | `0`; estimate remaining proposals automatically; a positive value specifies an estimated total proposal horizon for gating. |
+| `events` | `Bool` | `false`; record queries, cache changes, and exploration pause/resume events. |
 
 SampleResult.status is complete, incomplete, unknown, unsupported, or error.
 Other fields are reason, samples, candidates, solver_calls, core_calls,
-cache_hits, cache_regions, trace, and elapsed. Samples may repeat. Limits can
-produce a partial sample prefix; inspect status rather than treating a nonempty
+cache_hits, cache_regions, trace, elapsed, events, and timings. Timings distinguish solver,
+mass calculation, and cache selection; selection includes mass calculation, so these
+components are not additive. Exhausting exploration budgets continues sampling; candidate
+or time limits can produce a partial sample prefix. Samples may repeat; inspect status rather than treating a nonempty
 samples list as completion.
 
 The backend requires Python and OR-Tools; versions are in

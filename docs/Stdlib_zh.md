@@ -922,10 +922,16 @@ TAPAS_SOLVE_INT_MAX 配置；结论只针对配置域，不代表整个 Int 上�
 | `generalization` | `String` | `'online_mass_core'`；不可行候选的泛化策略。 |
 | `scheduler` | `String` | `'mass_fair'`；额外求解的调度策略。 |
 | `trace` | `Bool` | `false`；是否记录逐候选统计。 |
+| `cache_limit` | `Int` | `0`；活动缓存区域上限，0 表示无限制。 |
+| `cache_policy` | `String` | `'mass'`；超限时按独有质量淘汰，或选择 `'fifo'`、`'binding_count'`。 |
+| `exploration` | `String` | `'budget'`；原预算调度，或选择实验性 `'gain'` 门控、`'off'` 禁用泛化。 |
+| `core_call_limit` | `Int \| Nil` | `nil`；可增加整个调用的额外求解次数上限，0 禁止额外求解。 |
+| `discovery_horizon` | `Int` | `0`；自动估计剩余候选数，正值为门控所用的预计候选总长度。 |
+| `events` | `Bool` | `false`；记录查询、缓存替换与探索暂停／恢复事件。 |
 
 SampleResult.status 为 complete、incomplete、unknown、unsupported 或 error。
 结果还包括 reason、samples、candidates、solver_calls、core_calls、cache_hits、
-cache_regions、trace、elapsed。样本允许重复；达到预算上限时可能只返回部分样本，
+cache_regions、trace、elapsed、events、timings。`timings` 区分求解、质量计算和容量选择耗时；容量选择包含质量计算，不能将三者简单相加。探索预算耗尽后仍继续采样；达到候选或时间上限时可能只返回部分样本，
 应以 status 判断是否完成，不能仅凭 samples 非空判断成功。
 
 后端依赖 Python 和 OR-Tools，依赖版本见 [requirements.txt](../src/stdlib/solve/requirements.txt)。

@@ -461,6 +461,12 @@ if(BUILD_TESTING)
     if(TAPAS_TEST_SOLVE_PYTHON)
         set_property(TEST solve_hold APPEND PROPERTY
             ENVIRONMENT "${TAPAS_TEST_SOLVE_ENV}")
+        add_test(NAME solve_sample_controls
+            COMMAND "${TAPAS_TEST_SOLVE_PYTHON}"
+                "${CMAKE_CURRENT_SOURCE_DIR}/test/solve/test_sample_controls.py"
+                "$<TARGET_FILE:tapas>")
+        set_tests_properties(solve_sample_controls PROPERTIES TIMEOUT 120
+            ENVIRONMENT "${TAPAS_TEST_SOLVE_ENV}")
     endif()
 
     add_test(
