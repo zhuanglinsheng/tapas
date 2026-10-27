@@ -35,6 +35,7 @@ __tapas_build__/
 /tapas
 /build/
 /build*/
+/tmp/
 
 # Python caches and local virtual environments
 __pycache__/
@@ -82,11 +83,13 @@ editors/vscode/*.vsix
 # doc
 # docs/*
 
-# LaTeX paper: keep only source and rendered PDF
-/docs/paper_or/*
-!/docs/paper_or/*.tex
-!/docs/paper_or/*.pdf
+# Pinned third-party benchmark; fetch with external/tau-bench-python/fetch_upstream.py
+/external/tau-bench/
 
-# LaTeX draft: keep only the source
-/docs/plan/PaperDraft.*
-!/docs/plan/PaperDraft.tex
+# Local paper compiler intermediates; keep TeX and rendered PDF
+/external/paper/build/
+/external/paper/*.aux
+/external/paper/*.log
+/external/paper/*.synctex.gz
+/external/paper/*.fls
+/external/paper/*.fdb_latexmk

@@ -77,52 +77,84 @@
 
 基于上述设定，本文集中回答三个相互关联的问题：（1）如何在约束系统上定义具有明确概率语义的测试输入，使直接采样的变量服从目标分布，而求解得到的变量仅承担见证作用；（2）如何从失败查询中学习可复用的不可行区域，并保证这种学习不会改变最终的输入分布；（3）如何在有限预算下，根据区域新增覆盖的概率质量安排泛化与缓存，从而减少重复的约束规划调用。统一的约束采样模型为这些问题提供形式化基础，算法效果则通过后续实验问题进行评价。
 
-图~\ref{fig:framework} 展示本文方法的基本流程。每轮首先按先验分布产生候选输入。若候选命中已经证明的不可行区域，则直接拒绝；否则调用约束规划求解器。可行候选与求解见证共同形成测试样本，不可行候选则产生一个区域学习任务。学习过程在额外预算内泛化冲突条件，并以新增覆盖概率质量确定搜索与缓存优先级。
+图~\ref{fig:framework} 展示本文方法的基本流程。每轮首先按先验分布产生候选输入。若候选命中已经证明的不可行区域，则直接拒绝；否则调用约束规划求解器。SAT 候选与求解见证共同形成测试样本；UNSAT 候选立即拒绝，其原始安全区域可以直接进入缓存，并产生可继续泛化的学习任务。额外泛化按预算与采样交错执行，不是拒绝当前候选的前提。未决或执行失败的查询返回诊断，不作为不可行证据。
 
 \begin{figure}[htbp]
   \centering
   \resizebox{\textwidth}{!}{%
   \begin{tikzpicture}[
-      node distance=8mm and 11mm,
       >=Latex,
-      font=\small,
-      process/.style={draw, rounded corners=2pt, minimum height=9mm,
-        text width=27mm, align=center, fill=blue!6},
-      decision/.style={draw, diamond, aspect=2.0, inner sep=1.5pt,
-        text width=23mm, align=center, fill=yellow!12},
-      result/.style={draw, rounded corners=2pt, minimum height=9mm,
-        text width=24mm, align=center, fill=green!8},
-      learn/.style={draw, rounded corners=2pt, minimum height=9mm,
-        text width=30mm, align=center, fill=red!6},
-      line/.style={->, thick}
+      font=\fontsize{9}{12}\selectfont,
+      box/.style={draw=black!65, rounded corners=2pt, line width=.6pt,
+        text width=28mm, minimum height=11mm, inner sep=2.5pt, align=center},
+      process/.style={box, fill=blue!5},
+      result/.style={box, fill=green!6},
+      learn/.style={box, fill=orange!6, font=\fontsize{8.5}{11.5}\selectfont,
+        minimum height=13mm},
+      line/.style={->, line width=.75pt},
+      information/.style={->, dashed, line width=.75pt},
+      annotation/.style={font=\fontsize{8}{10}\selectfont, inner sep=1pt}
     ]
-    \node[process] (prior) {按先验分布 $\pi$\\产生候选 $x$};
-    \node[decision, right=of prior] (cache) {命中安全缓存？};
-    \node[process, right=of cache] (solver) {约束规划判定\\ $R\land A_x$};
-    \node[decision, right=of solver] (sat) {可补全？};
-    \node[result, above right=8mm and 11mm of sat] (output) {输出测试\\ $(x,y)$};
-    \node[learn, below right=8mm and 11mm of sat] (core) {提取并泛化\\不可行区域};
-    \node[learn, below=of solver] (mass) {计算新增覆盖质量\\并按预算调度};
-    \node[result, below=of cache] (reject) {拒绝候选};
+    % Two lanes distinguish candidate decisions from optional learning work.
+    \draw[draw=black!25, rounded corners=3pt, fill=black!1]
+      (0,-1.1) rectangle (14.45,2.45);
+    \draw[draw=black!25, rounded corners=3pt, fill=black!1]
+      (0,-4.7) rectangle (14.45,-1.65);
+    \node[anchor=west] at (.15,2.22) {候选处理};
+    \node[anchor=east, font=\fontsize{8.5}{11}\selectfont] at (14.2,2.22)
+      {每轮重复，直到样本数或运行上限};
+    \node[anchor=west] at (.15,-1.9) {区域学习};
+    \node[anchor=west, font=\fontsize{8.5}{11}\selectfont] at (4.05,-1.9)
+      {额外求解仅在预算允许时推进};
 
-    \draw[line] (prior) -- (cache);
-    \draw[line] (cache) -- node[above]{否} (solver);
-    \draw[line] (cache) -- node[left]{是} (reject);
-    \draw[line] (solver) -- (sat);
-    \draw[line] (sat) -- node[above left]{是} (output);
-    \draw[line] (sat) -- node[below left]{否} (core);
-    \draw[line] (core) |- (mass);
-    \draw[line] (mass) -- (reject);
-    \draw[line] (mass.west) -| node[pos=0.25,below]{更新缓存} (cache.south);
-    \draw[line] (output.north) |- ++(0,7mm) -| (prior.north);
-    \draw[line] (reject.west) -| ++(-9mm,0) |- (prior.south);
+    \node[box, fill=yellow!10] (store) at (4.8,3.45)
+      {安全缓存\\$U\subseteq F^{c}$};
+    \node[process] (prior) at (1.55,1.35) {先验抽样\\$x\sim\pi$};
+    \node[process] (lookup) at (4.8,1.35) {缓存查询\\$x\in U$？};
+    \node[process] (solver) at (8.5,1.35) {约束求解与补全\\$R\land A_x$};
+    \node[result] (output) at (12.7,1.35)
+      {输出测试 $(x,y)$\\进入下一轮};
+    \node[result] (reject) at (4.8,-.4)
+      {拒绝候选 $x$\\进入下一轮};
+    \node[box, fill=black!5] (diagnostic) at (12.7,-.4)
+      {返回诊断并结束\\未决、超时或错误};
+
+    \draw[information] (store.south) -- (lookup.north);
+    \draw[line] (prior) -- (lookup);
+    \draw[line] (lookup) -- node[annotation,above]{否} (solver);
+    \draw[line] (lookup.south) -- node[annotation,right]{是} (reject.north);
+    \draw[line] (solver) -- node[annotation,above]{SAT} (output);
+    \draw[line] (solver.south) -- (8.5,-.4) --
+      node[annotation,above]{UNSAT} (reject.east);
+    \fill (8.5,-.4) circle (1.3pt);
+    \draw[line] (solver.south east) -- (10.55,.65) --
+      node[annotation,left=2pt]{未决} (10.55,-.4) -- (diagnostic.west);
+
+    \node[learn] (task) at (1.75,-2.85)
+      {记录原始安全区域\\创建泛化任务};
+    \node[learn] (budget) at (5.3,-2.85)
+      {预算与收益调度\\任务可暂停、恢复};
+    \node[learn] (verify) at (8.9,-2.85)
+      {泛化候选区域\\调用求解器验证\\仅 UNSAT 可准入};
+    \node[learn, text width=29mm] (selection) at (12.7,-2.85)
+      {新增质量 $\Delta_\pi(G\mid U)$\\缓存准入与替换};
+
+    \draw[information] (8.5,-.4) -- (8.5,-1.35) -- (1.75,-1.35) -- (task.north);
+    \draw[information] (task) -- (budget);
+    \draw[information] (budget) -- (verify);
+    \draw[information] (verify) -- (selection);
+    % Raw certified regions do not depend on extra generalization queries.
+    \draw[information] (task.south) -- (1.75,-4.1) --
+      node[annotation,below=3pt]{原始安全区域可直接准入} (12.7,-4.1) -- (selection.south);
+    \draw[information] (selection.east) -- (14.95,-2.85) -- (14.95,4.45) --
+      node[annotation,above]{更新安全缓存} (4.8,4.45) -- (store.north);
   \end{tikzpicture}
   }
-  \caption{基于约束编程的分布保持测试采样框架。主循环从先验分布产生候选，并通过约束规划完成可行性判定和见证补全；学习循环泛化已经证明的不可行区域，并依据新增覆盖概率质量和剩余预算更新安全缓存。}
+  \caption{分布保持测试采样与安全区域学习。实线表示候选处理，虚线表示任务、区域及缓存信息流，不表示并行执行。UNSAT 候选立即拒绝，原始安全区域可直接准入；额外泛化按预算交错推进，只有经 UNSAT 证明的区域才能用于缓存拒绝。未决结果不作为不可行证据。}
   \label{fig:framework}
 \end{figure}
 
-这张图包含两个不同层次的循环。上方主循环决定候选是否成为测试样本，直接决定输出分布；下方学习循环只发现可以安全跳过的不可行区域，影响计算成本而不改变接受集合。二者共享约束规划的判定能力，但承担不同职责。
+图中将候选处理与区域学习分开，并显式画出二者共享的安全缓存 $U$。上方流程决定候选是否成为测试样本；下方流程在预算内发现和选择可以安全跳过的不可行区域。暂停额外学习不会阻止候选处理继续执行；缓存更新只改变后续查询成本，不改变可行输入的接受集合。
 
 本文作出以下三项贡献。
 
