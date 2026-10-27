@@ -5,6 +5,7 @@
 Rule 是带参数、可组合、可检查的一等值，用于表达函数契约、业务规则、对象不变量，也可以作为测试生成或其他解释器的输入。
 本文记录当前已经实现的 Rule 语法、Type、公共 IR 和 evaluator 接口。
 通用语法见[语言规范](Syntax_zh.md)，标准库目录见[标准库](Stdlib_zh.md)，Type 规则见[类型系统](TypeSystem_zh.md)。
+关系表的构造、整行 `in` 条件与已知表格参数求解见[有限关系表](#15-有限关系表)；实际业务用法见 [Retail Table 建模](../external/tau-bench-tapas/simplified/README.md#六用-table-联合选择规格与生成状态)。
 
 ```tapas
 let docs_positive = rule (value: Int) {
@@ -42,6 +43,8 @@ value must be below ten
 | `assert` | 根内建函数 | 检查 Rule；失败时产生运行时错误 |
 | `Rule` | 值与 Type | 带签名、IR 和捕获环境的不可变规则 |
 | `RuleInstance` | 值与 Type | Rule 与一组已绑定实参 |
+| `[x, y] in table` | 成员表达式 | 要求多个字段共同匹配关系表中的一行 |
+| `rules::Table` | 值与 Type | 保存显式列顺序和具体数据的不可变关系表 |
 | `rules` | 标准包 | 检查、查看、构造和序列化 Rule IR |
 | `evaluators` | 标准包 | 通过自定义解释器消费 Rule IR |
 
@@ -330,6 +333,7 @@ let instance: RuleInstance[Int] = Positive(1)
 | `types::RuleTerm`、`term(Type)` | 无类型或精确结果 Type 的 Term |
 | `Origin` | 源码范围 |
 | `CheckResult`、`Violation`、`Diagnostic` | 检查结果 |
+| `Table` | 有限标量关系表，支持整行成员判断 |
 
 除已写明 `types::` 的核心 Type 外，以上名称通过 `rules::` 访问。
 常用读取函数为：
@@ -348,7 +352,7 @@ RuleIR 可读取`display_name`、`source`、`version`、`parameters`、`captures
 Term 可读取`id`、`kind`、`type`、`arguments`、`payload`、`provider`和`version`。
 Item 可读取`kind`、`term`、`rule`、`arguments`和`description`。
 
-基础 Term kind 为`Constant`、`Parameter`、`Capture`、`Intrinsic`、`Call`、`Construct`、`Convert`、`Extension`、`Not`、`And`和`Or`。
+基础 Term kind 为`Constant`、`Parameter`、`Capture`、`Intrinsic`、`Call`、`Construct`、`Convert`、`Extension`、`Not`、`And`、`Or`和`In`。
 工具应依赖这些公开字段，而不是内部指针。
 
 ### 5.2 动态构造与序列化
@@ -357,6 +361,8 @@ Item 可读取`kind`、`term`、`rule`、`arguments`和`description`。
 |---|---|
 | `parameter(name, type)` | 创建 Parameter |
 | `constant(value)` | 创建 Constant Term |
+| `table(columns, data)` | 按显式列顺序构造 Table 值 |
+| `membership(value, domain)` | 创建 Bool 类型的 In Term，包括表格成员条件 |
 | `call(function, arguments)` | 创建 Call Term |
 | `conjunction(left, right)` | 创建从左到右短路的 And Term |
 | `disjunction(left, right)` | 创建从左到右短路的 Or Term |
@@ -664,3 +670,48 @@ Intrinsic
 ## 14. 可行性查询
 
 `solve::hold(Rule | RuleInstance)` 已提供可运行的 CP-SAT 后端。它在调用时读取上下文，返回状态和通过 checker 复核的见证实例。solve 默认把输入 Rule 的 Int 参数限制在闭区间 ±10¹²，可通过 `TAPAS_SOLVE_INT_MIN/MAX` 配置。该域在 presolve 前生效；结果 `scope` 为 `configured`，`unsat` 仅表示所配置域内无解，不改变语言 Int 的语义。接口、依赖安装、支持范围及可运行示例见 [solve 示例](../examples/solve/README.md)。
+
+## 15. 有限关系表
+
+### 15.1 构造与列顺序
+
+`rules::table(columns, data)` 用显式列名顺序和列字典构造不可变 Table。列列表必须非空且列名唯一，恰好覆盖字典全部键；各列等长，每列只包含同一种 Int、Bool 或 String。列顺序不依赖字典遍历顺序，枚举单元格按 String 保存。
+
+```tapas
+let RelationItemId = types::enum('A', 'B')
+let relation_products = rules::table(['item_id', 'price'], {
+    'price': [100, 200],
+    'item_id': ['A', 'B'],
+})
+let ProductRow = rule (item_id: RelationItemId, price: Int, products: rules::Table) {
+    [item_id, price] in products
+    price <= 150
+}
+assert(ProductRow('A', 100, relation_products))
+assert(rule { not ProductRow('A', 200, relation_products) })
+```
+
+### 15.2 整行成员条件
+
+List 行通过 `in` 按位置匹配表中某个完整行，行内各列同时成立、各行之间为或关系。它是普通 Bool 条件，支持 `not`、`and`、`or`、`implies` 和规则变换；Rule 外与 checker 中采用相同语义。候选类型或长度不匹配返回 false，Int 与 Bool 不互换。空表没有成员，重复行不改变成员关系。普通字典的成员判断仍查询键。
+
+构造时保存数据快照；`columns` 和 `rows` 字段返回独立列表，`len` 返回行数。第一版只提供基础 `rules::Table` Type。求解时表格必须已知：可捕获、传给子 Rule，或通过 `restrict` 固定表格参数；求解器不生成表格内容。字符串未知量仍需显式有限 Enum，普通 String 参数只能绑定具体值。完整可运行查询见 [商品关系表示例](../examples/solve/table.tap)。
+
+### 15.3 固定表格与搜索行字段
+
+上例的三个参数含义不同：`products` 是本次查询提供的具体数据，`item_id` 和 `price` 是待求行字段。表格列名不自动创建或绑定变量；List 的第一个位置对应第一列，第二个位置对应第二列。下面固定表格，保留另外两个参数待求：
+
+```text
+let query = rules::restrict(ProductRow, 'products': relation_products)
+let answer = solve::hold(query)
+```
+
+结果应为 `sat`，witness 的 `item_id` 为 `'A'`、`price` 为 `100`，第三个参数保留固定的 Table。全部参数绑定时仍是普通检查，例如 `assert(ProductRow('A', 100, relation_products))`。未绑定 Table 参数返回 `unsupported`，不把整个表格视为待求对象。
+
+`table::price` 不隐式选择一行；`columns` 与 `rows` 是数据反射接口。需要两个独立商品时，声明两组参数，分别写两个整行成员条件。约束不会根据参数名与列名自动关联。
+
+### 15.4 求解、反射与保存
+
+求解器将正向成员条件编译为原生允许表，否定编译为禁止表；在 `or`、`implies` 或布尔等价中保留完整逻辑语义。它不会先展开为每行一个析取。表格应当保存完整候选关系，库存、同商品、预算等业务限制另写为条件，才能生成指定原因的失败请求。
+
+Table 成员表达式继续使用 In Term。含 Table 常量的可移植编码使用 TPIR8，读取兼容 TPIR1–7；源码 Rule 的闭包重连边界不变。

@@ -1,0 +1,116 @@
+let ItemId = types::enum('A', 'B', 'C')
+var products = rules::table(['item_id', 'price', 'available'], {
+    'price': [100, 200, 120],
+    'available': [true, false, false],
+    'item_id': ['A', 'B', 'C'],
+})
+
+let Affordable = rule (item_id: ItemId, price: Int, table: rules::Table) {
+    [item_id, price, true] in table
+    price <= 150
+}
+
+let trial = rules::restrict(Affordable, 'table': products)
+let answer = solve::hold(trial)
+
+assert(rule { answer::status == 'sat' })
+
+let chosen_arguments = arguments(answer::witness)
+
+assert(rule {
+    chosen_arguments[0] == 'A'
+    chosen_arguments[1] == 100
+    identical(chosen_arguments[2], products)
+})
+
+assert(answer::witness)
+
+let wrong = solve::hold(rules::restrict(trial, 'item_id': 'B'))
+
+assert(rule {
+    wrong::status == 'unsat'
+    len(wrong::conflicts) > 0
+})
+
+let unbound = solve::hold(Affordable)
+
+assert(rule { unbound::status == 'unsupported' })
+
+let incompatible_table = rules::table(['item_id', 'price', 'available'], {
+    'item_id': ['A'], 'price': [90], 'available': [true],
+})
+
+let contradictory = solve::hold(rules::restrict(trial, 'table': incompatible_table))
+
+assert(rule { contradictory::status == 'unsat' })
+
+let Membership = rule (item_id: ItemId, price: Int, available: Bool) {
+    [item_id, price, available] in products
+}
+
+let complement = rules::violate(Membership, 0)
+let outside = solve::hold(rules::restrict(complement,
+    'item_id': 'A', 'price': 200, 'available': true))
+assert(rule { outside::status == 'sat' })
+assert(outside::witness)
+
+let Channel = rule (item_id: ItemId, price: Int, accepted: Bool) {
+    accepted == ([item_id, price, true] in products)
+}
+
+let channel_result = solve::hold(rules::restrict(Channel,
+    'item_id': 'B', 'price': 200, 'accepted': false))
+assert(rule { channel_result::status == 'sat' })
+
+let sampled = solve::sample(Membership, 4, {
+    'item_id': ['A', 'B', 'C'],
+    'price': [100, 120, 200],
+    'available': [false, true],
+}, rng = random::generator(random::pcg32_xsh_rr, 42))
+assert(rule {
+    sampled::status == 'complete'
+    len(sampled::samples) == 4
+})
+
+for (let sample in sampled::samples) {
+    assert(Membership(sample))
+}
+
+let Constructed = rule (price: Int) {
+    [price] in rules::table(['price'], {'price': [100, 200]})
+    price == 100
+}
+
+let constructed_result = solve::hold(Constructed)
+
+assert(rule { constructed_result::status == 'sat' })
+
+let Empty = rule (x: Int) {
+    [x] in rules::table(['x'], {'x': []})
+}
+
+let empty_result = solve::hold(Empty)
+
+assert(rule { empty_result::status == 'unsat' })
+
+var binary_text = json::parse('"A\\u0000B"')
+var text_table = rules::table(['text'], {'text': [binary_text]})
+
+let BinaryText = rule (x: Int) {
+    [binary_text] in text_table
+    not (['A'] in text_table)
+    x == 1
+}
+
+let binary_result = solve::hold(BinaryText)
+
+assert(rule { binary_result::status == 'sat' })
+
+let UnknownTable = rule (x: Int) {
+    [x] in rules::table(['x'], {'x': [x]})
+}
+
+let unknown_table_result = solve::hold(UnknownTable)
+
+assert(rule { unknown_table_result::status == 'unsupported' })
+print('solve tables: ok')

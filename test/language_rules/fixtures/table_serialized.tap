@@ -1,0 +1,10 @@
+let products = rules::table(['item', 'price'], {
+    'price': [100, 200],
+    'item': ['A', 'B'],
+})
+
+let row = rules::parameter('row', types::List)
+let product_row = rules::make('ProductRow', [row], [
+    rules::condition(rules::membership(row, rules::constant(products))),
+])
+print(json::stringify(rules::serialize(product_row)))

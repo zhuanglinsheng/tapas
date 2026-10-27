@@ -71,7 +71,7 @@ conflicts = [{
 
 | 想了解的内容 | 从这里开始 |
 | --- | --- |
-| 怎样检查完整的业务状态转移 | [换货业务教程](examples/retail/README.md)：将前状态、请求、实际输出和后状态绑定到模型，检查正确拒绝和故意缺陷 |
+| 怎样检查完整的业务状态转移 | [换货业务教程](external/tau-bench-tapas/simplified/README.md)：将前状态、请求、实际输出和后状态绑定到模型，检查正确拒绝和故意缺陷 |
 | 怎样生成失败测试数据 | [生成失败测试数据示例](examples/solve/generate_violations.tap)：从具名规则条件派生场景、采样并检查结果 |
 | 怎样求解规则、读取失败原因 | [可行性示例](examples/solve/feasibility.tap)与[冲突诊断示例](examples/solve/diagnostics.tap)：两个可独立运行的小程序 |
 | 代码的基本写法 | [Tapas 入门](docs/examples/Basics_zh.md)：变量、函数和控制流；[模块与目录包](docs/examples/modules/README.md)：跨文件组织代码 |

@@ -4,7 +4,7 @@
 
 Start with a small program to learn Tapas, or follow the retail exchange example to use the same Rules for checking execution results and generating test inputs.
 
-If the syntax is new to you, read the [language introduction](../docs/examples/Basics_en.md) first. For rule solving, start with the [solve examples](solve), then follow the [retail tutorial](retail/README_en.md).
+If the syntax is new to you, read the [language introduction](../docs/examples/Basics_en.md) first. For rule solving, start with the [solve examples](solve), then follow the [retail tutorial](../external/tau-bench-tapas/simplified/README_en.md).
 
 ## Running an example
 
@@ -14,7 +14,7 @@ Build Tapas using the [project instructions](../README_en.md). Run the commands 
 build/bin/tapas examples/general/fibonacci.tap
 ```
 
-The `general` examples only need Tapas. The `solve` and `retail` examples also require Python and OR-Tools. Follow the [solve dependency instructions](../src/stdlib/solve/README.md#依赖) (Chinese) to prepare the environment.
+The `general` examples only need Tapas. The `solve` examples and external Retail case also require Python and OR-Tools. Follow the [solve dependency instructions](../src/stdlib/solve/README.md#依赖) (Chinese) to prepare the environment.
 
 ## Files, programs, and JSON together
 
@@ -48,31 +48,31 @@ For example, a quantity cannot be both at least eight and at most four. The quer
 
 ## Testing a retail exchange
 
-The [retail tutorial](retail/README_en.md) follows Yusuf, who has received a keyboard and wants another variant of the same product, paying the price difference. The retail system must check identity, confirmation, stock, and payment capacity before accepting or rejecting the request.
+The [retail tutorial](../external/tau-bench-tapas/simplified/README_en.md) follows Yusuf, who has received a keyboard and wants another variant of the same product, paying the price difference. The retail system must check identity, confirmation, stock, and payment capacity before accepting or rejecting the request.
 
 Rules describe these requirements, while a simulator executes the exchange. Each execution check fixes the previous state, request, actual output, and next state in the top-level `ExchangeModel`, then calls `solve::hold` to check whether the execution satisfies the requirements.
 
 Start with a valid exchange:
 
 ```sh
-build/bin/tapas examples/retail/test_valid_exchange.tap
+build/bin/tapas external/tau-bench-tapas/simplified/test_valid_exchange.tap
 ```
 
 Then try the experiments below. Each file runs independently; none requires another test to run first.
 
 | Experiment | Question being tested |
 |---|---|
-| [Valid exchange](retail/test_valid_exchange.tap) | Are the charge and order changes correct after acceptance? |
-| [Rejected exchanges](retail/test_rejected_exchange.tap) | Does an ineligible request get rejected without a charge or order changes? |
-| [Incorrect state transition](retail/test_invalid_transition.tap) | Can the model detect a simulator that skips the same-product check and exchanges a keyboard for a thermostat? |
-| [Generating eligible inputs](retail/test_generate_valid_exchange.tap) | Can the solver find sufficient payment capacity within a range? Does tightening the range make the query infeasible? |
-| [Generating ineligible inputs](retail/test_generate_rejected_exchange.tap) | Can it find insufficient payment capacity, then check that the simulator rejects correctly? |
-| [Restricting several parameters](retail/test_generate_joint_inputs.tap) | Can it generate specified scenarios while payment capacity, authenticated user, and confirmation vary together? |
+| [Valid exchange](../external/tau-bench-tapas/simplified/test_valid_exchange.tap) | Are the charge and order changes correct after acceptance? |
+| [Rejected exchanges](../external/tau-bench-tapas/simplified/test_rejected_exchange.tap) | Does an ineligible request get rejected without a charge or order changes? |
+| [Incorrect state transition](../external/tau-bench-tapas/simplified/test_invalid_transition.tap) | Can the model detect a simulator that skips the same-product check and exchanges a keyboard for a thermostat? |
+| [Generating eligible inputs](../external/tau-bench-tapas/simplified/test_generate_valid_exchange.tap) | Can the solver find sufficient payment capacity within a range? Does tightening the range make the query infeasible? |
+| [Generating ineligible inputs](../external/tau-bench-tapas/simplified/test_generate_rejected_exchange.tap) | Can it find insufficient payment capacity, then check that the simulator rejects correctly? |
+| [Restricting several parameters](../external/tau-bench-tapas/simplified/test_generate_joint_inputs.tap) | Can it generate specified scenarios while payment capacity, authenticated user, and confirmation vary together? |
 
 For example, run the final group with:
 
 ```sh
-build/bin/tapas examples/retail/test_generate_joint_inputs.tap
+build/bin/tapas external/tau-bench-tapas/simplified/test_generate_joint_inputs.tap
 ```
 
 These experiments first query for an input, execute it in the simulator, then run a second query to check the actual transition. They reuse the business rules and change only the restrictions for each query.

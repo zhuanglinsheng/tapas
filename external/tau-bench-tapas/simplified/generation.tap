@@ -1,0 +1,91 @@
+/// generation.tap
+///
+/// 用目录 Table 联合生成换货规格、额度、价格见证、输出和后状态。
+/// 许可条件与状态关系复用 model.tap；模拟器仍独立执行。
+
+import data.tap as data
+import model.tap as model
+import model_defs.tap as defs
+import simulation.tap as simulation
+
+var initial_state = simulation::initial_state('')
+
+let ExchangeInputs = rule (
+        target_item_id: data::ItemId,
+        payment_capacity: Int,
+        original_price: Int,
+        target_price: Int,
+        target_available: Bool,
+        same_product: Bool,
+        allowed: Bool,
+        decision: defs::Decision,
+        charged_difference: Int,
+        next_status: defs::OrderStatus,
+        next_item_id: data::ItemId,
+        next_capacity: Int,
+) {
+    let previous_state = {
+        'order_id': initial_state::order_id,
+        'user_id': initial_state::user_id,
+        'status': initial_state::status,
+        'item_id': initial_state::item_id,
+        'payment_method_id': initial_state::payment_method_id,
+        'payment_capacity': payment_capacity,
+        'authenticated_user_id': initial_state::authenticated_user_id,
+        'confirmed_target_id': target_item_id,
+    }
+
+    let parameters = {
+        'order_id': initial_state::order_id,
+        'target_item_id': target_item_id,
+        'payment_method_id': initial_state::payment_method_id,
+    }
+
+    let output = {
+        'decision': decision,
+        'charged_difference': charged_difference,
+    }
+
+    let next_state = {
+        'order_id': initial_state::order_id,
+        'user_id': initial_state::user_id,
+        'status': next_status,
+        'item_id': next_item_id,
+        'payment_method_id': initial_state::payment_method_id,
+        'payment_capacity': next_capacity,
+        'authenticated_user_id': initial_state::authenticated_user_id,
+        'confirmed_target_id': target_item_id,
+    }
+
+    '库存见证必须来自目标规格所在行':
+        [target_item_id, target_available] in data::availability_table
+
+    '同商品见证必须反映目录关系':
+        same_product == ([initial_state::item_id, target_item_id] in data::same_product_table)
+
+    '许可见证必须反映已有业务规则':
+        allowed == (model::ExchangeAllowedWithPrices(
+            previous_state, parameters, original_price, target_price) and true)
+    model::ExchangeModelWithPrices(previous_state, parameters, output, next_state,
+        original_price, target_price)
+}
+
+// 只解码具体 witness，不参与 solver lowering，也不重复业务判定。
+function decode(values: List) -> Dictionary
+{
+    let previous_state = simulation::initial_state(values[0])
+    previous_state['payment_capacity'] = values[1]
+    let next_state = previous_state.copy()
+    next_state['status'] = values[9]
+    next_state['item_id'] = values[10]
+    next_state['payment_capacity'] = values[11]
+
+    return {
+        'before': previous_state,
+        'parameters': simulation::exchange_parameters(values[0]),
+        'output': { 'decision': values[7], 'charged_difference': values[8] },
+        'after': next_state,
+    }
+}
+
+return { 'ExchangeInputs': ExchangeInputs, 'decode': decode }

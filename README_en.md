@@ -96,7 +96,7 @@ the [failure-data generation example](examples/solve/generate_violations.tap).
 
 | What you want to learn | Start here |
 | --- | --- |
-| How to check a complete business state transition | [Retail tutorial](examples/retail/README_en.md): bind prior state, request, actual output, and resulting state to a model, then check correct rejections and an intentional defect |
+| How to check a complete business state transition | [Retail tutorial](external/tau-bench-tapas/simplified/README_en.md): bind prior state, request, actual output, and resulting state to a model, then check correct rejections and an intentional defect |
 | How to generate failure test data | [Failure-data generation example](examples/solve/generate_violations.tap): derive a scenario from a named Rule condition, sample it, and check the results |
 | How to solve rules and read failures | [Feasibility](examples/solve/feasibility.tap) and [conflict diagnostics](examples/solve/diagnostics.tap): two small standalone programs |
 | How to read and write Tapas code | [A First Look at Tapas](docs/examples/Basics_en.md): variables, functions, and control flow; [modules and packages](docs/examples/modules/README_en.md): organizing code across files |

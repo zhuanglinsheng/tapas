@@ -1,13 +1,15 @@
 # Retail 概率采样数值实验
 
-实验使用 [`ExchangeAllowed`](model.tap) 构造三个概率输入：支付额度、认证用户和确认目标。支付额度取 `90..109`，另外两个变量各有三个取值；低额度、未认证和未确认具有更高先验权重。完整枚举得到可行先验质量 `Z = 0.04`，可行域上的条件分布是额度 `100..109` 上的均匀分布。
+本页数值保留为 Table 改造前的历史结果，不代表当前编码的性能。当前脚本已改用 Table 补全两个价格见证，请重新运行后另存结果；请求先验和目标条件分布不变。
+
+实验使用 [`ExchangeAllowedWithPrices`](model.tap) 构造三个概率输入：支付额度、认证用户和确认目标。支付额度取 `90..109`，另外两个变量各有三个取值；低额度、未认证和未确认具有更高先验权重。完整枚举得到可行先验质量 `Z = 0.04`，可行域上的条件分布是额度 `100..109` 上的均匀分布。
 
 [`sample_experiment.tap`](sample_experiment.tap) 对每种策略使用相同的五个 seed，每次生成 10 个接受样本；[`run_sample_experiment.py`](run_sample_experiment.py) 执行实验并给出均值与双侧 95% Student 置信区间。`total/sample` 包含业务查询和 core 泛化查询。
 
 运行：
 
 ```sh
-python3 examples/retail/run_sample_experiment.py
+python3 external/tau-bench-tapas/simplified/run_sample_experiment.py
 ```
 
 ## 泛化策略

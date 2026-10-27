@@ -189,6 +189,34 @@ let result = solve::sample(
 
 `hold` 支持 Int、Bool、有限字符串 Enum 参数及具体值绑定，支持整数线性算术、标量比较、布尔组合、整数区间与点集，以及 `restrict`、动态 Rule 和非递归嵌套 Rule。已绑定的固定字段结构参数，以及由标量参数构造并传给子 Rule 的固定字段记录，也可以参与受支持的字段读取、算术和条件。
 
+### 有限关系表
+
+`[item_id, price] in products` 将多个参数关联到同一条数据行。`products` 必须是已知 `rules::Table`；普通 Dictionary 的成员测试仍检查键。CP-SAT 使用原生允许表，否定使用禁止表，布尔上下文使用双向重化，不展开成逐行析取。预求解保留表约束，表内传播交给 CP-SAT。
+
+```tapas
+let TableItemId = types::enum('A', 'B')
+let query_products = rules::table(['item_id', 'price'], {
+    'price': [100, 200],
+    'item_id': ['A', 'B'],
+})
+let TableAffordable = rule (item_id: TableItemId, price: Int, products: rules::Table) {
+    [item_id, price] in products
+    price <= 150
+}
+let table_query = rules::restrict(TableAffordable, 'products': query_products)
+let table_answer = solve::hold(table_query)
+assert(rule { table_answer::status == 'sat' })
+let table_arguments = arguments(table_answer::witness)
+assert(rule {
+    table_arguments[0] == 'A'
+    table_arguments[1] == 100
+})
+```
+
+表格参数可用 `restrict` 固定，witness 保留 VM 中的固定表格值；其余 Int、Bool、Enum 参数继续搜索。固定值只从无条件参数等式及保持参数身份的直接 Requirement 读取，原始限制全部保留。未绑定 Table 参数返回 `unsupported`，不搜索表格内容。`sample` 也可捕获或向子 Rule 传入已知表格；概率保证仍只针对显式采样变量。
+
+支持 Int 线性表达式、Bool 表达式和有限 Enum 的整行匹配；各 Enum 列按自身成员顺序编码，不把不同枚举的编号混用。已知 String 单元格按内容匹配。类型、长度不兼容或空表的成员条件为 false，可正常取反。表格构造规则与快照行为见 [rules 包](../rules/README.md)。完整示例见 [table.tap](../../../examples/solve/table.tap)。
+
 ### 限制
 
 `hold` 不执行任意用户函数来探测约束，不支持浮点、变量乘变量、除法、未绑定结构参数搜索、符号索引、递归 Rule、匿名词法作用域或未知 Extension。规则包含当前源码 IR 未记录的完全未使用局部初始化表达式时，查询返回 `unsupported`。
@@ -260,6 +288,7 @@ TAPAS_SOLVE_INT_MIN=0 TAPAS_SOLVE_INT_MAX=1000 build/bin/tapas examples/solve/fe
 - 已绑定的固定字段结构参数（含嵌套结构）；从无条件参数等式中取得全部固定值的 Rule，包括 `restrict` 构造的 Rule。
 - 整数加减、正负号、常量乘法，标量比较。
 - `and`、`or`、`not`、`implies`，包括完整的双向布尔等价编码。
+- 已知 `rules::Table` 上的 List 整行成员条件，含否定、布尔组合及固定表格参数。
 - Int / Bool / Enum 点集和整数区间；规则内直接调用 `rules::points` / `rules::range`，以及捕获预先构造的域。构造时的区间端点和点集成员须已知，暂不支持依赖求解变量的域构造。
 - `restrict`、动态 Rule、非递归的嵌套 Rule、嵌套实参表达式。
 - 当前上下文中的标量、域、列表和字典快照；已知索引及字段读取。
@@ -422,6 +451,6 @@ HoldResult 的 status、scope、reason 为 String；integer_min/max 为 Int；co
 
 源码 Rule 可以用标量参数构造固定字段记录，再将该记录传给结构参数子 Rule。lowering 保留字段中的 Int、Bool、Enum 符号变量，递归检查参数类型，字段读取直接引用原变量。键必须是已知标量；构造记录没有捕获的运行时身份，其相等比较仍不支持，不会擅自改成结构相等。
 
-这支持 retail 中未知支付额度的输入生成，返回的 witness 仍绑定原标量参数。未绑定的顶层结构参数、符号目录索引与任意用户函数调用仍不支持。相关实验见 `examples/retail/test_generate_valid_exchange.tap` 和 `test_generate_rejected_exchange.tap`。
+这支持 retail 中未知支付额度的输入生成，返回的 witness 仍绑定原标量参数。未绑定的顶层结构参数、符号目录索引与任意用户函数调用仍不支持。相关实验见 `external/tau-bench-tapas/simplified/test_generate_valid_exchange.tap` 和 `test_generate_rejected_exchange.tap`。
 
 有限字符串 Enum 符号可传入 String 参数或记录字段；保留原 Enum 变量及编码用于求解与 witness 恢复，不扩大为无限字符串域。retail 的 `test_generate_joint_inputs.tap` 联合搜索额度、认证与确认，并覆盖错误身份下要求允许的无解查询。

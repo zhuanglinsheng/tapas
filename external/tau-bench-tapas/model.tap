@@ -1,0 +1,508 @@
+import calculator.tap as calc
+
+// Independent executable contracts for Sierra tau-bench Retail (pinned in SOURCE.json).
+// Structured JSON runtime checking; opaque helper calls are not CP-SAT constraints.
+function clone(x: AnyType) -> AnyType
+{
+    var out = json::parse(json::stringify(x))
+
+    return out
+}
+
+function equal(a: AnyType, b: AnyType) -> Bool
+{
+    if ((types::matches(a, types::Int) or types::matches(a, types::Float)) and (types::matches(b, types::Int) or types::matches(b, types::Float))) {
+        return math::abs(a - b) < 0.0000001
+    }
+
+    if (types::matches(a, types::Dictionary) and types::matches(b, types::Dictionary)) {
+        if (len(a) != len(b)) {
+            return false
+        }
+
+        for (let k in keys(a)) {
+            if (not (k in b) or not this(a[k], b[k])) {
+                return false
+            }
+        }
+
+        return true
+    }
+
+    if (types::matches(a, types::List) and types::matches(b, types::List)) {
+        if (len(a) != len(b)) {
+            return false
+        }
+
+        for (let i in 0 to (len(a))) {
+            if (not this(a[i], b[i])) {
+                return false
+            }
+        }
+
+        return true
+    }
+
+    return identical(a, b)
+}
+
+function lower(s: String) -> String
+{
+    let upper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+    let small = 'abcdefghijklmnopqrstuvwxyz'
+    var out = s
+
+    for (let i in 0 to (26)) {
+        out = strings::replace(out, upper[i], small[i])
+    }
+
+    return out
+}
+
+function cents(x: Int | Float) -> Float
+{
+    return calc::rounded(x)
+}
+
+function gift(id: String) -> Bool
+{
+    return strings::find(id, 'gift_card') >= 0
+}
+
+function result(db: Dictionary, output: AnyType) -> Dictionary
+{
+    var out = {'after': db, 'output': output, 'exception': ''}
+
+    return out
+}
+
+function fault(db: Dictionary, error: String) -> Dictionary
+{
+    var out = {'after': db, 'output': '', 'exception': error}
+
+    return out
+}
+
+function address(a: Dictionary) -> Dictionary
+{
+    var out = {
+        'address1': a['address1'],
+        'address2': a['address2'],
+        'city': a['city'],
+        'state': a['state'],
+        'country': a['country'],
+        'zip': a['zip']
+    }
+
+    return out
+}
+
+function first_item(items: List, id: String) -> Int
+{
+    for (let i in 0 to (len(items))) {
+        if (items[i]['item_id'] == id) {
+            return i + 0
+        }
+    }
+
+    return -1
+}
+
+function occurrences(ids: List, id: String) -> Int
+{
+    let n = 0
+
+    for (let x in ids) {
+        if (x == id) {
+            n = n + 1
+        }
+    }
+
+    return n + 0
+}
+
+function ordered(ids: List) -> List
+{
+    var out = clone(ids)
+    sort(out)
+
+    return out
+}
+
+function transaction(kind: String, amount: Int | Float, method: String) -> Dictionary
+{
+    var out = {'transaction_type': kind, 'amount': amount, 'payment_method_id': method}
+
+    return out
+}
+
+// Predict tool behavior, including upstream quirks. Policy is checked separately.
+function transition(before: Dictionary, call: Dictionary) -> Dictionary
+{
+    let db = clone(before)
+    let name = call['name']
+    let a = call['kwargs']
+
+    if (name == 'think') {
+        return result(db, '')
+    }
+
+    if (name == 'transfer_to_human_agents') {
+        return result(db, 'Transfer successful')
+    }
+
+    if (name == 'calculate') {
+        return result(db, calc::calculate(a['expression']))
+    }
+
+    if (name == 'find_user_id_by_email' or name == 'find_user_id_by_name_zip') {
+        for (let uid in keys(db['users'])) {
+            let u = db['users'][uid]
+
+            if (name == 'find_user_id_by_email') {
+                if (lower(u['email']) == lower(a['email'])) {
+                    return result(db, uid)
+                }
+            } else {
+                if (lower(u['name']['first_name']) == lower(a['first_name']) and
+                    lower(u['name']['last_name']) == lower(a['last_name']) and u['address']['zip'] == a['zip']) {
+                    return result(db, uid)
+                }
+            }
+        }
+
+        return result(db, 'Error: user not found')
+    }
+
+    if (name == 'list_all_product_types') {
+        let out = {}
+
+        for (let pid in keys(db['products'])) {
+            out[db['products'][pid]['name']] = pid
+        }
+
+        return result(db, out)
+    }
+
+    if (name == 'get_user_details' or name == 'modify_user_address') {
+        if (not (a['user_id'] in db['users'])) {
+            return result(db, 'Error: user not found')
+        }
+
+        let u = db['users'][a['user_id']]
+
+        if (name == 'modify_user_address') {
+            u['address'] = address(a)
+        }
+
+        return result(db, u)
+    }
+
+    if (name == 'get_product_details') {
+        if (not (a['product_id'] in db['products'])) {
+            return result(db, 'Error: product not found')
+        }
+
+        return result(db, db['products'][a['product_id']])
+    }
+
+    if (not (a['order_id'] in db['orders'])) {
+        return result(db, 'Error: order not found')
+    }
+
+    let o = db['orders'][a['order_id']]
+
+    if (name == 'get_order_details') {
+        return result(db, o)
+    }
+
+    let pending = name in ['cancel_pending_order', 'modify_pending_order_address', 'modify_pending_order_payment', 'modify_pending_order_items']
+
+    if (pending and o['status'] != 'pending') {
+        if (name == 'cancel_pending_order') {
+            return result(db, 'Error: non-pending order cannot be cancelled')
+        }
+
+        return result(db, 'Error: non-pending order cannot be modified')
+    }
+
+    if (not pending and o['status'] != 'delivered') {
+        if (name == 'return_delivered_order_items') {
+            return result(db, 'Error: non-delivered order cannot be returned')
+        }
+
+        return result(db, 'Error: non-delivered order cannot be exchanged')
+    }
+
+    let methods = db['users'][o['user_id']]['payment_methods']
+
+    if (name == 'modify_pending_order_address') {
+        o['address'] = address(a)
+
+        return result(db, o)
+    }
+
+    if (name == 'cancel_pending_order') {
+        if (not (a['reason'] in ['no longer needed', 'ordered by mistake'])) {
+            return result(db, 'Error: invalid reason')
+        }
+
+        let refunds = []
+
+        for (let t in o['payment_history']) {
+            append(refunds, transaction('refund', t['amount'], t['payment_method_id']))
+
+            if (gift(t['payment_method_id'])) {
+                let p = methods[t['payment_method_id']]
+                p['balance'] = cents(p['balance'] + t['amount'])
+            }
+        }
+
+        for (let t in refunds) {
+            append(o['payment_history'], t)
+        }
+
+        o['status'] = 'cancelled'
+        o['cancel_reason'] = a['reason']
+
+        return result(db, o)
+    }
+
+    if (name == 'modify_pending_order_payment') {
+        let id = a['payment_method_id']
+
+        if (not (id in methods)) {
+            return result(db, 'Error: payment method not found')
+        }
+
+        let history = o['payment_history']
+
+        if (len(history) == 0) {
+            return fault(db, 'IndexError')
+        }
+
+        if (len(history) > 1 or history[0]['transaction_type'] != 'payment') {
+            return result(db, 'Error: there should be exactly one payment for a pending order')
+        }
+
+        let old = history[0]['payment_method_id']
+
+        if (old == id) {
+            return result(db, 'Error: the new payment method should be different from the current one')
+        }
+
+        let amount = history[0]['amount']
+        let p = methods[id]
+
+        if (p['source'] == 'gift_card' and p['balance'] < amount) {
+            return result(db, 'Error: insufficient gift card balance to pay for the order')
+        }
+
+        append(history, transaction('payment', amount, id))
+        append(history, transaction('refund', amount, old))
+
+        if (p['source'] == 'gift_card') {
+            p['balance'] = cents(p['balance'] - amount)
+        }
+
+        if (gift(old)) {
+            let previous = methods[old]
+            previous['balance'] = cents(previous['balance'] + amount)
+        }
+
+        return result(db, o)
+    }
+
+    if (name == 'return_delivered_order_items') {
+        let id = a['payment_method_id']
+
+        if (not (id in methods)) {
+            return result(db, 'Error: payment method not found')
+        }
+
+        if (len(o['payment_history']) == 0 and not gift(id)) {
+            return fault(db, 'IndexError')
+        }
+
+        if (not gift(id) and id != o['payment_history'][0]['payment_method_id']) {
+            return result(db, 'Error: payment method should be either the original payment method or a gift card')
+        }
+
+        let ids = []
+
+        for (let item in o['items']) {
+            append(ids, item['item_id'])
+        }
+
+        for (let requested in a['item_ids']) {
+            if (occurrences(a['item_ids'], requested) > occurrences(ids, requested)) {
+                return result(db, 'Error: some item not found')
+            }
+        }
+
+        o['status'] = 'return requested'
+        o['return_items'] = ordered(a['item_ids'])
+        o['return_payment_method_id'] = id
+
+        return result(db, o)
+    }
+
+    // exchange and modify-items have a shared validation order, but different commits.
+    let ids = []
+
+    for (let item in o['items']) {
+        append(ids, item['item_id'])
+    }
+
+    for (let requested in a['item_ids']) {
+        if (occurrences(a['item_ids'], requested) > occurrences(ids, requested)) {
+            return result(db, strings::join(['Error: ', requested, ' not found'], ''))
+        }
+    }
+
+    if (len(a['item_ids']) != len(a['new_item_ids'])) {
+        return result(db, 'Error: the number of items to be exchanged should match')
+    }
+
+    let difference = 0.0
+
+    for (let i in 0 to (len(a['item_ids']))) {
+        let item = o['items'][first_item(o['items'], a['item_ids'][i])]
+        let variants = db['products'][item['product_id']]['variants']
+        let replacement_id = a['new_item_ids'][i]
+
+        if (not (replacement_id in variants) or not variants[replacement_id]['available']) {
+            return result(db, strings::join(['Error: new item ', replacement_id, ' not found or available'], ''))
+        }
+
+        difference = difference + (variants[replacement_id]['price'] - item['price'])
+    }
+
+    if (name == 'exchange_delivered_order_items') {
+        difference = cents(difference)
+    }
+
+    let id = a['payment_method_id']
+
+    if (not (id in methods)) {
+        return result(db, 'Error: payment method not found')
+    }
+
+    let p = methods[id]
+
+    if (p['source'] == 'gift_card' and p['balance'] < difference) {
+        if (pending) {
+            return result(db, 'Error: insufficient gift card balance to pay for the new item')
+        }
+
+        return result(db, 'Error: insufficient gift card balance to pay for the price difference')
+    }
+
+    if (not pending) {
+        o['status'] = 'exchange requested'
+        o['exchange_items'] = ordered(a['item_ids'])
+        o['exchange_new_items'] = ordered(a['new_item_ids'])
+        o['exchange_payment_method_id'] = id
+        o['exchange_price_difference'] = difference
+
+        return result(db, o)
+    }
+
+    let kind = 'refund'
+
+    if (difference > 0) {
+        kind = 'payment'
+    }
+
+    append(o['payment_history'], transaction(kind, math::abs(difference), id))
+
+    if (p['source'] == 'gift_card') {
+        p['balance'] = cents(p['balance'] - difference)
+    }
+
+    for (let i in 0 to (len(a['item_ids']))) {
+        let index = first_item(o['items'], a['item_ids'][i])
+
+        if (index < 0) {
+            return fault(db, 'IndexError')
+        }
+
+        let item = o['items'][index]
+        let replacement = db['products'][item['product_id']]['variants'][a['new_item_ids'][i]]
+        item['item_id'] = a['new_item_ids'][i]
+        item['price'] = replacement['price']
+        item['options'] = replacement['options']
+    }
+
+    o['status'] = 'pending (item modified)'
+
+    return result(db, o)
+}
+
+function output_matches(case: Dictionary, expected: Dictionary) -> Bool
+{
+    if (case['call']['name'] == 'calculate') {
+        return calc::matches(case['call']['kwargs']['expression'], case['output'])
+    }
+
+    return equal(case['output'], expected['output'])
+}
+
+let ToolContract = rule (case: Dictionary) {
+    let expected = transition(case['before'], case['call'])
+
+    '工具结果必须与独立模型一致':
+        output_matches(case, expected)
+
+    '数据库变化和所有未修改字段必须一致':
+        equal(case['after'], expected['after'])
+
+    '原始工具异常及其发生前的部分更新必须一致':
+        case['exception'] == expected['exception']
+}
+
+// Semantic facts are explicit evidence, not deductions from unstructured prose.
+let ConversationPolicy = rule (f: Dictionary) {
+    'P01 必须先通过邮箱或姓名邮编查找认证':
+        f['authenticated']
+
+    'P02 一次会话只能服务同一用户':
+        f['same_user']
+
+    'P03 数据库修改前逐项说明并取得明确yes且绑定当前参数':
+        f['confirmation']
+
+    'P04 修改前必须查询该订单的当前状态':
+        f['status_checked']
+
+    'P05 修改或换货前提醒确认已提供全部商品':
+        f['all_items_reminded']
+
+    'P06 每轮最多一个工具且不能同时回复':
+        f['serialized']
+
+    'P07 不捏造事实或流程':
+        f['grounded']
+
+    'P08 不作主观推荐或评论':
+        f['objective']
+
+    'P09 转人工必须符合所选政策来源':
+        f['transfer_scope']
+
+    'P10 替换规格必须与原规格不同':
+        f['different_options']
+
+    'P11 退款时间与邮件流程说明符合政策':
+        f['fulfillment_claims']
+
+    'P12 姓名邮编回退符合工具描述':
+        f['lookup_fallback']
+}
+
+return {
+    'transition': transition,
+    'equal': equal,
+    'ToolContract': ToolContract,
+    'ConversationPolicy': ConversationPolicy
+}

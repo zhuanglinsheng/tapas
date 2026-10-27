@@ -10,6 +10,7 @@
 #include "tapas/dsa/tstring.h"
 #include "domain.h"
 #include "hash.h"
+#include "table.h"
 
 #include "tapas/objects/trule.h"
 #include "tapas/objects/tstr.h"
@@ -35,6 +36,14 @@ static long serial_term_index(const trule_ir *ir, const trule_term *term) {
   return -1;
 }
 
+static void serial_table_string(tstring *out, const tobj *value) {
+  const tstring *text = ((tstr *)value->val.v_tcompo)->data;
+  const unsigned char *bytes = (const unsigned char *)tstring_cstr(text);
+  tstring_append_fmt(out, "z%zu:", tstring_len(text) * 2);
+  for (size_t i = 0; i < tstring_len(text); i++)
+    tstring_append_fmt(out, "%02x", bytes[i]);
+}
+
 static int serial_value(tstring *out, const trule_ir *ir, const tobj *value) {
   switch (value->type) {
   case tnil:
@@ -50,6 +59,19 @@ static int serial_value(tstring *out, const trule_ir *ir, const tobj *value) {
     tstring_append_fmt(out, "f%.17g;", value->val.v_tfloat);
     return 1;
   case tcompo:
+    if (trules_table_is(value)) {
+      const trules_table *table = (trules_table *)value->val.v_tcompo;
+      tstring_append_fmt(out, "h%u;%u;", (unsigned)table->columns.len,
+                         (unsigned)(table->cells.len / table->columns.len));
+      for (uint_objs i = 0; i < table->columns.len; i++)
+        serial_table_string(out, &table->columns.data[i]);
+      for (uint_objs i = 0; i < table->cells.len; i++) {
+        if (table->cells.data[i].type == tcompo)
+          serial_table_string(out, &table->cells.data[i]);
+        else if (!serial_value(out, ir, &table->cells.data[i])) return 0;
+      }
+      return 1;
+    }
     if (trules_domain_is_range(value)) {
       const trules_domain *d = (trules_domain *)value->val.v_tcompo;
       tstring_append_fmt(out, "g%ld;%ld;", d->start, d->end);
@@ -100,7 +122,13 @@ static int serial_value(tstring *out, const trule_ir *ir, const tobj *value) {
 }
 
 int trule_ir_serialize(const trule_ir *ir, tstring **result) {
-  tstring *out = tstring_new(ir->version >= 7   ? "TPIR7;"
+  long version = ir->version;
+  for (uint_objs i = 0; i < ir->terms.len; i++) {
+    const trule_term *term = (trule_term *)ir->terms.data[i].val.v_tcompo;
+    if (trules_table_is(&term->payload) && version < 8) version = 8;
+  }
+  tstring *out = tstring_new(version >= 8      ? "TPIR8;"
+                             : version >= 7 ? "TPIR7;"
                              : ir->version >= 6 ? "TPIR6;"
                              : ir->version == 5 ? "TPIR5;"
                              : ir->version == 4 ? "TPIR4;"
@@ -109,7 +137,7 @@ int trule_ir_serialize(const trule_ir *ir, tstring **result) {
                                                 : "TPIR1;");
   serial_text(out, tstring_cstr(ir->display_name));
   serial_text(out, tstring_cstr(ir->source));
-  tstring_append_fmt(out, "%ld;%u;%u;%u;", ir->version, (unsigned)ir->terms.len,
+  tstring_append_fmt(out, "%ld;%u;%u;%u;", version, (unsigned)ir->terms.len,
                      (unsigned)ir->parameters.len, (unsigned)ir->items.len);
   for (uint_objs i = 0; i < ir->terms.len; i++) {
     trule_term *term = (trule_term *)ir->terms.data[i].val.v_tcompo;
@@ -200,6 +228,74 @@ static int parse_value(const char **cursor, trule_term **terms,
                        uint_objs term_count, tobj *result) {
   char tag = *(*cursor)++;
   tobj_set_nil(result);
+  if (tag == 'z') {
+    char *hex = parse_text(cursor);
+    if (!hex) return 0;
+    size_t length = strlen(hex);
+    if (length % 2) { free(hex); return 0; }
+    char *bytes = calloc(length / 2 + 1, 1);
+    if (!bytes) abort();
+    int valid = 1;
+    for (size_t i = 0; valid && i < length; i++) {
+      int digit = hex[i] >= '0' && hex[i] <= '9' ? hex[i] - '0' :
+                  hex[i] >= 'a' && hex[i] <= 'f' ? hex[i] - 'a' + 10 : -1;
+      if (digit < 0) valid = 0;
+      else if (i % 2) bytes[i / 2] |= digit;
+      else bytes[i / 2] = (char)(digit << 4);
+    }
+    if (valid) tobj_set_compo(result, (tcompo_v *)tstr_new_len(bytes, length / 2));
+    free(bytes);
+    free(hex);
+    return valid;
+  }
+  if (tag == 'h') {
+    long width, height;
+    if (!parse_long(cursor, &width) || !parse_long(cursor, &height) ||
+        width <= 0 || height < 0 || (unsigned long)width > strlen(*cursor) ||
+        (unsigned long)height > strlen(*cursor) / (unsigned long)width)
+      return 0;
+    tobj names, data;
+    tobj_set_compo(&names, (tcompo_v *)tlist_new());
+    tobj_set_compo(&data, (tcompo_v *)tdict_new());
+    tlist *columns = (tlist *)names.val.v_tcompo;
+    tdict *dictionary = (tdict *)data.val.v_tcompo;
+    int valid = 1;
+    for (long c = 0; valid && c < width; c++) {
+      tobj name;
+      tobj_set_nil(&name);
+      valid = (**cursor == 's' || **cursor == 'z') && parse_value(cursor, terms, term_count, &name);
+      if (valid && tdict_contains(dictionary, &name)) valid = 0;
+      if (valid) {
+        tobj values;
+        tobj_set_compo(&values, (tcompo_v *)tlist_new());
+        tobj_vec_push(&columns->items, &name);
+        tdict_set(dictionary, &name, &values);
+        tobj_try_clear(&values);
+      }
+      tobj_try_clear(&name);
+    }
+    for (long r = 0; valid && r < height; r++) {
+      for (long c = 0; valid && c < width; c++) {
+        tobj cell, column;
+        tobj_set_nil(&cell);
+        tobj_set_nil(&column);
+        valid = (**cursor == 's' || **cursor == 'z' || **cursor == 'b' || **cursor == 'i') &&
+                parse_value(cursor, terms, term_count, &cell);
+        if (valid) {
+          tdict_get(dictionary, tlist_at(columns, c), &column);
+          tlist *values = (tlist *)column.val.v_tcompo;
+          if (r && cell.type != tlist_at(values, 0)->type) valid = 0;
+          if (valid) tobj_vec_push(&values->items, &cell);
+        }
+        tobj_try_clear(&column);
+        tobj_try_clear(&cell);
+      }
+    }
+    if (valid) tobj_set_compo(result, (tcompo_v *)trules_table_new(columns, dictionary));
+    tobj_try_clear(&names);
+    tobj_try_clear(&data);
+    return valid;
+  }
   if (tag == 'g') {
     long start, end;
     if (!parse_long(cursor, &start) || !parse_long(cursor, &end) || start > end)
@@ -288,7 +384,7 @@ trule_ir *trule_ir_deserialize(const char *data) {
       (strncmp(data, "TPIR1;", 6) != 0 && strncmp(data, "TPIR2;", 6) != 0 &&
        strncmp(data, "TPIR3;", 6) != 0 && strncmp(data, "TPIR4;", 6) != 0 &&
        strncmp(data, "TPIR5;", 6) != 0 && strncmp(data, "TPIR6;", 6) != 0 &&
-       strncmp(data, "TPIR7;", 6) != 0))
+       strncmp(data, "TPIR7;", 6) != 0 && strncmp(data, "TPIR8;", 6) != 0))
     return nullptr;
   const char *cursor = data + 6;
   char *name = parse_text(&cursor);
@@ -571,7 +667,7 @@ void trules_deserialize(tobj *params, uint_regs count, tobj *result) {
   if (strncmp(data, "TPIR1;", 6) == 0 || strncmp(data, "TPIR2;", 6) == 0 ||
       strncmp(data, "TPIR3;", 6) == 0 || strncmp(data, "TPIR4;", 6) == 0 ||
       strncmp(data, "TPIR5;", 6) == 0 || strncmp(data, "TPIR6;", 6) == 0 ||
-      strncmp(data, "TPIR7;", 6) == 0) {
+      strncmp(data, "TPIR7;", 6) == 0 || strncmp(data, "TPIR8;", 6) == 0) {
     trule_ir *ir = trule_ir_deserialize(data);
     if (!ir)
       twarn(ErrRuntime_Other, "rules::deserialize",

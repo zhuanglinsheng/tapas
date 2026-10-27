@@ -20,6 +20,7 @@ rules::Violation: Type
 rules::Diagnostic: Type
 rules::PointsOf: Type
 rules::RangeOf: Type
+rules::Table: Type
 ```
 
 `RuleIR`、`RuleTerm` 与 `RuleItem` 是 core 对象 Type，由 `types` 暴露；rules
@@ -83,6 +84,34 @@ rules::membership(value: RuleTerm, domain: RuleTerm) -> types::RuleTerm
 ```
 
 `points` 构造元素 Type 明确的有限点集；每个值必须匹配 `element_type`。`range` 构造包含 start 与 end 的整数闭区间。`membership` 构造表示 value 属于 domain 的 Bool Term。
+
+### 有限关系表
+
+```tap
+rules::table(columns: List[String], data: Dictionary[String, List]) -> rules::Table
+```
+
+`table` 按 `columns` 的显式顺序，从列字典建立不可变关系表。列名必须唯一、非空列列表必须精确覆盖字典的键，各列长度必须相同。每列只接受同一种 Int、Bool 或 String；空列可以构造空表，不支持 Float、Nil 或嵌套单元格。枚举值仍按 String 存储。
+
+`[value1, value2, ...] in table` 按位置匹配完整行，各列必须来自同一行。结果为 Bool，Rule 内外含义相同；候选不是 List、长度不匹配或单元格类型不兼容时为 false。Int 与 Bool 不互换。重复行保留，但不改变成员判断；空表没有成员。普通 Dictionary 的 `in` 继续查询键。
+
+```tapas
+let product_table = rules::table(['item_id', 'price'], {
+    'price': [100, 200],
+    'item_id': ['A', 'B'],
+})
+assert(rule {
+    ['A', 100] in product_table
+    not (['A', 200] in product_table)
+    len(product_table) == 2
+})
+```
+
+`len(table)` 返回行数。只读字段 `columns` 和 `rows` 分别返回列名列表与按列顺序排列的行列表，均为独立副本。构造时复制输入数据，修改原字典、列列表或返回的列表不会改变表格。`copy` 创建独立表格；`identical` 比较列顺序和完整行序列，包括重复行。
+
+第一版提供基础 `rules::Table` Type，不提供可变列数的泛型标注或自动列名绑定。表格可以作为已知 Rule 参数，通过 `rules::restrict` 固定；不搜索未知表格内容。CP-SAT 支持整行成员约束、否定及布尔组合，接口与示例见 [solve 包](../solve/README.md) 和 [商品表查询](../../../examples/solve/table.tap)。
+
+含 Table 常量的可移植 RuleIR 编码为 TPIR8，兼容读取 TPIR1–7；没有增加 RuleItem 或 Term 种类。源码闭包的跨进程重连限制保持不变。
 
 ### Term 与 Rule 构造
 

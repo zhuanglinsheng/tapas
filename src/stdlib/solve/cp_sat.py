@@ -1,6 +1,7 @@
 """CP-SAT adapter for presolved models. Compilation is separate from queries."""
 from dataclasses import dataclass
 import operator
+from model_ir import Linear
 
 
 @dataclass
@@ -22,7 +23,15 @@ class Encoder:
         self.cache = {}
 
     def expression(self, expression):
+        if not isinstance(expression, Linear):
+            return self.literal(expression)
         return sum(c * self.variables[i] for i, c in expression.coefficients) + expression.constant
+
+    def relation(self, predicate, inverted=False):
+        expressions, rows = predicate.args
+        forbidden = (predicate.kind == 'not_table') != inverted
+        add = self.model.add_forbidden_assignments if forbidden else self.model.add_allowed_assignments
+        return add([self.expression(expression) for expression in expressions], rows)
 
     def comparison(self, predicate, inverted=False):
         operation = {'<=': operator.gt if inverted else operator.le,
@@ -46,6 +55,9 @@ class Encoder:
             else:
                 self.model.add_bool_or(children).only_enforce_if(value)
                 self.model.add_bool_and(negative).only_enforce_if(value.Not())
+        elif predicate.kind in ('table', 'not_table'):
+            self.relation(predicate).only_enforce_if(value)
+            self.relation(predicate, True).only_enforce_if(value.Not())
         else:
             self.model.add(self.comparison(predicate)).only_enforce_if(value)
             self.model.add(self.comparison(predicate, True)).only_enforce_if(value.Not())
@@ -61,6 +73,8 @@ class Encoder:
                 self.require(child)
         elif predicate.kind == 'or':
             self.model.add_bool_or([self.literal(child) for child in predicate.args])
+        elif predicate.kind in ('table', 'not_table'):
+            self.relation(predicate)
         else:
             self.model.add(self.comparison(predicate))
 
@@ -83,6 +97,20 @@ def compile_model(query, analysis, cp_model):
     return CompiledModel(cp_model, model, query, analysis, tuple(variables), domains)
 
 
+def solution_values(query, variables, solver):
+    values = []
+    indices = query.output_variables or tuple(range(len(query.variables)))
+    for index in indices:
+        if index is None:
+            values.append(None)
+            continue
+        variable = query.variables[index]
+        value = int(solver.value(variables[index]))
+        values.append(bool(value) if variable.kind == 'bool' else
+                      variable.members[value] if variable.kind == 'enum' else value)
+    return values
+
+
 def hold(compiled, time_limit=5.0):
     """Existence query within the declared query domain."""
     cp, model, scope = compiled.cp, compiled.model, compiled.scope
@@ -96,10 +124,7 @@ def hold(compiled, time_limit=5.0):
     if status in (cp.OPTIMAL, cp.FEASIBLE):
         values = []
         if not compiled.query.bound_instance:
-            for variable, expression in zip(compiled.query.variables, compiled.variables):
-                value = int(solver.value(expression))
-                values.append(bool(value) if variable.kind == 'bool' else
-                              variable.members[value] if variable.kind == 'enum' else value)
+            values = solution_values(compiled.query, compiled.variables, solver)
         return 'sat', scope, '', values
     if status == cp.INFEASIBLE:
         return 'unsat', scope, '', []

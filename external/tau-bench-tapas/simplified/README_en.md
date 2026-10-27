@@ -105,7 +105,7 @@ A valid input is not necessarily eligible. Out-of-stock and underfunded requests
 
 ## 3. Checking simulated results
 
-You need the current project build of Tapas, Python, and OR-Tools. See the [solve package](../../src/stdlib/solve/README.md) for installation. Run the commands below from the repository root. Business output is in Chinese.
+You need the current project build of Tapas, Python, and OR-Tools. See the [solve package](../../../src/stdlib/solve/README.md) for installation. Run the commands below from the repository root. Business output is in Chinese.
 
 The simulator stands in for the retail system: it takes the current state and customer request and returns `output` and `after`. Its business decisions are independent of the Rules that Tapas uses to check them.
 
@@ -114,7 +114,7 @@ The simulator stands in for the retail system: it takes the current state and cu
 Run the [valid exchange experiment](test_valid_exchange.tap):
 
 ```sh
-build/bin/tapas examples/retail/test_valid_exchange.tap
+build/bin/tapas external/tau-bench-tapas/simplified/test_valid_exchange.tap
 ```
 
 It prepares inputs and simulates execution:
@@ -147,7 +147,7 @@ let result = solve::hold(restricted_model)
 Run the [rejection experiment](test_rejected_exchange.tap):
 
 ```sh
-build/bin/tapas examples/retail/test_rejected_exchange.tap
+build/bin/tapas external/tau-bench-tapas/simplified/test_rejected_exchange.tap
 ```
 
 It covers unavailable stock, missing authentication, missing confirmation, insufficient capacity, the original variant, and a different product. All six results are `sat`.
@@ -159,7 +159,7 @@ It covers unavailable stock, missing authentication, missing confirmation, insuf
 Run the [invalid transition experiment](test_invalid_transition.tap):
 
 ```sh
-build/bin/tapas examples/retail/test_invalid_transition.tap
+build/bin/tapas external/tau-bench-tapas/simplified/test_invalid_transition.tap
 ```
 
 The request now replaces Yusuf’s keyboard with a thermostat, with matching confirmation. Identity, confirmation, and capacity are sufficient, but the product differs. A deliberately defective simulation omits the same-product check, accepts the request, and changes the item.
@@ -175,10 +175,10 @@ The first three tests start with complete inputs. Next, we fix the order and tar
 Run the [accepted-input generation experiment](test_generate_valid_exchange.tap):
 
 ```sh
-build/bin/tapas examples/retail/test_generate_valid_exchange.tap
+build/bin/tapas external/tau-bench-tapas/simplified/test_generate_valid_exchange.tap
 ```
 
-`AcceptedCapacity(payment_capacity: Int)` constructs a state with unknown capacity and requires the existing `ExchangeInput` and `ExchangeAllowed` Rules. It does not duplicate the eligibility conditions.
+`AcceptedCapacity(payment_capacity, original_price, target_price)` constructs a state with unknown capacity and reuses `ExchangeInput` and `ExchangeAllowedWithPrices`. The two prices are Table-derived witnesses, not additional random inputs.
 
 ```text
 let input_model = rules::restrict(AcceptedCapacity,
@@ -202,14 +202,14 @@ It then tightens the range to 0–99 while still requiring eligibility. This ret
 Run the [rejected-input generation experiment](test_generate_rejected_exchange.tap):
 
 ```sh
-build/bin/tapas examples/retail/test_generate_rejected_exchange.tap
+build/bin/tapas external/tau-bench-tapas/simplified/test_generate_rejected_exchange.tap
 ```
 
 The experiment constructs a Rule that violates only the capacity condition:
 
 ```tapas
 let RejectedByCapacity = rules::violate(
-    model::ExchangeAllowed,
+    model::ExchangeAllowedWithPrices,
     '可支付额度必须足以支付差价',
 )
 ```
@@ -226,7 +226,7 @@ The input query is `sat`, simulation rejects, and the actual transition query is
 Run the [joint-input experiment](test_generate_joint_inputs.tap):
 
 ```sh
-build/bin/tapas examples/retail/test_generate_joint_inputs.tap
+build/bin/tapas external/tau-bench-tapas/simplified/test_generate_joint_inputs.tap
 ```
 
 Three values are now unknown. Candidate users and confirmation targets are explicit finite enums:
@@ -237,7 +237,7 @@ let Confirmation = types::enum('', 'keyboard-clicky-plain', 'thermostat-google-h
 ```
 
 The authentication candidates are no authenticated user, Yusuf, and another user. Confirmation candidates are no confirmation, the requested keyboard, and the thermostat. Yusuf remains the owner; the operator and confirmation context vary.
-`ExchangeInputs` places these values into the state and reuses the original Rules. Its `allowed` parameter selects eligible inputs when fixed to true and ineligible inputs when fixed to false.
+`ExchangeInputs` places these values into the state and reuses the original Rules through `ExchangeAllowedWithPrices`. It adds two price witnesses constrained by hard Table memberships outside the eligibility negation. Its `allowed` parameter selects eligible inputs when fixed to true and ineligible inputs when fixed to false.
 
 ### Test 6: satisfy all three conditions
 
@@ -276,10 +276,44 @@ let impossible = solve::hold(incompatible)
 
 This is `unsat`: sufficient capacity and correct confirmation cannot satisfy the owner-authentication requirement. The failure occurs during input generation, before simulation.
 
+## 6. Selecting variants and generating state with Tables
+
+The fixed-target generation experiments now use `ExchangeAllowedWithPrices`. Catalog prices are completion witnesses, while the declared request priors remain unchanged. To leave the target variant unbound and generate the output and next state as well, run:
+
+```sh
+build/bin/tapas external/tau-bench-tapas/simplified/test_generate_table_inputs.tap
+```
+
+[data.tap](data.tap) derives `item_table`, `item_domain`, `price_table`, `availability_table`, and `same_product_table` from the same catalog. The first stores full variant rows; the others expose projections or same-product pairs. Unavailable variants, the original variant, and cross-product candidates remain in the data. Rules impose business restrictions. The independent simulator still reads the ordinary `items` dictionary.
+
+[model.tap](model.tap) associates unknown choices with facts using:
+
+```text
+[previous_state::item_id, original_price] in data::price_table
+[action_parameters::target_item_id, target_price] in data::price_table
+[previous_state::item_id, action_parameters::target_item_id] in data::same_product_table
+[action_parameters::target_item_id, true] in data::availability_table
+```
+
+`ExchangeAllowedWithPrices` reuses all original eligibility conditions except concrete dictionary price lookup. Both entry points share the `SufficientCapacity` Rule. `ExchangeEffects` owns success, rejection, and unchanged-field conditions for both the original four-argument transition API and the new explicit-price API.
+
+[generation.tap](generation.tap) places unknown scalars in fixed-field records and passes them to `ExchangeModelWithPrices`. Availability, same-product membership, and eligibility witnesses are linked to the actual relations in both directions. Tests choose the target rather than fixing its ID:
+
+| Restriction | Selected target | Result |
+|---|---|---|
+| Eligible, capacity 0–100 cents | Plain clicky keyboard | Success |
+| Same product, unavailable, capacity 500 | RGB clicky keyboard | Rejection |
+| Available, different product, capacity 100 | Thermostat | Rejection |
+| Exclude original, available, same product, capacity 99 | Plain clicky keyboard | Rejection |
+
+Predicted outputs and next states are compared with the independent simulator and checked by the original `ExchangeModel`. An additional 20 combinations of four variants and five capacity boundaries compare both eligibility entry points, solver witnesses, and simulation. Sampling declares priors only for target and capacity; prices and state fields are completion witnesses.
+
+Price memberships always hold outside the rejected-eligibility branch, preventing fabricated prices from explaining a rejection. The original checking API remains available; the new solving path does not index ordinary dictionaries with unknown IDs. This remains a bounded one-item model, not arbitrary JSON or variable-length item-list generation.
+
 ## Interpreting the scope of these experiments
 
 The amount ranges and candidate users restrict each experiment. A result is about that search space, not coverage of every possible business input.
-Joint-input experiments explicitly construct records from scalar variables; they do not search arbitrary structural fields or symbolic catalog indices.
+Joint-input experiments explicitly construct records from scalar variables. Section 6 uses Tables to search target variants and state fields; it does not search arbitrary structural fields, variable-length item lists, or ordinary dictionaries with symbolic indices.
 
 `unsupported`, `unknown`, and `error` mean unsupported, undecided, or failed queries. They are not business passes or violations. Configuration and supported features are documented in the solve package.
 

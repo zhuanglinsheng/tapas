@@ -1,0 +1,147 @@
+// Dataset constraints; historic order prices intentionally need not equal current catalog prices.
+var payment_sources = rules::table(['source'], {
+    'source': ['gift_card', 'paypal', 'credit_card'],
+})
+
+var order_statuses = rules::table(['status'], {
+    'status': ['pending', 'processed', 'delivered', 'cancelled',
+        'pending (item modified)', 'return requested', 'exchange requested'],
+})
+
+// 以原始字典键建立引用关系，不把订单历史价格替换成当前目录价格。
+function relations(db: Dictionary) -> Dictionary
+{
+    let product_ids = []
+    let item_ids = []
+    let owners = []
+    let method_ids = []
+    let sources = []
+
+    for (let pid in keys(db['products'])) {
+        for (let iid in keys(db['products'][pid]['variants'])) {
+            append(product_ids, pid)
+            append(item_ids, iid)
+        }
+    }
+
+    for (let uid in keys(db['users'])) {
+        for (let mid in keys(db['users'][uid]['payment_methods'])) {
+            append(owners, uid)
+            append(method_ids, mid)
+            append(sources, db['users'][uid]['payment_methods'][mid]['source'])
+        }
+    }
+
+    return {
+        'users': rules::table(['user_id'], {'user_id': keys(db['users'])}),
+        'variants': rules::table(['product_id', 'item_id'], {
+            'product_id': product_ids, 'item_id': item_ids,
+        }),
+        'payment_methods': rules::table(['user_id', 'payment_method_id', 'source'], {
+            'user_id': owners, 'payment_method_id': method_ids, 'source': sources,
+        }),
+    }
+}
+
+function facts(db: Dictionary) -> Dictionary
+{
+    let tables = relations(db)
+    var out = {
+        'product_count': len(db['products']) == 50,
+        'product_ids': true,
+        'variant_ids': true,
+        'payment_sources': true,
+        'order_references': true,
+        'statuses': true,
+        'addresses': true
+    }
+
+    let seen = {}
+
+    for (let pid in keys(db['products'])) {
+        let product = db['products'][pid]
+
+        if (product['product_id'] != pid) {
+            out['product_ids'] = false
+        }
+
+        for (let iid in keys(product['variants'])) {
+            let variant = product['variants'][iid]
+
+            if (iid in seen or variant['item_id'] != iid) {
+                out['variant_ids'] = false
+            }
+
+            seen[iid] = pid
+        }
+    }
+
+    for (let uid in keys(db['users'])) {
+        let user = db['users'][uid]
+
+        for (let p in values(user['payment_methods'])) {
+            if (not ([p['source']] in payment_sources)) {
+                out['payment_sources'] = false
+            }
+        }
+
+        for (let field in ['address1', 'address2', 'city', 'state', 'country', 'zip']) {
+            if (not (field in user['address'])) {
+                out['addresses'] = false
+            }
+        }
+    }
+
+    for (let oid in keys(db['orders'])) {
+        let order = db['orders'][oid]
+
+        if (order['order_id'] != oid or not ([order['user_id']] in tables::users)) {
+            out['order_references'] = false
+        }
+
+        if (not ([order['status']] in order_statuses)) {
+            out['statuses'] = false
+        }
+
+        for (let item in order['items']) {
+            if (not ([item['product_id'], item['item_id']] in tables::variants)) {
+                out['order_references'] = false
+            }
+        }
+
+        for (let field in ['address1', 'address2', 'city', 'state', 'country', 'zip']) {
+            if (not (field in order['address'])) {
+                out['addresses'] = false
+            }
+        }
+    }
+
+    return out
+}
+
+let Domain = rule (db: Dictionary) {
+    let f = facts(db)
+
+    'D01 原始目录包含50种商品':
+        f['product_count']
+
+    'D02 商品键与独立商品ID一致':
+        f['product_ids']
+
+    'D03 规格ID全局唯一且与规格键一致':
+        f['variant_ids']
+
+    'D04 支付来源仅礼品卡PayPal信用卡':
+        f['payment_sources']
+
+    'D05 订单用户与商品规格引用有效':
+        f['order_references']
+
+    'D06 原始及请求后状态属于已知状态集':
+        f['statuses']
+
+    'D07 地址包含六个原始字段':
+        f['addresses']
+}
+
+return {'Domain': Domain, 'facts': facts, 'relations': relations}

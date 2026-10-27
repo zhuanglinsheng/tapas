@@ -1173,6 +1173,7 @@ whether two values refer to the same runtime object.
 | `in` | any value and an iterator | Tests iterator membership. |
 | `in` | any value and a list | Searches using built-in content-equality rules. |
 | `in` | any value and a dictionary | Searches dictionary keys. |
+| `in` | List and rules::Table | Match a complete row in explicit column order; incompatible types or lengths return false. |
 | `in` | any other right operand | Produces `false`; arrays currently provide no membership test. |
 | `:` | any two values | Creates a `Pair` containing the left and right values. |
 

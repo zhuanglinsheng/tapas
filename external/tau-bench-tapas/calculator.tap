@@ -1,0 +1,237 @@
+// Safe Pratt parser: decimal numbers, unary signs, + - * / // ** and parentheses.
+// No Python eval. Error text is normalized; exact CPython diagnostics are not modeled.
+function rounded(x: Int | Float) -> Float
+{
+    let scaled = x * 100.0
+    let integral = math::floor(scaled)
+
+    if (scaled - integral == 0.5) {
+        let residue = math::fma(x, 100.0, -scaled)
+
+        if (residue > 0) {
+            return (integral + 1) / 100.0
+        }
+
+        if (residue < 0) {
+            return integral / 100.0
+        }
+    }
+
+    return math::nearbyint(scaled) / 100.0
+}
+
+function spaces(c: Dictionary)
+{
+    while (c['pos'] < len(c['text']) and c['text'][c['pos']] == ' ') {
+        c['pos'] = c['pos'] + 1
+    }
+}
+
+function expression(c: Dictionary, minimum: Int) -> Float
+{
+    spaces(c)
+
+    if (c['pos'] >= len(c['text'])) {
+        c['error'] = 'syntax'
+
+        return 0.0
+    }
+
+    let ch = c['text'][c['pos']]
+    let left = 0.0
+
+    if (ch == '+' or ch == '-') {
+        c['pos'] = c['pos'] + 1
+        left = this(c, 25)
+
+        if (ch == '-') {
+            left = -left
+        }
+    } elif (ch == '(') {
+        c['pos'] = c['pos'] + 1
+        left = this(c, 0)
+        spaces(c)
+
+        if (c['pos'] >= len(c['text']) or c['text'][c['pos']] != ')') {
+            c['error'] = 'syntax'
+
+            return 0.0
+        }
+
+        c['pos'] = c['pos'] + 1
+    } else {
+        let number = ''
+
+        while (c['pos'] < len(c['text']) and strings::find('0123456789.', c['text'][c['pos']]) >= 0) {
+            number = strings::join([number, c['text'][c['pos']]], '')
+            c['pos'] = c['pos'] + 1
+        }
+
+        let parsed = try_float(number)
+
+        if (not parsed['ok']) {
+            c['error'] = 'syntax'
+
+            return 0.0
+        }
+
+        left = parsed['value']
+    }
+
+    while (c['error'] == '') {
+        spaces(c)
+
+        if (c['pos'] >= len(c['text'])) {
+            return left + 0.0
+        }
+
+        let op = c['text'][c['pos']]
+
+        if (op == ')') {
+            return left + 0.0
+        }
+
+        let width = 1
+
+        if (c['pos'] + 1 < len(c['text']) and c['text'][c['pos'] + 1] == op and (op == '*' or op == '/')) {
+            op = strings::join([op, op], '')
+            width = 2
+        }
+
+        let precedence = 0
+
+        if (op == '+' or op == '-') {
+            precedence = 10
+        }
+
+        if (op == '*' or op == '/' or op == '//') {
+            precedence = 20
+        }
+
+        if (op == '**') {
+            precedence = 30
+        }
+
+        if (precedence == 0) {
+            c['error'] = 'syntax'
+
+            return 0.0
+        }
+
+        if (precedence < minimum) {
+            return left + 0.0
+        }
+
+        c['pos'] = c['pos'] + width
+        let next_minimum = precedence + 1
+
+        if (op == '**') {
+            next_minimum = precedence
+        }
+
+        let right = this(c, next_minimum)
+
+        if (c['error'] != '') {
+            return 0.0
+        }
+
+        if (op == '+') {
+            left = left + right
+        }
+
+        if (op == '-') {
+            left = left - right
+        }
+
+        if (op == '*') {
+            left = left * right
+        }
+
+        if (op == '/' or op == '//') {
+            if (right == 0) {
+                c['error'] = 'zero-division'
+
+                return 0.0
+            }
+
+            left = left / right
+
+            if (op == '//') {
+                left = math::floor(left)
+            }
+        }
+
+        if (op == '**') {
+            if (left == 0 and right < 0) {
+                c['error'] = 'zero-division'
+
+                return 0.0
+            }
+
+            if (left < 0 and right != math::floor(right)) {
+                c['error'] = 'complex'
+
+                return 0.0
+            }
+
+            left = math::pow(left, right)
+        }
+    }
+
+    return left + 0.0
+}
+
+function calculate(text: String) -> Dictionary
+{
+    var out = {'value': 0.0, 'error': ''}
+
+    for (let ch in text) {
+        if (strings::find('0123456789+-*/(). ', ch) < 0) {
+            out['error'] = 'characters'
+
+            return out
+        }
+    }
+
+    let c = {'pos': 0, 'text': text, 'error': ''}
+    let value = expression(c, 0)
+    spaces(c)
+
+    if (c['error'] == '' and c['pos'] != len(text)) {
+        c['error'] = 'syntax'
+    }
+
+    if (c['error'] == '' and not math::isfinite(value)) {
+        c['error'] = 'overflow'
+    }
+
+    out['error'] = c['error']
+    out['value'] = rounded(value)
+
+    return out
+}
+
+function matches(text: String, output: AnyType) -> Bool
+{
+    let expected = calculate(text)
+
+    if (expected['error'] != '') {
+        if (not types::matches(output, types::String)) {
+            return false
+        }
+
+        if (expected['error'] == 'characters') {
+            return output == 'Error: invalid characters in expression'
+        }
+
+        return strings::starts_with(output, 'Error:')
+    }
+
+    if (not (types::matches(output, types::Int) or types::matches(output, types::Float))) {
+        return false
+    }
+
+    return math::abs(expected['value'] - output) < 0.0000001
+}
+
+return {'calculate': calculate, 'matches': matches, 'rounded': rounded}

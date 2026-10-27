@@ -1,0 +1,258 @@
+import model.tap as m
+
+// Evidence events: tool(before,call,output,after,exception), proposal(call,review),
+// user(text), assistant(review), request(reviewed scope facts).
+// review covers grounded/objective/fulfillment_claims: absent evidence is UNKNOWN.
+function audit(events: List, profile: String) -> Dictionary
+{
+    let f = {
+        'authenticated': true,
+        'same_user': true,
+        'confirmation': true,
+        'status_checked': true,
+        'all_items_reminded': true,
+        'serialized': true,
+        'grounded': true,
+        'objective': true,
+        'transfer_scope': true,
+        'different_options': true,
+        'fulfillment_claims': true,
+        'lookup_fallback': true
+    }
+
+    let unknown = []
+    let auth = ''
+    let proposal = {}
+    let confirmed = false
+    let reminded = false
+    let email_failed = false
+    let email_unavailable = false
+    let status_evidence = {}
+    let scope_known = false
+    let supported = true
+    let human_requested = false
+    let transferred = false
+    let tool_failures = []
+    let turns = {}
+
+    if (not (profile in ['wiki', 'rules', 'tool_description'])) {
+        f['transfer_scope'] = false
+    }
+
+    for (let event in events) {
+        let kind = event['kind']
+
+        if (kind in ['tool', 'assistant', 'proposal']) {
+            if (not ('turn' in event)) {
+                f['serialized'] = false
+                append(unknown, 'turn identity')
+            } else {
+                let turn_key = str(event['turn'])
+
+                if (not (turn_key in turns)) {
+                    turns[turn_key] = {'calls': 0, 'replies': 0}
+                }
+
+                let turn = turns[turn_key]
+
+                if (kind == 'tool') {
+                    turn['calls'] = turn['calls'] + 1
+                } else {
+                    turn['replies'] = turn['replies'] + 1
+                }
+
+                if (turn['calls'] > 1 or (turn['calls'] > 0 and turn['replies'] > 0)) {
+                    f['serialized'] = false
+                }
+            }
+        }
+
+        if (kind == 'request') {
+            if (event['reviewed']) {
+                scope_known = true
+                supported = event['supported']
+                human_requested = event['human_requested']
+                email_unavailable = event['email_unavailable']
+                transferred = false
+            } else {
+                scope_known = false
+                append(unknown, 'request scope')
+            }
+        }
+
+        if (not (kind in ['request', 'assistant', 'proposal', 'user', 'tool'])) {
+            append(unknown, 'unrecognized event kind')
+            f['serialized'] = false
+        }
+
+        if (kind == 'assistant' or kind == 'proposal') {
+            if (not ('review' in event) or not ('requires_authentication' in event['review'])) {
+                append(unknown, 'authentication scope')
+                f['authenticated'] = false
+            } elif (event['review']['requires_authentication'] and auth == '') {
+                f['authenticated'] = false
+            }
+
+            for (let field in ['grounded', 'objective', 'fulfillment_claims']) {
+                if (not ('review' in event) or not (field in event['review'])) {
+                    append(unknown, field)
+                    f[field] = false
+                } elif (not event['review'][field]) {
+                    f[field] = false
+                }
+            }
+        }
+
+        if (kind == 'proposal') {
+            proposal = event['call']
+            confirmed = false
+            reminded = 'all_items_reminded' in event and event['all_items_reminded']
+
+            if (not ('details_reviewed' in event) or not event['details_reviewed']) {
+                proposal = {}
+                append(unknown, 'proposal details')
+            }
+        }
+
+        if (kind == 'user') {
+            // Literal yes, case-insensitive and whitespace trimmed. No inferred consent.
+            confirmed = strings::trim(event['text']) in ['yes', 'Yes', 'YES'] and len(proposal) > 0
+        }
+
+        if (kind == 'tool') {
+            let c = event['call']
+            let name = c['name']
+            let a = c['kwargs']
+            let verdict = rules::check(m::ToolContract(event))
+
+            if (not verdict['passed']) {
+                append(tool_failures, name)
+            }
+
+            if (name == 'find_user_id_by_email' or name == 'find_user_id_by_name_zip') {
+                if (name == 'find_user_id_by_name_zip' and profile == 'tool_description' and not email_failed and not email_unavailable) {
+                    f['lookup_fallback'] = false
+                }
+
+                if (types::matches(event['output'], types::String) and event['output'] in event['after']['users']) {
+                    if (auth != '' and auth != event['output']) {
+                        f['same_user'] = false
+                    }
+
+                    if (auth == '') {
+                        auth = event['output']
+                    }
+                } elif (name == 'find_user_id_by_email') {
+                    email_failed = true
+                }
+            } elif (name != 'think') {
+                if (auth == '') {
+                    f['authenticated'] = false
+                }
+            }
+
+            if ('user_id' in a and auth != a['user_id']) {
+                f['same_user'] = false
+            }
+
+            if ('order_id' in a and a['order_id'] in event['before']['orders']) {
+                if (event['before']['orders'][a['order_id']]['user_id'] != auth) {
+                    f['same_user'] = false
+                }
+            }
+
+            if (name == 'get_order_details' and types::matches(event['output'], types::Dictionary)) {
+                status_evidence[a['order_id']] = event['output']
+            }
+
+            let mutating = name in ['cancel_pending_order', 'modify_user_address', 'modify_pending_order_address',
+                'modify_pending_order_payment', 'modify_pending_order_items', 'return_delivered_order_items', 'exchange_delivered_order_items']
+            if (mutating) {
+                if (not confirmed or not m::equal(proposal, c)) {
+                    f['confirmation'] = false
+                }
+
+                // Consume consent: a second call requires a fresh proposal and yes.
+                confirmed = false
+                proposal = {}
+
+                if ('order_id' in a) {
+                    if (not (a['order_id'] in status_evidence) or not (a['order_id'] in event['before']['orders'])) {
+                        f['status_checked'] = false
+                    } elif (not m::equal(status_evidence[a['order_id']], event['before']['orders'][a['order_id']])) {
+                        f['status_checked'] = false
+                    }
+                }
+
+                if (name in ['modify_pending_order_items', 'exchange_delivered_order_items']) {
+                    if (not reminded) {
+                        f['all_items_reminded'] = false
+                    }
+
+                    if (a['order_id'] in event['before']['orders']) {
+                        let order = event['before']['orders'][a['order_id']]
+
+                        for (let i in 0 to len(a['item_ids'])) {
+                            if (i < len(a['new_item_ids'])) {
+                                for (let item in order['items']) {
+                                    if (item['item_id'] == a['item_ids'][i]) {
+                                        let variants = event['before']['products'][item['product_id']]['variants']
+                                        let replacement = a['new_item_ids'][i]
+
+                                        if (replacement == item['item_id']) {
+                                            f['different_options'] = false
+                                        }
+
+                                        if (replacement in variants and m::equal(item['options'], variants[replacement]['options'])) {
+                                            f['different_options'] = false
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                reminded = false
+            }
+
+            if (name == 'transfer_to_human_agents') {
+                transferred = true
+
+                if (not scope_known) {
+                    f['transfer_scope'] = false
+                    append(unknown, 'transfer scope')
+                }
+
+                if (profile == 'rules') {
+                    f['transfer_scope'] = false
+                }
+
+                if (profile == 'wiki' and supported) {
+                    f['transfer_scope'] = false
+                }
+
+                if (profile == 'tool_description' and supported and not human_requested) {
+                    f['transfer_scope'] = false
+                }
+            }
+        }
+    }
+
+    if (scope_known and not supported and not transferred and profile == 'wiki') {
+        f['transfer_scope'] = false
+    }
+
+    let check = rules::check(m::ConversationPolicy(f))
+    var out = {
+        'passed': check['passed'] and len(tool_failures) == 0 and len(unknown) == 0,
+        'facts': f,
+        'unknown': unknown,
+        'tool_failures': tool_failures,
+        'profile': profile
+    }
+
+    return out
+}
+
+return {'audit': audit}

@@ -342,6 +342,7 @@ Exposes the compiler's lexical view for formatters and other source tools.
 |---|---|
 | `PointsOf` | Finite point-domain template. |
 | `RangeOf` | Closed integer interval-domain template. |
+| `Table` | Immutable finite scalar relation table. |
 | `Parameter` | Rule parameter record. |
 | `Capture` | Closure capture record. |
 | `Condition` | Boolean condition Item. |
@@ -364,6 +365,7 @@ Exposes the compiler's lexical view for formatters and other source tools.
 | `membership(value: RuleTerm, domain: RuleTerm)` | `RuleTerm` | Constructs a membership Term. |
 | `points(element_type: Type, ...values)` | `PointsOf` | Finite point domain with the specified element Type. |
 | `range(start: Int, end: Int)` | `RangeOf[Int]` | Closed integer interval, unlike the half-open root iter range. |
+| `table(columns: List[String], data: Dictionary[String, List])` | `Table` | Build a relation with explicit column order; List rows use in for membership. |
 | `term(type: Type)` | `Type` | RuleTerm Type for a specified value Type. |
 | `check(rule: RuleInstance \| Rule)` | `CheckResult` | Checks Conditions and returns a check result. |
 | `inspect(rule: RuleInstance \| Rule)` | `RuleIR` | Returns an immutable Rule IR view. |

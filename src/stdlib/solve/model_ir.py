@@ -49,7 +49,7 @@ def linear(value):
 
 @dataclass(frozen=True)
 class Formula:
-    kind: str  # and, or, <=, ==, != ; comparisons have one Linear argument
+    kind: str  # and, or, <=, ==, !=, table, not_table
     args: tuple
 
 
@@ -79,7 +79,35 @@ def negate(value):
         return not value
     if value.kind in ('and', 'or'):
         return junction('or' if value.kind == 'and' else 'and', [negate(v) for v in value.args])
+    if value.kind in ('table', 'not_table'):
+        return Formula('not_table' if value.kind == 'table' else 'table', value.args)
     return atom({'<=': '>', '==': '!=', '!=': '=='}[value.kind], value.args[0])
+
+
+def table(expressions, rows, forbidden=False):
+    expressions = tuple(expressions)
+    rows = tuple(dict.fromkeys(tuple(row) for row in rows))
+    if not rows:
+        return forbidden
+    if all(isinstance(expression, Linear) and not expression.coefficients for expression in expressions):
+        found = tuple(expression.constant for expression in expressions) in rows
+        return not found if forbidden else found
+    return Formula('not_table' if forbidden else 'table', (expressions, rows))
+
+
+def variable_indices(predicate):
+    if type(predicate) is bool:
+        return set()
+    if predicate.kind in ('and', 'or'):
+        return set().union(*(variable_indices(child) for child in predicate.args))
+    expressions = predicate.args[0] if predicate.kind in ('table', 'not_table') else (predicate.args[0],)
+    result = set()
+    for expression in expressions:
+        if isinstance(expression, Linear):
+            result.update(index for index, _ in expression.coefficients)
+        else:
+            result.update(variable_indices(expression))
+    return result
 
 
 def junction(kind, values):
@@ -125,6 +153,7 @@ class Query:
     constraints: tuple = ()
     bound_issue: str = ""
     bindings: tuple = ()
+    output_variables: tuple = ()  # Root parameter order; None retains a fixed Table in the VM.
 
     def __post_init__(self):
         if self.integer_domain is not None:

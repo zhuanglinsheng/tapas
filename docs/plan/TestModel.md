@@ -1,11 +1,17 @@
 # Tapas 基于状态模型的测试设计
 
-[产品规划](Plan.md) | [Rule](docs/Rules_zh.md) | [类型系统](docs/TypeSystem_zh.md) | [Retail 示例](examples/retail/README.md)
+[产品规划](Plan.md) | [Rule](docs/Rules_zh.md) | [类型系统](docs/TypeSystem_zh.md) | [Retail 示例](external/tau-bench-tapas/simplified/README.md)
+
+
 
 > 状态：设计草案，2026-09-04。
+>
 > 本文记录状态模型测试的数学语义、语法方向和未来需求，不表示这些能力已经实现。
+>
 > 除明确说明外，代码块使用 `text`：它们是语法草案，不是当前可执行示例。
 > `implies` 的第一版语法、checker、IR、触发记录和格式化已实现，见第 5.3 节；Action 参数类、ActionInstance、空间分析、Runner 和 Trace 的具体公共接口尚未确定。
+
+
 
 ## 1. 目标与设计边界
 

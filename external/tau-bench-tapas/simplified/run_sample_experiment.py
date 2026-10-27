@@ -11,7 +11,7 @@ from collections import defaultdict
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 SOURCE = Path(__file__).with_name("sample_experiment.tap")
 FIELDS = (
     "mode", "scheduler", "seed", "status", "samples", "candidates",

@@ -1,0 +1,78 @@
+let names = ['item_id', 'price', 'available']
+let source = {
+    'price': [100, 200, 100],
+    'available': [true, false, true],
+    'item_id': ['A', 'B', 'A'],
+}
+
+let products: rules::Table = rules::table(names, source)
+let columns = products::columns
+let rows = products::rows
+columns[0] = 'changed'
+let first_row = rows[0]
+first_row[1] = 900
+let source_prices = source['price']
+source_prices[0] = 800
+let source_items = source['item_id']
+source_items[0] = 'Z'
+names[0] = 'changed'
+
+assert(rule {
+    ['A', 100, true] in products
+    ['B', 200, false] in products
+    not (['A', 200, true] in products)
+    not (['A', 100, 1] in products)
+    not (['A', 100.0, true] in products)
+    not (['A', 100] in products)
+    not ('A' in products)
+    not ({'item_id': 'A'} in products)
+    len(products) == 3
+    products::columns == ['item_id', 'price', 'available']
+    types::matches(products, rules::Table)
+    types::matches(products, types::MemberTestable)
+    types::matches(products, types::Indexable)
+    types::matches(products, types::of(products))
+    identical(copy(products), products)
+    'price' in source
+    not (['price', 100] in source)
+})
+
+let empty = rules::table(['x'], {'x': []})
+
+assert(rule {
+    len(empty) == 0
+    not ([1] in empty)
+})
+
+let Product = rule (row: List, table: rules::Table) {
+    row in table
+}
+
+assert(Product(['A', 100, true], products))
+assert(rule { not Product(['A', 200, true], products) })
+
+let row_parameter = rules::parameter('row', types::List)
+let dynamic = rules::make('ProductRow', [row_parameter], [
+    rules::condition(rules::membership(row_parameter, rules::constant(products))),
+])
+let serialized = rules::serialize(dynamic)
+let restored = rules::deserialize(serialized)
+
+assert(restored(['A', 100, true]))
+assert(rule { not restored(['A', 200, true]) })
+assert(rule {
+    strings::find(serialized, 'TPIR8;') == 0
+    rules::semantic_hash(dynamic) == rules::semantic_hash(restored)
+})
+
+let binary_text = json::parse('"A\\u0000B"')
+let text_table = rules::table(['text'], {'text': [binary_text, '键盘']})
+let text_row = rules::make('TextRow', [row_parameter], [
+    rules::condition(rules::membership(row_parameter, rules::constant(text_table))),
+])
+let restored_text = rules::deserialize(rules::serialize(text_row))
+
+assert(restored_text([binary_text]))
+assert(restored_text(['键盘']))
+assert(rule { not restored_text(['A']) })
+print('rule tables: ok')

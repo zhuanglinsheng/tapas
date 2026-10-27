@@ -2,6 +2,8 @@
 
 简体中文 | [English](README_en.md)
 
+本目录是用于演示求解与抽样的简化模型。原始 τ-bench Retail 全部工具和政策的运行约束复现见 [tau-bench-tapas](../README.md)，两者的换货支付时机与状态语义不同。
+
 顾客 Yusuf 收到了一把线性轴键盘，想换成同款的无背光段落轴键盘。新规格贵 1 元，他确认了目标规格，准备使用订单关联的支付方式补差价。
 
 零售系统需要核对他的身份、订单和确认信息，还要检查目标规格是否有货、可支付额度是否足够。符合换货条件，就接受请求、收取差价并更新订单；不符合条件，就拒绝请求，保留原来的订单。
@@ -148,7 +150,7 @@ let ExchangeModel = rule (
 
 ## 三、检查模拟产生的结果
 
-下面开始运行实验。需要当前项目构建的 Tapas、Python 和 OR-Tools；安装方法见 [solve 包说明](../../src/stdlib/solve/README.md)。所有命令都在仓库根目录执行。
+下面开始运行实验。需要当前项目构建的 Tapas、Python 和 OR-Tools；安装方法见 [solve 包说明](../../../src/stdlib/solve/README.md)。所有命令都在仓库根目录执行。
 
 在下面的实验中，模拟器扮演零售系统：接收前状态和顾客请求，返回业务输出 `output` 与后状态 `after`。模拟中的业务判断独立编写，Tapas 再用 Rule 检查它的处理是否正确。
 
@@ -157,7 +159,7 @@ let ExchangeModel = rule (
 运行[正常换货实验](test_valid_exchange.tap)：
 
 ```sh
-build/bin/tapas examples/retail/test_valid_exchange.tap
+build/bin/tapas external/tau-bench-tapas/simplified/test_valid_exchange.tap
 ```
 
 测试文件开头先引入业务模型和模拟器：
@@ -220,7 +222,7 @@ let result = solve::hold(restricted_model)
 运行[拒绝换货实验](test_rejected_exchange.tap)：
 
 ```sh
-build/bin/tapas examples/retail/test_rejected_exchange.tap
+build/bin/tapas external/tau-bench-tapas/simplified/test_rejected_exchange.tap
 ```
 
 先看额度不足的一组：Yusuf 仍然请求换入那把贵 100 分的键盘，身份和确认信息都正确，但可支付额度改成了 99 分。请求可以提交，只是不满足 `ExchangeAllowed`。
@@ -244,7 +246,7 @@ build/bin/tapas examples/retail/test_rejected_exchange.tap
 运行[错误转移实验](test_invalid_transition.tap)：
 
 ```sh
-build/bin/tapas examples/retail/test_invalid_transition.tap
+build/bin/tapas external/tau-bench-tapas/simplified/test_invalid_transition.tap
 ```
 
 这次把 Yusuf 的请求改为“将键盘换成温控器”，并让确认目标与请求一致。虽然身份、确认和额度都符合要求，目标仍然不是同一商品。实验使用故意遗漏“同一商品”检查的模拟函数，它会错误地返回成功，并更新订单商品。
@@ -289,10 +291,10 @@ build/bin/tapas examples/retail/test_invalid_transition.tap
 运行[生成合法输入的实验](test_generate_valid_exchange.tap)：
 
 ```sh
-build/bin/tapas examples/retail/test_generate_valid_exchange.tap
+build/bin/tapas external/tau-bench-tapas/simplified/test_generate_valid_exchange.tap
 ```
 
-订单、目标规格、认证和确认信息保持不变。实验定义 `AcceptedCapacity(payment_capacity: Int)`，用未知额度构造订单，再要求它满足已有的 `ExchangeInput` 和 `ExchangeAllowed`。
+订单、目标规格、认证和确认信息保持不变。实验定义 `AcceptedCapacity(payment_capacity, original_price, target_price)`，用未知额度构造订单，再要求它满足已有的 `ExchangeInput` 和 `ExchangeAllowedWithPrices`。原价和目标价由目录 Table 补全，不是额外随机输入。
 换货允许条件仍来自业务模型，不在实验中重新计算一套。这个实验 Rule 的完整定义如下：
 
 ```text
@@ -300,7 +302,11 @@ let initial_state = simulation::initial_state('keyboard-clicky-plain')
 let exchange_parameters = simulation::exchange_parameters('keyboard-clicky-plain')
 
 // 只将支付额度设为未知参数，订单的其他信息沿用已知数据。
-let AcceptedCapacity = rule (payment_capacity: Int) {
+let AcceptedCapacity = rule (
+        payment_capacity: Int,
+        original_price: Int,
+        target_price: Int,
+) {
     let previous_state = {
         'order_id': initial_state::order_id,
         'user_id': initial_state::user_id,
@@ -314,13 +320,14 @@ let AcceptedCapacity = rule (payment_capacity: Int) {
     }
     model::ExchangeInput(previous_state, exchange_parameters)
     // 生成的输入必须允许换货；具体允许条件仍由业务模型定义。
-    model::ExchangeAllowed(previous_state, exchange_parameters)
+    model::ExchangeAllowedWithPrices(previous_state, exchange_parameters,
+        original_price, target_price)
 }
 ```
 
 前面准备的 `initial_state` 和 `exchange_parameters` 是已知数据。新构造的 `previous_state` 沿用原订单的其他字段，只有 `payment_capacity` 来自 Rule 参数，等待求解器赋值。
 
-最后两行要求这份输入既满足 `ExchangeInput`，也满足 `ExchangeAllowed`。所以求解器寻找的是“能让这笔换货被允许的额度”。未知量是在这里显式声明并放入订单的；仅仅不限制一个已有订单的字段，并不等于自动把该字段变成未知参数。
+最后两项要求这份输入既满足 `ExchangeInput`，也满足带目录价格关系的 `ExchangeAllowedWithPrices`。所以求解器寻找的是“能让这笔换货被允许的额度”。未知量是在这里显式声明并放入订单的；仅仅不限制一个已有订单的字段，并不等于自动把该字段变成未知参数。
 
 本次只允许在 0–100 分内寻找额度：
 
@@ -355,7 +362,7 @@ if (generated::status == 'sat') {
 }
 ```
 
-`arguments` 按 Rule 参数声明的顺序返回值；`AcceptedCapacity` 只有一个参数，所以索引 `0` 就是求出的额度。随后，测试像正常换货时一样，将四项执行数据固定到 `ExchangeModel`，检查模拟器是否正确处理了生成的输入。
+`arguments` 按 Rule 参数声明的顺序返回值；`AcceptedCapacity` 的第一个参数是额度，后两个是目录价格见证，所以索引 `0` 仍是求出的额度。随后，测试像正常换货时一样，将四项执行数据固定到 `ExchangeModel`，检查模拟器是否正确处理了生成的输入。
 
 测试文件还会打印两次查询和模拟的结果：
 
@@ -373,14 +380,14 @@ if (generated::status == 'sat') {
 运行[生成拒绝输入的实验](test_generate_rejected_exchange.tap)：
 
 ```sh
-build/bin/tapas examples/retail/test_generate_rejected_exchange.tap
+build/bin/tapas external/tau-bench-tapas/simplified/test_generate_rejected_exchange.tap
 ```
 
-实验先从 `ExchangeAllowed` 构造一个只违反额度条件的新 Rule：
+实验先从 `ExchangeAllowedWithPrices` 构造一个只违反额度条件的新 Rule；两项价格关联不被反转：
 
 ```text
 let RejectedByCapacity = rules::violate(
-    model::ExchangeAllowed,
+    model::ExchangeAllowedWithPrices,
     '可支付额度必须足以支付差价',
 )
 ```
@@ -401,7 +408,7 @@ let RejectedByCapacity = rules::violate(
 运行[多变量实验](test_generate_joint_inputs.tap)：
 
 ```sh
-build/bin/tapas examples/retail/test_generate_joint_inputs.tap
+build/bin/tapas external/tau-bench-tapas/simplified/test_generate_joint_inputs.tap
 ```
 
 这次不只留下额度未知，还让求解器选择认证用户和确认目标。为了明确候选范围，实验使用两个枚举类型：
@@ -424,6 +431,8 @@ let ExchangeInputs = rule (
         confirmed_target_id: Confirmation,
         // 指定要生成允许换货还是不允许换货的输入，不是模拟器的输出。
         allowed: Bool,
+        original_price: Int,
+        target_price: Int,
 ) {
     let previous_state = {
         'order_id': initial_state::order_id,
@@ -436,13 +445,18 @@ let ExchangeInputs = rule (
         'confirmed_target_id': confirmed_target_id,
     }
     model::ExchangeInput(previous_state, exchange_parameters)
+    // 价格事实独立成立，不能用错误价格解释拒绝。
+    [previous_state::item_id, original_price] in data::price_table
+    [exchange_parameters::target_item_id, target_price] in data::price_table
     // true 要求满足允许条件；false 要求至少一项允许条件不满足。
-    ((allowed and model::ExchangeAllowed(previous_state, exchange_parameters)) or
-        (not allowed and not model::ExchangeAllowed(previous_state, exchange_parameters)))
+    ((allowed and model::ExchangeAllowedWithPrices(previous_state, exchange_parameters,
+        original_price, target_price)) or
+        (not allowed and not model::ExchangeAllowedWithPrices(previous_state, exchange_parameters,
+        original_price, target_price)))
 }
 ```
 
-构造订单的方法与测试 4 相同，只是现在有三个字段来自未知参数。`allowed` 是第四个参数，用来指定这次想寻找哪类输入，并不是模拟器已经返回的结果。
+构造订单的方法与测试 4 相同，只是现在有三个字段来自未知参数。`allowed` 是第四个参数，用来指定这次想寻找哪类输入，并不是模拟器已经返回的结果；后两个价格参数由 Table 补全。示例中的 `data` 为导入的 `data.tap` 模块。
 
 最后的逻辑表达式把它与业务规则关联起来：`allowed` 为 `true` 时，必须满足 `ExchangeAllowed`；为 `false` 时，必须不满足 `ExchangeAllowed`。`and` 要求两边同时成立，`or` 要求至少一边成立，`not` 表示取反。无论选择哪一类，都仍需满足前一行的 `ExchangeInput`。
 
@@ -517,10 +531,44 @@ let impossible = solve::hold(incompatible)
 结果为 `unsat`。订单属于 Yusuf，另一用户即使有足够额度、确认了正确目标，也不满足“认证用户必须是订单所属用户”的条件。
 这次无解发生在输入生成阶段，尚未执行模拟。
 
+## 六、用 Table 联合选择规格与生成状态
+
+前面的固定目标实验已经改用 `ExchangeAllowedWithPrices`：价格作为由目录关联确定的见证，不改变原有请求先验。现在还可以不固定目标规格，联合搜索规格、额度、输出和后状态：
+
+```sh
+build/bin/tapas external/tau-bench-tapas/simplified/test_generate_table_inputs.tap
+```
+
+[data.tap](data.tap) 从同一份目录构造 `item_table`、`item_domain`、`price_table`、`availability_table` 和 `same_product_table`。前者保存完整规格行；其余表按用途投影，或保存同商品规格对。无货、原规格和跨商品候选仍保留在数据里，业务限制由 Rule 施加。普通 `items` 字典仍供独立模拟器使用。
+
+[model.tap](model.tap) 中的核心关系是：
+
+```text
+[previous_state::item_id, original_price] in data::price_table
+[action_parameters::target_item_id, target_price] in data::price_table
+[previous_state::item_id, action_parameters::target_item_id] in data::same_product_table
+[action_parameters::target_item_id, true] in data::availability_table
+```
+
+`ExchangeAllowedWithPrices` 复用原许可规则中除已知规格查价以外的全部条件，额度关系由同一个 `SufficientCapacity` Rule 表达。`ExchangeEffects` 集中维护成功、拒绝和不变字段；旧的四参数检查入口与新的显式价格入口共用它。
+
+[generation.tap](generation.tap) 将未知标量放入固定字段记录，交给 `ExchangeModelWithPrices`。`target_available`、`same_product`、`allowed` 是与实际关系双向关联的见证，不是可任意填写的开关。测试不固定目标规格，得到：
+
+| 限制 | 求出的目标 | 业务结果 |
+|---|---|---|
+| 要求允许，额度 0–100 分 | 无背光段落轴键盘 | 成功 |
+| 要求同商品、无货，额度 500 分 | RGB 段落轴键盘 | 拒绝 |
+| 要求有货、跨商品，额度 100 分 | 温控器 | 拒绝 |
+| 排除原规格，要求有货同商品，额度 99 分 | 无背光段落轴键盘 | 拒绝 |
+
+生成的输出和后状态逐字段与独立模拟器核对，再交给原 `ExchangeModel` 检查。另对四种规格和五个额度边界共 20 组输入核对两种许可入口、求解见证与模拟结果，并验证仅采样规格和额度时，价格及状态作为见证补全。
+
+价格 Table 关联在拒绝分支之外始终成立。否则 `not ExchangeAllowedWithPrices(...)` 可能靠伪造价格成立，不能代表真实业务拒绝。原接口保留用于已知规格的检查；新求解入口不使用未知 ID 索引普通字典。
+
 ## 关于结果与范围
 
 实验中的金额范围和用户候选是本次查询的限制。求解器只在这些范围内寻找解，不代表已经覆盖了所有可能的业务输入。
-多变量实验显式地用标量参数构造订单，目前不涉及任意结构字段或商品目录索引的自动搜索。
+多变量实验显式地用标量参数构造订单。第六节通过 Table 搜索目标规格和状态字段，不涉及任意结构字段、变长商品列表或字典未知索引的自动搜索。
 
 如果出现 `unsupported`、`unknown` 或 `error`，分别表示查询尚不支持、未能判定或执行出错，不能当作业务通过或违规。具体配置与支持范围见 solve 包说明。
 

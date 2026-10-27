@@ -14,6 +14,7 @@
 #include "codec.h"
 #include "domain.h"
 #include "hash.h"
+#include "table.h"
 
 #include "tapas/objects/tdict.h"
 #include "tapas/objects/tlist.h"
@@ -102,6 +103,10 @@ static void create_points_type(tobj *result) {
 static void create_range_type(tobj *result) {
   tobj_set_compo(result, (tcompo_v *)ttypeval_new_extension_template(
                                 &trules_range_template));
+}
+
+static void create_table_type(tobj *result) {
+  tobj_set_compo(result, (tcompo_v *)ttypeval_new_named("rules::Table"));
 }
 
 static void rule_result_field(tdict *result, const char *name,
@@ -777,7 +782,30 @@ static void rules_range(tobj *params, uint_regs count, tobj *result) {
                              params[0].val.v_tint,
                              params[1].val.v_tint));
 }
+static void rules_table(tobj *params, uint_regs count, tobj *result) {
+  count_is("rules::table", count, 2);
+  tlist *columns = list_is(&params[0], "rules::table");
+  if (params[1].type != tcompo || tobj_compo_type(&params[1]) != compo_tdict)
+    twarn(ErrRuntime_ParamsType, "rules::table", "Dictionary data required");
+  tobj_set_compo(result, (tcompo_v *)trules_table_new(
+      columns, (tdict *)params[1].val.v_tcompo));
+}
+
 static const textension_symbol symbols[] = {
+    {.name = "Table",
+     .type = "Type",
+     .detail = "rules::Table: immutable scalar relation table",
+     .kind = textension_type,
+     .value_factory = create_table_type,
+     .instance_capabilities = &trules_table_capabilities},
+    {.name = "table",
+     .type = "Function[List[String], Dictionary[String, List]] -> Table",
+     .detail = "rules::table(columns: List[String], data: Dictionary[String, List]) -> Table",
+     .kind = textension_function,
+     .function = rules_table,
+     .minimum_arguments = 2,
+     .maximum_arguments = 2,
+     .compile_time_signature = 1},
     {.name = "item",
      .type = "Function[Rule, Int | String | RuleItem] -> RuleItem",
      .detail = "rules::item(rule: Rule, target: Int | String | RuleItem) -> RuleItem",

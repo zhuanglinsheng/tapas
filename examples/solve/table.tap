@@ -1,0 +1,38 @@
+/// table.tap
+///
+/// 用完整商品行关联规格、价格和库存，再搜索价格不超过 150 分的有货商品。
+
+let ItemId = types::enum('A', 'B', 'C')
+let products = rules::table(['item_id', 'price', 'available'], {
+    'price': [100, 200, 120],
+    'available': [true, true, false],
+    'item_id': ['A', 'B', 'C'],
+})
+
+let Affordable = rule (
+        item_id: ItemId,
+        price: Int,
+        available: Bool,
+        products: rules::Table,
+) {
+    '规格、价格和库存必须来自同一行':
+        [item_id, price, available] in products
+
+    '价格不能超过预算':
+        price <= 150
+
+    '商品必须有货':
+        available
+}
+
+let trial = rules::restrict(Affordable, 'products': products)
+let answer = solve::hold(trial)
+print('status: ', answer::status)
+
+if (answer::status == 'sat') {
+    let chosen = arguments(answer::witness)
+    print('item: ', chosen[0], '; price: ', chosen[1])
+    assert(answer::witness)
+} else {
+    print(answer::reason)
+}

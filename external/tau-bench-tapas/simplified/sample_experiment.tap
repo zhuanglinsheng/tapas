@@ -13,11 +13,13 @@ let Authentication = types::enum(
 let Confirmation = types::enum(
     '', 'keyboard-clicky-plain', 'thermostat-google-home')
 
-// 只把会随业务请求变化的三个字段作为概率输入；其余背景保持固定。
-let AcceptedExchange = rule(
+// 三个请求字段保持原先验；Table 补全价格见证，不增加概率输入。
+let AcceptedExchange = rule (
         payment_capacity: Int,
         authenticated_user_id: Authentication,
         confirmed_target_id: Confirmation,
+        original_price: Int,
+        target_price: Int,
 ) {
     let previous_state = {
         'order_id': initial_state::order_id,
@@ -29,7 +31,9 @@ let AcceptedExchange = rule(
         'authenticated_user_id': authenticated_user_id,
         'confirmed_target_id': confirmed_target_id,
     }
-    model::ExchangeAllowed(previous_state, exchange_parameters)
+
+    model::ExchangeAllowedWithPrices(previous_state, exchange_parameters,
+        original_price, target_price)
 }
 
 let experiment_space = {
@@ -64,6 +68,7 @@ let configurations = [
     {'mode': 'online_mass_core', 'scheduler': 'fifo'},
     {'mode': 'online_mass_core', 'scheduler': 'binding_count'},
 ]
+
 for (let seed in seeds) {
     for (let configuration in configurations) {
         let mode = configuration::mode
@@ -112,6 +117,7 @@ for (let seed in seeds) {
         time_limit = 60.0,
         generalization = 'raw_core'
     )
+
     for (let test_data in distribution_check::samples) {
         print('DISTRIBUTION|', seed, '|', test_data['payment_capacity'])
     }

@@ -4,7 +4,7 @@
 
 这里可以从短小的程序开始了解 Tapas，也可以通过换货业务学习如何用同一份 Rule 检查执行结果、生成测试输入。
 
-如果还不熟悉 Tapas 的写法，先读[语言入门](../docs/examples/Basics_zh.md)。想了解规则求解，可以先运行 [solve 示例](solve)，再阅读[换货业务教程](retail/README.md)。
+如果还不熟悉 Tapas 的写法，先读[语言入门](../docs/examples/Basics_zh.md)。想了解规则求解，可以先运行 [solve 示例](solve)，再阅读[换货业务教程](../external/tau-bench-tapas/simplified/README.md)。
 
 ## 运行示例
 
@@ -14,7 +14,7 @@
 build/bin/tapas examples/general/fibonacci.tap
 ```
 
-`general` 示例只需要 Tapas。`solve` 和 `retail` 还需要 Python 与 OR-Tools，请先按 [solve 包的依赖说明](../src/stdlib/solve/README.md#依赖)准备运行环境。
+`general` 示例只需要 Tapas。`solve` 和外部 Retail 案例 还需要 Python 与 OR-Tools，请先按 [solve 包的依赖说明](../src/stdlib/solve/README.md#依赖)准备运行环境。
 
 ## 文件、程序与 JSON 联动
 
@@ -48,31 +48,31 @@ build/bin/tapas examples/solve/diagnostics.tap
 
 ## 用规则测试换货业务
 
-[换货业务教程](retail/README.md)从顾客 Yusuf 的订单开始：他收到一把键盘，希望换成同款的另一种规格，并支付差价。零售系统需要核对身份、确认信息、库存和支付额度，再决定接受或拒绝。
+[换货业务教程](../external/tau-bench-tapas/simplified/README.md)从顾客 Yusuf 的订单开始：他收到一把键盘，希望换成同款的另一种规格，并支付差价。零售系统需要核对身份、确认信息、库存和支付额度，再决定接受或拒绝。
 
 示例用 Rule 描述这些业务要求，用模拟器执行换货。测试将前状态、请求、实际输出和后状态固定到顶层 `ExchangeModel`，再通过 `solve::hold` 检查这次处理是否符合要求。
 
 可以先运行正常换货：
 
 ```sh
-build/bin/tapas examples/retail/test_valid_exchange.tap
+build/bin/tapas external/tau-bench-tapas/simplified/test_valid_exchange.tap
 ```
 
 然后依次尝试下面的实验。每个文件都可以单独运行，不需要先执行其他测试。
 
 | 实验 | 要检查的问题 |
 |---|---|
-| [正常换货](retail/test_valid_exchange.tap) | 接受请求后，收费和订单变化是否正确？ |
-| [拒绝换货](retail/test_rejected_exchange.tap) | 请求不符合条件时，系统是否拒绝、不收费并保留原订单？ |
-| [错误的状态转移](retail/test_invalid_transition.tap) | 模拟器遗漏同商品检查、错误地把键盘换成温控器时，模型能否发现？ |
-| [生成允许换货的输入](retail/test_generate_valid_exchange.tap) | 只给出额度范围，能否找到允许换货的额度？收紧范围后是否无解？ |
-| [生成应当拒绝的输入](retail/test_generate_rejected_exchange.tap) | 能否找到不足以支付差价的额度，再检查模拟器是否正确拒绝？ |
-| [同时限制多个参数](retail/test_generate_joint_inputs.tap) | 额度、认证用户和确认目标一起变化时，能否生成指定情形的输入？ |
+| [正常换货](../external/tau-bench-tapas/simplified/test_valid_exchange.tap) | 接受请求后，收费和订单变化是否正确？ |
+| [拒绝换货](../external/tau-bench-tapas/simplified/test_rejected_exchange.tap) | 请求不符合条件时，系统是否拒绝、不收费并保留原订单？ |
+| [错误的状态转移](../external/tau-bench-tapas/simplified/test_invalid_transition.tap) | 模拟器遗漏同商品检查、错误地把键盘换成温控器时，模型能否发现？ |
+| [生成允许换货的输入](../external/tau-bench-tapas/simplified/test_generate_valid_exchange.tap) | 只给出额度范围，能否找到允许换货的额度？收紧范围后是否无解？ |
+| [生成应当拒绝的输入](../external/tau-bench-tapas/simplified/test_generate_rejected_exchange.tap) | 能否找到不足以支付差价的额度，再检查模拟器是否正确拒绝？ |
+| [同时限制多个参数](../external/tau-bench-tapas/simplified/test_generate_joint_inputs.tap) | 额度、认证用户和确认目标一起变化时，能否生成指定情形的输入？ |
 
 例如，运行最后一组实验：
 
 ```sh
-build/bin/tapas examples/retail/test_generate_joint_inputs.tap
+build/bin/tapas external/tau-bench-tapas/simplified/test_generate_joint_inputs.tap
 ```
 
 这里先用一次查询生成输入，再将输入交给模拟器，最后用另一次查询检查实际转移。实验复用原有业务规则，只改变本次查询的限制。

@@ -44,18 +44,36 @@ function rejected_inputs()
     underfunded_state['payment_capacity'] = 99
 
     return [
-        { 'name': '无货规格', 'state': initial_state('keyboard-clicky-rgb'),
-            'parameters': exchange_parameters('keyboard-clicky-rgb') },
-        { 'name': '身份未验证', 'state': unauthenticated_state,
-            'parameters': exchange_parameters(target_item_id) },
-        { 'name': '未确认', 'state': unconfirmed_state,
-            'parameters': exchange_parameters(target_item_id) },
-        { 'name': '额度不足', 'state': underfunded_state,
-            'parameters': exchange_parameters(target_item_id) },
-        { 'name': '原规格', 'state': initial_state('keyboard-linear-rgb'),
-            'parameters': exchange_parameters('keyboard-linear-rgb') },
-        { 'name': '跨商品', 'state': initial_state('thermostat-google-home'),
-            'parameters': exchange_parameters('thermostat-google-home') },
+        {
+            'name': '无货规格',
+            'state': initial_state('keyboard-clicky-rgb'),
+            'parameters': exchange_parameters('keyboard-clicky-rgb')
+        },
+        {
+            'name': '身份未验证',
+            'state': unauthenticated_state,
+            'parameters': exchange_parameters(target_item_id)
+        },
+        {
+            'name': '未确认',
+            'state': unconfirmed_state,
+            'parameters': exchange_parameters(target_item_id)
+        },
+        {
+            'name': '额度不足',
+            'state': underfunded_state,
+            'parameters': exchange_parameters(target_item_id)
+        },
+        {
+            'name': '原规格',
+            'state': initial_state('keyboard-linear-rgb'),
+            'parameters': exchange_parameters('keyboard-linear-rgb')
+        },
+        {
+            'name': '跨商品',
+            'state': initial_state('thermostat-google-home'),
+            'parameters': exchange_parameters('thermostat-google-home')
+        },
     ]
 }
 
@@ -78,19 +96,24 @@ function perform(
         replacement_item::available and
         current_state::payment_capacity >= price_difference
     )
+
     if (check_same_product) {
         exchange_accepted = exchange_accepted and original_item::product_id == replacement_item::product_id
     }
+
     let next_state = current_state.copy()
+
     if (exchange_accepted) {
         next_state['status'] = '换货申请'
         next_state['item_id'] = action_parameters::target_item_id
         next_state['payment_capacity'] = current_state::payment_capacity - price_difference
+
         return {
             'output': { 'decision': '成功', 'charged_difference': price_difference },
             'after': next_state,
         }
     }
+
     return {
         'output': { 'decision': '拒绝', 'charged_difference': 0 },
         'after': next_state,

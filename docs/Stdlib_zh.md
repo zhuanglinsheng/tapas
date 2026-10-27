@@ -311,6 +311,7 @@ a-b-c
 |---|---|
 | `PointsOf` | 有限点集定义域模板。 |
 | `RangeOf` | 闭整数区间定义域模板。 |
+| `Table` | 不可变的有限标量关系表。 |
 | `Parameter` | Rule 形参记录。 |
 | `Capture` | 闭包捕获记录。 |
 | `Condition` | 布尔条件 Item。 |
@@ -333,6 +334,7 @@ a-b-c
 | `membership(value: RuleTerm, domain: RuleTerm)` | `RuleTerm` | 构造成员判断 Term。 |
 | `points(element_type: Type, ...values)` | `PointsOf` | 构造指定元素 Type 的有限点集定义域。 |
 | `range(start: Int, end: Int)` | `RangeOf[Int]` | 构造包含两端的整数区间；与根函数 iter 的半开区间不同。 |
+| `table(columns: List[String], data: Dictionary[String, List])` | `Table` | 按显式列顺序构造关系表；List 行通过 in 匹配。 |
 | `term(type: Type)` | `Type` | 构造指定值 Type 的 RuleTerm Type。 |
 | `check(rule: RuleInstance \| Rule)` | `CheckResult` | 检查 Condition，返回检查结果。 |
 | `inspect(rule: RuleInstance \| Rule)` | `RuleIR` | 返回规则的不可变 IR 视图。 |

@@ -139,6 +139,7 @@ set(TAPAS_STDLIB_SOURCES
     src/stdlib/types/types.c
     src/stdlib/rules/rules.c
     src/stdlib/rules/domain.c
+    src/stdlib/rules/table.c
     src/stdlib/rules/hash.c
     src/stdlib/rules/codec.c
     src/stdlib/solve/solve.c
@@ -467,6 +468,12 @@ if(BUILD_TESTING)
                 "$<TARGET_FILE:tapas>")
         set_tests_properties(solve_sample_controls PROPERTIES TIMEOUT 120
             ENVIRONMENT "${TAPAS_TEST_SOLVE_ENV}")
+        add_test(NAME retail_tables
+            COMMAND "${TAPAS_TEST_SOLVE_PYTHON}"
+                "${CMAKE_CURRENT_SOURCE_DIR}/external/tau-bench-tapas/test_tables.py"
+                "$<TARGET_FILE:tapas>")
+        set_tests_properties(retail_tables PROPERTIES TIMEOUT 90
+            ENVIRONMENT "${TAPAS_TEST_SOLVE_ENV}")
     endif()
 
     add_test(
@@ -503,13 +510,14 @@ if(BUILD_TESTING)
     endforeach()
 
     foreach(RETAIL_EXAMPLE IN ITEMS test_valid_exchange test_rejected_exchange test_invalid_transition
-            test_generate_valid_exchange test_generate_rejected_exchange test_generate_joint_inputs)
+            test_generate_valid_exchange test_generate_rejected_exchange test_generate_joint_inputs
+            test_generate_table_inputs)
         add_test(
             NAME "example_retail_${RETAIL_EXAMPLE}"
             COMMAND ${CMAKE_COMMAND} -E env
                 "TAPAS_BLAS_LIBRARY=$<TARGET_FILE:test_cblas>"
                 $<TARGET_FILE:tapas>
-                "${CMAKE_CURRENT_SOURCE_DIR}/examples/retail/${RETAIL_EXAMPLE}.tap"
+                "${CMAKE_CURRENT_SOURCE_DIR}/external/tau-bench-tapas/simplified/${RETAIL_EXAMPLE}.tap"
         )
         set_tests_properties("example_retail_${RETAIL_EXAMPLE}" PROPERTIES
             WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"

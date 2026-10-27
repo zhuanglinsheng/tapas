@@ -9,6 +9,11 @@ covers the currently implemented Rule syntax, Types, public IR, and evaluator
 API. See the [Language Reference](Syntax_en.md), [Standard Library](Stdlib_en.md),
 and [Type System](TypeSystem_en.md) for the surrounding language.
 
+
+For construction, whole-row membership, and solving with fixed table parameters,
+see [finite relation tables](#15-finite-relation-tables). For a business example,
+see [Retail Table modeling](../external/tau-bench-tapas/simplified/README_en.md#6-selecting-variants-and-generating-state-with-tables).
+
 ```tapas
 let docs_positive = rule (value: Int) {
     "value must be positive":
@@ -44,6 +49,8 @@ value must be below ten
 | `assert` | root built-in | Checks a Rule and raises a runtime error on failure |
 | `Rule` | value and Type | Immutable rule with a signature, IR, and capture environment |
 | `RuleInstance` | value and Type | Rule with bound arguments |
+| `[x, y] in table` | membership expression | Matches multiple fields against one complete relation row |
+| `rules::Table` | value and Type | Immutable relation with explicit column order and concrete data |
 | `rules` | standard package | Checks, inspects, constructs, and serializes Rule IR |
 | `evaluators` | standard package | Consumes Rule IR through custom interpreters |
 
@@ -355,6 +362,7 @@ change the IR.
 | `types::RuleTerm`, `term(Type)` | Broad or result-typed Term |
 | `Origin` | Source range |
 | `CheckResult`, `Violation`, `Diagnostic` | Check results |
+| `Table` | Finite scalar relation with whole-row membership |
 
 Except for core Types explicitly qualified with `types::`, these names use `rules::`. Common readers are:
 
@@ -374,7 +382,7 @@ RuleIR exposes `display_name`, `source`, `version`, `parameters`, `captures`,
 `term`, `rule`, `arguments`, and `description`.
 
 Base Term kinds are `Constant`, `Parameter`, `Capture`, `Intrinsic`, `Call`,
-`Construct`, `Convert`, `Extension`, `Not`, `And`, and `Or`. Tools should depend on these public
+`Construct`, `Convert`, `Extension`, `Not`, `And`, `Or`, and `In`. Tools should depend on these public
 fields rather than runtime pointers.
 
 ### 5.2 Dynamic construction and serialization
@@ -383,6 +391,8 @@ fields rather than runtime pointers.
 |---|---|
 | `parameter(name, type)` | Creates a Parameter |
 | `constant(value)` | Creates a Constant Term |
+| `table(columns, data)` | Builds a Table value with explicit column order |
+| `membership(value, domain)` | Creates a Bool In Term, including table membership |
 | `call(function, arguments)` | Creates a Call Term |
 | `conjunction(left, right)` | Creates an ordered, short-circuiting And Term |
 | `disjunction(left, right)` | Creates an ordered, short-circuiting Or Term |
@@ -711,3 +721,48 @@ New source graphs use TPIR7, with backward reading support for TPIR1–6. Source
 ## 14. Feasibility queries
 
 `solve::hold(Rule | RuleInstance)` now has an executable CP-SAT backend. It reads the current context at call time and returns a status with a checker-verified witness when feasible. Solve declares a default closed domain of ±10¹² for input Int parameters, configurable through `TAPAS_SOLVE_INT_MIN/MAX`. The domain is applied before presolve, including to bound Int arguments. Results use `scope: configured`: `unsat` means no solution in the configured domain, without changing the language Int type. See the [solve example](../examples/solve/README.md) for the interface, dependencies, supported subset, and runnable program.
+
+## 15. Finite relation tables
+
+### 15.1 Construction and column order
+
+`rules::table(columns, data)` constructs an immutable Table from an explicit column-name order and a dictionary of columns. The column list must be nonempty, have distinct names, and cover every dictionary key exactly once. Columns have equal lengths and each contains a single scalar Type: Int, Bool, or String. Column order does not depend on dictionary iteration. Enum cells are stored as String values.
+
+```tapas
+let RelationItemId = types::enum('A', 'B')
+let relation_products = rules::table(['item_id', 'price'], {
+    'price': [100, 200],
+    'item_id': ['A', 'B'],
+})
+let ProductRow = rule (item_id: RelationItemId, price: Int, products: rules::Table) {
+    [item_id, price] in products
+    price <= 150
+}
+assert(ProductRow('A', 100, relation_products))
+assert(rule { not ProductRow('A', 200, relation_products) })
+```
+
+### 15.2 Whole-row membership
+
+A List row uses `in` to match one complete table row by position: columns are conjoined within a row and rows are alternatives. This ordinary Bool condition supports `not`, `and`, `or`, `implies`, and Rule transformations. Membership has the same meaning outside Rules and in the checker. Incompatible candidate types or lengths return false; Int and Bool are distinct. Empty tables have no members; duplicate rows do not change membership. Dictionary membership still checks keys.
+
+Construction snapshots the data. The `columns` and `rows` fields return independent Lists, and `len` returns the row count. The first version provides the basic `rules::Table` Type. Solving requires a known table: capture it, pass it to a child Rule, or fix a table parameter with `restrict`. Solvers do not generate table contents. Unknown strings still require an explicit finite Enum; ordinary String parameters require concrete bindings. See the runnable [product relation example](../examples/solve/table.tap).
+
+### 15.3 Fixed tables and unknown row fields
+
+The three parameters have different roles: `products` supplies concrete query data, while `item_id` and `price` are row fields to solve. Column names do not create or bind variables. List position one matches column one, and position two matches column two. Fix the table while leaving the row fields unbound:
+
+```text
+let query = rules::restrict(ProductRow, 'products': relation_products)
+let answer = solve::hold(query)
+```
+
+The result is `sat`, with `item_id = 'A'` and `price = 100`; the third witness argument retains the fixed Table. Fully bound calls remain ordinary checks, such as `assert(ProductRow('A', 100, relation_products))`. An unbound Table parameter returns `unsupported`; the solver does not search table contents.
+
+`table::price` does not implicitly select a row. The `columns` and `rows` fields expose data snapshots. To select two independent products, declare two parameter groups and write a separate row membership condition for each. Names do not establish implicit column bindings.
+
+### 15.4 Solving, reflection, and persistence
+
+The solver compiles positive membership into a native allowed table and negative membership into a forbidden table, preserving full logic under `or`, `implies`, and Boolean equivalence. Rows are not first expanded into a disjunction. Keep complete candidate relations in the table and express availability, product compatibility, and budget as separate conditions so targeted failure generation remains possible.
+
+Table membership retains the In Term. Portable encodings containing Table constants use TPIR8 and retain reading support for TPIR1–7. Source Rule closure reconnection limitations are unchanged.

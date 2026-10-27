@@ -1,0 +1,159 @@
+/// test_generate_table_inputs.tap
+///
+/// 不固定目标规格，按 Table 关系生成成功和三类拒绝，并核对实际模拟结果。
+
+import generation.tap as generation
+import data.tap as data
+import model.tap as model
+import simulation.tap as simulation
+
+let experiments = [
+    {
+        'name': '联合选择有货规格和额度',
+        'rule': rules::restrict(generation::ExchangeInputs,
+            'payment_capacity': rules::range(0, 100), 'allowed': true),
+        'target': 'keyboard-clicky-plain',
+        'decision': '成功'
+    },
+    {
+        'name': '从目录选择无货规格',
+        'rule': rules::restrict(generation::ExchangeInputs,
+            'payment_capacity': 500, 'target_available': false,
+            'same_product': true, 'allowed': false),
+        'target': 'keyboard-clicky-rgb',
+        'decision': '拒绝'
+    },
+    {
+        'name': '从目录选择跨商品规格',
+        'rule': rules::restrict(generation::ExchangeInputs,
+            'payment_capacity': 100, 'target_available': true,
+            'same_product': false, 'allowed': false),
+        'target': 'thermostat-google-home',
+        'decision': '拒绝'
+    },
+    {
+        'name': '有货同商品但额度不足',
+        'rule': rules::restrict(generation::ExchangeInputs,
+            'payment_capacity': 99, 'target_available': true,
+            'same_product': true, 'allowed': false,
+            'target_item_id': rules::points(
+                types::String, 'keyboard-clicky-plain', 'keyboard-clicky-rgb')),
+        'target': 'keyboard-clicky-plain',
+        'decision': '拒绝'
+    },
+]
+
+function run_experiment(experiment: Dictionary)
+{
+    let answer = solve::hold(experiment::rule)
+
+    if (answer::status != 'sat') {
+        pprint(answer)
+    }
+
+    assert(rule { answer::status == 'sat' })
+    assert(answer::witness)
+
+    let chosen = arguments(answer::witness)
+
+    assert(rule {
+        chosen[0] == experiment::target
+        chosen[7] == experiment::decision
+    })
+
+    let generated = generation::decode(chosen)
+    let actual = simulation::exchange(generated::before.copy(), generated::parameters.copy())
+
+    assert(rule {
+        actual::output::decision == generated::output::decision
+        actual::output::charged_difference == generated::output::charged_difference
+        actual::after::status == generated::after::status
+        actual::after::item_id == generated::after::item_id
+        actual::after::payment_capacity == generated::after::payment_capacity
+    })
+
+    let checked = solve::hold(rules::restrict(model::ExchangeModel,
+        'previous_state': generated::before,
+        'action_parameters': generated::parameters,
+        'exchange_output': actual::output, 'next_state': actual::after))
+    assert(rule { checked::status == 'sat' })
+    print(experiment::name, '：', chosen[0], '；', chosen[7], '；实际转移：', checked::status)
+}
+
+for (let experiment in experiments) {
+    run_experiment(experiment)
+}
+
+let impossible = solve::hold(rules::restrict(generation::ExchangeInputs,
+    'payment_capacity': rules::range(0, 99), 'allowed': true))
+assert(rule { impossible::status == 'unsat' })
+
+// 拒绝不能通过伪造目录价格得到：价格关联始终是硬条件。
+let forged_price = solve::hold(rules::restrict(generation::ExchangeInputs,
+    'target_item_id': 'keyboard-clicky-plain', 'original_price': 0,
+    'target_price': 0, 'allowed': false))
+assert(rule { forged_price::status == 'unsat' })
+
+// 穷举小目录和额度边界，比较旧入口、关系入口、完整求解见证与独立模拟。
+function check_boundary(target: String, capacity: Int)
+{
+    let previous_state = simulation::initial_state(target)
+    previous_state['payment_capacity'] = capacity
+    let parameters = simulation::exchange_parameters(target)
+    let original_price = data::items[previous_state::item_id]::price
+    let target_price = data::items[target]::price
+    let original_check = rules::check(model::ExchangeAllowed(previous_state, parameters))
+    let relation_check = rules::check(model::ExchangeAllowedWithPrices(
+        previous_state, parameters, original_price, target_price))
+    assert(rule { original_check::passed == relation_check::passed })
+
+    let answer = solve::hold(rules::restrict(generation::ExchangeInputs,
+        'target_item_id': target, 'payment_capacity': capacity))
+    assert(rule { answer::status == 'sat' })
+    assert(answer::witness)
+
+    let predicted = generation::decode(arguments(answer::witness))
+    let actual = simulation::exchange(previous_state.copy(), parameters.copy())
+
+    assert(rule {
+        predicted::output::decision == actual::output::decision
+        predicted::output::charged_difference == actual::output::charged_difference
+        predicted::after::item_id == actual::after::item_id
+        predicted::after::status == actual::after::status
+        predicted::after::payment_capacity == actual::after::payment_capacity
+        relation_check::passed == (actual::output::decision == '成功')
+    })
+}
+
+for (let item_id in keys(data::items)) {
+    for (let capacity in [0, 99, 100, 499, 500]) {
+        check_boundary(item_id, capacity)
+    }
+}
+
+// 只对规格和额度声明先验；价格、库存、许可和后状态都是补全见证。
+let samples = solve::sample(rules::restrict(generation::ExchangeInputs, 'allowed': true), 4, {
+    'target_item_id': keys(data::items),
+    'payment_capacity': [0, 99, 100, 500],
+}, rng = random::generator(random::pcg32_xsh_rr, 42))
+assert(rule {
+    samples::status == 'complete'
+    len(samples::samples) == 4
+})
+
+function check_sample(sample: Dictionary)
+{
+    assert(generation::ExchangeInputs(sample))
+    assert(rule {
+        sample::target_item_id == 'keyboard-clicky-plain'
+        sample::payment_capacity >= 100
+        sample::decision == '成功'
+        sample::target_price == 12100
+    })
+}
+
+for (let sample in samples::samples) {
+    check_sample(sample)
+}
+
+print('retail tables: ok')

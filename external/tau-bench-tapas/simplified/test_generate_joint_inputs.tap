@@ -7,6 +7,7 @@
 
 import model.tap as model
 import simulation.tap as simulation
+import data.tap as data
 
 let initial_state = simulation::initial_state('keyboard-clicky-plain')
 let exchange_parameters = simulation::exchange_parameters('keyboard-clicky-plain')
@@ -19,6 +20,8 @@ let ExchangeInputs = rule (
         authenticated_user_id: Authentication,
         confirmed_target_id: Confirmation,
         allowed: Bool,
+        original_price: Int,
+        target_price: Int,
 ) {
     let previous_state = {
         'order_id': initial_state::order_id,
@@ -30,10 +33,18 @@ let ExchangeInputs = rule (
         'authenticated_user_id': authenticated_user_id,
         'confirmed_target_id': confirmed_target_id,
     }
+
     model::ExchangeInput(previous_state, exchange_parameters)
+
+    // 目录事实独立成立，拒绝分支不能通过伪造价格得到。
+    [previous_state::item_id, original_price] in data::price_table
+    [exchange_parameters::target_item_id, target_price] in data::price_table
+
     // allowed 是本次查询选择的行为分支，不替代模型中的任何业务判断。
-    ((allowed and model::ExchangeAllowed(previous_state, exchange_parameters)) or
-        (not allowed and not model::ExchangeAllowed(previous_state, exchange_parameters)))
+    ((allowed and model::ExchangeAllowedWithPrices(
+        previous_state, exchange_parameters, original_price, target_price)) or
+        (not allowed and not model::ExchangeAllowedWithPrices(
+            previous_state, exchange_parameters, original_price, target_price)))
 }
 
 let accepted = rules::restrict(ExchangeInputs,
@@ -44,31 +55,41 @@ let accepted = rules::restrict(ExchangeInputs,
 // 每组实验只改变限制；同一个模型关联认证、确认和额度。
 let experiments = [
     { 'name': '联合生成合法输入', 'rule': accepted },
-    { 'name': '认证确认正确，生成不足额度', 'rule': rules::restrict(ExchangeInputs,
-        'payment_capacity': rules::range(99, 100),
-        'authenticated_user_id': initial_state::user_id,
-        'confirmed_target_id': exchange_parameters::target_item_id,
-        'allowed': false,
-    ) },
-    { 'name': '认证额度正确，生成错误确认目标', 'rule': rules::restrict(ExchangeInputs,
-        'payment_capacity': 100,
-        'authenticated_user_id': initial_state::user_id,
-        'confirmed_target_id': rules::points(Confirmation,
-            'keyboard-clicky-plain', 'thermostat-google-home'),
-        'allowed': false,
-    ) },
-    { 'name': '确认额度正确，生成错误认证用户', 'rule': rules::restrict(ExchangeInputs,
-        'payment_capacity': 100,
-        'authenticated_user_id': rules::points(Authentication,
-            'yusuf_rossi_9620', 'another_user'),
-        'confirmed_target_id': exchange_parameters::target_item_id,
-        'allowed': false,
-    ) },
+    {
+        'name': '认证确认正确，生成不足额度',
+        'rule': rules::restrict(ExchangeInputs,
+            'payment_capacity': rules::range(99, 100),
+            'authenticated_user_id': initial_state::user_id,
+            'confirmed_target_id': exchange_parameters::target_item_id,
+            'allowed': false,
+        )
+    },
+    {
+        'name': '认证额度正确，生成错误确认目标',
+        'rule': rules::restrict(ExchangeInputs,
+            'payment_capacity': 100,
+            'authenticated_user_id': initial_state::user_id,
+            'confirmed_target_id': rules::points(Confirmation,
+                'keyboard-clicky-plain', 'thermostat-google-home'),
+            'allowed': false,
+        )
+    },
+    {
+        'name': '确认额度正确，生成错误认证用户',
+        'rule': rules::restrict(ExchangeInputs,
+            'payment_capacity': 100,
+            'authenticated_user_id': rules::points(Authentication,
+                'yusuf_rossi_9620', 'another_user'),
+            'confirmed_target_id': exchange_parameters::target_item_id,
+            'allowed': false,
+        )
+    },
 ]
 
 for (let experiment in experiments) {
     let generated = solve::hold(experiment::rule)
     print(experiment::name, '：', generated::status)
+
     if (generated::status == 'sat') {
         let values = arguments(generated::witness)
         print('支付额度：', values[0], '；认证用户：', values[1], '；确认目标：', values[2])
@@ -85,16 +106,20 @@ for (let experiment in experiments) {
         )
         let checked = solve::hold(transition_model)
         print('模拟结果：', exchange_result::output::decision, '；实际转移：', checked::status)
+
         if (len(checked::conflicts) > 0) {
             pprint(checked::conflicts)
         }
+
         if (checked::reason != '') {
             print(checked::reason)
         }
     }
+
     if (len(generated::conflicts) > 0) {
         pprint(generated::conflicts)
     }
+
     if (generated::reason != '') {
         print(generated::reason)
     }
@@ -104,9 +129,11 @@ for (let experiment in experiments) {
 let incompatible = rules::restrict(accepted, 'authenticated_user_id': 'another_user')
 let impossible = solve::hold(incompatible)
 print('错误身份仍要求允许换货：', impossible::status)
+
 if (len(impossible::conflicts) > 0) {
     pprint(impossible::conflicts)
 }
+
 if (impossible::reason != '') {
     print(impossible::reason)
 }

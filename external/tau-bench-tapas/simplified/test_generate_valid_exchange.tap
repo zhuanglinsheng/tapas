@@ -10,8 +10,12 @@ import simulation.tap as simulation
 let initial_state = simulation::initial_state('keyboard-clicky-plain')
 let exchange_parameters = simulation::exchange_parameters('keyboard-clicky-plain')
 
-// 只替换额度字段；业务条件复用模型，不在实验中重写价格或许可判断。
-let AcceptedCapacity = rule (payment_capacity: Int) {
+// 价格由 Table 补全，只将额度作为本次实验输入；业务条件复用模型，不在实验中重写价格或许可判断。
+let AcceptedCapacity = rule (
+        payment_capacity: Int,
+        original_price: Int,
+        target_price: Int,
+) {
     let previous_state = {
         'order_id': initial_state::order_id,
         'user_id': initial_state::user_id,
@@ -22,8 +26,10 @@ let AcceptedCapacity = rule (payment_capacity: Int) {
         'authenticated_user_id': initial_state::authenticated_user_id,
         'confirmed_target_id': initial_state::confirmed_target_id,
     }
+
     model::ExchangeInput(previous_state, exchange_parameters)
-    model::ExchangeAllowed(previous_state, exchange_parameters)
+    model::ExchangeAllowedWithPrices(previous_state, exchange_parameters,
+        original_price, target_price)
 }
 
 let input_model = rules::restrict(AcceptedCapacity,
@@ -47,16 +53,20 @@ if (generated::status == 'sat') {
     let checked = solve::hold(transition_model)
     print('模拟结果：', exchange_result::output::decision)
     print('实际转移：', checked::status)
+
     if (len(checked::conflicts) > 0) {
         pprint(checked::conflicts)
     }
+
     if (checked::reason != '') {
         print(checked::reason)
     }
 }
+
 if (len(generated::conflicts) > 0) {
     pprint(generated::conflicts)
 }
+
 if (generated::reason != '') {
     print(generated::reason)
 }
@@ -67,9 +77,11 @@ let insufficient_model = rules::restrict(AcceptedCapacity,
 )
 let impossible = solve::hold(insufficient_model)
 print('额度不超过 99 分且要求允许换货：', impossible::status)
+
 if (len(impossible::conflicts) > 0) {
     pprint(impossible::conflicts)
 }
+
 if (impossible::reason != '') {
     print(impossible::reason)
 }

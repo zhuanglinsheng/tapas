@@ -3,8 +3,8 @@ import json
 import sys
 from lowering import lower
 from presolve import presolve
-from cp_sat import compile_model, hold
-from model_ir import Unsupported
+from cp_sat import compile_model, hold, solution_values
+from model_ir import Unsupported, variable_indices
 from diagnostics import explain_unsat
 
 
@@ -19,16 +19,6 @@ def hold_with_binding_core(query, cp):
                   else query.integer_domain)
         variables.append(model.new_int_var(lo, hi, variable.name))
     encoder = Encoder(cp, model, variables)
-    def variable_indices(predicate):
-        if type(predicate) is bool:
-            return set()
-        if predicate.kind in ('and', 'or'):
-            result = set()
-            for child in predicate.args:
-                result.update(variable_indices(child))
-            return result
-        return {index for index, _ in predicate.args[0].coefficients}
-
     assumptions = []
     for constraint in query.constraints:
         if constraint.rule != 0:
@@ -59,12 +49,7 @@ def hold_with_binding_core(query, cp):
     solver.parameters.num_search_workers = 1
     status = solver.solve(model)
     if status in (cp.OPTIMAL, cp.FEASIBLE):
-        values = []
-        for variable, expression in zip(query.variables, variables):
-            value = int(solver.value(expression))
-            values.append(bool(value) if variable.kind == 'bool' else
-                          variable.members[value] if variable.kind == 'enum'
-                          else value)
+        values = solution_values(query, variables, solver) if not query.bound_instance else []
         return 'sat', 'configured', '', values, []
     if status == cp.INFEASIBLE:
         indices = solver.sufficient_assumptions_for_infeasibility()
@@ -133,7 +118,7 @@ def main():
             reason = reason[:970] + ' ... (diagnostic truncated)'
         lines = ['TAPAS_SOLVE_3', status, scope, reason, str(len(values))]
         for value in values:
-            lines.append('b' + str(int(value)) if type(value) is bool else 'i' + str(value) if type(value) is int else 's' + value.encode('utf-8').hex())
+            lines.append('t' if value is None else 'b' + str(int(value)) if type(value) is bool else 'i' + str(value) if type(value) is int else 's' + value.encode('utf-8').hex())
         lines.append(str(len(conflicts)))
         for conflict in conflicts:
             lines.extend([str(conflict['rule']), 's' + conflict['condition'].encode('utf-8').hex()])

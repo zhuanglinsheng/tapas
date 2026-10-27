@@ -290,6 +290,7 @@ include("${CMAKE_CURRENT_LIST_DIR}/logical_not.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/rule_not.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/rule_logic.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/rule_domains.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/rule_tables.cmake")
 
 foreach(instance_fixture IN ITEMS instance_of instance_of_import)
     foreach(mode IN ITEMS source bytecode)

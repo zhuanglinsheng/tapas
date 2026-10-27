@@ -1,0 +1,89 @@
+/// data.tap
+///
+/// 商品目录。
+///
+/// 保存各规格的所属商品、描述、库存可用性与价格；金额单位为分。
+/// items 供独立模拟器查表；关系表从同一目录构造，供 Rule 联合求解。
+
+let catalog = {
+    'keyboard-linear-rgb': {
+        'product_id': 'mechanical-keyboard',
+        'description': '线性轴、RGB 背光',
+        'available': true,
+        'price': 12000,
+    },
+    'keyboard-clicky-rgb': {
+        'product_id': 'mechanical-keyboard',
+        'description': '段落轴、RGB 背光',
+        'available': false,
+        'price': 12500,
+    },
+    'keyboard-clicky-plain': {
+        'product_id': 'mechanical-keyboard',
+        'description': '段落轴、无背光',
+        'available': true,
+        'price': 12100,
+    },
+    'thermostat-google-home': {
+        'product_id': 'smart-thermostat',
+        'description': '兼容 Google Home 的温控器',
+        'available': true,
+        'price': 12100,
+    },
+}
+
+let ItemId = types::enum(
+    'keyboard-linear-rgb', 'keyboard-clicky-rgb',
+    'keyboard-clicky-plain', 'thermostat-google-home',
+)
+let item_ids = keys(catalog)
+sort(item_ids)
+let product_ids = []
+let prices = []
+let availability = []
+let pair_originals = []
+let pair_replacements = []
+
+for (let item_id in item_ids) {
+    let item = catalog[item_id]
+    append(product_ids, item::product_id)
+    append(prices, item::price)
+    append(availability, item::available)
+
+    for (let target_id in item_ids) {
+        if (item::product_id == catalog[target_id]::product_id) {
+            append(pair_originals, item_id)
+            append(pair_replacements, target_id)
+        }
+    }
+}
+
+let item_table = rules::table(['item_id', 'product_id', 'price', 'available'], {
+    'item_id': item_ids,
+    'product_id': product_ids,
+    'price': prices,
+    'available': availability,
+})
+
+let item_domain = rules::table(['item_id'], {'item_id': item_ids})
+let price_table = rules::table(['item_id', 'price'], {
+    'item_id': item_ids, 'price': prices,
+})
+
+let availability_table = rules::table(['item_id', 'available'], {
+    'item_id': item_ids, 'available': availability,
+})
+
+let same_product_table = rules::table(['original_item_id', 'target_item_id'], {
+    'original_item_id': pair_originals, 'target_item_id': pair_replacements,
+})
+
+return {
+    'items': catalog,
+    'ItemId': ItemId,
+    'item_table': item_table,
+    'item_domain': item_domain,
+    'price_table': price_table,
+    'availability_table': availability_table,
+    'same_product_table': same_product_table,
+}

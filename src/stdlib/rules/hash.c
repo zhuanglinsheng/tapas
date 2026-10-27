@@ -6,6 +6,7 @@
  * @note Hashes are cache and comparison aids, not collision-free identities.
  */
 #include "hash.h"
+#include "table.h"
 #include "tapas/dsa/tstring.h"
 
 #include "tapas/objects/trule.h"
@@ -48,6 +49,27 @@ uint64_t trule_ir_semantic_hash(const trule_ir *ir) {
         long target = serial_term_index(ir, as_term(&term->payload));
         hash ^= (uint64_t)target + 1;
         hash *= 1099511628211ULL;
+      } else if (trules_table_is(&term->payload)) {
+        const trules_table *table = (trules_table *)term->payload.val.v_tcompo;
+        const tobj_vec *parts[] = {&table->columns, &table->cells};
+        for (unsigned p = 0; p < 2; p++) {
+          hash ^= parts[p]->len;
+          hash *= 1099511628211ULL;
+          for (uint_objs j = 0; j < parts[p]->len; j++) {
+            const tobj *value = &parts[p]->data[j];
+            hash ^= value->type;
+            hash *= 1099511628211ULL;
+            if (value->type == tcompo) {
+              const tstring *text = ((tstr *)value->val.v_tcompo)->data;
+              hash ^= tstring_len(text);
+              hash = hash_bytes(hash, tstring_cstr(text), tstring_len(text));
+            } else {
+              tstring *text = tobj_tostring_full(value);
+              hash = hash_bytes(hash, tstring_cstr(text), tstring_len(text));
+              tstring_free(text);
+            }
+          }
+        }
       } else {
         tstring *payload = tobj_tostring_full(&term->payload);
         hash = hash_bytes(hash, tstring_cstr(payload), tstring_len(payload));

@@ -49,10 +49,11 @@ typedef struct {
     int fields;
 } export_context;
 
-static void json_string(tstring *out, const char *text)
+static void json_string_bytes(tstring *out, const char *text, size_t length)
 {
     tstring_append_c(out, '"');
-    for (const unsigned char *p = (const unsigned char *)text; *p; p++) {
+    const unsigned char *bytes = (const unsigned char *)text;
+    for (const unsigned char *p = bytes; (size_t)(p - bytes) < length; p++) {
         if (*p == '"' || *p == '\\') {
             tstring_append_c(out, '\\');
             tstring_append_c(out, *p);
@@ -65,10 +66,17 @@ static void json_string(tstring *out, const char *text)
     tstring_append_c(out, '"');
 }
 
+static void json_string(tstring *out, const char *text)
+{
+    json_string_bytes(out, text, strlen(text));
+}
+
 static void export_type(export_context *ctx, const ttypeval *type)
 {
     const char *kind = type->kind == ttype_kind_fields ? "record" :
         type->kind == ttype_kind_enum ? "enum" :
+        type->kind == ttype_kind_named && type->named_identity &&
+            tstring_eq_cstr(type->named_identity, "rules::Table") ? "table" :
         ttypeval_equal(type, ttypeval_builtin(tbuiltintype_int)) ? "int" :
         ttypeval_equal(type, ttypeval_builtin(tbuiltintype_bool)) ? "bool" :
         ttypeval_equal(type, ttypeval_builtin(tbuiltintype_string)) ? "string" : "unsupported";
@@ -93,7 +101,8 @@ static void export_type(export_context *ctx, const ttypeval *type)
         for (uint_objs i = 0; i < type->enum_member_count; i++) {
             if (i)
                 tstring_append_c(ctx->out, ',');
-            json_string(ctx->out, tstring_cstr(type->enum_members[i]));
+            json_string_bytes(ctx->out, tstring_cstr(type->enum_members[i]),
+                tstring_len(type->enum_members[i]));
         }
         tstring_append_c(ctx->out, ']');
     }
@@ -116,7 +125,8 @@ static void export_value(export_context *ctx, const tobj *value);
 typedef enum {
 	solve_extension_unknown,
 	solve_extension_points,
-	solve_extension_range
+	solve_extension_range,
+	solve_extension_table
 } solve_extension_kind;
 
 /* Package objects expose their language-level nominal Type through the generic
@@ -137,6 +147,8 @@ static solve_extension_kind object_domain_kind(const tobj *value)
 			kind = solve_extension_points;
 		else if (identity && !strcmp(identity, "rules::RangeOf"))
 			kind = solve_extension_range;
+		else if (identity && !strcmp(identity, "rules::Table"))
+			kind = solve_extension_table;
 	}
 	tobj_try_clear(&reflected);
 	return kind;
@@ -183,8 +195,10 @@ static void export_value(export_context *ctx, const tobj *value)
         break;
     case tcompo:
         switch (tobj_compo_type(value)) {
-        case compo_tstr:
-            json_string(ctx->out, tstring_cstr(((tstr *)value->val.v_tcompo)->data));
+        case compo_tstr: {
+            const tstring *text = ((tstr *)value->val.v_tcompo)->data;
+            json_string_bytes(ctx->out, tstring_cstr(text), tstring_len(text));
+        }
             break;
         case compo_trule: {
             int index = register_rule(ctx, (trule *)value->val.v_tcompo);
@@ -217,7 +231,18 @@ static void export_value(export_context *ctx, const tobj *value)
             break;
         case compo_extension: {
             solve_extension_kind kind = object_domain_kind(value);
-            if (kind == solve_extension_range) {
+            if (kind == solve_extension_table) {
+                tobj columns, rows;
+                object_field(value, "columns", &columns);
+                object_field(value, "rows", &rows);
+                tstring_append(ctx->out, "{\"table\":{\"columns\":");
+                export_value(ctx, &columns);
+                tstring_append(ctx->out, ",\"rows\":");
+                export_value(ctx, &rows);
+                tstring_append(ctx->out, "}}");
+                tobj_try_clear(&columns);
+                tobj_try_clear(&rows);
+            } else if (kind == solve_extension_range) {
                 tobj start, end;
                 object_field(value, "start", &start);
                 object_field(value, "end", &end);
@@ -286,7 +311,8 @@ static void export_value(export_context *ctx, const tobj *value)
             for (uint32_t i = 0; i < tstdlib_rules_module.symbol_count; i++) {
                 const textension_symbol *symbol = &tstdlib_rules_module.symbols[i];
                 if (symbol->function == function->f &&
-                    (!strcmp(symbol->name, "range") || !strcmp(symbol->name, "points")))
+                    (!strcmp(symbol->name, "range") || !strcmp(symbol->name, "points") ||
+                     !strcmp(symbol->name, "table")))
                     name = symbol->name;
             }
             if (name)
@@ -506,6 +532,9 @@ static int decode_argument(const char *line, tobj *argument)
 void tsolve_worker_free(tsolve_worker *worker) { (void)worker; }
 #endif
 
+static void collect_fixed(trule *rule, trule *root, const tobj **fixed,
+    unsigned depth, unsigned *budget);
+
 static void hold_configured(tsolve_worker **worker, const tobj *input,
 			    tobj *result, long integer_min,
 			    long integer_max, long timeout_ms,
@@ -518,6 +547,11 @@ static void hold_configured(tsolve_worker **worker, const tobj *input,
 #else
     trule_instance *instance = tobj_compo_type(input) == compo_trule_instance ? (trule_instance *)input->val.v_tcompo : nullptr;
     trule *rule = instance ? (trule *)instance->rule.val.v_tcompo : (trule *)input->val.v_tcompo;
+    const tobj *fixed[UINT8_MAX] = {0};
+    if (!instance && rule->ir->parameters.len <= UINT8_MAX) {
+        unsigned budget = 4096;
+        collect_fixed(rule, rule, fixed, 0, &budget);
+    }
     export_context ctx = {.out = tstring_new_empty()}; register_rule(&ctx, rule);
     tstring_append_fmt(ctx.out,
         "{\"version\":3,\"integer_min\":%ld,\"integer_max\":%ld,"
@@ -531,7 +565,15 @@ static void hold_configured(tsolve_worker **worker, const tobj *input,
         }
         tstring_append_c(ctx.out, ']');
     } else tstring_append(ctx.out, "null");
-    tstring_append(ctx.out, ",\"rules\":[");
+    tstring_append(ctx.out, ",\"fixed_tables\":{");
+    unsigned fixed_count = 0;
+    for (uint_objs i = 0; !instance && i < rule->ir->parameters.len && i < UINT8_MAX; i++) {
+        if (!fixed[i] || object_domain_kind(fixed[i]) != solve_extension_table) continue;
+        if (fixed_count++) tstring_append_c(ctx.out, ',');
+        tstring_append_fmt(ctx.out, "\"%u\":", (unsigned)i);
+        export_value(&ctx, fixed[i]);
+    }
+    tstring_append(ctx.out, "},\"rules\":[");
     for (unsigned i = 0; i < ctx.count; i++) {
         if (i) tstring_append_c(ctx.out, ','); export_terms(&ctx, ctx.rules[i]);
         if (tstring_len(ctx.out) > 16 * 1024 * 1024) break;
@@ -583,7 +625,13 @@ static void hold_configured(tsolve_worker **worker, const tobj *input,
     tobj arguments[UINT8_MAX];
     for (unsigned i = 0; i < UINT8_MAX; i++) tobj_set_nil(&arguments[i]);
     for (long i = 0; valid && i < count; i++) {
-        valid = read_line(&response, line, sizeof(line)) && decode_argument(line, &arguments[i]);
+        valid = read_line(&response, line, sizeof(line));
+        if (valid && !strcmp(line, "t")) {
+            valid = fixed[i] && object_domain_kind(fixed[i]) == solve_extension_table;
+            if (valid) tobj_copy(&arguments[i], fixed[i]);
+        } else if (valid) {
+            valid = decode_argument(line, &arguments[i]);
+        }
         if (valid && arguments[i].type == tint) valid = arguments[i].val.v_tint >= integer_min && arguments[i].val.v_tint <= integer_max;
         if (valid) valid = ttypeval_matches(&arguments[i], ((trule_term *)rule->ir->parameters.data[i].val.v_tcompo)->type);
     }
@@ -897,7 +945,7 @@ static void create_sample(tobj *result)
 			.type = "Function[...] -> "
 				"solve::SampleResult",
 			.minimum_parameters = 3,
-			.maximum_parameters = 12
+			.maximum_parameters = 18
 		}
 	};
 	tcppsessf *sample = tcppsessf_new_descriptor(&descriptor);
@@ -941,7 +989,10 @@ static const textension_symbol symbols[] = {
 		"time_limit: Float | Nil = nil, core_budget_factor: Float = 1.0, "
 		"fairness_interval: Int = 4, "
 		"generalization: String = 'online_mass_core', "
-		"scheduler: String = 'mass_fair', trace: Bool = false) -> "
+		"scheduler: String = 'mass_fair', trace: Bool = false, "
+		"cache_limit: Int = 0, cache_policy: String = 'mass', "
+		"exploration: String = 'budget', core_call_limit: Int | Nil = nil, "
+		"discovery_horizon: Int = 0, events: Bool = false) -> "
 		"solve::SampleResult",
 	.kind = textension_value,
 	.value_factory = create_sample
@@ -951,7 +1002,7 @@ static const textension_symbol symbols[] = {
 	.type = "{status: String, reason: String, samples: List[Dictionary], "
 		"candidates: Int, solver_calls: Int, core_calls: Int, "
 		"cache_hits: Int, cache_regions: Int, trace: List[Dictionary], "
-		"elapsed: Float}",
+		"elapsed: Float, events: List[Dictionary], timings: Dictionary}",
 	.detail = "Finite-domain sampling results and execution statistics",
 	.kind = textension_type,
 	.value_factory = create_sample_result

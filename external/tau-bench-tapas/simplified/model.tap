@@ -15,10 +15,15 @@ let StateSpace = rule (state: defs::State) {
         state::user_id != ''
         state::payment_method_id != ''
     }
-    '订单商品必须属于示例目录': state::item_id in data::items
-    '可支付额度不能为负': state::payment_capacity >= 0
+
+    '订单商品必须属于示例目录':
+        [state::item_id] in data::item_domain
+
+    '可支付额度不能为负':
+        state::payment_capacity >= 0
+
     '确认只能指向已知规格或为空':
-        state::confirmed_target_id == '' or state::confirmed_target_id in data::items
+        state::confirmed_target_id == '' or [state::confirmed_target_id] in data::item_domain
 }
 
 // I：本示例从已送达的原键盘订单开始，认证、确认与额度可变化。
@@ -32,7 +37,11 @@ let InitialState = rule (state: defs::State) {
 let Exchange = rule (action_parameters: defs::ExchangeParameters) {
     action_parameters::order_id != ''
     action_parameters::payment_method_id != ''
-    action_parameters::target_item_id in data::items
+    [action_parameters::target_item_id] in data::item_domain
+}
+
+let SufficientCapacity = rule (capacity: Int, original_price: Int, target_price: Int) {
+    capacity >= target_price - original_price
 }
 
 // Allowed 不是调用前过滤器；不满足它的请求也要交给实现，测试实际拒绝。
@@ -40,40 +49,65 @@ let ExchangeAllowed = rule (
         previous_state: defs::State,
         action_parameters: defs::ExchangeParameters,
 ) {
-    let original_item = data::items[previous_state::item_id]
-    let replacement_item = data::items[action_parameters::target_item_id]
     '必须认证为订单所属用户':
         previous_state::authenticated_user_id == previous_state::user_id
+
     '确认必须关联这次换货的目标规格':
         previous_state::confirmed_target_id == action_parameters::target_item_id
+
     '订单与支付方式必须匹配': {
         previous_state::order_id == action_parameters::order_id
         previous_state::payment_method_id == action_parameters::payment_method_id
     }
-    '只有已送达订单可以换货': previous_state::status == '已送达'
+
+    '只有已送达订单可以换货':
+        previous_state::status == '已送达'
+
     '只能换成同一商品的其他规格': {
-        original_item::product_id == replacement_item::product_id
+        [previous_state::item_id, action_parameters::target_item_id] in data::same_product_table
         previous_state::item_id != action_parameters::target_item_id
     }
-    '目标规格必须有货': replacement_item::available
+
+    '目标规格必须有货':
+        [action_parameters::target_item_id, true] in data::availability_table
+
     '可支付额度必须足以支付差价':
-        previous_state::payment_capacity >= replacement_item::price - original_item::price
+        SufficientCapacity(previous_state::payment_capacity,
+            data::items[previous_state::item_id]::price,
+            data::items[action_parameters::target_item_id]::price)
 }
 
-// C(previous_state, action_parameters, exchange_output, next_state)：只判断实际转移，不生成结果。
-let ExchangeTransition = rule (
+// 保留所有许可条件，只把已知规格查价替换为显式价格见证。
+// Table 关联的是完整目录，不提前过滤无货、跨商品或原规格请求。
+let ExchangePrerequisites = rules::drop(ExchangeAllowed, '可支付额度必须足以支付差价')
+
+let ExchangeAllowedWithPrices = rule (
+        previous_state: defs::State,
+        action_parameters: defs::ExchangeParameters,
+        original_price: Int,
+        target_price: Int,
+) {
+    '原规格与价格必须来自同一目录行':
+        [previous_state::item_id, original_price] in data::price_table
+
+    '目标规格与价格必须来自同一目录行':
+        [action_parameters::target_item_id, target_price] in data::price_table
+    // 将派生 Rule 作为布尔条件组合，兼容后续的 drop / violate 变换。
+    ExchangePrerequisites(previous_state, action_parameters) and true
+
+    '可支付额度必须足以支付差价':
+        SufficientCapacity(previous_state::payment_capacity, original_price, target_price)
+}
+
+// 成功、拒绝和 Frame 关系只维护一份；两种查价入口共用此 Rule。
+let ExchangeEffects = rule (
         previous_state: defs::State,
         action_parameters: defs::ExchangeParameters,
         exchange_output: defs::ExchangeOutput,
         next_state: defs::State,
+        exchange_allowed: Bool,
+        price_difference: Int,
 ) {
-    // 绑定许可规则实例，由两个互补前件分别判断是否成立。
-    let exchange_allowed = ExchangeAllowed(previous_state, action_parameters)
-    let price_difference: Int = (
-        data::items[action_parameters::target_item_id]::price -
-        data::items[previous_state::item_id]::price
-    )
-
     '允许换货时必须正确更新订单与额度':
         exchange_allowed implies {
             exchange_output::decision == '成功'
@@ -100,6 +134,38 @@ let ExchangeTransition = rule (
         next_state::authenticated_user_id == previous_state::authenticated_user_id
         next_state::confirmed_target_id == previous_state::confirmed_target_id
     }
+}
+
+// 保持原单步检查接口；规格已知时直接读取模拟器共享的目录。
+let ExchangeTransition = rule (
+        previous_state: defs::State,
+        action_parameters: defs::ExchangeParameters,
+        exchange_output: defs::ExchangeOutput,
+        next_state: defs::State,
+) {
+    let allowed = ExchangeAllowed(previous_state, action_parameters)
+    let difference = (data::items[action_parameters::target_item_id]::price -
+        data::items[previous_state::item_id]::price)
+    ExchangeEffects(previous_state, action_parameters, exchange_output, next_state,
+        allowed and true, difference)
+}
+
+// 生成入口：价格由 Table 约束，不在 Rule 内用未知 ID 索引字典。
+let ExchangeTransitionWithPrices = rule (
+        previous_state: defs::State,
+        action_parameters: defs::ExchangeParameters,
+        exchange_output: defs::ExchangeOutput,
+        next_state: defs::State,
+        original_price: Int,
+        target_price: Int,
+) {
+    // 价格关联必须在否定许可条件之外成立，防止用伪造价格解释拒绝。
+    [previous_state::item_id, original_price] in data::price_table
+    [action_parameters::target_item_id, target_price] in data::price_table
+    let allowed = ExchangeAllowedWithPrices(previous_state, action_parameters,
+        original_price, target_price)
+    ExchangeEffects(previous_state, action_parameters, exchange_output, next_state,
+        allowed and true, target_price - original_price)
 }
 
 // 在合法前状态与操作参数上检查一步结果；输入空间由执行器在调用前验证。
@@ -135,13 +201,31 @@ let ExchangeModel = rule (
     ExchangeResult(previous_state, action_parameters, exchange_output, next_state)
 }
 
+let ExchangeModelWithPrices = rule (
+        previous_state: defs::State,
+        action_parameters: defs::ExchangeParameters,
+        exchange_output: defs::ExchangeOutput,
+        next_state: defs::State,
+        original_price: Int,
+        target_price: Int,
+) {
+    ExchangeInput(previous_state, action_parameters)
+    ExchangeTransitionWithPrices(previous_state, action_parameters,
+        exchange_output, next_state, original_price, target_price)
+    StateSpace(next_state)
+}
+
 return {
     'StateSpace': StateSpace,
     'InitialState': InitialState,
     'Exchange': Exchange,
     'ExchangeAllowed': ExchangeAllowed,
+    'ExchangeAllowedWithPrices': ExchangeAllowedWithPrices,
+    'ExchangeEffects': ExchangeEffects,
     'ExchangeTransition': ExchangeTransition,
+    'ExchangeTransitionWithPrices': ExchangeTransitionWithPrices,
     'ExchangeResult': ExchangeResult,
     'ExchangeInput': ExchangeInput,
     'ExchangeModel': ExchangeModel,
+    'ExchangeModelWithPrices': ExchangeModelWithPrices,
 }

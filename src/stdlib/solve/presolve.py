@@ -89,6 +89,8 @@ def expression_bounds(expression, domains, omit=None):
 def truth(predicate, domains):
     if type(predicate) is bool:
         return predicate
+    if predicate.kind in ('table', 'not_table'):
+        return None
     expression = predicate.args[0]
     lo, hi = expression_bounds(expression, domains)
     if predicate.kind == '<=':
@@ -105,6 +107,8 @@ def simplify(predicate, domains):
         return predicate
     if predicate.kind in ('and', 'or'):
         return junction(predicate.kind, [simplify(v, domains) for v in predicate.args])
+    if predicate.kind in ('table', 'not_table'):
+        return predicate
     expression = predicate.args[0]
     constant = expression.constant
     terms = []
@@ -185,6 +189,8 @@ class Propagator:
         known = truth(predicate, domains)
         if known is not None:
             return domains if known else None
+        if predicate.kind in ('table', 'not_table'):
+            return domains  # Preserve the relation for native backend propagation.
         expression = predicate.args[0]
         if predicate.kind == '<=':
             return self.inequality(expression, domains)

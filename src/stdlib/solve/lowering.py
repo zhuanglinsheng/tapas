@@ -1,7 +1,7 @@
 """Captured RuleIR to canonical, solver-independent linear/Boolean IR."""
 import operator
 from dataclasses import dataclass
-from model_ir import Unsupported, Linear, Formula, Variable, Query, SourceConstraint, linear, atom, negate, junction
+from model_ir import Unsupported, Linear, Formula, Variable, Query, SourceConstraint, linear, atom, negate, junction, table
 
 
 class Record(dict):
@@ -40,6 +40,27 @@ class Domain:
     values: object
 
 
+@dataclass(frozen=True)
+class Table:
+    columns: tuple
+    rows: tuple
+
+    def __post_init__(self):
+        if not self.columns or any(type(c) is not str for c in self.columns) or len(set(self.columns)) != len(self.columns):
+            raise ValueError('Table requires distinct String column names')
+        if any(len(row) != len(self.columns) or any(type(v) not in (int, bool, str) for v in row) for row in self.rows):
+            raise ValueError('Table requires scalar rows of the declared width')
+        if self.rows and any(type(row[c]) is not type(self.rows[0][c]) for row in self.rows for c in range(len(self.columns))):
+            raise ValueError('Table columns must have a single scalar Type')
+
+    def __getitem__(self, name):
+        if name == 'columns':
+            return list(self.columns)
+        if name == 'rows':
+            return [list(row) for row in self.rows]
+        raise KeyError(name)
+
+
 class RuleLowerer:
     def __init__(self, request):
         self.request = request
@@ -63,6 +84,9 @@ class RuleLowerer:
             return Domain('range', value['range'])
         if 'points' in value:
             return Domain('points', [self.decode(v) for v in value['points']])
+        if 'table' in value:
+            data = value['table']
+            return Table(tuple(self.decode(data['columns'])), tuple(tuple(row) for row in self.decode(data['rows'])))
         if 'list' in value:
             return [self.decode(v) for v in value['list']]
         if 'dict' in value:
@@ -108,6 +132,14 @@ class RuleLowerer:
         raise Unsupported('integer arithmetic requires Int operands')
 
     def compare(self, op, left, right):
+        if isinstance(left, Table) or isinstance(right, Table):
+            if op not in ('==', '!='):
+                raise Unsupported('ordered Table comparison')
+            equal = (isinstance(left, Table) and isinstance(right, Table) and
+                     left.columns == right.columns and len(left.rows) == len(right.rows) and
+                     all(type(a) is type(b) and a == b for row_a, row_b in zip(left.rows, right.rows)
+                         for a, b in zip(row_a, row_b)))
+            return equal if op == '==' else not equal
         if isinstance(left, Record) or isinstance(right, Record):
             if op not in ('==', '!='):
                 raise Unsupported('ordered record comparison')
@@ -169,6 +201,8 @@ class RuleLowerer:
         return result if type(result) is bool else Symbol(result, 'bool')
 
     def membership(self, value, domain):
+        if isinstance(domain, Table):
+            return self.table_membership(value, domain)
         if isinstance(domain, Domain):
             if domain.kind == 'range':
                 if not (type(value) is int or isinstance(value, Symbol) and value.kind == 'int'):
@@ -184,10 +218,64 @@ class RuleLowerer:
             raise Unsupported('unsupported membership domain')
         return self.logic([self.compare('==', value, point) for point in points], False)
 
+    def table_membership(self, value, domain):
+        if not isinstance(value, list) or len(value) != len(domain.columns) or not domain.rows:
+            return False
+        expressions = []
+        enum_codes = []
+        for column, candidate in enumerate(value):
+            kind = 'int' if type(domain.rows[0][column]) is int else 'bool' if type(domain.rows[0][column]) is bool else 'enum'
+            if isinstance(candidate, Symbol):
+                if candidate.kind != kind:
+                    return False
+                if kind == 'bool':
+                    expression = candidate.expr
+                else:
+                    expression = candidate.expr
+            else:
+                if type(candidate) is not type(domain.rows[0][column]):
+                    return False
+                expression = linear(0 if kind == 'enum' else int(candidate))
+            expressions.append(expression)
+            enum_codes.append({member: index for index, member in enumerate(candidate.members)}
+                              if isinstance(candidate, Symbol) and candidate.kind == 'enum' else None)
+        rows = []
+        for row in domain.rows:
+            encoded = []
+            for candidate, cell, codes in zip(value, row, enum_codes):
+                if codes is not None:
+                    if cell not in codes:
+                        break
+                    encoded.append(codes[cell])
+                elif type(candidate) is str:
+                    if cell != candidate:
+                        break
+                    encoded.append(0)
+                else:
+                    encoded.append(int(cell))
+            else:
+                rows.append(tuple(encoded))
+        predicate = table(expressions, rows)
+        return predicate if type(predicate) is bool else Symbol(predicate, 'bool')
+
     def call(self, target, args):
         if isinstance(target, RuleRef):
             return Applied(target.index, args)
         if isinstance(target, Native):
+            if target.name == 'rules::table' and len(args) == 2:
+                columns, data = args
+                if isinstance(columns, list) and any(isinstance(name, Symbol) for name in columns):
+                    raise Unsupported('Table column names must be fixed')
+                if not isinstance(columns, list) or not isinstance(data, Record) or len(columns) != len(data):
+                    raise ValueError('Table columns must name every data column')
+                values = [data.get(name) for name in columns if type(name) is str]
+                if len(values) != len(columns) or any(not isinstance(v, list) for v in values) or not values:
+                    raise ValueError('Table requires named List data columns')
+                if len({len(v) for v in values}) != 1:
+                    raise ValueError('Table column lengths must match')
+                if any(isinstance(cell, Symbol) for column in values for cell in column):
+                    raise Unsupported('Table contents must be fixed; match unknown values with in')
+                return Table(tuple(columns), tuple(zip(*values)))
             if target.name == 'rules::range' and len(args) == 2 and all(type(a) is int for a in args):
                 if args[0] > args[1]:
                     raise Unsupported('reversed range would raise in the checker')
@@ -202,6 +290,8 @@ class RuleLowerer:
 
     @staticmethod
     def matches(value, typ):
+        if typ['kind'] == 'table':
+            return isinstance(value, Table)
         if isinstance(value, Symbol):
             if value.kind == 'enum' and typ['kind'] == 'string':
                 return True
@@ -225,7 +315,7 @@ class RuleLowerer:
             raise Unsupported('nested Rule argument count mismatch')
         for parameter, value in zip(rule['parameters'], args):
             typ = rule['terms'][str(parameter)]['type']
-            if typ['kind'] not in ('int', 'bool', 'string', 'enum', 'record'):
+            if typ['kind'] not in ('int', 'bool', 'string', 'enum', 'record', 'table'):
                 raise Unsupported('parameter Type is not supported by the first compiler')
             if not self.matches(value, typ):
                 raise Unsupported('argument Type is not guaranteed to match the Rule signature')
@@ -284,8 +374,23 @@ class RuleLowerer:
             raise ValueError('invalid configured integer domain')
         root = self.rules[0]
         bound_args = self.request['bindings']
-        args = ([self.decode(a) for a in bound_args] if bound_args is not None else
-                [self.variable(root['terms'][str(p)]['type'], parameter_name(root, p, i)) for i, p in enumerate(root['parameters'])])
+        outputs = []
+        if bound_args is not None:
+            args = [self.decode(a) for a in bound_args]
+        else:
+            args = []
+            fixed_tables = self.request.get('fixed_tables', {})
+            for i, p in enumerate(root['parameters']):
+                typ = root['terms'][str(p)]['type']
+                if str(i) in fixed_tables:
+                    value = self.decode(fixed_tables[str(i)])
+                    if typ['kind'] != 'table' or not isinstance(value, Table):
+                        raise ValueError('invalid fixed Table parameter')
+                    args.append(value)
+                    outputs.append(None)
+                else:
+                    outputs.append(len(self.variables))
+                    args.append(self.variable(typ, parameter_name(root, p, i)))
         predicate = self.literal(self.rule(0, args))
         issue = ''
         def integer_fields(value, typ, name):
@@ -308,7 +413,7 @@ class RuleLowerer:
                 if issue:
                     break
         bindings = tuple((parameter_name(root, p, i), args[i]) for i, p in enumerate(root['parameters'])) if bound_args is not None else ()
-        return Query(tuple(self.variables), predicate, bound_args is not None, (lo, hi), tuple(self.constraints), issue, bindings)
+        return Query(tuple(self.variables), predicate, bound_args is not None, (lo, hi), tuple(self.constraints), issue, bindings, tuple(outputs))
 
 
 

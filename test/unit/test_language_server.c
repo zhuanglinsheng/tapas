@@ -72,6 +72,15 @@ static void test_presentation_categories(void)
 	assert(strstr(tstring_cstr(description),
 		"discovery_horizon: Int = 0, events: Bool = false)"));
 	tstring_free(description);
+	description = tlsp_present_standard(&test_standards,
+		tstandard_symbol_find(&test_standards, "rules", "Table"));
+	assert(strstr(tstring_cstr(description), "Type rules::Table"));
+	tstring_free(description);
+	description = tlsp_present_standard(&test_standards,
+		tstandard_symbol_find(&test_standards, "rules", "table"));
+	assert(strstr(tstring_cstr(description), "Function rules::table"));
+	assert(strstr(tstring_cstr(description), "List[String]"));
+	tstring_free(description);
     tfrontend_free(&f);
 }
 
