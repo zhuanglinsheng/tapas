@@ -8,6 +8,7 @@ function longest_common_subsequence(left: String, right: String) -> String
 {
     let rows = left.len() + 1
     let columns = right.len() + 1
+
     // lengths[i, j] stores the best length for both prefixes ending at i, j.
     let lengths: RealArray = array(rows, columns, 0)
 
@@ -25,8 +26,10 @@ function longest_common_subsequence(left: String, right: String) -> String
 
     let i = left.len()
     let j = right.len()
+
     // Backtracking discovers characters from the end, so reverse once later.
     let reversed: List[String] = []
+
     while (i > 0 and j > 0) {
         if (left[i - 1] == right[j - 1]) {
             reversed.append(left[i - 1])
@@ -40,9 +43,11 @@ function longest_common_subsequence(left: String, right: String) -> String
     }
 
     let ordered: List[String] = []
+
     for (let index in iter(reversed.len() - 1, -1, -1)) {
         ordered.append(reversed[index])
     }
+
     return strings::join(ordered, '')
 }
 

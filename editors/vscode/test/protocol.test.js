@@ -40,6 +40,28 @@ async function main() {
     'function expanded(\n        value: Int,\n) -> Int {\n    return value\n}\n');
   let resolveExit;
   const parameterCases = [
+    ["let Check = rule { 'positive': true }\n",
+      "let Check = rule {\n    'positive':\n        true\n}\n"],
+    ['\n'.repeat(65536) + 'let value = 1\n',
+      '\n'.repeat(65536) + 'let value = 1\n'],
+    [
+      "let Check = rule (n: Int) {\n    'positive': n > 0\n    'bounded': {\n        n < 10\n    }\n}\n",
+      "let Check = rule (n: Int) {\n    'positive':\n        n > 0\n\n    'bounded': {\n        n < 10\n    }\n}\n",
+    ],
+    [
+      "let row = {'price': 100, 'available': true}\r\n" +
+      "let Check = rule {\r\n    'positive': true\r\n    'bounded': false\r\n}\r\n",
+      "let row = {'price': 100, 'available': true}\r\n" +
+      "let Check = rule {\r\n    'positive':\r\n        true\r\n\r\n    'bounded':\r\n        false\r\n}\r\n",
+    ],
+    [
+      "let Check = rule {\n    let row = {'price': 100}\n" +
+      "    'positive': row::price > 0\n    // Explain the next condition.\n" +
+      "    'bounded': // Keep this comment with its description.\n        row::price < 200\n}\n",
+      "let Check = rule {\n    let row = {'price': 100}\n\n" +
+      "    'positive':\n        row::price > 0\n    // Explain the next condition.\n" +
+      "    'bounded': // Keep this comment with its description.\n        row::price < 200\n}\n",
+    ],
     [
       'let Check = rule (x: Int) {\n    Positive(x) implies x > 0\n}\n',
       'let Check = rule (x: Int) {\n    (Positive(x)) implies {\n        x > 0\n    }\n}\n',
@@ -464,7 +486,7 @@ async function main() {
   assert.ok(!anonymousHover.contents.value.includes('status: String'));
   assert.ok(!anonymousHover.contents.value.includes(': State'));
   const retailCatalogSource = fs.readFileSync(path.resolve(
-    __dirname, '../../../examples/retail/data.tap'), 'utf8');
+    __dirname, '../../../external/tau-bench-tapas/simplified/data.tap'), 'utf8');
   for (const marker of ['let catal', "'items': catal"]) {
     const hover = await memberRequest(retailCatalogSource, marker, 'hover');
     assert.strictEqual(hover.contents.value, '```tapas\nlet catalog: Dictionary\n```');
@@ -551,7 +573,7 @@ async function main() {
     'test_generate_valid_exchange', 'test_generate_rejected_exchange', 'test_generate_joint_inputs',
     'rule_implies', 'rule_instance_implies', 'rule_not', 'rule_logic']) {
     const file = path.resolve(__dirname, name.startsWith('rule_')
-      ? '../../../test/language_rules/regression' : '../../../examples/retail', `${name}.tap`);
+      ? '../../../test/language_rules/regression' : '../../../external/tau-bench-tapas/simplified', `${name}.tap`);
     const uri = pathToFileURL(file).toString();
     const received = new Promise((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error(`No diagnostics for ${name}`)), 5000);

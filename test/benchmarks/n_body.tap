@@ -15,8 +15,10 @@ let Body = types::make_type(
 function advance(bodies, dt)
 {
     let count = len(bodies)
+
     for (let i in 0 to count) {
         let bi = bodies[i]
+
         for (let j in i + 1 to count) {
             let bj = bodies[j]
             let dx = bi::x - bj::x
@@ -34,6 +36,7 @@ function advance(bodies, dt)
             bj['vz'] = bj::vz + dz * mi
         }
     }
+
     for (let i in 0 to count) {
         let b = bodies[i]
         b['x'] = b::x + dt * b::vx
@@ -46,9 +49,11 @@ function energy(bodies)
 {
     var e = 0.0
     let count = len(bodies)
+
     for (let i in 0 to count) {
         let bi = bodies[i]
         e = e + 0.5 * bi::mass * (bi::vx * bi::vx + bi::vy * bi::vy + bi::vz * bi::vz)
+
         for (let j in i + 1 to count) {
             let bj = bodies[j]
             let dx = bi::x - bj::x
@@ -57,6 +62,7 @@ function energy(bodies)
             e = e - bi::mass * bj::mass / math::sqrt(dx * dx + dy * dy + dz * dz)
         }
     }
+
     return e + 0.0
 }
 
@@ -65,11 +71,13 @@ function offset_momentum(bodies)
     var px = 0.0
     var py = 0.0
     var pz = 0.0
+
     for (let b in bodies) {
         px = px + b::vx * b::mass
         py = py + b::vy * b::mass
         pz = pz + b::vz * b::mass
     }
+
     let sun = bodies[0]
     sun['vx'] = (0.0 - px) / solar_mass
     sun['vy'] = (0.0 - py) / solar_mass
@@ -131,9 +139,11 @@ let steps = 5000
 
 offset_momentum(bodies)
 let started = clock_ns()
+
 for (let step in 0 to steps) {
     advance(bodies, 0.01)
 }
+
 let result = int((energy(bodies) + 200.0) * 1000000000.0)
 let elapsed = clock_ns() - started
 

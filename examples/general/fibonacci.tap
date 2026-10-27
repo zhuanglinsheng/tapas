@@ -9,6 +9,7 @@ function fibonacci_recursive(n: Int) -> Int
     if (n < 2) {
         return n
     }
+
     return this(n - 1) + this(n - 2)
 }
 
@@ -20,11 +21,13 @@ function fibonacci_sequence(count: Int) -> List[Int]
 
     for (let i in 0 to count) {
         sequence.append(previous)
+
         // Update both consecutive values only after saving the emitted term.
         let next = previous + current
         previous = current
         current = next
     }
+
     return sequence.copy()
 }
 

@@ -6,6 +6,7 @@ function field_step(left, right, output)
     output['mul'] = left::x * right::y
     output['div'] = left::x / right::y
     let total = left::x + right::y
+
     return total + 0
 }
 
@@ -13,32 +14,47 @@ let left = {'x': 12}
 let right = {'y': 3}
 let output = {'add': [99]}
 var observed = 0
+
 for (let iteration in 0 to 4) {
     observed = field_step(left, right, output)
 }
+
 assert(rule { observed == 15 })
 assert(rule { output::sub == 9 and output::mul == 36 and output::div == 4 })
-for (let index in 0 to 300) { output[index] = index }
+
+for (let index in 0 to 300) {
+    output[index] = index
+}
+
 delete(output, 'add')
 let after_resize = field_step(left, right, output)
+
 assert(rule { after_resize == 15 and output::add == 15 })
 left['x'] = 7.5
 right['y'] = 2
 let mixed = field_step(left, right, output)
+
 assert(rule { mixed == 9.5 and output::sub == 5.5 and output::div == 3.75 })
-for (let index in 0 to 300) { left[index] = index }
+
+for (let index in 0 to 300) {
+    left[index] = index
+}
+
 delete(left, 'x')
 left['x'] = 7.5
 let resized_source = field_step(left, right, output)
+
 assert(rule { resized_source == 9.5 and output::mul == 15.0 })
 
 var captured_left = {'x': 5}
 var captured_output = {'value': 0}
+
 function captured_fields(right, output)
 {
     output['value'] = captured_left::x + right::y
     captured_output['value'] = captured_left::x + right::y
 }
+
 captured_fields(right, captured_output)
 captured_fields(right, captured_output)
 assert(rule { captured_output::value == 7 })
@@ -47,6 +63,7 @@ function update_alias(data)
 {
     data['x'] = data::x - data::y
 }
+
 let alias = {'x': 8, 'y': 3}
 update_alias(alias)
 update_alias(alias)
@@ -55,17 +72,24 @@ assert(rule { alias::x == 2 })
 function add_fields(first, second, destination)
 {
     destination['value'] = first::value + second::value
+
     return destination::value
 }
+
 let first = {'value': 1}
 let second = {'value': 2}
 let destination = {'value': 0}
 var scalar_sum = 0
-for (let iteration in 0 to 3) { scalar_sum = add_fields(first, second, destination) }
+
+for (let iteration in 0 to 3) {
+    scalar_sum = add_fields(first, second, destination)
+}
+
 assert(rule { scalar_sum == 3 })
 first['value'] = array(1, 1, 2)
 second['value'] = array(1, 1, 3)
 let array_sum = add_fields(first, second, destination)
+
 assert(rule { array_sum[0, 0] == 5 })
 first['value'] = 4
 second['value'] = 5
@@ -78,12 +102,26 @@ assert(rule { scalar_sum == 9 })
 function compare_character(text, other)
 {
     var score = 0
-    if (text[0] == other) { score = score + 1 }
-    if (text[0] != other) { score = score + 2 }
-    if (other == text[0]) { score = score + 4 }
-    if (other != text[0]) { score = score + 8 }
+
+    if (text[0] == other) {
+        score = score + 1
+    }
+
+    if (text[0] != other) {
+        score = score + 2
+    }
+
+    if (other == text[0]) {
+        score = score + 4
+    }
+
+    if (other != text[0]) {
+        score = score + 8
+    }
+
     return score
 }
+
 assert(rule { compare_character('abc', 'a') == 5 })
 assert(rule { compare_character('abc', '') == 10 })
 assert(rule { compare_character('abc', 'ab') == 10 })
@@ -92,10 +130,14 @@ assert(rule { compare_character('abc', 97.0) == 10 })
 assert(rule { compare_character('abc', true) == 10 })
 assert(rule { compare_character('中文', '中') == 10 })
 assert(rule { compare_character('中文', '中文'[0]) == 5 })
-var byte_equal = false
-if ('中文'[0] == '中文'[0]) { byte_equal = true }
-assert(rule { byte_equal })
 
+var byte_equal = false
+
+if ('中文'[0] == '中文'[0]) {
+    byte_equal = true
+}
+
+assert(rule { byte_equal })
 
 // Materialized characters retain String semantics in named, stack, stored-Bool
 // and branch consumers. Alternate Types at the same comparison call sites.
@@ -105,13 +147,18 @@ function compare_cached_character(text, other)
     let same = character == other[0]
     let different = other[0] != character
     let reversed = other[0] == character
+
     if (character == other[0]) {
         assert(rule { same and reversed and not different })
+
         return 1
     }
+
     assert(rule { not same and not reversed and different })
+
     return 0
 }
+
 assert(rule { compare_cached_character('ba', 'abc') == 1 })
 assert(rule { compare_cached_character('ba', 'xbc') == 0 })
 assert(rule { compare_cached_character('ba', ['a']) == 1 })
@@ -119,13 +166,19 @@ assert(rule { compare_cached_character('ba', [97]) == 0 })
 assert(rule { compare_cached_character('ba', 'abc') == 1 })
 assert(rule { compare_cached_character(['中文'[0]], '中') == 1 })
 assert(rule { compare_cached_character(['中文'[0]], '文') == 0 })
+
 for (let iteration in 0 to 128) {
     let character = 'abc'[iteration % 3]
     let stored = 'abc'[iteration % 3] == character
-    if (not stored) { assert(rule { false }) }
+
+    if (not stored) {
+        assert(rule { false })
+    }
+
     if (strings::join(['long', 'text'], '') == 'abc'[0]) {
         assert(rule { false })
     }
+
     if ('abc'[0] != strings::join(['long', 'text'], '')) {
         assert(rule { true })
     }
@@ -134,16 +187,40 @@ for (let iteration in 0 to 128) {
 function indexed_comparisons(text, left, right)
 {
     var score = 0
-    if (text[left] == text[right]) { score = score + 1 }
-    if (text[left] != text[right]) { score = score + 2 }
-    if (text[left + 0] == text[right + 0]) { score = score + 4 }
-    if (text[left + 0] != text[right + 0]) { score = score + 8 }
-    if (text[0] == text[left]) { score = score + 16 }
-    if (text[0] != text[right]) { score = score + 32 }
+
+    if (text[left] == text[right]) {
+        score = score + 1
+    }
+
+    if (text[left] != text[right]) {
+        score = score + 2
+    }
+
+    if (text[left + 0] == text[right + 0]) {
+        score = score + 4
+    }
+
+    if (text[left + 0] != text[right + 0]) {
+        score = score + 8
+    }
+
+    if (text[0] == text[left]) {
+        score = score + 16
+    }
+
+    if (text[0] != text[right]) {
+        score = score + 32
+    }
+
     let same = text[left] == text[right]
-    if (same) { score = score + 64 }
+
+    if (same) {
+        score = score + 64
+    }
+
     return score
 }
+
 assert(rule { indexed_comparisons('aab', 0, 1) == 85 })
 assert(rule { indexed_comparisons('aab', 1, 2) == 58 })
 assert(rule { indexed_comparisons('aab', -3, -2) == 85 })
@@ -152,20 +229,33 @@ assert(rule { indexed_comparisons([5, 5, 7], 0, 1) == 85 })
 assert(rule { indexed_comparisons(['a', 'a', 'b'], 1, 2) == 58 })
 assert(rule { indexed_comparisons('aab', 0, 1) == 85 })
 
-function echo_forwarded(value) { return value }
+function echo_forwarded(value)
+{
+    return value
+}
+
 function forward_argument(value)
 {
     let temporary = value
+
     return echo_forwarded(temporary)
 }
+
 assert(rule { forward_argument(7) == 7 })
 assert(rule { forward_argument('ok') == 'ok' })
+
 let owned_argument = [1]
 let forwarded_argument = forward_argument(owned_argument)
 forwarded_argument.append(2)
 assert(rule { owned_argument[1] == 2 })
+
 var captured_argument = [4]
-function forward_captured() { return echo_forwarded(captured_argument) }
+
+function forward_captured()
+{
+    return echo_forwarded(captured_argument)
+}
+
 let captured_alias = forward_captured()
 captured_alias.append(5)
 assert(rule { captured_argument[1] == 5 })
@@ -175,21 +265,33 @@ function fresh_pair()
 {
     return [3, 4] : [5, 6]
 }
+
 let pair_element = fresh_pair()[-1]
+
 assert(rule { pair_element[1] == 6 })
+
 let pair_value = [1] : [2]
 let member = pair_value[-2]
 member.append(3)
 assert(rule { pair_value[0][1] == 3 })
+
 function fresh_text()
 {
     return strings::join(['temporary', 'string'], '')
 }
+
 var equal_count = 0
+
 for (let iteration in 0 to 128) {
-    if (fresh_text() == fresh_text()) { equal_count = equal_count + 1 }
-    if (fresh_text() != fresh_text()) { equal_count = equal_count + 1000 }
+    if (fresh_text() == fresh_text()) {
+        equal_count = equal_count + 1
+    }
+
+    if (fresh_text() != fresh_text()) {
+        equal_count = equal_count + 1000
+    }
 }
+
 assert(rule { equal_count == 128 })
 
 // Dynamic local initializers must own their result even when the producer's
@@ -197,49 +299,74 @@ assert(rule { equal_count == 128 })
 function scoped_aliases(values)
 {
     let saved = []
+
     for (let index in 0 to values.len()) {
         let item = values[index]
         let alias = item
         saved.append(alias)
-        if (index == 0) { continue }
-        if (index == 2) { break }
+
+        if (index == 0) {
+            continue
+        }
+
+        if (index == 2) {
+            break
+        }
     }
+
     return echo_forwarded(saved)
 }
+
 let saved_aliases = scoped_aliases([[1], 'text', 7, [9]])
 saved_aliases[0].append(2)
 assert(rule { saved_aliases[0][1] == 2 })
 assert(rule { saved_aliases[1] == 'text' and saved_aliases[2] == 7 })
+
 let scalar_aliases = scoped_aliases([3, [4], false, 9])
 scalar_aliases[1].append(5)
 assert(rule { scalar_aliases[0] == 3 and scalar_aliases[1][1] == 5 })
 assert(rule { scalar_aliases[2] == false })
+
 function return_indexed(values)
 {
     for (let index in 0 to values.len()) {
         let item = values[index]
+
         return echo_forwarded(item)
     }
+
     return []
 }
+
 let surviving_index = return_indexed([[8]])
 surviving_index.append(9)
 assert(rule { surviving_index[1] == 9 })
+
 function while_locals()
 {
     let index = 0
     let total = 0
+
     while (index < 8) {
         index = index + 1
         let deferred: Int
         deferred = index
         let item = [deferred]
-        if (index == 2) { continue }
-        if (index == 5) { break }
+
+        if (index == 2) {
+            continue
+        }
+
+        if (index == 5) {
+            break
+        }
+
         total = total + item[0]
     }
+
     return total + 0
 }
+
 assert(rule { while_locals() == 8 })
 
 print('ok')

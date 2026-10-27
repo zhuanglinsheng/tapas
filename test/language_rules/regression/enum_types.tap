@@ -42,6 +42,7 @@ print(accept_status('Cancelled'))
 
 let dynamic_name: String = 'Shipped'
 print(OrderStatus[dynamic_name])
+
 if (types::matches(dynamic_name, OrderStatus)) {
     let checked: OrderStatus = dynamic_name
     print(checked)
@@ -51,8 +52,10 @@ let statuses: List[OrderStatus] = ['Pending', OrderStatus['Delivered']]
 pprint(statuses)
 
 let HasStatus = rule (value: OrderStatus) {
-    "status is not delivered": value == 'Delivered'
+    "status is not delivered":
+        value == 'Delivered'
 }
+
 print(rules::check(HasStatus('Delivered'))['passed'])
 let RestoredHasStatus = rules::deserialize(rules::serialize(HasStatus))
 print(rules::check(RestoredHasStatus('Delivered'))['passed'])

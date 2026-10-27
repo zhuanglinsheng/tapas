@@ -8,11 +8,13 @@ function gcd(a: Int, b: Int) -> Int
 {
     let left = math::abs(a)
     let right = math::abs(b)
+
     while (right != 0) {
         let remainder = left % right
         left = right
         right = remainder
     }
+
     return left + 0
 }
 
@@ -21,6 +23,7 @@ function lcm(a: Int, b: Int) -> Int
     if (a == 0 or b == 0) {
         return 0
     }
+
     return math::abs((a / gcd(a, b)) * b)
 }
 
@@ -49,7 +52,9 @@ function extended_gcd(a: Int, b: Int) -> List[Int]
         old_t = t
         t = next_t
     }
+
     let result: List[Int] = [old_r, old_s, old_t]
+
     return result.copy()
 }
 

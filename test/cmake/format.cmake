@@ -27,6 +27,13 @@ assert(rule{
     positive(1)
 })
 let ExactRule = types::rule(types::Int)
+
+let bounded = rule (value: Int) {
+    'positive': value > 0
+    'below ten': {
+        value < 10
+    }
+}
 ]=])
 
 execute_process(
@@ -109,6 +116,15 @@ assert(rule {
     positive(1)
 })
 let ExactRule = types::rule(types::Int)
+
+let bounded = rule (value: Int) {
+    'positive':
+        value > 0
+
+    'below ten': {
+        value < 10
+    }
+}
 ]=])
 if(NOT FORMATTED STREQUAL EXPECTED)
     message(FATAL_ERROR "unexpected formatted source:\n${FORMATTED}")

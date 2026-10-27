@@ -4,11 +4,13 @@ function primes_up_to(limit)
     is_prime[0] = false
     is_prime[1] = false
     fill(is_prime, false, iter(4, 2, limit + 1))
+
     for (let candidate in iter(3, 2, math::isqrt(limit) + 1)) {
         if (is_prime[candidate]) {
             fill(is_prime, false, iter(candidate * candidate, candidate, limit + 1))
         }
     }
+
     return count(is_prime, true)
 }
 

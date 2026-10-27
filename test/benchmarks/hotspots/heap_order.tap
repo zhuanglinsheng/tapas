@@ -2,17 +2,25 @@ function bench(repetitions, values)
 {
     let started = clock_ns()
     var checksum = 0
+
     for (let repetition in 0 to repetitions) {
         let queue = copy(values)
         heap::heapify(queue)
+
         for (let position in 0 to len(values)) {
             checksum = checksum + heap::pop(queue)[0] * (position + 1)
         }
     }
+
     let elapsed = clock_ns() - started
     print(checksum)
     print(elapsed)
 }
+
 let values = []
-for (let i in 0 to 256) { values.append([(i * 73 + 19) % 31 - 15, i]) }
+
+for (let i in 0 to 256) {
+    values.append([(i * 73 + 19) % 31 - 15, i])
+}
+
 bench(64, values)

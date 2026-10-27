@@ -22,6 +22,7 @@ let docs_positive = rule (value: Int) {
 
 let docs_bounded = rule (value: Int) {
     docs_positive(value)
+
     "value must be below ten":
         value < 10
 }
@@ -155,7 +156,10 @@ site.
 Each top-level Rule expression is an obligation: a Bool result must be true, and a RuleInstance result must hold. Write the instance directly to compose a child rule:
 
 ```text
-let Positive = rule (value: Int) { value > 0 }
+let Positive = rule (value: Int) {
+    value > 0
+}
+
 let SmallPositive = rule (value: Int) {
     Positive(value)
     value < 10
@@ -193,7 +197,10 @@ Dynamic construction uses `rules::implication(antecedent, consequents[, descript
 RuleInstance antecedents need no explicit checker call:
 
 ```tapas
-let docs_positive_premise = rule (value: Int) { value > 0 }
+let docs_positive_premise = rule (value: Int) {
+    value > 0
+}
+
 let docs_guarded = rule (value: Int) {
     (docs_positive_premise(value)) implies { value < 10 }
 }
@@ -212,10 +219,17 @@ A bare Rule is invalid, including a zero-parameter Rule: write `R()`. Consequent
 Inside a Rule's own expressions, `not` accepts Bool, RuleInstance, or their union and produces Bool. In ordinary functions it still accepts only Bool; defining or calling a function inside a Rule does not change that function's semantics. A bare Rule, even with no parameters, must first be instantiated as `R()`.
 
 ```tapas
-let Positive = rule (value: Int) { value > 0 }
-let NonPositive = rule (value: Int) { not Positive(value) }
+let Positive = rule (value: Int) {
+    value > 0
+}
+
+let NonPositive = rule (value: Int) {
+    not Positive(value)
+}
+
 let Contract = rule (value: Int) {
-    'lower bound for non-positive values': not Positive(value) implies { value >= -10 }
+    'lower bound for non-positive values':
+        (not Positive(value)) implies { value >= -10 }
 }
 assert(NonPositive(-1))
 assert(Contract(1))
@@ -250,8 +264,15 @@ Custom evaluators must interpret `Not` as Bool negation or negated instance sati
 Within a Rule's own expressions, `and` and `or` accept Bool, RuleInstance, or their union and return Bool. AnyType operands are checked at runtime. Ordinary functions remain Bool-only even when called by a Rule. Elementwise `&` and `|` do not acquire instance semantics.
 
 ```tapas
-let docs_in_range = rule (x: Int) { x >= 0; x <= 10 }
-let docs_override = rule (x: Int) { x == 42 }
+let docs_in_range = rule (x: Int) {
+    x >= 0
+    x <= 10
+}
+
+let docs_override = rule (x: Int) {
+    x == 42
+}
+
 let docs_allowed = rule (x: Int) {
     docs_in_range(x) or docs_override(x)
     not (x < 0)
@@ -566,7 +587,9 @@ syntax.
 ```tapas
 let domain_points: rules::PointsOf[Int] = rules::points(types::Int, 1, 4, 9)
 let domain_range: rules::RangeOf[Int] = rules::range(0, 5)
-let domain_member = rule (x: Int) { x in domain_points and x in domain_range }
+let domain_member = rule (x: Int) {
+    x in domain_points and x in domain_range
+}
 assert(domain_member(4))
 print(rules::check(domain_member(9))::passed)
 ```
@@ -617,8 +640,11 @@ Unknown parameter names, non-string keys, and incompatible concrete values or po
 
 ```tapas
 let transform_bounds = rule (value: Int) {
-    'lower bound': value >= 0
-    'upper bound': value <= 10
+    'lower bound':
+        value >= 0
+
+    'upper bound':
+        value <= 10
 }
 
 let lower_item = rules::item(transform_bounds, 'lower bound')
@@ -627,7 +653,10 @@ let below_lower = rules::violate(transform_bounds, 0)
 
 assert(without_lower(-1))
 assert(below_lower(-1))
-assert(rule { not below_lower(0); not below_lower(11) })
+assert(rule {
+    not below_lower(0)
+    not below_lower(11)
+})
 ```
 
 `drop` removes the selected Item. `violate` retains every other direct Item and
@@ -677,7 +706,7 @@ Source Rules now produce an expression graph alongside their checker. Parameter 
 
 ```tapas
 var ir_minimum = 3
-let ir_example = rule(x: Int) {
+let ir_example = rule (x: Int) {
     let y = x + 1
     y >= ir_minimum
 }

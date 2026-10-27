@@ -8,7 +8,9 @@ function total_length(node, depth)
     if (types::matches(node[1], types::String)) {
         return node[0] * depth
     }
+
     let children = node[1]
+
     return this(children[0], depth + 1) + this(children[1], depth + 1)
 }
 
@@ -16,12 +18,17 @@ function huffman_total(text)
 {
     // The workload has a fixed small alphabet; count each symbol natively.
     let nodes = []
+
     for (let ch in 'abcdefgh') {
         let frequency = count(text, ch)
-        if (frequency > 0) { nodes.append(frequency : ch) }
+
+        if (frequency > 0) {
+            nodes.append(frequency : ch)
+        }
     }
 
     heap::heapify(nodes, frequency_less)
+
     while (nodes.len() > 1) {
         let left = heap::pop(nodes, frequency_less)
         let right = heap::pop(nodes, frequency_less)
@@ -33,10 +40,12 @@ function huffman_total(text)
 
 let chars = []
 let seed = 42
+
 for (let index in 0 to 40000) {
     seed = (seed * 1103515245 + 12345) % 2147483648
     chars.append('abcdefgh'[seed % 8])
 }
+
 let text = strings::join(chars, '')
 
 let started = clock_ns()

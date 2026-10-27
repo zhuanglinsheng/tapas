@@ -4,9 +4,12 @@ let system_fixture = path::join(system_root, 'request.json')
 let system_request = {'quantity': 2}
 io::write_text(system_fixture, json::stringify(system_request))
 let system_execution = os::run(['/bin/cat'], stdin=io::read_text(system_fixture), timeout=2.0)
+
 assert(rule { system_execution::status == 'exited' and system_execution::exit_code == 0 })
 assert(rule { not system_execution::output_truncated })
+
 let system_reply = json::parse(system_execution::stdout)
+
 assert(rule { system_reply::quantity == 2 })
 fs::remove(system_fixture)
 fs::remove(system_root)

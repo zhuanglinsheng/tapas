@@ -1,4 +1,7 @@
-function check(condition) { assert(rule { condition }) }
+function check(condition)
+{
+    assert(rule { condition })
+}
 
 check([] < [0])
 check([] <= [])
@@ -19,8 +22,10 @@ check([9223372036854775807] < [9223372036854775808.0])
 check([-9223372036854775808.0] < [-9223372036854775807])
 check([1] <= [1.0])
 check([1] >= [1.0])
+
 // Structural equality retains its existing type-sensitive element semantics.
 check([1] != [1.0])
+
 // Only the first differing position decides ordering.
 check([0, {}] < [1, []])
 
@@ -29,15 +34,21 @@ let expected = [[], [1], [1, 0], [2, 'a'], [2, 'a'], [2, 'b']]
 let batch = copy(records)
 let incremental = []
 heap::heapify(batch)
-for (let record in records) { heap::push(incremental, record) }
+
+for (let record in records) {
+    heap::push(incremental, record)
+}
+
 let sorted_records = copy(records)
 sort(sorted_records)
 check(sorted_records == expected)
+
 for (let record in expected) {
     check(heap::peek(batch) == record)
     check(heap::pop(batch) == record)
     check(heap::pop(incremental) == record)
 }
+
 check(len(batch) == 0)
 check(len(incremental) == 0)
 let float_values = [3.5, -2.5, 0.0, 3.5]
@@ -53,11 +64,16 @@ check(heap::pop(words) == 'a')
 check(heap::pop(words) == 'aa')
 check(heap::pop(words) == 'b')
 let maximum = [[1, 9], [2, 0], [1, 3]]
-let greater = (a, b) { return a > b }
+let greater = (a, b)
+{
+    return a > b
+}
+
 heap::heapify(maximum, greater)
 check(heap::pop(maximum, greater) == [2, 0])
 check(heap::pop(maximum, greater) == [1, 9])
 check(heap::pop(maximum, greater) == [1, 3])
+
 // A new List operator must preserve the other operand's symbolic operators.
 let parameter = rules::parameter('items', types::List)
 let Ordered = rules::make('Ordered', [parameter], [

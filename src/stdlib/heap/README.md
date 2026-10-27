@@ -46,7 +46,10 @@ let heap_records = [[2, 'later'], [1, 'b'], [1, 'a']]
 heap::heapify(heap_records)
 print(heap::pop(heap_records)[1])
 
-let heap_less = (a, b) { return a[0] < b[0] }
+let heap_less = (a, b)
+{
+    return a[0] < b[0]
+}
 let heap_queue = []
 heap::push(heap_queue, 8 : 'later', heap_less)
 heap::push(heap_queue, 3 : 'earlier', heap_less)

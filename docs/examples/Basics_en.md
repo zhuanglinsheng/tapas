@@ -14,7 +14,8 @@ let numbers = [2, 4, 9]
 function square_root(value: Int | Float) -> Float
 {
     assert(rule {
-        "The radicand cannot be negative": value >= 0
+        "The radicand cannot be negative":
+            value >= 0
     })
 
     if (value == 0) {
@@ -54,7 +55,7 @@ squared error is small enough. The manual implementation demonstrates a
 complete program; production code can call `math::sqrt` directly.
 
 Rules can also check business data and generate test inputs. After this example,
-continue with the [retail tutorial](../../examples/retail/README_en.md), or see
+continue with the [retail tutorial](../../external/tau-bench-tapas/simplified/README_en.md), or see
 the [Rules documentation](../Rules_en.md) for the complete syntax and checking
 interfaces.
 

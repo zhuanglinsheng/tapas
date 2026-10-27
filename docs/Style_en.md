@@ -167,3 +167,17 @@ tapas -m format --check examples/a.tap examples/b.tap
 `--check` is passed directly to the module; an empty `--` separator is not
 needed. Check mode returns 0 when every file is formatted. Otherwise it prints
 the paths needing changes and returns 1.
+
+Format checks cover mechanical rules, not the logical grouping within a
+function. Authors still arrange blank lines between setup, computation, and
+result handling; the formatter preserves those blank lines.
+
+Repository source formatting is included in the test suite and can be checked
+separately:
+
+```sh
+ctest --test-dir build -R source_style --output-on-failure
+```
+
+This check preserves the original forms of invalid-source and compatibility
+test fixtures.

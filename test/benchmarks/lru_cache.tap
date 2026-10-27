@@ -17,9 +17,11 @@ function lru_work(capacity, operations)
     let values = {}
     let checksum = 0
     let seed = 12345
+
     for (let op in 0 to operations) {
         seed = (seed * 1103515245 + 12345) % 2147483648
         let key = seed % 256
+
         if (seed % 10 < 7) {
             if (key in values) {
                 move_to_end(order, key)
@@ -36,11 +38,13 @@ function lru_work(capacity, operations)
                     delete(values, evicted)
                     checksum = checksum - evicted
                 }
+
                 order.append(key)
                 values[key] = key * 3
             }
         }
     }
+
     return checksum + 0
 }
 

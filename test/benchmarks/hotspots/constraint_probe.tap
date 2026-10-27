@@ -1,13 +1,17 @@
 // Extract Sudoku's candidate validation, including computed indices and break.
 let grid = []
+
 for (let row in 0 to 9) {
-    for (let column in 0 to 9) { grid.append((row * 3 + row / 3 + column) % 9 + 1) }
+    for (let column in 0 to 9) {
+        grid.append((row * 3 + row / 3 + column) % 9 + 1)
+    }
 }
 
 function bench(n, grid)
 {
     let result = 0
     let started = clock_ns()
+
     for (let r in 0 to n) {
         let index = r % 81
         let row = (index / 9) * 9
@@ -15,13 +19,22 @@ function bench(n, grid)
         let box = (index / 27) * 27 + (column / 3) * 3
         let digit = (r / 81) % 9 + 1
         let k = 0
+
         while (k < 9) {
-            if (grid[row + k] == digit or grid[column + k * 9] == digit) { break }
-            if (grid[box + (k / 3) * 9 + k % 3] == digit) { break }
+            if (grid[row + k] == digit or grid[column + k * 9] == digit) {
+                break
+            }
+
+            if (grid[box + (k / 3) * 9 + k % 3] == digit) {
+                break
+            }
+
             k = k + 1
         }
+
         result = result + k
     }
+
     let elapsed = clock_ns() - started
     print(result)
     print(elapsed)

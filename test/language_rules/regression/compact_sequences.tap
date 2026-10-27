@@ -1,4 +1,5 @@
 let buffer = bytes::buffer(6, 1)
+
 assert(rule { types::matches(buffer, bytes::Buffer) and len(buffer) == 6 })
 assert(rule { types::matches(buffer, types::Iterable) and types::matches(buffer, types::Indexable) and types::matches(buffer, types::IndexSettable) })
 assert(rule { list(buffer) == [1, 1, 1, 1, 1, 1] })
@@ -12,6 +13,7 @@ fill(buffer, 0, iter(-1, -2, -7))
 assert(rule { list(buffer) == [1, 0, 1, 0, 1, 0] })
 fill(buffer, 2, [-1, 0, -1])
 assert(rule { buffer[0] == 2 and buffer[-1] == 2 })
+
 let detached = copy(buffer)
 detached[0] = 9
 assert(rule { buffer[0] == 2 and detached[0] == 9 })
@@ -33,20 +35,24 @@ assert(rule { count(aliased, 0) == 4 })
 
 let matrix = array(2, 3, true)
 let view = dense::flat(matrix)
+
 assert(rule { types::matches(view, dense::FlatView) and len(view) == 6 })
 fill(view, false, iter(1, 2, 6))
 assert(rule { matrix[0, 1] == false and matrix[1, 0] == false })
 matrix[1, 2] = true
 assert(rule { view[5] == true and count(view, true) == 4 })
 assert(rule { count(view, 1) == 0 and count(view, 1.0) == 0 })
+
 let independent = copy(view)
 independent[0] = false
 assert(rule { matrix[0, 0] == true and independent[0] == false })
+
 let temporary = dense::flat(array(1, 4, false))
 fill(temporary, true, iter(0, 4))
 assert(rule { count(temporary, true) == 4 })
 assert(rule { true in temporary and not (false in temporary) })
 assert(rule { not (1 in temporary) and not (1.0 in temporary) })
+
 let real = dense::flat(array(1, 4, 0.0))
 fill(real, 2, iter(0, 4))
 assert(rule { count(real, 2.0) == 4 and count(real, 2) == 0 })
@@ -55,8 +61,13 @@ real[-1] = -0.0
 assert(rule { count(real, 0.0) == 1 })
 real[0] = math::make_nan()
 assert(rule { count(real, math::make_nan()) == 0 })
+
 let sum = 0.0
-for (let item in copy(dense::flat(array(1, 3, 2.0)))) { sum = sum + item }
+
+for (let item in copy(dense::flat(array(1, 3, 2.0)))) {
+    sum = sum + item
+}
+
 assert(rule { sum == 6.0 })
 assert(rule { len(dense::flat(array(0, 3, false))) == 0 })
 assert(rule { not (true in dense::flat(array(0, 3, false))) })

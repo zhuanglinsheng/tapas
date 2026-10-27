@@ -5,6 +5,7 @@ function fannkuch(n)
     let checksum = 0
     let maxflips = 0
     let r = n
+
     while (true) {
         while (r != 1) {
             count[r - 1] = r
@@ -14,9 +15,11 @@ function fannkuch(n)
         let perm = perm1.copy()
         let flips = 0
         let k = perm[0]
+
         while (k != 0) {
             let i = 0
             let j = k
+
             while (i < j) {
                 let temporary = perm[i]
                 perm[i] = perm[j]
@@ -24,10 +27,13 @@ function fannkuch(n)
                 i = i + 1
                 j = j - 1
             }
+
             flips = flips + 1
             k = perm[0]
         }
+
         checksum = checksum + flips
+
         if (flips > maxflips) {
             maxflips = flips
         }
@@ -36,15 +42,20 @@ function fannkuch(n)
             if (r == n) {
                 return checksum + maxflips + 0
             }
+
             let first = perm1[0]
+
             for (let i in 0 to r) {
                 perm1[i] = perm1[i + 1]
             }
+
             perm1[r] = first
             count[r] = count[r] - 1
+
             if (count[r] > 0) {
                 break
             }
+
             r = r + 1
         }
     }

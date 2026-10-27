@@ -22,18 +22,22 @@ function merge_sort(values)
             j = j + 1
         }
     }
+
     while (i < left_size) {
         merged.append(left[i])
         i = i + 1
     }
+
     while (j < right_size) {
         merged.append(right[j])
         j = j + 1
     }
+
     return merged
 }
 
 let values = []
+
 for (let index in 0 to 4096) {
     values.append((index * 73 + 19) % 1009)
 }
@@ -41,9 +45,11 @@ for (let index in 0 to 4096) {
 let started = clock_ns()
 let sorted = merge_sort(values)
 let checksum = 0
+
 for (let index in 0 to sorted.len()) {
     checksum = checksum + sorted[index] * (index + 1)
 }
+
 let elapsed = clock_ns() - started
 
 print(checksum)

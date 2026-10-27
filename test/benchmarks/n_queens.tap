@@ -5,21 +5,26 @@ function count_queens(positions, row, size)
     }
 
     let count = 0
+
     for (let column in 0 to size) {
         let valid = true
+
         for (let previous in 0 to row) {
             let placed = positions[previous]
             let distance = row - previous
+
             if (placed == column or placed == column - distance or placed == column + distance) {
                 valid = false
                 break
             }
         }
+
         if (valid) {
             positions[row] = column
             count = count + this(positions, row + 1, size)
         }
     }
+
     return count + 0
 }
 

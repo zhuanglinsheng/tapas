@@ -1,25 +1,38 @@
 // One-row LCS update from the valid row for prefix 'ABCDAB'.
 let right = 'DCBAABCDDCBAABCD'
+
 function bench(n, right)
 {
     let started = clock_ns()
     let previous = [0, 1, 1, 2, 2, 2, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6, 6]
     let current = replicate([0], 17)
     let result = 0
+
     for (let r in 0 to n) {
         let ch = 'ABCD'[r % 4]
         let diagonal = 0
         let preceding = 0
+
         for (let j in 1 to 17) {
             let above = previous[j]
-            if (ch == right[j - 1]) { preceding = diagonal + 1 }
-            elif (above > preceding) { preceding = above }
+
+            if (ch == right[j - 1]) {
+                preceding = diagonal + 1
+            } elif (above > preceding) {
+                preceding = above
+            }
+
             current[j] = preceding
             diagonal = above
         }
+
         result = result + current[16]
     }
-    for (let j in 0 to 17) { result = result + current[j] * j }
+
+    for (let j in 0 to 17) {
+        result = result + current[j] * j
+    }
+
     let elapsed = clock_ns() - started
     print(result)
     print(elapsed)

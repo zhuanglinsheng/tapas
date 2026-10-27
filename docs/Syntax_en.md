@@ -546,6 +546,7 @@ let tutorial_positive = rule (value: Int) {
 
 let tutorial_small_positive = rule (value: Int) {
     tutorial_positive(value)
+
     'value must be below ten':
         value < 10
 }
@@ -631,7 +632,9 @@ its top level:
 
 ```text
 function exported_function()
-{ return 5 }
+{
+    return 5
+}
 return {
     'get_five' : exported_function,
 }

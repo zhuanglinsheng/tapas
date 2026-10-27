@@ -1,23 +1,39 @@
 // Logical not accepts scalar Bool values only.
 function negate(value: Bool) -> Bool
-{ return not value }
+{
+    return not value
+}
+
 function dynamic_negate(value: AnyType) -> Bool
-{ return not value }
+{
+    return not value
+}
+
 var calls = [0]
+
 function counted() -> Bool
 {
     calls[0] = calls[0] + 1
+
     return true
 }
+
 function unavailable() -> Bool
-{ return [][0] }
+{
+    return [][0]
+}
+
 let once = not counted()
 let skip_and = false and not unavailable()
 let skip_or = true or not unavailable()
 let not_values = [not true, not false, not not true]
 let inferred = not false
+
 function accepts_bool(value: Bool) -> Bool
-{ return value }
+{
+    return value
+}
+
 assert(rule {
     not_values[0] == false
     not_values[1]
@@ -37,7 +53,15 @@ assert(rule {
     not skip_and
     skip_or
 })
+
 var loop_state = [false]
-while (not loop_state[0]) { loop_state[0] = true }
+
+while (not loop_state[0]) {
+    loop_state[0] = true
+}
+
 assert(rule { loop_state[0] })
-if (not false) { print('not: ok') }
+
+if (not false) {
+    print('not: ok')
+}

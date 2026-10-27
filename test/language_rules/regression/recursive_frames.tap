@@ -1,25 +1,31 @@
 let nested_sum = (depth)
 {
     var total = 0
+
     for (let value in [1, 2, 3]) {
         total = total + value
+
         if (value == 2 and depth > 0) {
             total = total + this(depth - 1)
         }
     }
+
     return total
 }
 
 let make_counter = (value)
 {
     var captured = 0
+
     if (value == 0) {
         return ()
         {
             captured = captured + 1
+
             return captured
         }
     }
+
     return this(value - 1)
 }
 
@@ -28,6 +34,7 @@ let count_down = (remaining, count)
     if (remaining == 0) {
         return count
     }
+
     return this(remaining - 1, count + 1)
 }
 
@@ -36,6 +43,7 @@ let count_up = (remaining)
     if (remaining == 0) {
         return 0
     }
+
     return this(remaining - 1) + 1
 }
 

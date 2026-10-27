@@ -58,9 +58,9 @@ let OrderStatus = types::enum(
 )
 
 let Refundable = rule (
-    status        : OrderStatus,
-    delivered_days: Int,
-    confirmed     : Bool,
+        status        : OrderStatus,
+        delivered_days: Int,
+        confirmed     : Bool,
 ) {
     "order has not been delivered":
         status == OrderStatus["Delivered"]

@@ -484,6 +484,14 @@ if(BUILD_TESTING)
             -P ${CMAKE_CURRENT_SOURCE_DIR}/test/cmake/format.cmake
     )
 
+    add_test(
+        NAME source_style
+        COMMAND ${CMAKE_COMMAND}
+            -DTAPAS=$<TARGET_FILE:tapas>
+            -DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/test/cmake/style.cmake
+    )
+
     add_test(NAME standard_streams COMMAND ${CMAKE_COMMAND}
         -DTAPAS=$<TARGET_FILE:tapas>
         -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/test-streams

@@ -499,7 +499,9 @@ constraint, not a guarantee of runtime identity at dynamic boundaries.
 At a dynamic boundary, construct the runtime Type explicitly:
 
 ```tapas
-let IdentityExample = rule (value: Int) { true }
+let IdentityExample = rule (value: Int) {
+    true
+}
 let expected_identity = types::instance_of(IdentityExample)
 let matches_identity = types::matches(IdentityExample(1), expected_identity)
 ```

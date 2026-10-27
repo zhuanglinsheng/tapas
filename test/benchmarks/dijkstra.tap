@@ -3,14 +3,17 @@ function dijkstra(graph, source, size)
     let dist = replicate([1000000000000], size)
     dist[source] = 0
     let queue = [[0, source]]
+
     while (len(queue) > 0) {
         let current = heap::pop(queue)
         let distance = current[0]
         let vertex = current[1]
+
         if (distance == dist[vertex] and vertex in graph) {
             for (let edge in graph[vertex]) {
                 let target = edge[0]
                 let alt = distance + edge[1]
+
                 if (alt < dist[target]) {
                     dist[target] = alt
                     heap::push(queue, [alt, target])
@@ -18,35 +21,43 @@ function dijkstra(graph, source, size)
             }
         }
     }
+
     return copy(dist)
 }
 
 let size = 250
 let degree = 6
 let graph = {}
+
 for (let i in 0 to size) {
     let edges = []
     edges.append([(i + 1) % size, 1])
+
     for (let k in 0 to degree) {
         let j = (i * 7 + k * 13 + 3) % size
         let w = (i * 5 + k * 11 + 7) % 19 + 1
         edges.append([j, w])
     }
+
     graph[i] = edges
 }
+
 let sources = [0, size / 4, size / 2, size * 3 / 4]
 let rounds = 4
 
 let started = clock_ns()
 var checksum = 0
+
 for (let round in 0 to rounds) {
     for (let s in 0 to len(sources)) {
         let dist = dijkstra(graph, sources[s], size)
+
         for (let i in 0 to size) {
             checksum = checksum + dist[i]
         }
     }
 }
+
 let elapsed = clock_ns() - started
 
 print(checksum)

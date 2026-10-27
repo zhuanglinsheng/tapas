@@ -1,9 +1,14 @@
 let text = strings::join(replicate(['abacabad'], 62500), '')
+
 function bench(text)
 {
     let started = clock_ns()
     let counts = {}
-    for (let ch in text) { counts[ch] = idx_or(counts, ch, 0) + 1 }
+
+    for (let ch in text) {
+        counts[ch] = idx_or(counts, ch, 0) + 1
+    }
+
     let result = counts['a'] + counts['b'] * 3 + counts['c'] * 5 + counts['d'] * 7
     let elapsed = clock_ns() - started
     print(result)

@@ -5,11 +5,13 @@ let positive = rule (value: Int) {
 
 let bounded = rule (value: Int) {
     positive(value)
+
     "value must be below ten":
         value < 10
 }
 
 assert(bounded(5))
+
 let failed = rules::check(bounded(12))
 print(failed["passed"])
 print(len(failed["violations"]))
@@ -27,5 +29,6 @@ let evaluator = evaluators::make("identity", 1, (context)
         "diagnostics": []
     }
 })
+
 print(types::matches(evaluators::eval(positive(1), evaluator), evaluators::Result))
 print(evaluators::compile(positive, evaluator)["status"])

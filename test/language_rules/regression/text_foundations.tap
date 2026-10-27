@@ -12,15 +12,22 @@ assert(rule { strings::replace('aaaaa', 'aa', 'x') == 'xxa' })
 assert(rule { strings::replace('你好你好', '你好', '好') == '好好' })
 assert(rule { strings::starts_with('你好', '你') and strings::ends_with('你好', '好') })
 assert(rule { strings::starts_with('', '') and strings::ends_with('abc', '') })
+
 let binary = json::parse('"a\\u0000b"')
+
 assert(rule { strings::find(binary, 'b') == 2 and str(binary) == binary })
 assert(rule { strings::split(binary, json::parse('"\\u0000"')) == ['a', 'b'] })
 assert(rule { bytes::to_string(bytes::from_string(binary)) == binary })
+
 let buffer = bytes::from_string('你好')
+
 assert(rule { len(buffer) == 6 and strings::is_utf8(bytes::to_string(buffer)) })
+
 let invalid_utf8 = bytes::buffer(1, 255)
+
 assert(rule { not strings::is_utf8(bytes::to_string(invalid_utf8)) })
 assert(rule { strings::is_utf8('') and strings::is_utf8(binary) })
+
 let raw_input = bytes::from_string('abc')
 let detached = bytes::to_string(raw_input)
 raw_input[0] = 120
@@ -52,7 +59,9 @@ assert(rule { path::dirname('file') == '.' and path::dirname('/') == '/' })
 assert(rule { path::extension('/a/.env') == '' and path::extension('/a/a.tar.gz') == '.gz' })
 assert(rule { path::extension('..env') == '' and path::extension('..') == '' and path::extension('file.') == '.' })
 assert(rule { path::is_absolute('/a') and not path::is_absolute('a') })
+
 let missing = io::try_read_text('/__tapas_missing_fixture_directory__/x')
+
 assert(rule { not missing::ok and missing::code == 'not_found' and missing::value == '' })
 assert(rule { not io::try_read_text(binary)::ok })
 assert(rule { io::try_read_text(42)::code == 'invalid_type' })

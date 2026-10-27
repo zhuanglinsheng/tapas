@@ -1,21 +1,28 @@
 var calls = [0]
+
 function antecedent(value: Bool) -> Bool
 {
     calls[0] = calls[0] + 1
+
     return value
 }
+
 function unavailable() -> Bool
 {
     return [][0]
 }
+
 let Check = rule (enabled: Bool, value: Int) {
     '前件为假时不执行后件':
         (antecedent(enabled)) implies {
             value > 0
             value < 10
         }
-    '后续条件仍保持定位': value != 42
+
+    '后续条件仍保持定位':
+        value != 42
 }
+
 let skipped = rules::check(Check(false, 42))
 print(skipped['passed'])
 print(skipped['implications'][0]['triggered'])
@@ -30,14 +37,23 @@ print(failed['passed'])
 print(failed['implications'][0]['passed'])
 print(failed['violations'][0]['description'])
 print(calls[0])
+
 let Lazy = rule (a: Bool) {
-    a implies unavailable()
+    a implies {
+        unavailable()
+    }
 }
+
 assert(Lazy(false))
+
 let Both = rule (a: Bool, b: Bool) {
-    a and b implies a == b
-    (a) implies b
+    (a and b) implies {
+        a == b
+    }
+
+    a implies b
 }
+
 print(rules::check(Both(true, false))['passed'])
 let info = rules::items(rules::inspect(Check))[0]
 print(info['kind'])
@@ -52,10 +68,12 @@ let positive = value > zero
 let implication = rules::implication(guard, [positive], 'positive')
 let dynamic = rules::make('Dynamic', [guard, value], [implication])
 let dynamic_restored = rules::deserialize(rules::serialize(dynamic))
+
 assert(rule {
     rules::semantic_hash(dynamic) == rules::semantic_hash(dynamic_restored)
     rules::content_hash(dynamic) == rules::content_hash(dynamic_restored)
 })
+
 print(rules::check(dynamic_restored(false, -1))['passed'])
 print(rules::check(dynamic_restored(true, -1))['passed'])
 print(rules::check(dynamic_restored(true, 1))['passed'])
@@ -63,21 +81,29 @@ let division = value / zero
 let lazy_term = division > zero
 let lazy_item = rules::implication(guard, [lazy_term])
 let lazy_dynamic = rules::make('LazyDynamic', [guard, value], [lazy_item])
+
 assert(lazy_dynamic(false, 1))
 
 // Inline and nested Terms must survive temporary stack values.
 let inline_item = rules::implication(guard, [value > rules::constant(0)])
 let inline_rule = rules::make('Inline', [guard, value], [inline_item])
+
 assert(inline_rule(true, 1))
+
 let nested_item = rules::implication(guard, [(value / zero) > zero])
 let nested_rule = rules::make('Nested', [guard, value], [nested_item])
+
 assert(nested_rule(false, 1))
 
 let Parent = rule (enabled: Bool, value: Int) {
     Check(enabled, value)
-    enabled implies value != 0
+    enabled implies {
+        value != 0
+    }
 }
+
 let parent_result = rules::check(Parent(true, 0))
+
 assert(rule {
     len(parent_result['violations']) == 2
     len(parent_result['implications']) == 2
@@ -86,8 +112,15 @@ assert(rule {
     skipped['implications'][0]['passed']
 })
 
-let Multiple = rule { true implies { false; false } }
+let Multiple = rule {
+    (true) implies {
+        false
+        false
+    }
+}
+
 let multiple_result = rules::check(Multiple())
+
 assert(rule {
     len(multiple_result['violations']) == 2
     multiple_result['implications'][0]['consequents_checked'] == 2

@@ -9,20 +9,25 @@ function lcs_length(left, right)
         current[0] = 0
         let diagonal = 0
         let preceding = 0
+
         for (let j in 1 to row_size) {
             let above = previous[j]
+
             if (character == right[j - 1]) {
                 preceding = diagonal + 1
             } elif (above > preceding) {
                 preceding = above
             }
+
             current[j] = preceding
             diagonal = above
         }
+
         let temporary = previous
         previous = current
         current = temporary
     }
+
     return previous[row_size - 1] + 0
 }
 
@@ -31,9 +36,11 @@ let right = 'ALGORITHMSFORDYNAMICLANGUAGESUSEPROGRAMSTRUCTUREANDRUNTIMEDATATOMEA
 
 let started = clock_ns()
 let result = 0
+
 for (let repetition in 0 to 40) {
     result = result + lcs_length(left, right)
 }
+
 let elapsed = clock_ns() - started
 
 print(result)

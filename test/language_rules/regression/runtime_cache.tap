@@ -1,9 +1,11 @@
 let sum_values = (values)
 {
     var total = 0
+
     for (let value in values) {
         total = total + value
     }
+
     return total
 }
 
@@ -11,15 +13,19 @@ let repeat_until_three = (values)
 {
     var total = 0
     var pass = 0
+
     while (pass < 2) {
         for (let value in values) {
             if (value == 3) {
                 break
             }
+
             total = total + value
         }
+
         pass = pass + 1
     }
+
     return total
 }
 
@@ -36,15 +42,24 @@ let first = (values)
 let replace_last = (values, value)
 {
     values[-1] = value
+
     return values[-1]
 }
 
 let increment = (value)
-{ return value + 1 }
+{
+    return value + 1
+}
+
 let double = (value)
-{ return value * 2 }
+{
+    return value * 2
+}
+
 let apply = (operation, value)
-{ return operation(value) }
+{
+    return operation(value)
+}
 
 print(first([7, 8]))
 print(first("ab"))
@@ -61,6 +76,7 @@ let read_cell = (values, row, column)
 let write_cell = (values, row, column, value)
 {
     values[row, column] = value
+
     return values[row, column]
 }
 

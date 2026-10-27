@@ -400,7 +400,9 @@ Bool、Int、Float 和 String 字面量，替换结果是精确值 Type。
 需要在动态边界检查同一 Rule 对象时，应显式构造运行时 Type：
 
 ```tapas
-let IdentityExample = rule (value: Int) { true }
+let IdentityExample = rule (value: Int) {
+    true
+}
 let expected_identity = types::instance_of(IdentityExample)
 let matches_identity = types::matches(IdentityExample(1), expected_identity)
 ```

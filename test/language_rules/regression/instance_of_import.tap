@@ -4,10 +4,11 @@ import ../fixtures/instance_of_module.tap as second
 let Alias = first::Alias
 let local: InstanceOf[Alias] = first::R(1)
 let qualified: InstanceOf[first::R] = first::Alias(2)
+
 assert(rule {
-	first::accept(local) == 1
-	first::accept(qualified) == 2
-	first::accept(second::R(3)) == 3
-	types::matches(first::R(4), types::instance_of(Alias))
-	types::matches(second::R(4), types::instance_of(Alias)) == false
+    first::accept(local) == 1
+    first::accept(qualified) == 2
+    first::accept(second::R(3)) == 3
+    types::matches(first::R(4), types::instance_of(Alias))
+    types::matches(second::R(4), types::instance_of(Alias)) == false
 })

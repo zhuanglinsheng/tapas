@@ -1,35 +1,45 @@
 function solve_from(grid, start)
 {
     let index = start
+
     while (index < 81) {
         if (grid[index] == 0) {
             let row = (index / 9) * 9
             let column = index % 9
             let box = (index / 27) * 27 + (column / 3) * 3
+
             for (let digit in 1 to 10) {
                 let valid = true
+
                 for (let k in 0 to 9) {
                     if (grid[row + k] == digit or grid[column + k * 9] == digit) {
                         valid = false
                         break
                     }
+
                     if (grid[box + (k / 3) * 9 + k % 3] == digit) {
                         valid = false
                         break
                     }
                 }
+
                 if (valid) {
                     grid[index] = digit
+
                     if (this(grid, index + 1)) {
                         return true
                     }
                 }
             }
+
             grid[index] = 0
+
             return false
         }
+
         index = index + 1
     }
+
     return true
 }
 
@@ -53,18 +63,23 @@ let repetitions = 10
 
 let started = clock_ns()
 var checksum = -1
+
 for (let round in 0 to repetitions) {
     let board = copy(puzzle)
     let solved = solve_board(board)
+
     if (not solved) {
         checksum = -1
         break
     }
+
     checksum = 0
+
     for (let index in 0 to 81) {
         checksum = checksum + board[index] * (index + 1)
     }
 }
+
 let elapsed = clock_ns() - started
 
 print(checksum)

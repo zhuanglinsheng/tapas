@@ -12,7 +12,8 @@ let numbers = [2, 4, 9]
 function square_root(value: Int | Float) -> Float
 {
     assert(rule {
-        "被开方数不能为负数": value >= 0
+        "被开方数不能为负数":
+            value >= 0
     })
 
     if (value == 0) {
@@ -45,7 +46,7 @@ sqrt(9) = 3
 
 函数先处理零，再从输入值开始反复修正`estimate`，直到平方误差足够小。这里实现平方根是为了展示完整程序，实际项目也可以直接使用`math::sqrt`。
 
-Rule 还可以用于检查业务数据和生成测试输入。完成这个入门示例后，可以继续阅读[换货业务教程](../../examples/retail/README.md)；Rule 的完整语法和检查方式见 [Rule 文档](../Rules_zh.md)。
+Rule 还可以用于检查业务数据和生成测试输入。完成这个入门示例后，可以继续阅读[换货业务教程](../../external/tau-bench-tapas/simplified/README.md)；Rule 的完整语法和检查方式见 [Rule 文档](../Rules_zh.md)。
 
 在仓库根目录运行：
 

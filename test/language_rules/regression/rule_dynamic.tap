@@ -15,6 +15,7 @@ assert(rule {
     types::matches(value, types::RuleTerm)
     types::matches(first, types::RuleItem)
 })
+
 let encoded = rules::serialize(in_range)
 let restored = rules::deserialize(encoded)
 print(rules::check(restored(5))["passed"])
@@ -28,6 +29,7 @@ let observer = evaluators::make("observer", 1, (context)
         "diagnostics": []
     }
 })
+
 print(evaluators::eval(in_range(7), observer)["value"])
 print(evaluators::compile(in_range, observer)["status"])
 
@@ -35,6 +37,7 @@ let sourced = rule (number: Int) {
     "number must be positive":
         number > 0
 }
+
 let sourced_ir = rules::inspect(sourced)
 print(len(rules::items(sourced_ir)))
 print(rules::parameters(sourced_ir)[0]["payload"])
@@ -51,12 +54,15 @@ let source_observer = evaluators::make("source-observer", 1, (context)
         "diagnostics": []
     }
 })
+
 print(evaluators::eval(sourced(2), source_observer)["value"])
 
 let ceiling = 4
+
 let captured = rule (number: Int) {
     number < ceiling
 }
+
 print(len(rules::inspect(captured)["captures"]))
 let capture_observer = evaluators::make("capture-observer", 1, (context)
 {
@@ -68,4 +74,5 @@ let capture_observer = evaluators::make("capture-observer", 1, (context)
         "diagnostics": []
     }
 })
+
 print(evaluators::eval(captured(2), capture_observer)["value"])

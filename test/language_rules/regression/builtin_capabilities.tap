@@ -22,6 +22,7 @@ require(idx('ab', 1) == 'b')
 require(idx_or('ab', 7, 'missing') == 'missing')
 require(idx_or({'present': 7}, 'present', 0) == 7)
 require(idx_or({}, 'missing', 9) == 9)
+
 // Composite defaults must remain alive after the temporary target is released.
 let builtin_default = idx_or({}, 'missing', ['retained'])
 require(builtin_default[0] == 'retained')

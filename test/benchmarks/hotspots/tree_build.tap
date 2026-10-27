@@ -2,7 +2,10 @@
 // Build and release fresh immutable-use trees; inspect the final full tree.
 function tree_size(node)
 {
-    if (node == false) { return 1 }
+    if (node == false) {
+        return 1
+    }
+
     return 1 + this(node[0]) + this(node[1])
 }
 
@@ -11,19 +14,21 @@ function make_tree(depth)
     if (depth == 0) {
         return false
     }
+
     return [this(depth - 1), this(depth - 1)]
 }
-
 
 function bench(n)
 {
     let started = clock_ns()
     let result = 0
     let tree = false
+
     for (let r in 0 to n) {
         tree = make_tree(10)
         result = result + tree.len()
     }
+
     result = result + tree_size(tree)
     let elapsed = clock_ns() - started
     print(result)

@@ -10,6 +10,7 @@ let MappedSource = types::make_type(
 function expand_indentation(indentation: String) -> String
 {
     let parts = []
+
     for (let index in 0 to indentation.len()) {
         if (indentation[index] == syntax::horizontal_tab) {
             parts.append('    ')
@@ -17,6 +18,7 @@ function expand_indentation(indentation: String) -> String
             parts.append(indentation[index])
         }
     }
+
     return strings::join(parts, '')
 }
 
@@ -26,21 +28,26 @@ function whitespace_edits(
 ) -> Dictionary[Int, Dictionary] {
     let edits: Dictionary[Int, Dictionary] = {}
     let line_start = true
+
     for (let index in 0 to tokens.len()) {
         let token = tokens[index]
         let kind = token['kind']
+
         if (kind == 'newline') {
             line_start = true
         } elif (kind == 'whitespace') {
             let replacement = source[token['start']:token['end']]
+
             if (line_start) {
                 replacement = expand_indentation(replacement)
             }
+
             if (index + 1 < tokens.len() and
                 (tokens[index + 1]['kind'] == 'newline' or
-                 tokens[index + 1]['kind'] == 'eof')) {
+                    tokens[index + 1]['kind'] == 'eof')) {
                 replacement = ''
             }
+
             if (replacement != source[token['start']:token['end']]) {
                 edits[token['start']] = {
                     'end': token['end'],
@@ -51,6 +58,7 @@ function whitespace_edits(
             line_start = false
         }
     }
+
     return edits.copy()
 }
 
@@ -68,8 +76,11 @@ function lexical_view(
     let line_has_token = false
     let line = 0
 
-    for (let token in tokens) {
+    // Generated sources can contain more than 65,535 tokens.
+    for (let token_index in 0 to tokens.len()) {
+        let token = tokens[token_index]
         let kind = token['kind']
+
         if (kind == 'newline') {
             line_start = token['end']
             indentation_end = line_start
@@ -77,23 +88,29 @@ function lexical_view(
             line = line + 1
             continue
         }
+
         if (kind == 'whitespace') {
             if (line_has_token == false) {
                 indentation_end = token['end']
             }
+
             continue
         }
+
         if (kind == 'comment') {
             clean = false
             line_has_token = true
             continue
         }
+
         if (kind == 'eof') {
             continue
         }
+
         if (line_has_token == false) {
             indentation_end = token['start']
         }
+
         significant.append(token)
         clean_before.append(clean)
         indents.append(source[line_start:indentation_end])
@@ -101,6 +118,7 @@ function lexical_view(
         clean = true
         line_has_token = true
     }
+
     return significant.copy()
 }
 
@@ -109,8 +127,10 @@ function parenthesis_matches(
 ) -> Dictionary[Int, Int] {
     let matches: Dictionary[Int, Int] = {}
     let stack: List[Int] = []
+
     for (let index in 0 to tokens.len()) {
         let kind = tokens[index]['kind']
+
         if (kind == '(') {
             stack.append(index)
         } elif (kind == ')' and stack.len() > 0) {
@@ -118,6 +138,7 @@ function parenthesis_matches(
             matches[opening] = index
         }
     }
+
     return matches.copy()
 }
 
@@ -128,8 +149,10 @@ function block_after(tokens: List[syntax::Token], start: Int) -> Int
     let index: Int = start
     let result = -1
     let finished = false
+
     while (index < tokens.len() and finished == false) {
         let kind = tokens[index]['kind']
+
         if (kind == '[') {
             square_depth = square_depth + 1
         } elif (kind == ']') {
@@ -142,13 +165,15 @@ function block_after(tokens: List[syntax::Token], start: Int) -> Int
             result = index
             finished = true
         } elif ((kind == ';' or kind == '=') and
-                square_depth == 0 and parenthesis_depth == 0) {
+            square_depth == 0 and parenthesis_depth == 0) {
             finished = true
         }
+
         if (finished == false) {
             index = index + 1
         }
     }
+
     return int(result)
 }
 
@@ -190,22 +215,28 @@ function parameter_indentation(
     let continuation = strings::join([header_indent, '        '], '')
     let line_start = 0
     let first = true
-    for (let token in tokens) {
+
+    for (let token_index in 0 to tokens.len()) {
+        let token = tokens[token_index]
         let kind = token['kind']
+
         if (kind == 'newline') {
             line_start = token['end']
             first = true
         } elif (kind != 'whitespace' and kind != 'eof') {
             if (first and line_start > opening and token['start'] <= closing) {
                 let replacement = continuation.copy()
+
                 if (token['start'] == closing) {
                     replacement = header_indent.copy()
                 }
+
                 edits[line_start] = {
                     'end': token['start'],
                     'text': replacement.copy(),
                 }
             }
+
             first = false
         }
     }
@@ -228,24 +259,31 @@ function structural_edits(
     for (let index in 0 to tokens.len()) {
         let kind = tokens[index]['kind']
         let qualified = false
+
         if (index > 0) {
             qualified = (tokens[index - 1]['kind'] == '::' or
                 tokens[index - 1]['kind'] == '.')
         }
+
         if (kind == 'rule' and qualified == false and
             index + 1 < tokens.len() and tokens[index + 1]['kind'] == '{') {
             put_edit(edits, clean_before, tokens, index, index + 1, ' ')
         }
+
         if ((kind == 'if' or kind == 'elif' or kind == 'for' or
-             kind == 'while' or (kind == 'rule' and qualified == false)) and
+            kind == 'while' or (kind == 'rule' and qualified == false)) and
             index + 1 < tokens.len()) {
             let opening = index + 1
+
             if (tokens[opening]['kind'] == '(' and opening in matches) {
                 let closing = matches[opening]
+
                 if (kind == 'rule') {
                     parameter_headers[opening] = index
                 }
+
                 put_edit(edits, clean_before, tokens, index, opening, ' ')
+
                 if (closing + 1 < tokens.len() and
                     tokens[closing + 1]['kind'] == '{') {
                     put_edit(
@@ -254,8 +292,8 @@ function structural_edits(
                 }
             }
         } elif ((kind == 'else' or (kind == 'rule' and qualified == false)) and
-                index + 1 < tokens.len() and
-                tokens[index + 1]['kind'] == '{') {
+            index + 1 < tokens.len() and
+            tokens[index + 1]['kind'] == '{') {
             put_edit(edits, clean_before, tokens, index, index + 1, ' ')
         }
 
@@ -266,8 +304,10 @@ function structural_edits(
 
         if (kind == 'function' and index + 2 < tokens.len()) {
             let opening = index + 2
+
             if (tokens[opening]['kind'] == '(' and opening in matches) {
                 let brace = block_after(tokens, matches[opening] + 1)
+
                 if (brace >= 0) {
                     function_braces[brace] = index
                     parameter_headers[opening] = index
@@ -280,18 +320,24 @@ function structural_edits(
         if (tokens[opening]['kind'] != '(' or (opening in matches) == false) {
             continue
         }
+
         let previous = ''
+
         if (opening > 0) {
             previous = tokens[opening - 1]['kind']
         }
+
         if (opening > 0 and is_function_prefix(previous) == false) {
             continue
         }
+
         let closing = matches[opening]
         let after = closing + 1
+
         if (after >= tokens.len()) {
             continue
         }
+
         if (tokens[after]['kind'] == '{') {
             if ((after in function_braces) == false) {
                 function_braces[after] = opening
@@ -299,6 +345,7 @@ function structural_edits(
             }
         } elif (tokens[after]['kind'] == '->') {
             let brace = block_after(tokens, after + 1)
+
             if (brace >= 0 and (brace in function_braces) == false) {
                 function_braces[brace] = opening
                 parameter_headers[opening] = opening
@@ -315,14 +362,84 @@ function structural_edits(
     for (let brace in keys(function_braces)) {
         let header = function_braces[brace]
         let prefix = ' '
+
         if (lines[header] == lines[brace - 1]) {
             prefix = strings::join([line_break, expand_indentation(indents[header])], '')
         }
+
         put_edit(
             edits, clean_before, tokens,
             brace - 1, brace,
             prefix)
     }
+
+    return edits.copy()
+}
+
+function described_condition_edits(source: String, line_break: String) -> Dictionary[Int, Dictionary]
+{
+    let clean_before: List[Bool] = []
+    let indents: List[String] = []
+    let lines: List[Int] = []
+    let tokens = lexical_view(source, clean_before, indents, lines)
+    let rules: Dictionary[Int, String] = {}
+    let described: Dictionary[Int, Bool] = {}
+    let stack: List[Int] = []
+    let edits: Dictionary[Int, Dictionary] = {}
+
+    for (let index in 0 to tokens.len()) {
+        let kind = tokens[index]['kind']
+
+        if (kind == 'rule' and
+            (index == 0 or (tokens[index - 1]['kind'] != '::' and
+                tokens[index - 1]['kind'] != '.'))) {
+            let brace = block_after(tokens, index + 1)
+
+            if (brace >= 0) {
+                rules[brace] = strings::join([expand_indentation(indents[index]), '    '], '')
+            }
+        }
+
+        if (kind == '(' or kind == '[' or kind == '{') {
+            stack.append(index)
+        } elif (kind == ')' or kind == ']' or kind == '}') {
+            if (stack.len() > 0) {
+                let closing = pop_back(stack)
+                if (kind == '}' and closing in described) {
+                    let indentation = rules[closing]
+                    let header = indentation[0:indentation.len() - 4]
+                    put_edit(edits, clean_before, tokens, index - 1, index,
+                        strings::join([line_break, header], ''))
+                }
+            }
+        } elif (kind == 'string' and stack.len() > 0 and index + 2 < tokens.len()) {
+            let opening = stack[stack.len() - 1]
+
+            if ((opening in rules) == false or tokens[index + 1]['kind'] != ':') {
+                continue
+            }
+
+            let indentation = rules[opening]
+            described[opening] = true
+            let prefix = strings::join([line_break, indentation], '')
+
+            if (index - 1 != opening) {
+                prefix = strings::join([line_break, line_break, indentation], '')
+            }
+
+            put_edit(edits, clean_before, tokens, index - 1, index, prefix)
+
+            let proposition = index + 2
+            let separator = strings::join([line_break, indentation, '    '], '')
+
+            if (tokens[proposition]['kind'] == '{') {
+                separator = ' '
+            }
+
+            put_edit(edits, clean_before, tokens, index + 1, proposition, separator)
+        }
+    }
+
     return edits.copy()
 }
 
@@ -330,6 +447,7 @@ function apply_edits(source: String, edits: Dictionary[Int, Dictionary]) -> Stri
 {
     let parts: List[String] = []
     let position = 0
+
     while (position < source.len()) {
         if (position in edits) {
             let edit = edits[position]
@@ -341,15 +459,18 @@ function apply_edits(source: String, edits: Dictionary[Int, Dictionary]) -> Stri
             position = position + 1
         }
     }
+
     return strings::join(parts, '')
 }
 
 function source_origins(source: String) -> List[Int]
 {
     let origins: List[Int] = []
+
     for (let index in 0 to source.len()) {
         origins.append(index)
     }
+
     return origins.copy()
 }
 
@@ -361,14 +482,17 @@ function apply_mapped_edits(
     let parts: List[String] = []
     let output_origins: List[Int] = []
     let position = 0
+
     while (position < source.len()) {
         if (position in edits) {
             let edit = edits[position]
             delete(edits, position)
             parts.append(edit['text'])
+
             for (let index in 0 to edit['text'].len()) {
                 output_origins.append(-1)
             }
+
             position = edit['end']
         } else {
             parts.append(source[position])
@@ -376,6 +500,7 @@ function apply_mapped_edits(
             position = position + 1
         }
     }
+
     return {
         'source': strings::join(parts, ''),
         'origins': output_origins.copy(),
@@ -390,10 +515,13 @@ function mapped_edits(
     let result: List[model::Edit] = []
     let original_start = 0
     let formatted_start = 0
+
     for (let formatted_index in 0 to formatted.len()) {
         let origin = origins[formatted_index]
+
         if (origin >= 0) {
             let replacement = formatted[formatted_start:formatted_index]
+
             if (origin > original_start or replacement.len() > 0) {
                 if (replacement != original[original_start:origin]) {
                     result.append({
@@ -403,11 +531,14 @@ function mapped_edits(
                     })
                 }
             }
+
             original_start = origin + 1
             formatted_start = formatted_index + 1
         }
     }
+
     let replacement = formatted[formatted_start:formatted.len()]
+
     if (original_start < original.len() or replacement.len() > 0) {
         if (replacement != original[original_start:original.len()]) {
             result.append({
@@ -417,6 +548,7 @@ function mapped_edits(
             })
         }
     }
+
     return result.copy()
 }
 
@@ -430,64 +562,97 @@ function implication_edits(
     let tokens = lexical_view(source, clean, indents, lines)
     let matches = parenthesis_matches(tokens)
     let edits: Dictionary[Int, Dictionary] = {}
+
     for (let index in 0 to tokens.len()) {
         if (tokens[index]['kind'] != 'implies' or index == 0 or
             index + 1 >= tokens.len()) {
             continue
         }
+
         let left = index - 1
         let depth = 0
         let scanning = true
+
         while (scanning) {
             let kind = tokens[left]['kind']
-            if (kind == ')' or kind == ']' or kind == '}') { depth = depth + 1 }
-            if (kind == '(' or kind == '[' or kind == '{') { depth = depth - 1 }
+
+            if (kind == ')' or kind == ']' or kind == '}') {
+                depth = depth + 1
+            }
+
+            if (kind == '(' or kind == '[' or kind == '{') {
+                depth = depth - 1
+            }
+
             if (left == 0) {
                 scanning = false
             } elif (depth == 0 and
-                    (lines[left - 1] != lines[left] or
-                     tokens[left - 1]['kind'] == '{' or
-                     tokens[left - 1]['kind'] == ':' or
-                     tokens[left - 1]['kind'] == ';')) {
+                (lines[left - 1] != lines[left] or
+                    tokens[left - 1]['kind'] == '{' or
+                    tokens[left - 1]['kind'] == ':' or
+                    tokens[left - 1]['kind'] == ';')) {
                 scanning = false
             } else {
                 left = left - 1
             }
         }
+
         let right = index + 1
         let braced = tokens[right]['kind'] == '{'
         let end = right
         depth = 0
         scanning = true
+
         while (scanning and end < tokens.len()) {
             let kind = tokens[end]['kind']
-            if (kind == '(' or kind == '[' or kind == '{') { depth = depth + 1 }
-            if (kind == ')' or kind == ']' or kind == '}') { depth = depth - 1 }
+
+            if (kind == '(' or kind == '[' or kind == '{') {
+                depth = depth + 1
+            }
+
+            if (kind == ')' or kind == ']' or kind == '}') {
+                depth = depth - 1
+            }
+
             if (depth == 0 and
                 (braced or end + 1 == tokens.len() or
-                 lines[end + 1] != lines[end] or
-                 tokens[end + 1]['kind'] == '}' or
-                 tokens[end + 1]['kind'] == ';')) {
+                    lines[end + 1] != lines[end] or
+                    tokens[end + 1]['kind'] == '}' or
+                    tokens[end + 1]['kind'] == ';')) {
                 scanning = false
             } else {
                 end = end + 1
             }
         }
-        if (end >= tokens.len()) { continue }
-        let safe = true
-        for (let at in left + 1 to end + 1) {
-            if (clean[at] == false) { safe = false }
+
+        if (end >= tokens.len()) {
+            continue
         }
+
+        let safe = true
+
+        for (let at in left + 1 to end + 1) {
+            if (clean[at] == false) {
+                safe = false
+            }
+        }
+
         // Do not move comments across the antecedent/consequent boundary.
-        if (safe == false) { continue }
+        if (safe == false) {
+            continue
+        }
+
         let first = left
         let last = index - 1
+
         while (first < last and first in matches and matches[first] == last) {
             first = first + 1
             last = last - 1
         }
+
         let antecedent = source[tokens[first]['start']:tokens[last]['end']]
         let parts: List[String] = []
+
         if (first == last and tokens[first]['kind'] == 'identifier') {
             parts.append(antecedent)
         } else {
@@ -495,14 +660,21 @@ function implication_edits(
             parts.append(antecedent)
             parts.append(')')
         }
+
         parts.append(' implies ')
         first = right
         last = end
-        if (braced) { first = first + 1; last = last - 1 }
+
+        if (braced) {
+            first = first + 1
+            last = last - 1
+        }
+
         while (first < last and first in matches and matches[first] == last) {
             first = first + 1
             last = last - 1
         }
+
         if (first == last and tokens[first]['kind'] == 'identifier') {
             parts.append(source[tokens[first]['start']:tokens[first]['end']])
         } elif (braced) {
@@ -517,12 +689,14 @@ function implication_edits(
             parts.append(indents[left])
             parts.append('}')
         }
+
         let replacement = strings::join(parts, '')
         edits[tokens[left]['start']] = {
             'end': tokens[end]['end'],
             'text': replacement.copy(),
         }
     }
+
     return edits.copy()
 }
 
@@ -535,12 +709,16 @@ function source(source_text: String) -> String
     let tokens = lexical_view(
         source_text, clean_before, indents, lines)
     let line_break = syntax::line_feed
-    for (let token in all_tokens) {
+
+    for (let token_index in 0 to all_tokens.len()) {
+        let token = all_tokens[token_index]
+
         if (token['kind'] == 'newline') {
             line_break = source_text[token['start']:token['end']]
             break
         }
     }
+
     let edits = whitespace_edits(source_text, all_tokens)
     let structure = structural_edits(
         source_text, all_tokens, tokens,
@@ -548,10 +726,13 @@ function source(source_text: String) -> String
     for (let start in keys(structure)) {
         edits[start] = structure[start]
     }
+
     let formatted = apply_edits(
         source_text, edits)
     let implications = implication_edits(formatted, line_break)
-    return apply_edits(formatted, implications)
+    let expanded = apply_edits(formatted, implications)
+
+    return apply_edits(expanded, described_condition_edits(expanded, line_break))
 }
 
 function edits(source_text: String) -> List[model::Edit]
@@ -563,7 +744,10 @@ function edits(source_text: String) -> List[model::Edit]
     let tokens = lexical_view(
         source_text, clean_before, indents, lines)
     let line_break = syntax::line_feed
-    for (let token in all_tokens) {
+
+    for (let token_index in 0 to all_tokens.len()) {
+        let token = all_tokens[token_index]
+
         if (token['kind'] == 'newline') {
             line_break = source_text[token['start']:token['end']]
             break
@@ -577,12 +761,16 @@ function edits(source_text: String) -> List[model::Edit]
     for (let start in keys(structure)) {
         first_edits[start] = structure[start]
     }
+
     let first = apply_mapped_edits(
         source_text, source_origins(source_text), first_edits)
     let second_edits = implication_edits(first['source'], line_break)
     let second = apply_mapped_edits(
         first['source'], first['origins'], second_edits)
-    return mapped_edits(source_text, second['source'], second['origins'])
+    let conditions = described_condition_edits(second['source'], line_break)
+    let third = apply_mapped_edits(second['source'], second['origins'], conditions)
+
+    return mapped_edits(source_text, third['source'], third['origins'])
 }
 
 function is_formatted(source_text: String) -> Bool
@@ -594,10 +782,13 @@ function file(path: String) -> Bool
 {
     let original = io::read_text(path)
     let formatted = source(original)
+
     if (formatted == original) {
         return false
     }
+
     io::replace_text(path, formatted)
+
     return true
 }
 
@@ -610,6 +801,7 @@ function main(arguments: List[String]) -> Int
 {
     let checking = false
     let failed = false
+
     for (let argument in arguments) {
         if (argument == '--check') {
             checking = true
@@ -622,9 +814,11 @@ function main(arguments: List[String]) -> Int
             print(argument)
         }
     }
+
     if (failed) {
         return 1
     }
+
     return 0
 }
 

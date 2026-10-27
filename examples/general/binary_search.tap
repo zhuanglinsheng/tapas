@@ -12,6 +12,7 @@ function binary_search(xs: List[Int], target: Int) -> Int
     while (low <= high) {
         // This form avoids adding low and high before division.
         let middle = low + (high - low) / 2
+
         if (xs[middle] == target) {
             return middle + 0
         } elif (xs[middle] < target) {
@@ -20,6 +21,7 @@ function binary_search(xs: List[Int], target: Int) -> Int
             high = middle - 1
         }
     }
+
     return -1
 }
 

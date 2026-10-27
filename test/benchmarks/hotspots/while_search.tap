@@ -1,18 +1,29 @@
 let values = list(8 to 32)
-for (let value in [3, 1, 4, 0, 5, 7, 2, 6]) { values.append(value) }
+
+for (let value in [3, 1, 4, 0, 5, 7, 2, 6]) {
+    values.append(value)
+}
+
 function bench(n, values)
 {
     let started = clock_ns()
     let result = 0
+
     for (let r in 0 to n) {
         let target = r % 8
         let j = 0
+
         while (j < 32) {
-            if (values[j] == target) { break }
+            if (values[j] == target) {
+                break
+            }
+
             j = j + 1
         }
+
         result = result + j
     }
+
     let elapsed = clock_ns() - started
     print(result)
     print(elapsed)

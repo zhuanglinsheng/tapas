@@ -1,9 +1,11 @@
 let sum_values = (values)
 {
     var total = 0
+
     for (let value in values) {
         total = total + value
     }
+
     return total
 }
 
@@ -24,8 +26,10 @@ let invoke_captured = (callback, value)
     {
         return callback(value)
     }
+
     return inner()
 }
+
 invoke_captured(sum_values, [1, 2, 3])
 
 function retained_target(values)
@@ -37,8 +41,10 @@ function retained_call(values)
 {
     var callback = retained_target
     callback = retained_target
+
     return callback(values)
 }
+
 retained_call([1, 2, 3])
 clock_ns()
 __binary__()

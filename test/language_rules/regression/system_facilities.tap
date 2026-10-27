@@ -1,22 +1,33 @@
 let sys_env = os::getenv('__TAPAS_DOCUMENTATION_MISSING_ENVIRONMENT__')
+
 assert(rule { types::matches(sys_env::found, types::Bool) and types::matches(sys_env::value, types::String) })
 assert(rule { len(os::cwd()) > 0 and len(os::home()) > 0 and len(os::temp_dir()) > 0 })
 assert(rule { os::platform() == 'linux' or os::platform() == 'macos' })
+
 let sys_started = time::monotonic_ns()
+
 assert(rule { time::monotonic_ns() >= sys_started })
 assert(rule { time::monotonic() >= 0.0 and time::unix_ns() > 0 })
+
 let sys_epoch = time::parse_utc('1970-01-01T00:00:00Z')
+
 assert(rule { time::unix(sys_epoch) == 0 })
 assert(rule { time::format_utc(sys_epoch, '%Y-%m-%dT%H:%M:%SZ') == '1970-01-01T00:00:00Z' })
 assert(rule { not time::try_parse_utc('2023-02-29T00:00:00Z')::ok })
+
 let sys_root = fs::temp_dir()
 let sys_file = path::join(sys_root, 'request.json')
 io::write_text(sys_file, '{"quantity":2}')
 assert(rule { fs::exists(sys_file) and fs::stat(sys_file)::kind == 'file' })
+
 let sys_exec = os::run(['/bin/cat'], stdin=io::read_text(sys_file), timeout=2.0)
+
 assert(rule { sys_exec::status == 'exited' and sys_exec::exit_code == 0 and not sys_exec::output_truncated })
+
 let sys_reply = json::parse(sys_exec::stdout)
+
 assert(rule { sys_reply::quantity == 2 })
+
 let sys_binary_file = path::join(sys_root, 'binary')
 let sys_bytes = bytes::from_string(json::parse('"a\\u0000b"'))
 io::write_bytes(sys_binary_file, sys_bytes)
@@ -29,10 +40,14 @@ assert(rule { fs::list_dir(sys_root) == [] })
 fs::remove(sys_root)
 assert(rule { fs::try_exists(sys_root)::ok and not fs::try_exists(sys_root)::value })
 assert(rule { fs::try_remove([])::code == 'invalid_type' })
+
 let sys_nonzero = os::run(['/bin/sh', '-c', 'printf output; printf log >&2; exit 7'])
+
 assert(rule { sys_nonzero::status == 'exited' and sys_nonzero::exit_code == 7 })
 assert(rule { sys_nonzero::stdout == 'output' and sys_nonzero::stderr == 'log' })
+
 let sys_limited = os::run(['/bin/sh', '-c', 'printf abcdef'], output_limit=3)
+
 assert(rule { sys_limited::stdout == 'abc' and sys_limited::output_truncated })
 io::write('o')
 io::write('k\n')

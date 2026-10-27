@@ -15,6 +15,7 @@ let docs_positive = rule (value: Int) {
 
 let docs_bounded = rule (value: Int) {
     docs_positive(value)
+
     "value must be below ten":
         value < 10
 }
@@ -132,7 +133,10 @@ function below(maximum: Int) -> Rule[Int]
 Rule 体最外层的表达式是一项要求：Bool 结果必须为 true，RuleInstance 结果必须成立。直接写子实例即可组合规则：
 
 ```text
-let Positive = rule (value: Int) { value > 0 }
+let Positive = rule (value: Int) {
+    value > 0
+}
+
 let SmallPositive = rule (value: Int) {
     Positive(value)
     value < 10
@@ -170,7 +174,10 @@ let Exchange = rule (approved: Bool, stock: Int, quantity: Int) {
 RuleInstance 前件示例（无需手动调用 checker）：
 
 ```tapas
-let docs_positive_premise = rule (value: Int) { value > 0 }
+let docs_positive_premise = rule (value: Int) {
+    value > 0
+}
+
 let docs_guarded = rule (value: Int) {
     (docs_positive_premise(value)) implies { value < 10 }
 }
@@ -189,10 +196,17 @@ assert(docs_guarded(5))
 在 Rule 自身的表达式中，`not`接受 Bool、RuleInstance 或两者的联合 Type，结果为 Bool。普通函数中的`not`仍只接受 Bool；在 Rule 中定义或调用普通函数不会改变该函数的语义。裸 Rule 即使无参数，也必须先写成实例`R()`。
 
 ```tapas
-let Positive = rule (value: Int) { value > 0 }
-let NonPositive = rule (value: Int) { not Positive(value) }
+let Positive = rule (value: Int) {
+    value > 0
+}
+
+let NonPositive = rule (value: Int) {
+    not Positive(value)
+}
+
 let Contract = rule (value: Int) {
-    '非正值的下界': not Positive(value) implies { value >= -10 }
+    '非正值的下界':
+        (not Positive(value)) implies { value >= -10 }
 }
 assert(NonPositive(-1))
 assert(Contract(1))
@@ -227,8 +241,15 @@ assert(Reject(Positive(-1)))
 Rule 自身表达式中的`and`、`or`接受 Bool、RuleInstance 及两者的联合类型，结果为 Bool；AnyType 实参在执行时验证。普通函数仍只接受 Bool，即使它由 Rule 调用。`&`、`|`没有获得实例语义。
 
 ```tapas
-let docs_in_range = rule (x: Int) { x >= 0; x <= 10 }
-let docs_override = rule (x: Int) { x == 42 }
+let docs_in_range = rule (x: Int) {
+    x >= 0
+    x <= 10
+}
+
+let docs_override = rule (x: Int) {
+    x == 42
+}
+
 let docs_allowed = rule (x: Int) {
     docs_in_range(x) or docs_override(x)
     not (x < 0)
@@ -442,7 +463,9 @@ Context 只读，不能修改 IR、参数绑定或捕获环境。
 直接读取声明与绑定值时，不需要创建 evaluator：
 
 ```tapas
-let ReflectionExample = rule (amount: Int) { amount > 0 }
+let ReflectionExample = rule (amount: Int) {
+    amount > 0
+}
 let reflection_instance = ReflectionExample(-1)
 let reflection_parameters = parameters(ReflectionExample)
 let reflection_arguments = arguments(reflection_instance)
@@ -582,8 +605,11 @@ assert(restrict_trial(4, true))
 
 ```tapas
 let transform_bounds = rule (value: Int) {
-    '下界': value >= 0
-    '上界': value <= 10
+    '下界':
+        value >= 0
+
+    '上界':
+        value <= 10
 }
 
 let lower_item = rules::item(transform_bounds, '下界')
@@ -592,7 +618,10 @@ let below_lower = rules::violate(transform_bounds, 0)
 
 assert(without_lower(-1))
 assert(below_lower(-1))
-assert(rule { not below_lower(0); not below_lower(11) })
+assert(rule {
+    not below_lower(0)
+    not below_lower(11)
+})
 ```
 
 `drop`删除所选 Item；`violate`保留其他直接 Item，并把目标 Item 替换为其成立性的否定。Condition `C`变为`not C`；Requirement `Child(...)`变为`not Child(...)`；`A implies B`的违反等价于`A and not B`。多个 implication 后件作为一个合取整体取反。
@@ -626,7 +655,7 @@ premise 的参数数量或对应类型不同会在构造时明确报错。premis
 
 ```tapas
 var ir_minimum = 3
-let ir_example = rule(x: Int) {
+let ir_example = rule (x: Int) {
     let y = x + 1
     y >= ir_minimum
 }

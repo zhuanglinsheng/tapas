@@ -45,6 +45,7 @@ let make_reader = (value)
         return value
     }
 }
+
 let reader = make_reader(original)
 print(reader()[0])
 print(fresh()[0])
@@ -54,8 +55,11 @@ function rebind_during_call(value)
     var callback = ()
     {
         callback = identity
+
         return value
     }
+
     return callback()
 }
+
 print(rebind_during_call(11))

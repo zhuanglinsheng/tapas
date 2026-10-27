@@ -18,9 +18,11 @@ function square_root(
     }
 
     let estimate: Float = float(value)
+
     while (math::abs(estimate * estimate - value) > tolerance) {
         estimate = (estimate + value / estimate) / 2.0
     }
+
     return float(estimate)
 }
 
@@ -31,13 +33,16 @@ function cubic_root(initial: Float, tolerance: Float) -> Float
 
     let x: Float = initial
     let step: Float = 1.0
+
     while (math::abs(step) > tolerance) {
         let value: Float = x * x * x - x - 2.0
         let derivative: Float = 3.0 * x * x - 1.0
+
         // Newton update: x_next = x - f(x) / f_derivative(x).
         step = value / derivative
         x = x - step
     }
+
     return float(x)
 }
 
